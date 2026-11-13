@@ -1,0 +1,23 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>dressup icon maker</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&display=swap" rel="stylesheet">
+</head><body>
+<script>
+// Draws the app icon: the letter "d", centred by the real edges of the letter (its ink), not by its text box.
+async function makeIcons(){
+  await document.fonts.load('400 100px "Instrument Serif"');
+  const one=(S,round)=>{
+    const c=document.createElement('canvas'); c.width=c.height=S; const x=c.getContext('2d');
+    x.fillStyle='#1A1917';
+    if(round){const r=S*.23; x.beginPath(); x.roundRect(0,0,S,S,r); x.fill()} else x.fillRect(0,0,S,S);
+    let fs=S; x.font=`400 ${fs}px "Instrument Serif"`; let m=x.measureText('d');
+    fs=fs*(S*.6)/(m.actualBoundingBoxAscent+m.actualBoundingBoxDescent);          // the letter is 60% of the tile height
+    x.font=`400 ${fs}px "Instrument Serif"`; m=x.measureText('d');
+    const w=m.actualBoundingBoxLeft+m.actualBoundingBoxRight, h=m.actualBoundingBoxAscent+m.actualBoundingBoxDescent;
+    x.fillStyle='#FBFAF8'; x.textAlign='left'; x.textBaseline='alphabetic';
+    x.fillText('d',(S-w)/2+m.actualBoundingBoxLeft,(S-h)/2+m.actualBoundingBoxAscent);
+    return c.toDataURL('image/png');
+  };
+  return JSON.stringify({r512:one(512,true),r64:one(64,true),s180:one(180,false)});
+}
+</script></body></html>
