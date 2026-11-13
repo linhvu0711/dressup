@@ -73,3 +73,81 @@ test("fits the page width with no side scroll", async ({ page }, testInfo) => {
 	}[testInfo.project.name];
 	expect({ scrollWidth, article: article?.width }).toEqual(expected);
 });
+
+test("names what dressup keeps", async ({ page }) => {
+	// Given: the dev server; no cookies
+	// When
+	await page.goto("/privacy");
+	const items = page
+		.getByRole("region", { name: "What dressup keeps" })
+		.getByRole("listitem");
+	// Then
+	await expect(items).toHaveText([
+		"Your Google account's name, email, and picture.",
+		"The colours you save.",
+		"Your last outfit.",
+		"Your looks and their tags.",
+		"Your mannequin's skin and hair colour.",
+	]);
+});
+
+test("says why dressup keeps it", async ({ page }) => {
+	// Given: the dev server; no cookies
+	// When
+	await page.goto("/privacy");
+	const lines = page.getByRole("region", { name: "Why" }).locator("p");
+	// Then
+	await expect(lines).toHaveText([
+		"dressup keeps this only to show you your own clothes and looks. Nothing is sold, shared, or used for ads.",
+	]);
+});
+
+test("says where the data lives and which cookies dressup sets", async ({
+	page,
+}) => {
+	// Given: the dev server; no cookies
+	// When
+	await page.goto("/privacy");
+	const lines = page
+		.getByRole("region", { name: "Where it lives" })
+		.locator("p");
+	// Then
+	await expect(lines).toHaveText([
+		"Cloudflare runs the app and keeps the data.",
+		"Google is used only for sign-in.",
+		"dressup sets only the cookies that keep you signed in. It sets no tracking cookies.",
+	]);
+});
+
+test("says to write to the support email to delete the account", async ({
+	page,
+}) => {
+	// Given: the dev server; no cookies
+	// When
+	await page.goto("/privacy");
+	const region = page.getByRole("region", { name: "How to delete it" });
+	// Then
+	await expect(region.locator("p")).toHaveText([
+		"To delete your account and all its data, write to linh.tuan.vu.contact@gmail.com.",
+	]);
+	await expect(
+		region.getByRole("link", { name: "linh.tuan.vu.contact@gmail.com" }),
+	).toHaveAttribute("href", "mailto:linh.tuan.vu.contact@gmail.com");
+});
+
+test("gives the support email and the date of the last change", async ({
+	page,
+}) => {
+	// Given: the dev server; no cookies
+	// When
+	await page.goto("/privacy");
+	const contact = page.getByRole("region", { name: "Contact" });
+	// Then
+	await expect(page.getByText("Last changed: 13 November 2026")).toBeVisible();
+	await expect(contact.locator("p")).toHaveText([
+		"Questions about this page or your data: linh.tuan.vu.contact@gmail.com.",
+	]);
+	await expect(
+		contact.getByRole("link", { name: "linh.tuan.vu.contact@gmail.com" }),
+	).toHaveAttribute("href", "mailto:linh.tuan.vu.contact@gmail.com");
+});
