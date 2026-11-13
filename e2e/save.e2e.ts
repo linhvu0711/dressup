@@ -200,6 +200,9 @@ test("shows the other account's colours after it signs in in another tab", async
 	);
 	// Then: the page starts over, on the Mode tab on the phone
 	if (isPhone(page)) {
+		await expect(
+			page.getByRole("tab", { name: "Mode", exact: true }),
+		).toHaveAttribute("aria-selected", "true");
 		await page.getByRole("tab", { name: "Colours", exact: true }).click();
 	}
 	await expect(
