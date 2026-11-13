@@ -1,8 +1,9 @@
 import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
+import { applyChange, dressChangeSchema } from "@/dress/state";
 import { createAuth } from "./auth";
 import type { Db } from "./db";
-import { loadDress } from "./dress-store";
+import { loadDress, saveDress } from "./dress-store";
 
 type Auth = ReturnType<typeof createAuth>;
 type User = Auth["$Infer"]["Session"]["user"];
@@ -53,8 +54,37 @@ export function createApp(getDb: (env: Env) => Db) {
 	});
 
 	app.get("/dress", withAuth, requireUser, async (c) =>
-		c.json(await loadDress(getDb(c.env), c.var.user.id)),
+		c.json((await loadDress(getDb(c.env), c.var.user.id)).state),
 	);
+
+	app.post("/dress/changes", withAuth, requireUser, async (c) => {
+		let body: unknown;
+		try {
+			body = await c.req.json();
+		} catch {
+			return c.json({ error: "invalid", field: "body" }, 400);
+		}
+		const parsed = dressChangeSchema.safeParse(body);
+		if (!parsed.success) {
+			// A body that is JSON but not an object fails with an empty path.
+			const field = parsed.error.issues[0]?.path[0];
+			return c.json(
+				{
+					error: "invalid",
+					field: field === undefined ? "body" : String(field),
+				},
+				400,
+			);
+		}
+		const db = getDb(c.env);
+		const userId = c.var.user.id;
+		const stored = await loadDress(db, userId);
+		const result = applyChange(stored.state, parsed.data);
+		if (!result.ok)
+			return c.json({ error: result.error, field: result.field }, 400);
+		await saveDress(db, userId, stored, result.state);
+		return c.body(null, 204);
+	});
 
 	app.notFound((c) => c.json({ error: "not_found" }, 404));
 

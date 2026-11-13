@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
 	GARMENT_IDS,
 	type GarmentId,
@@ -38,9 +38,15 @@ function seed(db: Db, userId: string) {
 	]);
 }
 
+export type StoredDress = {
+	state: DressState;
+	// The smallest position of each row, so a new square can sort first.
+	firstPosition: Record<GarmentId, number>;
+};
+
 // The account's dress state. An account with no outfit yet gets the starter
 // set first, so accounts made before these tables get it too.
-export async function loadDress(db: Db, userId: string): Promise<DressState> {
+export async function loadDress(db: Db, userId: string): Promise<StoredDress> {
 	let [mode] = await db.select().from(outfit).where(eq(outfit.userId, userId));
 	if (!mode) {
 		await seed(db, userId);
@@ -58,12 +64,86 @@ export async function loadDress(db: Db, userId: string): Promise<DressState> {
 	const swatches = Object.fromEntries(
 		GARMENT_IDS.map((id) => [id, [] as Hex[]]),
 	) as Record<GarmentId, Hex[]>;
-	for (const s of squares) swatches[s.garment as GarmentId].push(s.hex as Hex);
+	const firstPosition = Object.fromEntries(
+		GARMENT_IDS.map((id) => [id, 0]),
+	) as Record<GarmentId, number>;
+	for (const s of squares) {
+		const row = swatches[s.garment as GarmentId];
+		if (row.length === 0) firstPosition[s.garment as GarmentId] = s.position;
+		row.push(s.hex as Hex);
+	}
 	const picked = Object.fromEntries(
 		garments.map((g) => [g.garment, g.hex]),
 	) as Record<GarmentId, Hex>;
 	const open = JACKET_IDS.filter((id) =>
 		garments.some((g) => g.garment === id && g.open),
 	);
-	return { modeId: mode.modeId as ModeId, swatches, picked, open };
+	return {
+		state: { modeId: mode.modeId as ModeId, swatches, picked, open },
+		firstPosition,
+	};
+}
+
+// Writes only what differs between the stored state and the next one, all
+// in one batch, so a change is kept whole or not at all.
+export async function saveDress(
+	db: Db,
+	userId: string,
+	before: StoredDress,
+	after: DressState,
+) {
+	const old = before.state;
+	const writes = [];
+	if (after.modeId !== old.modeId)
+		writes.push(
+			db
+				.update(outfit)
+				.set({ modeId: after.modeId })
+				.where(eq(outfit.userId, userId)),
+		);
+	for (const garment of GARMENT_IDS) {
+		const wasOpen = (old.open as readonly GarmentId[]).includes(garment);
+		const isOpen = (after.open as readonly GarmentId[]).includes(garment);
+		if (after.picked[garment] !== old.picked[garment] || wasOpen !== isOpen)
+			writes.push(
+				db
+					.update(outfitGarment)
+					.set({ hex: after.picked[garment], open: isOpen })
+					.where(
+						and(
+							eq(outfitGarment.userId, userId),
+							eq(outfitGarment.garment, garment),
+						),
+					),
+			);
+		const was = old.swatches[garment];
+		const now = after.swatches[garment];
+		for (const hex of was.filter((h) => !now.includes(h)))
+			writes.push(
+				db
+					.delete(colourSquare)
+					.where(
+						and(
+							eq(colourSquare.userId, userId),
+							eq(colourSquare.garment, garment),
+							eq(colourSquare.hex, hex),
+						),
+					),
+			);
+		// A new square goes first in its row (state.ts addColour), so it
+		// takes a position below the smallest.
+		const added = now.filter((h) => !was.includes(h));
+		added.forEach((hex, i) => {
+			writes.push(
+				db.insert(colourSquare).values({
+					userId,
+					garment,
+					hex,
+					position: before.firstPosition[garment] - added.length + i,
+				}),
+			);
+		});
+	}
+	const [first, ...rest] = writes;
+	if (first) await db.batch([first, ...rest]);
 }
