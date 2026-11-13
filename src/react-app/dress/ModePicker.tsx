@@ -42,7 +42,9 @@ export function ModePicker({
 				))}
 			</TabsList>
 			<TabsContent value={tab} className={BOUNDED}>
+				{/* A new list per tab, so each tab starts at its first card. */}
 				<div
+					key={tab}
 					data-slot="mode-cards"
 					className="-mx-1.5 min-h-0 flex-1 overflow-auto px-1.5"
 				>

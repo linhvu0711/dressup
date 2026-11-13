@@ -242,3 +242,16 @@ test("puts the modes left of the stage from 900 px", async ({
 		roomRight: 1440 - (wall.x + wall.width) >= 300,
 	}).toEqual({ modesLeft: true, roomRight: true });
 });
+
+test("starts each weather tab's cards at the top", async ({ page }) => {
+	// Given: both projects, tab "Cold" scrolled to its last card
+	await page.goto("/");
+	await page.locator(CARDS).evaluate((el) => {
+		el.scrollTop = el.scrollHeight;
+	});
+	// When
+	await page.getByRole("tab", { name: "Cool", exact: true }).click();
+	const top = await page.locator(CARDS).evaluate((el) => el.scrollTop);
+	// Then
+	expect(top).toBe(0);
+});
