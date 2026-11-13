@@ -14,6 +14,7 @@ export function authOptions(s: AuthSettings) {
 		database: drizzleAdapter(s.db, { provider: "sqlite", schema }),
 		secret: s.secret,
 		baseURL: s.baseURL,
+		session: { cookieCache: { enabled: true, maxAge: 300 } },
 		socialProviders: {
 			google: {
 				clientId: s.google.clientId,

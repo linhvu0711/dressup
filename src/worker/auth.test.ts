@@ -254,3 +254,34 @@ describe("Google sign-in", () => {
 		});
 	});
 });
+
+describe("session cookie cache", () => {
+	test("reads a cached session without the database", async () => {
+		// Given: alice signed in, with only her session token cookie
+		const { app, env, helpers, sqlite } = await withUser(
+			"alice-id",
+			"alice@example.com",
+			"Alice",
+		);
+		const headers = await helpers.getAuthHeaders({ userId: "alice-id" });
+		// When
+		const first = await app.request("/api/me", { headers }, env);
+		sqlite.run("delete from session");
+		const cache = first.headers
+			.getSetCookie()
+			.map((c) => c.split(";")[0])
+			.find((c) => c.startsWith("better-auth.session_data="));
+		const second = await app.request(
+			"/api/me",
+			{ headers: { cookie: `${headers.get("cookie")}; ${cache}` } },
+			env,
+		);
+		// Then
+		expect({
+			first: first.status,
+			setsCache: cache !== undefined,
+			second: second.status,
+			id: ((await second.json()) as { id?: string }).id,
+		}).toEqual({ first: 200, setsCache: true, second: 200, id: "alice-id" });
+	});
+});

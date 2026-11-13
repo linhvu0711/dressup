@@ -27,9 +27,14 @@ export function createApp(getDb: (env: Env) => Db) {
 	});
 
 	const requireUser = createMiddleware<AppEnv>(async (c, next) => {
-		const session = await c.var.auth.api.getSession({
+		const { headers, response: session } = await c.var.auth.api.getSession({
 			headers: c.req.raw.headers,
+			returnHeaders: true,
 		});
+		// Better Auth renews the cache and session cookies here; dropping them
+		// would send every request after the first 5 minutes to the database.
+		for (const cookie of headers.getSetCookie())
+			c.header("set-cookie", cookie, { append: true });
 		if (!session) return c.json({ error: "unauthorized" }, 401);
 		c.set("user", session.user);
 		await next();
