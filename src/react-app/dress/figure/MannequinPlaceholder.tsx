@@ -1,9 +1,13 @@
 // The grey figure the stage shows while the account's colours load, from
 // docs/prototype/dressup.html:816.
-export function MannequinPlaceholder() {
+export function MannequinPlaceholder({
+	viewBox = "0 10 400 800",
+}: {
+	viewBox?: string;
+}) {
 	return (
 		<svg
-			viewBox="0 10 400 800"
+			viewBox={viewBox}
 			role="img"
 			aria-label="Loading"
 			className="animate-placeholder motion-reduce:animate-none"

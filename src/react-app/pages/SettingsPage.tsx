@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
+import { MannequinSection } from "@/settings/MannequinSection";
 import { authClient } from "../auth-client";
 import { meQueryKey, useMe } from "../session";
 import { PageHeader } from "../shell/PageHeader";
@@ -23,6 +24,7 @@ export function SettingsPage() {
 		<>
 			<PageHeader title="Settings" back />
 			<div className="mx-auto flex w-full max-w-[560px] flex-col px-[18px] pt-1.5 pb-11">
+				<MannequinSection />
 				<h2 className="mt-[26px] mb-1.5 font-sans text-[12.5px] font-medium text-muted-foreground">
 					Account
 				</h2>

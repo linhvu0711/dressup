@@ -16,6 +16,7 @@ import {
 	type DressChange,
 	type DressState,
 	dressStateSchema,
+	type MannequinPart,
 } from "@/dress/state";
 import { meQueryKey } from "@/session";
 
@@ -25,6 +26,7 @@ type DressCommands = {
 	addColour: (garment: GarmentId, hex: Hex) => { added: boolean };
 	removeColour: (garment: GarmentId, hex: Hex) => { removed: boolean };
 	setJacket: (jacket: JacketId, open: boolean) => void;
+	setMannequinColour: (part: MannequinPart, hex: Hex) => void;
 };
 
 // `unsaved`: a change could not be stored and waits on the queue.
@@ -212,6 +214,9 @@ export function DressStateProvider({
 				}),
 				setJacket: (jacket, open) => {
 					run({ kind: "jacket", jacket, open });
+				},
+				setMannequinColour: (part, hex) => {
+					run({ kind: "mannequin", part, hex });
 				},
 			}
 		: { unsaved, retry, status: "loading" };
