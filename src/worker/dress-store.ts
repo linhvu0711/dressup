@@ -104,17 +104,13 @@ export async function saveDress(
 	for (const garment of GARMENT_IDS) {
 		const wasOpen = (old.open as readonly GarmentId[]).includes(garment);
 		const isOpen = (after.open as readonly GarmentId[]).includes(garment);
-		if (after.picked[garment] !== old.picked[garment] || wasOpen !== isOpen)
+		const thisGarment = and(
+			eq(outfitGarment.userId, userId),
+			eq(outfitGarment.garment, garment),
+		);
+		if (wasOpen !== isOpen)
 			writes.push(
-				db
-					.update(outfitGarment)
-					.set({ hex: after.picked[garment], open: isOpen })
-					.where(
-						and(
-							eq(outfitGarment.userId, userId),
-							eq(outfitGarment.garment, garment),
-						),
-					),
+				db.update(outfitGarment).set({ open: isOpen }).where(thisGarment),
 			);
 		const was = old.swatches[garment];
 		const now = after.swatches[garment];
@@ -150,6 +146,21 @@ export async function saveDress(
 					.onConflictDoNothing(),
 			);
 		});
+		// After the squares, and only while the square is still in the row:
+		// another device may have removed it since the read.
+		const hex = after.picked[garment];
+		if (hex !== old.picked[garment])
+			writes.push(
+				db
+					.update(outfitGarment)
+					.set({ hex })
+					.where(
+						and(
+							thisGarment,
+							sql`exists (select 1 from ${colourSquare} where ${colourSquare.userId} = ${userId} and ${colourSquare.garment} = ${garment} and ${colourSquare.hex} = ${hex})`,
+						),
+					),
+			);
 	}
 	const [first, ...rest] = writes;
 	if (first) await db.batch([first, ...rest]);

@@ -360,4 +360,44 @@ describe("two devices at the same moment", () => {
 		// Then
 		expect(s.swatches.sweater).toHaveLength(1);
 	});
+
+	test("keeps the pick on the square that is left", async () => {
+		// Given: alice with the sweater row cut to #1F3A5F and #8C8A84, and
+		// #1F3A5F picked
+		const { h, headers } = await aliceAfterGet();
+		for (const hex of ["#E6DFD0", "#7A2E2E"])
+			await post(h, headers, { kind: "remove", garment: "sweater", hex });
+		// When: the remove of #8C8A84 is stored first
+		const s = await atOnce(h, [
+			{ kind: "remove", garment: "sweater", hex: "#8C8A84" },
+			{ kind: "remove", garment: "sweater", hex: "#1F3A5F" },
+		]);
+		// Then
+		expect({ row: s.swatches.sweater, picked: s.picked.sweater }).toEqual({
+			row: ["#1F3A5F"],
+			picked: "#1F3A5F",
+		});
+	});
+
+	test("keeps a jacket toggle and the new pick together", async () => {
+		// Given: alice with the padded row cut to #1B1B1F and #1F3A5F, and
+		// #1B1B1F picked
+		const { h, headers } = await aliceAfterGet();
+		await post(h, headers, {
+			kind: "remove",
+			garment: "padded",
+			hex: "#55633F",
+		});
+		// When: one device removes #1B1B1F while the other opens the jacket
+		const s = await atOnce(h, [
+			{ kind: "remove", garment: "padded", hex: "#1B1B1F" },
+			{ kind: "jacket", jacket: "padded", open: true },
+		]);
+		// Then
+		expect({
+			row: s.swatches.padded,
+			picked: s.picked.padded,
+			open: s.open,
+		}).toEqual({ row: ["#1F3A5F"], picked: "#1F3A5F", open: ["padded"] });
+	});
 });
