@@ -1,0 +1,95 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@theme static {
+	--breakpoint-wide: 56.25rem;
+	--font-sans:
+		"Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+	--font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+	--font-serif:
+		"Instrument Serif", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+}
+
+/* Values from the prototype's <style> block (docs/prototype/dressup.html), under shadcn's names. */
+:root {
+	--background: #fbfaf8;
+	--foreground: #1a1917;
+	--card: #ffffff;
+	--card-foreground: #1a1917;
+	--muted: #f1efea;
+	--muted-foreground: #6e6a62;
+	--border: #e6e2da;
+	--input: #e6e2da;
+	--primary: #1a1917;
+	--primary-foreground: #fbfaf8;
+	--destructive: #b42318;
+	--ring: rgba(26, 25, 23, 0.45);
+	--shadow:
+		0 18px 40px -12px rgba(40, 32, 20, 0.22), 0 2px 6px rgba(40, 32, 20, 0.06);
+	--lift: 0 2px 10px rgba(40, 32, 20, 0.16);
+	--ease: cubic-bezier(0.16, 1, 0.3, 1);
+	--wall: linear-gradient(
+		90deg,
+		#c6c2bc 0%,
+		#dad6d0 40%,
+		#d3cfc9 70%,
+		#c3bfb9 100%
+	);
+	--radius: 0.75rem;
+	color-scheme: light;
+}
+
+/* The device decides the theme; the app has no switch, so no .dark class. */
+@media (prefers-color-scheme: dark) {
+	:root {
+		--background: #121110;
+		--foreground: #f4f1ea;
+		--card: #1b1a18;
+		--card-foreground: #f4f1ea;
+		--muted: #262421;
+		--muted-foreground: #a9a49a;
+		--border: #302d29;
+		--input: #302d29;
+		--primary: #f4f1ea;
+		--primary-foreground: #161513;
+		--destructive: #f97066;
+		--ring: rgba(244, 241, 234, 0.5);
+		--shadow:
+			0 18px 44px -12px rgba(0, 0, 0, 0.7), 0 2px 6px rgba(0, 0, 0, 0.4);
+		color-scheme: dark;
+	}
+}
+
+@theme inline {
+	--color-background: var(--background);
+	--color-foreground: var(--foreground);
+	--color-card: var(--card);
+	--color-card-foreground: var(--card-foreground);
+	--color-muted: var(--muted);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-border: var(--border);
+	--color-input: var(--input);
+	--color-primary: var(--primary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-destructive: var(--destructive);
+	--color-ring: var(--ring);
+	--shadow-float: var(--shadow);
+	--shadow-lift: var(--lift);
+	--ease-soft: var(--ease);
+}
+
+@layer base {
+	body {
+		background: var(--background);
+		color: var(--foreground);
+		font: 14px / 1.45 var(--font-sans);
+		-webkit-font-smoothing: antialiased;
+	}
+	h1,
+	h2,
+	h3 {
+		font-family: var(--font-serif);
+		font-weight: 400;
+		letter-spacing: -0.01em;
+	}
+}
