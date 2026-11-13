@@ -1,4 +1,6 @@
+import { useSearchParams } from "react-router";
 import { Button } from "@/components/ui/button";
+import { authClient } from "../auth-client";
 
 // The prototype's own sign-in mark (docs/prototype/dressup.html:785); Lucide has none.
 function GoogleMark() {
@@ -20,7 +22,17 @@ function GoogleMark() {
 	);
 }
 
+function signInWithGoogle() {
+	// Better Auth sends errors and cancels back to "/" with ?error=.
+	return authClient.signIn.social({
+		provider: "google",
+		callbackURL: "/",
+		errorCallbackURL: "/",
+	});
+}
+
 export function SignInPage() {
+	const [params] = useSearchParams();
 	return (
 		<div className="flex h-dvh flex-col bg-background">
 			<div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
@@ -28,10 +40,20 @@ export function SignInPage() {
 				<p className="max-w-[32ch] text-balance text-[15px] text-muted-foreground">
 					See your clothes in your colours, before you put them on.
 				</p>
-				<Button variant="primary" size="lg" className="mt-4">
+				<Button
+					variant="primary"
+					size="lg"
+					className="mt-4"
+					onClick={signInWithGoogle}
+				>
 					<GoogleMark />
 					Sign in with Google
 				</Button>
+				{params.has("error") && (
+					<p role="alert" className="text-[13px] text-destructive">
+						Sign-in did not work. Try again.
+					</p>
+				)}
 			</div>
 		</div>
 	);

@@ -28,6 +28,44 @@ test.describe("without a session", () => {
 			await expect(page).toHaveURL(path);
 		}
 	});
+
+	test("sends the Google button to Google", async ({ page }) => {
+		// Given: no session; the request to Google is caught, not sent
+		let googleUrl = "";
+		await page.route("https://accounts.google.com/**", (route) => {
+			googleUrl = route.request().url();
+			return route.abort();
+		});
+		await page.goto("/");
+		// When
+		await page.getByRole("button", { name: "Sign in with Google" }).click();
+		// Then
+		await expect.poll(() => googleUrl).not.toBe("");
+		const url = new URL(googleUrl);
+		expect({
+			path: url.pathname,
+			redirectUri: url.searchParams.get("redirect_uri"),
+		}).toEqual({
+			path: "/o/oauth2/v2/auth",
+			redirectUri: "http://localhost:5173/api/auth/callback/google",
+		});
+	});
+
+	test("shows the error line after a failed sign-in", async ({ page }) => {
+		// Given: no session
+		// When
+		await page.goto("/?error=access_denied");
+		// Then
+		const alert = page.getByRole("alert");
+		await expect(alert).toHaveText("Sign-in did not work. Try again.");
+		const button = await page
+			.getByRole("button", { name: "Sign in with Google" })
+			.boundingBox();
+		const line = await alert.boundingBox();
+		expect((line?.y ?? 0) >= (button?.y ?? 0) + (button?.height ?? 0)).toBe(
+			true,
+		);
+	});
 });
 
 test("shows the Dress page with a session", async ({ page }) => {
