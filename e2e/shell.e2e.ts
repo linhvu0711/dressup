@@ -235,3 +235,40 @@ test("draws the round icon button with the prototype size", async ({
 	// Then
 	expect(gear).toEqual({ radius: "50%", width: "36px", height: "36px" });
 });
+
+test("links the d icon for the tab and the home screen", async ({ page }) => {
+	// Given: both projects
+	// When
+	await page.goto("/");
+	const hrefs = await page.evaluate(() =>
+		["icon", "apple-touch-icon", "manifest"].map(
+			(rel) =>
+				document.querySelector(`link[rel="${rel}"]`)?.getAttribute("href") ??
+				"",
+		),
+	);
+	const files = [];
+	for (const path of [
+		"/icon-64.png",
+		"/apple-touch-icon.png",
+		"/icon-512.png",
+	]) {
+		const res = await page.request.get(path);
+		files.push({
+			path,
+			status: res.status(),
+			type: res.headers()["content-type"],
+		});
+	}
+	// Then
+	expect(hrefs).toEqual([
+		"/icon-64.png",
+		"/apple-touch-icon.png",
+		"/manifest.webmanifest",
+	]);
+	expect(files).toEqual([
+		{ path: "/icon-64.png", status: 200, type: "image/png" },
+		{ path: "/apple-touch-icon.png", status: 200, type: "image/png" },
+		{ path: "/icon-512.png", status: 200, type: "image/png" },
+	]);
+});
