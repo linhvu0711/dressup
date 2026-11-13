@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { type Me, meQueryKey } from "../session";
-import { type LookInput, lookSchema } from "./look";
+import { type Look, type LookInput, lookSchema } from "./look";
 
 export const looksQueryKey = (userId: string | null) =>
 	["looks", userId] as const;
@@ -61,7 +61,22 @@ export function useSaveLook() {
 			if (!res.ok) throw new Error(`POST /api/looks answered ${res.status}`);
 			return savedAnswer.parse(await res.json()).look;
 		},
-		onSuccess: () =>
-			queryClient.invalidateQueries({ queryKey: looksQueryKey(userId) }),
+		onSuccess: (look) => {
+			// The wall shows a cached list at once while it asks the server
+			// again, so the saved look goes into that list now, or a first
+			// visit's empty list would show "No looks yet" after a save. A look
+			// saved again keeps its place, as the server keeps its time.
+			queryClient.setQueryData<Look[]>(
+				looksQueryKey(userId),
+				(old) =>
+					old &&
+					(old.some((l) => l.id === look.id)
+						? old.map((l) => (l.id === look.id ? look : l))
+						: [look, ...old]),
+			);
+			return queryClient.invalidateQueries({
+				queryKey: looksQueryKey(userId),
+			});
+		},
 	});
 }

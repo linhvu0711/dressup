@@ -335,3 +335,18 @@ test("leaves out the right part when there is no look to pick", async ({
 	).toBeVisible();
 	await expect(panel).toHaveCount(0);
 });
+
+test("shows a new look on the wall at once after the wall was seen empty", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account; /looks seen empty, then a look
+	// "Fresh" saved from the Dress page
+	await page.goto("/looks");
+	await page.getByRole("link", { name: "Go to Dress" }).click();
+	await saveLook(page, "Fresh");
+	// When: the next GET /api/looks never answers
+	await page.route("**/api/looks", () => {});
+	await page.getByRole("link", { name: "Looks" }).click();
+	// Then
+	await expect(card(page, "Fresh")).toBeVisible();
+});
