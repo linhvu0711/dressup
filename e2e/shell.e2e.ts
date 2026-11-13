@@ -1,4 +1,5 @@
-import { expect, type Page, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 test("sends a browser visit to /api/nope to the Worker", async ({ page }) => {
 	// Given: the dev server Playwright starts

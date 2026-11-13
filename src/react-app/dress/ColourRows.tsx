@@ -27,11 +27,12 @@ export function ColourRows({
 	onLive: (live: LiveColour | null) => void;
 	titleClassName: string;
 }) {
-	const { state, pickColour, addColour, removeColour, setJacket } =
-		useDressState();
+	const dress = useDressState();
 	const toast = useToast();
 	const [adding, setAdding] = useState<GarmentId | null>(null);
 	const [editing, setEditing] = useState(false);
+	if (dress.status !== "ready") return null;
+	const { state, pickColour, addColour, removeColour, setJacket } = dress;
 	const mode = modeById(state.modeId);
 	const garments = [...mode.garments].reverse();
 

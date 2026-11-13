@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
-import { expect, test } from "@playwright/test";
-import { signOutFile } from "./global-setup";
+import { expect, test } from "./fixtures";
+import { SESSION_FILE, signOutFile } from "./global-setup";
 
 const signedOut = { cookies: [], origins: [] };
 
@@ -70,18 +70,24 @@ test.describe("without a session", () => {
 	});
 });
 
-test("shows the Dress page with a session", async ({ page }) => {
-	// Given: the config's session for e2e-user
-	// When
-	await page.goto("/");
-	// Then
-	await expect(page.locator("h1")).toHaveText("Dress");
-	const me = await page.request.get("/api/me");
-	expect(me.status()).toBe(200);
-	const body = await me.json();
-	expect({ id: body.id, email: body.email }).toEqual({
-		id: "e2e-user",
-		email: "e2e@dressup.test",
+// This test checks the account is the shared E2E user, so it keeps that
+// session in place of a pool account. It only reads.
+test.describe("the shared session", () => {
+	test.use({ storageState: SESSION_FILE });
+
+	test("shows the Dress page with a session", async ({ page }) => {
+		// Given: the config's session for e2e-user
+		// When
+		await page.goto("/");
+		// Then
+		await expect(page.locator("h1")).toHaveText("Dress");
+		const me = await page.request.get("/api/me");
+		expect(me.status()).toBe(200);
+		const body = await me.json();
+		expect({ id: body.id, email: body.email }).toEqual({
+			id: "e2e-user",
+			email: "e2e@dressup.test",
+		});
 	});
 });
 

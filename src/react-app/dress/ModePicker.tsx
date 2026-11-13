@@ -22,7 +22,9 @@ export function ModePicker({
 	modeId: ModeId;
 	onPick: (id: ModeId) => void;
 }) {
-	const { state } = useDressState();
+	const dress = useDressState();
+	if (dress.status !== "ready") return null;
+	const { state } = dress;
 	const modes =
 		tab === "Training"
 			? MODES.filter((m) => m.training)

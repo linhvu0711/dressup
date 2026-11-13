@@ -98,12 +98,21 @@ const hex = z
 	.transform((code) => code as Hex);
 const garment = z.enum(GARMENT_IDS);
 
+const modeId = z.enum(MODES.map((m) => m.id) as [ModeId, ...ModeId[]]);
+
+export const dressStateSchema: z.ZodType<DressState> = z.object({
+	modeId,
+	swatches: z.record(garment, z.array(hex)),
+	picked: z.record(garment, hex),
+	open: z.array(z.enum(JACKET_IDS)),
+});
+
 export const dressChangeSchema: z.ZodType<DressChange> = z.discriminatedUnion(
 	"kind",
 	[
 		z.object({
 			kind: z.literal("mode"),
-			modeId: z.enum(MODES.map((m) => m.id) as [ModeId, ...ModeId[]]),
+			modeId,
 		}),
 		z.object({ kind: z.literal("pick"), garment, hex }),
 		z.object({ kind: z.literal("add"), garment, hex }),

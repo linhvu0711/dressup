@@ -21,12 +21,14 @@ type Panel = "mode" | "colours";
 // Phone: the stage on top and the panels under the "Mode" and "Colours" tabs.
 // Laptop: modes on the left, the stage in the middle, colours on the right.
 export function DressPage() {
-	const { state, pickMode } = useDressState();
+	const dress = useDressState();
 	const [panel, setPanel] = useState<Panel>("mode");
 	const [tab, setTab] = useState<PickerTab>("Cold");
 	// The colour the picker shows before "Add". It stays out of the store,
 	// which holds only what the person keeps.
 	const [live, setLive] = useState<LiveColour | null>(null);
+	if (dress.status !== "ready") return <h1 className="sr-only">Dress</h1>;
+	const { state, pickMode } = dress;
 	const mode = modeById(state.modeId);
 	const colours = live
 		? { ...state.picked, [live.garment]: live.hex }
