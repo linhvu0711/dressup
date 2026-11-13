@@ -1,13 +1,33 @@
 import { cn } from "cn";
+import { Plus } from "lucide-react";
+import { useState } from "react";
+import { ColourPicker } from "@/colour/ColourPicker";
+import { useToast } from "@/components/ui/toast";
 import { useDressState } from "@/dress/DressState";
-import { GARMENT_NAMES } from "@/dress/garments";
+import { GARMENT_NAMES, type GarmentId, type Hex } from "@/dress/garments";
 import { modeById } from "@/dress/modes";
+
+export type LiveColour = { garment: GarmentId; hex: Hex };
 
 // The colour rows of docs/prototype/dressup.html:834-842: one row per garment
 // of the mode, top layer first.
-export function ColourRows() {
-	const { state, pickColour } = useDressState();
+export function ColourRows({
+	live,
+	onLive,
+}: {
+	live: LiveColour | null;
+	onLive: (live: LiveColour | null) => void;
+}) {
+	const { state, pickColour, addColour } = useDressState();
+	const toast = useToast();
+	const [adding, setAdding] = useState<GarmentId | null>(null);
 	const garments = [...modeById(state.modeId).garments].reverse();
+
+	const close = () => {
+		setAdding(null);
+		onLive(null);
+	};
+
 	return (
 		<div
 			data-slot="colour-rows"
@@ -16,6 +36,7 @@ export function ColourRows() {
 			{garments.map((garment) => {
 				const name = GARMENT_NAMES[garment];
 				const picked = state.picked[garment];
+				const shown = live?.garment === garment ? live.hex : picked;
 				return (
 					<fieldset
 						key={garment}
@@ -25,7 +46,7 @@ export function ColourRows() {
 						<div className="flex min-h-[30px] items-center gap-[9px] font-medium text-sm">
 							<span data-slot="colour-row-name">{name}</span>
 							<span className="font-mono font-normal text-muted-foreground text-xs">
-								{picked}
+								{shown}
 							</span>
 						</div>
 						<div className="flex flex-wrap items-center gap-[11px] py-[3px]">
@@ -45,10 +66,33 @@ export function ColourRows() {
 									)}
 								/>
 							))}
+							<button
+								type="button"
+								title="Add a colour"
+								aria-label={`Add a colour to ${name}`}
+								onClick={() => setAdding(garment)}
+								className="flex size-[34px] flex-none items-center justify-center rounded-[10px] border-[1.5px] border-border border-dashed text-muted-foreground transition-colors duration-150 hover:border-muted-foreground hover:text-foreground"
+							>
+								<Plus size={16} />
+							</button>
 						</div>
 					</fieldset>
 				);
 			})}
+			{adding ? (
+				<ColourPicker
+					title={`New colour · ${GARMENT_NAMES[adding]}`}
+					start={state.picked[adding]}
+					action="Add"
+					onLive={(hex) => onLive({ garment: adding, hex })}
+					onCancel={close}
+					onDone={(hex) => {
+						const { added } = addColour(adding, hex);
+						close();
+						if (!added) toast("You have this colour already. It is on now.");
+					}}
+				/>
+			) : null}
 		</div>
 	);
 }

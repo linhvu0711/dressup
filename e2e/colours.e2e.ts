@@ -29,10 +29,12 @@ async function labels(page: Page, garment: string) {
 	);
 }
 
+// By its label, not its role: an open picker hides the page from the
+// accessibility tree, and the live colour must still be read.
 const garmentIn = (page: Page, mode: string, garment: string) =>
-	page
-		.getByRole("img", { name: `Mannequin in ${mode}`, exact: true })
-		.locator(`[data-garment="${garment}"]`);
+	page.locator(
+		`svg[aria-label="Mannequin in ${mode}"] [data-garment="${garment}"]`,
+	);
 
 test("lists one row per garment, top layer first", async ({ page }) => {
 	// Given: both projects, a fresh page, the Colours tab on the phone
@@ -202,4 +204,128 @@ test.describe("dark device", () => {
 		// Then
 		expect(ring).toBe("rgba(244, 241, 234, 0.3) 0px 0px 0px 1px inset");
 	});
+});
+
+async function openPicker(page: Page) {
+	await openColours(page);
+	await page
+		.getByRole("button", { name: "Add a colour to Sweater", exact: true })
+		.click();
+	return page.getByRole("dialog", { name: "New colour" });
+}
+
+const sweaterNow = (page: Page) =>
+	garmentIn(page, "Polo + sweater", "sweater").innerHTML();
+
+test("shows a dragged colour live", async ({ page }) => {
+	// Given: both projects, a fresh page, the picker open on the Sweater row
+	const dialog = await openPicker(page);
+	const area = await dialog.locator('[data-slot="colour-area"]').boundingBox();
+	if (!area) throw new Error("no colour area");
+	// When
+	await page.mouse.move(area.x + area.width / 2, area.y + area.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(area.x + area.width + 20, area.y - 20);
+	await page.mouse.up();
+	// Then
+	await expect(
+		dialog.getByRole("textbox", { name: "Colour code" }),
+	).toHaveValue("#006CFF");
+	expect(await sweaterNow(page)).toContain('fill="#006CFF"');
+});
+
+test("shows a typed colour live", async ({ page }) => {
+	// Given: both projects, a fresh page, the picker open on the Sweater row
+	const dialog = await openPicker(page);
+	// When
+	await dialog.getByRole("textbox", { name: "Colour code" }).fill("C0392B");
+	// Then
+	await expect(
+		page.getByRole("button", { name: "Sweater #C0392B", exact: true }),
+	).toHaveCount(0);
+	expect(await sweaterNow(page)).toContain('fill="#C0392B"');
+});
+
+test("adds a typed colour at the front", async ({ page }) => {
+	// Given: both projects, a fresh page, the picker open on the Sweater row
+	const dialog = await openPicker(page);
+	// When
+	await dialog.getByRole("textbox", { name: "Colour code" }).fill("C0392B");
+	await dialog.getByRole("button", { name: "Add", exact: true }).click();
+	// Then
+	await expect(dialog).toBeHidden();
+	expect(await labels(page, "Sweater")).toEqual([
+		"Sweater #C0392B",
+		"Sweater #1F3A5F",
+		"Sweater #8C8A84",
+		"Sweater #E6DFD0",
+		"Sweater #7A2E2E",
+	]);
+	await expect(
+		page.getByRole("button", { name: "Sweater #C0392B", exact: true }),
+	).toHaveAttribute("aria-pressed", "true");
+	expect(await sweaterNow(page)).toContain('fill="#C0392B"');
+});
+
+test("puts the old colour back on Cancel", async ({ page }) => {
+	// Given: both projects, a fresh page, the picker open on the Sweater row
+	const dialog = await openPicker(page);
+	// When
+	await dialog.getByRole("textbox", { name: "Colour code" }).fill("C0392B");
+	await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+	// Then
+	await expect(dialog).toBeHidden();
+	expect(await sweaterNow(page)).toContain('fill="#1F3A5F"');
+	await expect(squares(page, "Sweater")).toHaveCount(4);
+});
+
+test("puts the old colour back on Esc", async ({ page }) => {
+	// Given: both projects, a fresh page, the picker open on the Sweater row
+	const dialog = await openPicker(page);
+	// When
+	await dialog.getByRole("textbox", { name: "Colour code" }).fill("C0392B");
+	await page.keyboard.press("Escape");
+	// Then
+	await expect(dialog).toBeHidden();
+	expect(await sweaterNow(page)).toContain('fill="#1F3A5F"');
+	await expect(squares(page, "Sweater")).toHaveCount(4);
+});
+
+test("turns Add off and shows the red hint", async ({ page }) => {
+	// Given: both projects, a fresh page, the picker open on the Sweater row
+	const dialog = await openPicker(page);
+	// When
+	await dialog.getByRole("textbox", { name: "Colour code" }).fill("zz1234");
+	// Then
+	await expect(
+		dialog.getByRole("button", { name: "Add", exact: true }),
+	).toBeDisabled();
+	const hint = dialog.getByText(
+		"This is not a colour code. Use 6 letters or numbers, like #1F3A5F.",
+		{ exact: true },
+	);
+	await expect(hint).toBeVisible();
+	expect(await hint.evaluate((el) => getComputedStyle(el).color)).toBe(
+		"rgb(180, 35, 24)",
+	);
+});
+
+test("picks the square it has and says so", async ({ page }) => {
+	// Given: both projects, a fresh page, the picker open on the Sweater row
+	const dialog = await openPicker(page);
+	// When
+	await dialog.getByRole("textbox", { name: "Colour code" }).fill("#8c8a84");
+	await dialog.getByRole("button", { name: "Add", exact: true }).click();
+	// Then
+	await expect(
+		page
+			.locator('[data-slot="toast"]')
+			.getByText("You have this colour already. It is on now.", {
+				exact: true,
+			}),
+	).toBeVisible();
+	await expect(squares(page, "Sweater")).toHaveCount(4);
+	await expect(
+		page.getByRole("button", { name: "Sweater #8C8A84", exact: true }),
+	).toHaveAttribute("aria-pressed", "true");
 });
