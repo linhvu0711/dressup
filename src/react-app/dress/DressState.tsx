@@ -161,7 +161,10 @@ export function DressStateProvider({
 					if (sent === "signed-out") void signOut();
 					else {
 						// The server's copy wins: drop the local one and load it.
+						// A "wear" may have gone with the queue, so the look is no
+						// longer on, and "Save changes" would write the wrong outfit.
 						setChanged(null);
+						setEdit(null);
 						void queryClient.invalidateQueries({ queryKey: dressQueryKey });
 					}
 					return sent;

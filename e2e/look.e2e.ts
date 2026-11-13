@@ -294,6 +294,32 @@ test("opens the look on the Dress page in the edit state", async ({ page }) => {
 		.toContain('fill="#7A2E2E"');
 });
 
+test("ends the edit state when the server refuses the look", async ({
+	page,
+}) => {
+	// Given: both projects, "Navy day" saved red, a navy sweater on, the look
+	// open; then each dress change is refused
+	await openColours(page);
+	await pickColour(page, "Sweater #7A2E2E");
+	await saveLook(page, "Navy day");
+	await pickColour(page, "Sweater #1F3A5F");
+	await goTo(page, "Looks");
+	await card(page, "Navy day").click();
+	await page.route("**/api/dress/changes", (route) =>
+		route.fulfill({ status: 400, json: { error: "invalid", field: "hex" } }),
+	);
+	// When
+	await page.getByRole("button", { name: "Edit this look" }).click();
+	// Then: the stored outfit is back, so "Save changes" cannot write it
+	// over the look
+	await expect(page).toHaveURL("/");
+	await expect(page.getByRole("button", { name: "Save look" })).toBeVisible();
+	await expect(page.getByText("Editing: Navy day")).toHaveCount(0);
+	await expect
+		.poll(() => sweater(page).innerHTML())
+		.toContain('fill="#1F3A5F"');
+});
+
 test("ends the edit state with the cross", async ({ page }) => {
 	// Given: both projects, "Navy day" in the edit state over a navy sweater
 	await editRedNavyDay(page);
