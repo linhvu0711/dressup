@@ -79,3 +79,15 @@ test.describe("dark device", () => {
 		});
 	});
 });
+
+test("starts with Polo + sweater", async ({ page }) => {
+	// Given: both projects, a fresh page
+	await page.goto("/");
+	// When
+	const figure = page.getByRole("img", {
+		name: "Mannequin in Polo + sweater",
+		exact: true,
+	});
+	// Then
+	await expect(figure).toBeVisible();
+});
