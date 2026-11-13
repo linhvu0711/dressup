@@ -146,18 +146,28 @@ export async function saveDress(
 					.onConflictDoNothing(),
 			);
 		});
-		// After the squares, and only while the square is still in the row:
-		// another device may have removed it since the read.
-		const hex = after.picked[garment];
-		if (hex !== old.picked[garment])
+		const picked = after.picked[garment] !== old.picked[garment];
+		if (picked)
 			writes.push(
 				db
 					.update(outfitGarment)
-					.set({ hex })
+					.set({ hex: after.picked[garment] })
+					.where(thisGarment),
+			);
+		// Another device may have changed the row since the read, so the pick
+		// can name a square that is gone. Then it moves to the row's first
+		// square, as removeColour in state.ts does.
+		if (picked || was.some((h) => !now.includes(h)))
+			writes.push(
+				db
+					.update(outfitGarment)
+					.set({
+						hex: sql`(select ${colourSquare.hex} from ${colourSquare} where ${colourSquare.userId} = ${userId} and ${colourSquare.garment} = ${garment} order by ${colourSquare.position} limit 1)`,
+					})
 					.where(
 						and(
 							thisGarment,
-							sql`exists (select 1 from ${colourSquare} where ${colourSquare.userId} = ${userId} and ${colourSquare.garment} = ${garment} and ${colourSquare.hex} = ${hex})`,
+							sql`not exists (select 1 from ${colourSquare} where ${colourSquare.userId} = ${userId} and ${colourSquare.garment} = ${garment} and ${colourSquare.hex} = ${outfitGarment.hex})`,
 						),
 					),
 			);

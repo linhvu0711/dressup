@@ -379,6 +379,21 @@ describe("two devices at the same moment", () => {
 		});
 	});
 
+	test("moves the pick to the row when the other device removes it", async () => {
+		// Given: alice after one GET, with #1F3A5F picked
+		const { h } = await aliceAfterGet();
+		// When: the pick of #7A2E2E is stored first
+		const s = await atOnce(h, [
+			{ kind: "pick", garment: "sweater", hex: "#7A2E2E" },
+			{ kind: "remove", garment: "sweater", hex: "#7A2E2E" },
+		]);
+		// Then
+		expect({ row: s.swatches.sweater, picked: s.picked.sweater }).toEqual({
+			row: ["#1F3A5F", "#8C8A84", "#E6DFD0"],
+			picked: "#1F3A5F",
+		});
+	});
+
 	test("keeps a jacket toggle and the new pick together", async () => {
 		// Given: alice with the padded row cut to #1B1B1F and #1F3A5F, and
 		// #1B1B1F picked
