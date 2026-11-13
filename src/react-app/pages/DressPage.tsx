@@ -45,6 +45,8 @@ export function DressPage() {
 					<Mannequin
 						layers={outfitOf(mode, colours)}
 						openJackets={state.open}
+						skin={state.mannequin.skin}
+						hair={state.mannequin.hair}
 						label={`Mannequin in ${mode.name}`}
 					/>
 				) : (

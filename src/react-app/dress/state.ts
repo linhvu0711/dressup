@@ -17,6 +17,19 @@ export type DressState = {
 	swatches: Record<GarmentId, readonly Hex[]>;
 	picked: Record<GarmentId, Hex>;
 	open: readonly JacketId[];
+	mannequin: MannequinColours;
+};
+
+export const MANNEQUIN_PARTS = ["skin", "hair"] as const;
+
+export type MannequinPart = (typeof MANNEQUIN_PARTS)[number];
+
+export type MannequinColours = Record<MannequinPart, Hex>;
+
+// docs/prototype/dressup.html:761 and tokens.md "Mannequin".
+export const STARTER_MANNEQUIN: MannequinColours = {
+	skin: "#D6A27B",
+	hair: "#141418",
 };
 
 const perGarment = <T>(value: (id: GarmentId) => T) =>
@@ -30,6 +43,7 @@ export const startDressState = (): DressState => ({
 	swatches: perGarment((id) => [...STARTER_COLOURS[id]]),
 	picked: perGarment((id) => STARTER_COLOURS[id][0]),
 	open: [],
+	mannequin: { ...STARTER_MANNEQUIN },
 });
 
 export const pickMode = (s: DressState, modeId: ModeId): DressState => ({
@@ -42,6 +56,12 @@ export const pickColour = (
 	garment: GarmentId,
 	hex: Hex,
 ): DressState => ({ ...s, picked: { ...s.picked, [garment]: hex } });
+
+export const setMannequinColour = (
+	s: DressState,
+	part: MannequinPart,
+	hex: Hex,
+): DressState => ({ ...s, mannequin: { ...s.mannequin, [part]: hex } });
 
 // A colour the row has already gets no second square: that square goes on
 // (docs/prototype/dressup.html:1035-1036).
@@ -90,7 +110,8 @@ export type DressChange =
 	| { kind: "pick"; garment: GarmentId; hex: Hex }
 	| { kind: "add"; garment: GarmentId; hex: Hex }
 	| { kind: "remove"; garment: GarmentId; hex: Hex }
-	| { kind: "jacket"; jacket: JacketId; open: boolean };
+	| { kind: "jacket"; jacket: JacketId; open: boolean }
+	| { kind: "mannequin"; part: MannequinPart; hex: Hex };
 
 const hex = z
 	.string()
@@ -105,6 +126,7 @@ export const dressStateSchema: z.ZodType<DressState> = z.object({
 	swatches: z.record(garment, z.array(hex)),
 	picked: z.record(garment, hex),
 	open: z.array(z.enum(JACKET_IDS)),
+	mannequin: z.object({ skin: hex, hair: hex }),
 });
 
 export const dressChangeSchema: z.ZodType<DressChange> = z.discriminatedUnion(
@@ -121,6 +143,11 @@ export const dressChangeSchema: z.ZodType<DressChange> = z.discriminatedUnion(
 			kind: z.literal("jacket"),
 			jacket: z.enum(JACKET_IDS),
 			open: z.boolean(),
+		}),
+		z.object({
+			kind: z.literal("mannequin"),
+			part: z.enum(MANNEQUIN_PARTS),
+			hex,
 		}),
 	],
 );
@@ -155,6 +182,11 @@ export function applyChange(s: DressState, change: DressChange): ChangeResult {
 			return {
 				ok: true,
 				state: setJacket(s, change.jacket, change.open),
+			};
+		case "mannequin":
+			return {
+				ok: true,
+				state: setMannequinColour(s, change.part, change.hex),
 			};
 	}
 }

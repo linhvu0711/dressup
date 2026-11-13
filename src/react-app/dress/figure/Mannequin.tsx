@@ -13,8 +13,8 @@ import {
 export function Mannequin({
 	layers = [],
 	openJackets = [],
-	skin = "#D6A27B",
-	hair = "#141418",
+	skin,
+	hair,
 	viewBox = "0 10 400 800",
 	lite = false,
 	label = "Mannequin",
@@ -22,8 +22,8 @@ export function Mannequin({
 }: {
 	layers?: readonly GarmentLayer[];
 	openJackets?: readonly JacketId[];
-	skin?: Hex;
-	hair?: Hex;
+	skin: Hex;
+	hair: Hex;
 	viewBox?: string;
 	lite?: boolean;
 	label?: string;

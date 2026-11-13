@@ -15,6 +15,13 @@
       "when": 1794562479388,
       "tag": "0001_quiet_kid_colt",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1794573483590,
+      "tag": "0002_dapper_ultimo",
+      "breakpoints": true
     }
   ]
 }

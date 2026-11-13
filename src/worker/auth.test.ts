@@ -92,6 +92,7 @@ describe("migrations", () => {
 			"__drizzle_migrations",
 			"account",
 			"colour_square",
+			"mannequin",
 			"outfit",
 			"outfit_garment",
 			"session",

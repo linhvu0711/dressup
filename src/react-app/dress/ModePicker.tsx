@@ -87,6 +87,8 @@ export function ModePicker({
 													viewBox="10 14 380 590"
 													layers={outfitOf(mode, state.picked)}
 													openJackets={state.open}
+													skin={state.mannequin.skin}
+													hair={state.mannequin.hair}
 												/>
 												{mode.training && tab !== "Training" ? (
 													<span className="absolute bottom-[7px] left-[7px] rounded-full bg-[rgba(26,25,23,.78)] px-2 py-0.5 font-semibold text-[10px] text-white">
