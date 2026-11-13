@@ -8,6 +8,8 @@
 	"main": "./src/worker/index.ts",
 	"compatibility_date": "2025-10-08",
 	"compatibility_flags": ["nodejs_compat"],
+	// A deploy keeps a variable set in the Cloudflare dashboard, as SIGNUPS_CLOSED (README "Stop new sign-ups").
+	"keep_vars": true,
 	"workers_dev": true,
 	// A version preview would run against the production D1 with the production secrets.
 	"preview_urls": false,

@@ -7,6 +7,7 @@ export type AuthSettings = {
 	secret: string | undefined;
 	baseURL: string | undefined;
 	google: { clientId: string; clientSecret: string };
+	signupsClosed: boolean;
 };
 
 export function authOptions(s: AuthSettings) {
@@ -19,6 +20,9 @@ export function authOptions(s: AuthSettings) {
 			google: {
 				clientId: s.google.clientId,
 				clientSecret: s.google.clientSecret,
+				// A new Google account goes back to /?error=signup_disabled; an
+				// account that exists signs in.
+				disableSignUp: s.signupsClosed,
 			},
 		},
 		// Every OAuth error lands on the sign-in screen with ?error=, never on

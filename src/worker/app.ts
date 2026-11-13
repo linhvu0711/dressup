@@ -48,6 +48,7 @@ export function createApp(getDb: (env: Env) => Db) {
 					clientId: c.env.GOOGLE_CLIENT_ID,
 					clientSecret: c.env.GOOGLE_CLIENT_SECRET,
 				},
+				signupsClosed: c.env.SIGNUPS_CLOSED === "true",
 			}),
 		);
 		await next();

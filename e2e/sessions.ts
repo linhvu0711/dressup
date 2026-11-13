@@ -33,6 +33,7 @@ function testAuth(
 			secret,
 			baseURL: "http://localhost:5173",
 			google: { clientId: "", clientSecret: "" },
+			signupsClosed: false,
 		}),
 		plugins: [testUtils()],
 	});
