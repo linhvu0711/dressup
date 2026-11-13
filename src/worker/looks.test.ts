@@ -368,6 +368,85 @@ describe("GET /api/looks", () => {
 	});
 });
 
+const NAVY_PATH = `/api/looks/${NAVY.id}`;
+
+const remove = ({ app, env }: Harness, headers: Headers, path = NAVY_PATH) =>
+	app.request(path, { method: "DELETE", headers }, env);
+
+const names = async (h: Harness, headers: Headers) =>
+	(await list(h, headers)).looks.map((l) => l.name);
+
+describe("DELETE /api/looks/:id", () => {
+	test("deletes a look", async () => {
+		// Given: alice saved NAVY
+		const { h, headers } = await aliceSignedIn();
+		await post(h, headers, NAVY);
+		// When
+		const res = await remove(h, headers);
+		// Then
+		expect({
+			status: res.status,
+			looks: (await list(h, headers)).looks,
+		}).toEqual({ status: 204, looks: [] });
+	});
+
+	test("answers 404 when the same delete comes twice", async () => {
+		// Given: alice saved NAVY
+		const { h, headers } = await aliceSignedIn();
+		await post(h, headers, NAVY);
+		// When
+		const first = await remove(h, headers);
+		const second = await remove(h, headers);
+		// Then
+		expect({
+			statuses: [first.status, second.status],
+			body: await second.json(),
+			looks: (await list(h, headers)).looks,
+		}).toEqual({
+			statuses: [204, 404],
+			body: { error: "not_found" },
+			looks: [],
+		});
+	});
+
+	test("answers 404 for a delete of another account's look", async () => {
+		// Given: alice saved NAVY; bob is signed in too
+		const { h, headers } = await aliceSignedIn();
+		await post(h, headers, NAVY);
+		const bob = await withBob(h);
+		// When
+		const res = await remove(h, bob);
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			aliceNames: await names(h, headers),
+		}).toEqual({
+			status: 404,
+			body: { error: "not_found" },
+			aliceNames: ["Navy day"],
+		});
+	});
+
+	test("refuses DELETE /api/looks/:id without a session", async () => {
+		// Given: alice saved NAVY; no session headers
+		const { h, headers } = await aliceSignedIn();
+		await post(h, headers, NAVY);
+		// When
+		const res = await remove(h, new Headers());
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			rows: h.sqlite.query("select count(*) as n from look").get(),
+		}).toEqual({
+			status: 401,
+			body: { error: "unauthorized" },
+			rows: { n: 1 },
+		});
+	});
+});
+
 describe("look rows", () => {
 	test("deletes the looks with their user", async () => {
 		// Given: alice saved two looks

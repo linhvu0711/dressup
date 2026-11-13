@@ -69,3 +69,16 @@ export async function saveLook(
 		? { ok: true, look: toLook(row), created: !before }
 		: { ok: false, error: "conflict" };
 }
+
+// Only the account's own look goes; false when there is none to delete.
+export async function deleteLook(
+	db: Db,
+	userId: string,
+	id: string,
+): Promise<boolean> {
+	const rows = await db
+		.delete(look)
+		.where(and(eq(look.id, id), eq(look.userId, userId)))
+		.returning({ id: look.id });
+	return rows.length > 0;
+}
