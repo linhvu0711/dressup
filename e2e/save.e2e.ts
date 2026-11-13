@@ -182,13 +182,15 @@ test("shows the other account's colours after it signs in in another tab", async
 	page,
 }) => {
 	// Given: both projects, the Colours tab on the phone; Sweater #7A2E2E
-	// picked and stored; then the browser holds a second account's session
+	// picked and stored, and the rows in edit mode; then the browser holds a
+	// second account's session
 	await openColours(page);
 	const stored = page.waitForResponse(
 		(r) => r.url().endsWith("/api/dress/changes") && r.status() === 204,
 	);
 	await square(page, "Sweater #7A2E2E").click();
 	await stored;
+	await page.getByRole("button", { name: "Edit colours", exact: true }).click();
 	const other = JSON.parse(readFileSync(claimAccount(), "utf8"));
 	await page.context().clearCookies();
 	await page.context().addCookies(other.cookies);
@@ -196,7 +198,13 @@ test("shows the other account's colours after it signs in in another tab", async
 	await page.evaluate(() =>
 		window.dispatchEvent(new Event("visibilitychange")),
 	);
-	// Then
+	// Then: the page starts over, on the Mode tab on the phone
+	if (isPhone(page)) {
+		await page.getByRole("tab", { name: "Colours", exact: true }).click();
+	}
+	await expect(
+		page.getByRole("button", { name: "Edit colours", exact: true }),
+	).toBeVisible();
 	await expect(square(page, "Sweater #1F3A5F")).toHaveAttribute(
 		"aria-pressed",
 		"true",

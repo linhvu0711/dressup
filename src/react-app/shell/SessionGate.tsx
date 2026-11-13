@@ -13,12 +13,14 @@ export function SessionGate() {
 	if (!me.isPending && !me.data) return <SignInPage />;
 	const signedIn = !!me.data;
 	// The same tree while the session is checked and after, so the shell is
-	// not drawn twice; the dress store loads only with a session.
+	// not drawn twice; the dress store loads only with a session. The page is
+	// keyed by account: another account signing in from a second tab gets a
+	// page with none of this one's tab, edit mode or colour preview.
 	return (
 		<Toaster>
 			<DressStateProvider userId={userId}>
 				<AppShell notice={signedIn ? <UnsavedBar /> : null}>
-					{signedIn ? <Outlet /> : null}
+					{signedIn ? <Outlet key={userId} /> : null}
 				</AppShell>
 			</DressStateProvider>
 		</Toaster>
