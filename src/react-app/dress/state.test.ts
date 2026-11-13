@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { modeById, outfitOf } from "@/dress/modes";
-import { pickColour, pickMode, startDressState } from "@/dress/state";
+import {
+	addColour,
+	pickColour,
+	pickMode,
+	startDressState,
+} from "@/dress/state";
 
 describe("dress state", () => {
 	test("starts with Polo + sweater and each starter set", () => {
@@ -39,5 +44,36 @@ describe("dress state", () => {
 			{ garment: "tee_l", color: "#F3F1EC" },
 			{ garment: "sweater", color: "#7A2E2E" },
 		]);
+	});
+	test("adds a new colour at the front and puts it on", () => {
+		// Given: a fresh state
+		// When
+		const { state, added } = addColour(startDressState(), "sweater", "#C0392B");
+		// Then
+		expect({
+			added,
+			row: state.swatches.sweater,
+			picked: state.picked.sweater,
+		}).toEqual({
+			added: true,
+			row: ["#C0392B", "#1F3A5F", "#8C8A84", "#E6DFD0", "#7A2E2E"],
+			picked: "#C0392B",
+		});
+	});
+
+	test("puts on the square it has for a colour it has", () => {
+		// Given: a fresh state, the passing case with a hex the row holds
+		// When
+		const { state, added } = addColour(startDressState(), "sweater", "#8C8A84");
+		// Then
+		expect({
+			added,
+			row: state.swatches.sweater,
+			picked: state.picked.sweater,
+		}).toEqual({
+			added: false,
+			row: ["#1F3A5F", "#8C8A84", "#E6DFD0", "#7A2E2E"],
+			picked: "#8C8A84",
+		});
 	});
 });

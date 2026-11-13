@@ -40,3 +40,18 @@ export const pickColour = (
 	garment: GarmentId,
 	hex: Hex,
 ): DressState => ({ ...s, picked: { ...s.picked, [garment]: hex } });
+
+// A colour the row has already gets no second square: that square goes on
+// (docs/prototype/dressup.html:1035-1036).
+export function addColour(
+	s: DressState,
+	garment: GarmentId,
+	hex: Hex,
+): { state: DressState; added: boolean } {
+	const row = s.swatches[garment];
+	const added = !row.includes(hex);
+	const swatches = added
+		? { ...s.swatches, [garment]: [hex, ...row] }
+		: s.swatches;
+	return { state: pickColour({ ...s, swatches }, garment, hex), added };
+}
