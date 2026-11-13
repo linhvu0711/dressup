@@ -201,3 +201,37 @@ test("shows the top bar from 900 px", async ({ page, viewport }) => {
 	);
 	await expect(page.getByRole("navigation", { name: "Main" })).toHaveCount(1);
 });
+
+test("draws the pill button with the prototype size", async ({ page }) => {
+	// Given: both projects
+	// When
+	await page.goto("/nope");
+	const pill = await page
+		.getByRole("link", { name: "Go to Dress" })
+		.evaluate((el) => {
+			const style = getComputedStyle(el);
+			return { radius: style.borderTopLeftRadius, height: style.height };
+		});
+	// Then
+	expect(pill).toEqual({ radius: "999px", height: "38px" });
+});
+
+test("draws the round icon button with the prototype size", async ({
+	page,
+}) => {
+	// Given: both projects
+	// When
+	await page.goto("/");
+	const gear = await page
+		.getByRole("link", { name: "Settings" })
+		.evaluate((el) => {
+			const style = getComputedStyle(el);
+			return {
+				radius: style.borderTopLeftRadius,
+				width: style.width,
+				height: style.height,
+			};
+		});
+	// Then
+	expect(gear).toEqual({ radius: "50%", width: "36px", height: "36px" });
+});

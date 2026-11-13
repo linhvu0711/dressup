@@ -1,4 +1,5 @@
 import { Link } from "react-router";
+import { Button } from "@/components/ui/button";
 
 export function NotFoundPage() {
 	return (
@@ -7,7 +8,9 @@ export function NotFoundPage() {
 			<p className="max-w-[30ch] text-muted-foreground">
 				There is no page at this address.
 			</p>
-			<Link to="/">Go to Dress</Link>
+			<Button asChild className="mt-2">
+				<Link to="/">Go to Dress</Link>
+			</Button>
 		</div>
 	);
 }
