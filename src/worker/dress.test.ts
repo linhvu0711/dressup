@@ -8,6 +8,7 @@ type Dress = {
 	swatches: Record<string, string[]>;
 	picked: Record<string, string>;
 	open: string[];
+	mannequin: { skin: string; hair: string };
 };
 
 async function withUser(id: string, email: string, name: string) {
@@ -48,6 +49,20 @@ describe("GET /api/dress", () => {
 		});
 	});
 
+	test("gives a new account the starter skin and hair", async () => {
+		// Given: alice, signed in, with no dress rows
+		const { app, env, helpers } = await withAlice();
+		const headers = await helpers.getAuthHeaders({ userId: "alice-id" });
+		// When
+		const res = await app.request("/api/dress", { headers }, env);
+		// Then
+		const s = (await res.json()) as Dress;
+		expect({ status: res.status, mannequin: s.mannequin }).toEqual({
+			status: 200,
+			mannequin: { skin: "#D6A27B", hair: "#141418" },
+		});
+	});
+
 	test("writes the starter set once when asked twice", async () => {
 		// Given: alice, signed in, with no dress rows
 		const { app, env, helpers, sqlite } = await withAlice();
@@ -66,14 +81,21 @@ describe("GET /api/dress", () => {
 	});
 
 	test("removes the colours and outfit with the user", async () => {
-		// Given: alice after one GET /api/dress
-		const { app, env, helpers, sqlite } = await withAlice();
-		const headers = await helpers.getAuthHeaders({ userId: "alice-id" });
-		await app.request("/api/dress", { headers }, env);
+		// Given: alice after one GET /api/dress and one skin change
+		const h = await withAlice();
+		const headers = await h.helpers.getAuthHeaders({ userId: "alice-id" });
+		await h.app.request("/api/dress", { headers }, h.env);
+		await post(h, headers, { kind: "mannequin", part: "skin", hex: "#8D5524" });
+		const { sqlite } = h;
 		// When
 		sqlite.run("delete from user where id = 'alice-id'");
 		// Then
-		const counts = ["colour_square", "outfit", "outfit_garment"].map(
+		const counts = [
+			"colour_square",
+			"outfit",
+			"outfit_garment",
+			"mannequin",
+		].map(
 			(table) =>
 				sqlite
 					.query<{ n: number }, []>(
@@ -81,7 +103,7 @@ describe("GET /api/dress", () => {
 					)
 					.get()?.n,
 		);
-		expect(counts).toEqual([0, 0, 0]);
+		expect(counts).toEqual([0, 0, 0, 0]);
 	});
 
 	test("refuses GET /api/dress without a session", async () => {
@@ -180,6 +202,81 @@ describe("POST /api/dress/changes", () => {
 		const s = await get(h, one);
 		// Then
 		expect(s.picked.sweater).toBe("#8C8A84");
+	});
+
+	test("stores a skin and a hair colour", async () => {
+		// Given: alice after one GET /api/dress
+		const { h, headers } = await aliceAfterGet();
+		// When
+		const statuses = [];
+		for (const change of [
+			{ kind: "mannequin", part: "skin", hex: "#8D5524" },
+			{ kind: "mannequin", part: "hair", hex: "#B55239" },
+		])
+			statuses.push((await post(h, headers, change)).status);
+		const s = await get(h, headers);
+		// Then
+		expect({ statuses, mannequin: s.mannequin }).toEqual({
+			statuses: [204, 204],
+			mannequin: { skin: "#8D5524", hair: "#B55239" },
+		});
+	});
+
+	test("keeps one mannequin row when the same change comes twice", async () => {
+		// Given: alice after one GET /api/dress
+		const { h, headers } = await aliceAfterGet();
+		const skin = { kind: "mannequin", part: "skin", hex: "#8D5524" };
+		// When
+		const first = await post(h, headers, skin);
+		const second = await post(h, headers, skin);
+		const s = await get(h, headers);
+		// Then
+		const rows = h.sqlite
+			.query<{ n: number }, []>(
+				"select count(*) as n from mannequin where user_id = 'alice-id'",
+			)
+			.get()?.n;
+		expect({
+			statuses: [first.status, second.status],
+			mannequin: s.mannequin,
+			rows,
+		}).toEqual({
+			statuses: [204, 204],
+			mannequin: { skin: "#8D5524", hair: "#141418" },
+			rows: 1,
+		});
+	});
+
+	test("refuses a skin code that is not a hex colour", async () => {
+		// Given: alice after one GET; the passing skin change with its hex changed
+		const { h, headers } = await aliceAfterGet();
+		// When
+		const res = await post(h, headers, {
+			kind: "mannequin",
+			part: "skin",
+			hex: "#zz1234",
+		});
+		// Then
+		expect({ status: res.status, body: await res.json() }).toEqual({
+			status: 400,
+			body: { error: "invalid", field: "hex" },
+		});
+	});
+
+	test("refuses an unknown mannequin part", async () => {
+		// Given: alice after one GET; the passing skin change with its part changed
+		const { h, headers } = await aliceAfterGet();
+		// When
+		const res = await post(h, headers, {
+			kind: "mannequin",
+			part: "eyes",
+			hex: "#8D5524",
+		});
+		// Then
+		expect({ status: res.status, body: await res.json() }).toEqual({
+			status: 400,
+			body: { error: "invalid", field: "part" },
+		});
 	});
 
 	test("refuses a code that is not a hex colour", async () => {
@@ -329,6 +426,18 @@ async function atOnce(h: Harness, changes: DressChange[]) {
 }
 
 describe("two devices at the same moment", () => {
+	test("keeps a skin from one device and a hair from another", async () => {
+		// Given: alice after one GET, with no mannequin row
+		const { h } = await aliceAfterGet();
+		// When
+		const s = await atOnce(h, [
+			{ kind: "mannequin", part: "skin", hex: "#8D5524" },
+			{ kind: "mannequin", part: "hair", hex: "#B55239" },
+		]);
+		// Then
+		expect(s.mannequin).toEqual({ skin: "#8D5524", hair: "#B55239" });
+	});
+
 	test("stores the same new colour from both", async () => {
 		// Given: alice after one GET
 		const { h } = await aliceAfterGet();

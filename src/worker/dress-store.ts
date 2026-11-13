@@ -7,9 +7,18 @@ import {
 	STARTER_COLOURS,
 } from "@/dress/garments";
 import { DEFAULT_MODE_ID, type ModeId } from "@/dress/modes";
-import type { DressState } from "@/dress/state";
+import {
+	type DressState,
+	MANNEQUIN_PARTS,
+	STARTER_MANNEQUIN,
+} from "@/dress/state";
 import type { Db } from "./db";
-import { colourSquare, outfit, outfitGarment } from "./db/dress-schema";
+import {
+	colourSquare,
+	mannequin,
+	outfit,
+	outfitGarment,
+} from "./db/dress-schema";
 
 function seed(db: Db, userId: string) {
 	const garmentRows = GARMENT_IDS.map((garment) =>
@@ -51,7 +60,7 @@ export async function loadDress(db: Db, userId: string): Promise<StoredDress> {
 	if ((await outfitRow).length === 0) await seed(db, userId);
 	// One batch, so a save from another device cannot land between the reads
 	// and leave a pick that is not in its row.
-	const [[mode], garments, squares] = await db.batch([
+	const [[mode], garments, squares, [colours]] = await db.batch([
 		outfitRow,
 		db.select().from(outfitGarment).where(eq(outfitGarment.userId, userId)),
 		db
@@ -61,6 +70,7 @@ export async function loadDress(db: Db, userId: string): Promise<StoredDress> {
 			// Two devices that add at once give their squares the same position;
 			// the hex keeps their order the same on each load.
 			.orderBy(colourSquare.position, colourSquare.hex),
+		db.select().from(mannequin).where(eq(mannequin.userId, userId)),
 	]);
 	const swatches = Object.fromEntries(
 		GARMENT_IDS.map((id) => [id, [] as Hex[]]),
@@ -80,7 +90,15 @@ export async function loadDress(db: Db, userId: string): Promise<StoredDress> {
 		garments.some((g) => g.garment === id && g.open),
 	);
 	return {
-		state: { modeId: mode.modeId as ModeId, swatches, picked, open },
+		state: {
+			modeId: mode.modeId as ModeId,
+			swatches,
+			picked,
+			open,
+			mannequin: colours
+				? { skin: colours.skin as Hex, hair: colours.hair as Hex }
+				: { ...STARTER_MANNEQUIN },
+		},
 		firstPosition,
 	};
 }
@@ -101,6 +119,23 @@ export async function saveDress(
 				.update(outfit)
 				.set({ modeId: after.modeId })
 				.where(eq(outfit.userId, userId)),
+		);
+	// Sets only the parts that changed, so a skin from one device and a hair
+	// from another, both read before either wrote, are both kept.
+	const parts = MANNEQUIN_PARTS.filter(
+		(part) => after.mannequin[part] !== old.mannequin[part],
+	);
+	if (parts.length > 0)
+		writes.push(
+			db
+				.insert(mannequin)
+				.values({ userId, ...after.mannequin })
+				.onConflictDoUpdate({
+					target: mannequin.userId,
+					set: Object.fromEntries(
+						parts.map((part) => [part, after.mannequin[part]]),
+					),
+				}),
 		);
 	for (const garment of GARMENT_IDS) {
 		const wasOpen = (old.open as readonly GarmentId[]).includes(garment);
