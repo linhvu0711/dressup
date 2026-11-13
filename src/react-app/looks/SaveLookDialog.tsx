@@ -4,30 +4,65 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { modeById } from "@/dress/modes";
 import type { DressState } from "@/dress/state";
-import { SaveError, useLooks, useSaveLook } from "./api";
-import { LOOK_LIMIT, LOOK_NAME_MAX, type LookId, lookFromDress } from "./look";
+import {
+	LookGone,
+	SaveError,
+	useLooks,
+	useSaveLook,
+	useUpdateLook,
+} from "./api";
+import { useLeaveGoneLook } from "./gone";
+import {
+	LOOK_LIMIT,
+	LOOK_NAME_MAX,
+	type Look,
+	type LookId,
+	lookFromDress,
+} from "./look";
 
 // The save form of docs/prototype/dressup.html:930-939, with no tags (#15).
+// In the edit state it changes the look, or saves a copy with "Save as new".
+// Either ends the edit state and keeps the colours (:1046-1049).
 export function SaveLookDialog({
 	state,
+	editing,
+	onSaved,
 	onClose,
 }: {
 	state: DressState;
+	editing: Look | null;
+	onSaved: () => void;
 	onClose: () => void;
 }) {
 	// One id for this form, so a Save after a failed Save that did reach the
 	// server writes the same look again rather than a second one.
 	const [id] = useState(() => crypto.randomUUID() as LookId);
-	const [name, setName] = useState("");
+	const [name, setName] = useState(editing?.name ?? "");
 	const box = useRef<HTMLInputElement>(null);
 	const save = useSaveLook();
+	const update = useUpdateLook();
 	const looks = useLooks();
 	const toast = useToast();
-	// #11's "Save as new" is off with Save; "Save changes" keeps the same id
-	// and is not counted. A 409 look_limit means another tab filled the account.
+	const leaveGoneLook = useLeaveGoneLook();
+	// "Save as new" is off with Save; "Save changes" keeps the same id and is
+	// not counted. A 409 look_limit means another tab filled the account.
 	const full =
 		(looks.data?.length ?? 0) >= LOOK_LIMIT ||
 		(save.error instanceof SaveError && save.error.code === "look_limit");
+	const failed =
+		save.isError || (update.isError && !(update.error instanceof LookGone));
+	const saveNew = () => {
+		// The prototype's saveDo stops here at the limit
+		// (docs/prototype/dressup.html:1044).
+		if (full) return;
+		save.mutate(lookFromDress(state, id, name), {
+			onSuccess: () => {
+				toast("Saved to Looks");
+				onSaved();
+				onClose();
+			},
+		});
+	};
 
 	return (
 		<Dialog.Root open onOpenChange={(open) => open || onClose()}>
@@ -46,19 +81,23 @@ export function SaveLookDialog({
 					className="fixed inset-x-0 bottom-0 z-[21] flex max-h-[88%] flex-col gap-4 overflow-auto rounded-t-[26px] border border-border border-b-0 bg-card p-5 pb-[22px] shadow-float outline-none duration-[260ms] ease-soft data-[state=open]:slide-in-from-bottom-8 data-[state=open]:animate-in wide:inset-x-auto wide:top-1/2 wide:bottom-auto wide:left-1/2 wide:w-[430px] wide:-translate-x-1/2 wide:-translate-y-1/2 wide:rounded-[22px] wide:border-b wide:p-6"
 				>
 					<Dialog.Title className="text-[25px] leading-tight">
-						Save look
+						{editing ? "Save changes" : "Save look"}
 					</Dialog.Title>
 					<form
 						className="flex flex-col gap-4"
 						onSubmit={(e) => {
 							e.preventDefault();
-							// The prototype's saveDo stops here at the limit
-							// (docs/prototype/dressup.html:1044).
-							if (full) return;
-							save.mutate(lookFromDress(state, id, name), {
+							if (!editing) return saveNew();
+							update.mutate(lookFromDress(state, editing.id, name), {
 								onSuccess: () => {
-									toast("Saved to Looks");
+									toast("Changes saved");
+									onSaved();
 									onClose();
+								},
+								onError: (error) => {
+									if (!(error instanceof LookGone)) return;
+									onClose();
+									leaveGoneLook(editing.id);
 								},
 							});
 						}}
@@ -87,7 +126,7 @@ export function SaveLookDialog({
 								You have 300 looks. That is the limit. Delete one to save a new
 								one.
 							</p>
-						) : save.isError ? (
+						) : failed ? (
 							<p role="alert" className="text-[13px] text-destructive">
 								Not saved. Try again.
 							</p>
@@ -96,12 +135,23 @@ export function SaveLookDialog({
 							<Button type="button" onClick={onClose}>
 								Cancel
 							</Button>
+							{editing ? (
+								<Button
+									type="button"
+									disabled={save.isPending || update.isPending || full}
+									onClick={saveNew}
+								>
+									Save as new
+								</Button>
+							) : null}
 							<Button
 								type="submit"
 								variant="primary"
-								disabled={save.isPending || full}
+								disabled={
+									save.isPending || update.isPending || (!editing && full)
+								}
 							>
-								Save
+								{editing ? "Save changes" : "Save"}
 							</Button>
 						</div>
 					</form>

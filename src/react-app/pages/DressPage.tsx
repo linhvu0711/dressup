@@ -106,7 +106,14 @@ export function DressPage() {
 				)}
 			</Stage>
 			{saving && state ? (
-				<SaveLookDialog state={state} onClose={() => setSaving(false)} />
+				<SaveLookDialog
+					state={state}
+					editing={editing}
+					onSaved={() => {
+						if (dress.status === "ready") dress.endEditing();
+					}}
+					onClose={() => setSaving(false)}
+				/>
 			) : null}
 			<div className="flex min-h-0 flex-1 flex-col px-4 pt-3 wide:contents">
 				<Tabs

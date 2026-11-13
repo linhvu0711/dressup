@@ -60,6 +60,17 @@ async function editRedNavyDay(page: Page) {
 	await page.getByRole("button", { name: "Edit this look" }).click();
 }
 
+const changesForm = (page: Page) =>
+	page.getByRole("dialog", { name: "Save changes" });
+
+async function openChangesForm(page: Page) {
+	await page.getByRole("button", { name: "Save changes" }).click();
+	await expect(changesForm(page)).toBeVisible();
+}
+
+const sweaters = async (page: Page) =>
+	(await storedLooks(page)).looks.map((l) => [l.name, l.colours.sweater]);
+
 const toast = (page: Page) => page.locator('[data-slot="toast"]');
 
 async function openLook(page: Page, name: string) {
@@ -320,4 +331,90 @@ test("shows the whole cross for a long name on a phone", async ({ page }) => {
 		leftOfSave: (cross?.x ?? 0) + (cross?.width ?? 0) <= (save?.x ?? 0),
 		inside: (cross?.x ?? 0) + (cross?.width ?? 0) <= 375,
 	}).toEqual({ leftOfSave: true, inside: true });
+});
+
+test("saves changes to the look", async ({ page }) => {
+	// Given: both projects, "Navy day" (red) in the edit state
+	await editRedNavyDay(page);
+	const [first] = (await storedLooks(page)).looks;
+	await pickColour(page, "Sweater #8C8A84");
+	await openChangesForm(page);
+	await expect(
+		changesForm(page).getByRole("textbox", {
+			name: "Name (you can leave it empty)",
+		}),
+	).toHaveValue("Navy day");
+	// When
+	await changesForm(page).getByRole("button", { name: "Save changes" }).click();
+	// Then
+	await expect(toast(page)).toHaveText("Changes saved");
+	await expect(page.getByText("Editing:")).toHaveCount(0);
+	expect(await storedLooks(page)).toEqual({
+		looks: [
+			{
+				id: first.id,
+				name: "Navy day",
+				modeId: "polo-sweater",
+				colours: { chino_p: "#C9B38C", polo_l: "#F3F1EC", sweater: "#8C8A84" },
+				open: [],
+			},
+		],
+	});
+});
+
+test("saves a copy with Save as new", async ({ page }) => {
+	// Given: both projects, "Navy day" (red) in the edit state
+	await editRedNavyDay(page);
+	const [first] = (await storedLooks(page)).looks;
+	await pickColour(page, "Sweater #8C8A84");
+	await openChangesForm(page);
+	// When
+	await changesForm(page).getByRole("button", { name: "Save as new" }).click();
+	// Then
+	await expect(toast(page)).toHaveText("Saved to Looks");
+	await expect(page.getByText("Editing:")).toHaveCount(0);
+	expect(await sweaters(page)).toEqual([
+		["Navy day", "#8C8A84"],
+		["Navy day", "#7A2E2E"],
+	]);
+	expect((await storedLooks(page)).looks[1].id).toBe(first.id);
+});
+
+test("keeps the form open when Save changes fails", async ({ page }) => {
+	// Given: both projects, "Navy day" (red) in the edit state; a PUT answers 500
+	await editRedNavyDay(page);
+	await page.route("**/api/looks/*", (route) =>
+		route.request().method() === "PUT"
+			? route.fulfill({ status: 500 })
+			: route.continue(),
+	);
+	await openChangesForm(page);
+	// When
+	await changesForm(page).getByRole("button", { name: "Save changes" }).click();
+	// Then
+	await expect(changesForm(page).getByRole("alert")).toHaveText(
+		"Not saved. Try again.",
+	);
+	await expect(changesForm(page)).toBeVisible();
+	await expect(page.getByText("Editing: Navy day")).toBeVisible();
+	expect(await sweaters(page)).toEqual([["Navy day", "#7A2E2E"]]);
+});
+
+test("shows the wall when the edited look is gone", async ({ page }) => {
+	// Given: both projects, "Navy day" in the edit state; then a second
+	// device deletes it
+	await editRedNavyDay(page);
+	const [gone] = (await storedLooks(page)).looks;
+	await page.request.delete(`/api/looks/${gone.id}`);
+	await openChangesForm(page);
+	// When
+	await changesForm(page).getByRole("button", { name: "Save changes" }).click();
+	// Then
+	await expect(toast(page)).toHaveText("This look is gone");
+	await expect(page).toHaveURL("/looks");
+	await expect(
+		page.getByRole("heading", { name: "No looks yet" }),
+	).toBeVisible();
+	await goTo(page, "Dress");
+	await expect(page.getByText("Editing:")).toHaveCount(0);
 });
