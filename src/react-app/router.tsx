@@ -3,11 +3,11 @@ import { DressPage } from "./pages/DressPage";
 import { LooksPage } from "./pages/LooksPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { SettingsPage } from "./pages/SettingsPage";
-import { AppShell } from "./shell/AppShell";
+import { SessionGate } from "./shell/SessionGate";
 
 export const router = createBrowserRouter([
 	{
-		element: <AppShell />,
+		element: <SessionGate />,
 		children: [
 			{ index: true, element: <DressPage /> },
 			{ path: "looks", element: <LooksPage /> },

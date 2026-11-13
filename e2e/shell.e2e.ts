@@ -92,6 +92,7 @@ test("sets the prototype fonts", async ({ page }) => {
 	// Given: both projects
 	// When
 	await page.goto("/");
+	await expect(page.locator("h1")).toHaveText("Dress");
 	const fonts = await page.evaluate(() => {
 		const probe = document.createElement("div");
 		probe.setAttribute("style", "font-family: var(--font-mono)");
