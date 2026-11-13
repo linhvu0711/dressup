@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { useLooks } from "@/looks/api";
 import { COMPARE_MAX, COMPARE_MIN } from "@/looks/compare";
+import { DeleteLookDialog } from "@/looks/DeleteLookDialog";
 import { LookCard } from "@/looks/LookCard";
 import { LookView } from "@/looks/LookView";
-import type { LookId } from "@/looks/look";
+import type { Look, LookId } from "@/looks/look";
 import { PageHeader } from "../shell/PageHeader";
 
 const WALL =
@@ -48,6 +49,9 @@ export function LooksPage() {
 		else if (picked.length >= COMPARE_MAX) toast("Six looks is the limit.");
 		else setPicked([...picked, id]);
 	}
+	// The confirm lives here, not in the look view: the view goes when the
+	// list drops the deleted look, and the confirm must still say so.
+	const [deleting, setDeleting] = useState<Look | null>(null);
 	// The look in the right part: the one the URL names, else the newest.
 	const shown = looks.isSuccess
 		? (looks.data.find((l) => l.id === lookId) ?? looks.data[0])
@@ -190,8 +194,13 @@ export function LooksPage() {
 						open ? "flex" : "hidden",
 					)}
 				>
-					{shown ? <LookView look={shown} /> : null}
+					{shown ? (
+						<LookView look={shown} onDelete={() => setDeleting(shown)} />
+					) : null}
 				</aside>
+			) : null}
+			{deleting ? (
+				<DeleteLookDialog look={deleting} onClose={() => setDeleting(null)} />
 			) : null}
 		</div>
 	);

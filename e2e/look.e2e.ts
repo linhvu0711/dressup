@@ -13,6 +13,19 @@ test.use({ permissions: ["clipboard-read", "clipboard-write"] });
 
 const panel = (page: Page) => page.locator('[data-slot="look-panel"]');
 
+const confirm = (page: Page) =>
+	page.getByRole("alertdialog", { name: "Delete this look?" });
+
+const names = async (page: Page) =>
+	(await storedLooks(page)).looks.map((l) => l.name);
+
+async function twoLooksNavyOpen(page: Page) {
+	await openDress(page);
+	await saveLook(page, "Navy day");
+	await saveLook(page, "Keep");
+	await openLook(page, "Navy day");
+}
+
 const toast = (page: Page) => page.locator('[data-slot="toast"]');
 
 async function openLook(page: Page, name: string) {
@@ -121,4 +134,92 @@ test("copies a code and shows the toast", async ({ page }) => {
 	expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
 		"#1F3A5F",
 	);
+});
+
+test("deletes a look", async ({ page }) => {
+	// Given: both projects, looks "Navy day" then "Keep"; "Navy day" open
+	await twoLooksNavyOpen(page);
+	// When
+	await page.getByRole("button", { name: "Delete this look" }).click();
+	await expect(confirm(page)).toContainText(
+		'"Navy day" goes away for good. Your colour squares stay.',
+	);
+	await confirm(page).getByRole("button", { name: "Delete" }).click();
+	// Then
+	await expect(toast(page)).toHaveText("Look deleted");
+	await expect(page).toHaveURL("/looks");
+	await expect(page.locator('[data-slot="look-card"]')).toHaveText(["Keep"]);
+	expect(await names(page)).toEqual(["Keep"]);
+});
+
+test("deletes the only look and shows No looks yet", async ({ page }) => {
+	// Given: both projects, one look "Navy day", open
+	await openDress(page);
+	await saveLook(page, "Navy day");
+	await openLook(page, "Navy day");
+	// When
+	await page.getByRole("button", { name: "Delete this look" }).click();
+	await confirm(page).getByRole("button", { name: "Delete" }).click();
+	// Then
+	await expect(toast(page)).toHaveText("Look deleted");
+	await expect(page).toHaveURL("/looks");
+	await expect(
+		page.getByRole("heading", { name: "No looks yet" }),
+	).toBeVisible();
+	expect(await storedLooks(page)).toEqual({ looks: [] });
+});
+
+test("keeps the look on Cancel and Esc", async ({ page }) => {
+	// Given: both projects, looks "Navy day" then "Keep"; "Navy day" open
+	await twoLooksNavyOpen(page);
+	// When
+	await page.getByRole("button", { name: "Delete this look" }).click();
+	await confirm(page).getByRole("button", { name: "Cancel" }).click();
+	await expect(confirm(page)).toHaveCount(0);
+	await page.getByRole("button", { name: "Delete this look" }).click();
+	await expect(confirm(page)).toBeVisible();
+	await page.keyboard.press("Escape");
+	// Then
+	await expect(confirm(page)).toHaveCount(0);
+	await expect(
+		page.getByRole("heading", { name: "Navy day", exact: true }),
+	).toBeVisible();
+	expect(await names(page)).toEqual(["Keep", "Navy day"]);
+	await expect(toast(page)).toHaveCount(0);
+});
+
+test("keeps the look when the delete fails", async ({ page }) => {
+	// Given: both projects, "Navy day" open; a DELETE answers 500
+	await twoLooksNavyOpen(page);
+	await page.route("**/api/looks/*", (route) =>
+		route.request().method() === "DELETE"
+			? route.fulfill({ status: 500 })
+			: route.continue(),
+	);
+	// When
+	await page.getByRole("button", { name: "Delete this look" }).click();
+	await confirm(page).getByRole("button", { name: "Delete" }).click();
+	// Then
+	await expect(toast(page)).toHaveText("Not deleted. Try again.");
+	await expect(
+		page.getByRole("heading", { name: "Navy day", exact: true }),
+	).toBeVisible();
+	await expect(confirm(page)).toHaveCount(0);
+	expect(await names(page)).toEqual(["Keep", "Navy day"]);
+});
+
+test("shows the wall when the look to delete is gone", async ({ page }) => {
+	// Given: both projects, "Navy day" open; then a second device deletes it
+	await twoLooksNavyOpen(page);
+	const gone = (await storedLooks(page)).looks.find(
+		(l) => l.name === "Navy day",
+	);
+	await page.request.delete(`/api/looks/${gone?.id}`);
+	// When
+	await page.getByRole("button", { name: "Delete this look" }).click();
+	await confirm(page).getByRole("button", { name: "Delete" }).click();
+	// Then
+	await expect(toast(page)).toHaveText("This look is gone");
+	await expect(page).toHaveURL("/looks");
+	await expect(page.locator('[data-slot="look-card"]')).toHaveText(["Keep"]);
 });

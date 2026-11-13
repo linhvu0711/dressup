@@ -1,4 +1,4 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Trash2 } from "lucide-react";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
@@ -13,7 +13,13 @@ import { type Look, lookName } from "./look";
 // The prototype's `detail` (docs/prototype/dressup.html:876-887). Under 900 px
 // it is the look's own page, its head row on top with Back; from 900 px it is
 // the right part of the Looks page, the head row under the stage.
-export function LookView({ look }: { look: Look }) {
+export function LookView({
+	look,
+	onDelete,
+}: {
+	look: Look;
+	onDelete: () => void;
+}) {
 	const dress = useDressState();
 	const toast = useToast();
 	const mode = modeById(look.modeId);
@@ -30,6 +36,16 @@ export function LookView({ look }: { look: Look }) {
 					{name}
 				</h2>
 				<span className="flex-1" />
+				<Button
+					variant="icon"
+					size="icon"
+					aria-label="Delete this look"
+					title="Delete this look"
+					className="text-destructive"
+					onClick={onDelete}
+				>
+					<Trash2 size={18} strokeWidth={1.9} aria-hidden />
+				</Button>
 			</div>
 			<Stage className="mx-3 flex-[0_0_52%] rounded-[24px] wide:mx-4 wide:mt-4 wide:flex-[0_0_50%] wide:rounded-[22px]">
 				{dress.status === "ready" ? (
