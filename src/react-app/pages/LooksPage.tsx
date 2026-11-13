@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
@@ -20,9 +21,12 @@ function Notice({ title, children }: { title: string; children: ReactNode }) {
 }
 
 // The page of docs/prototype/dressup.html:888-893. From 900 px the right part
-// is kept for the picked look of #11.
+// is kept for the picked look of #11. With no look to pick it is left out, so
+// a notice sits in the middle of the screen; it stays while the looks load,
+// so a wall with looks does not move when they come.
 export function LooksPage() {
 	const looks = useLooks();
+	const panel = looks.isPending || (looks.isSuccess && looks.data.length > 0);
 	let wall: ReactNode;
 	if (looks.isPending) {
 		// docs/prototype/dressup.html:863
@@ -77,16 +81,24 @@ export function LooksPage() {
 		);
 	}
 	return (
-		<div className="flex min-h-0 flex-1 flex-col wide:grid wide:grid-cols-[minmax(0,1fr)_420px] wide:grid-rows-[minmax(0,1fr)]">
+		<div
+			className={cn(
+				"flex min-h-0 flex-1 flex-col",
+				panel &&
+					"wide:grid wide:grid-cols-[minmax(0,1fr)_420px] wide:grid-rows-[minmax(0,1fr)]",
+			)}
+		>
 			<div className="flex min-h-0 flex-1 flex-col">
 				<PageHeader title="Looks" />
 				{wall}
 			</div>
-			<aside
-				data-slot="look-panel"
-				aria-label="Picked look"
-				className="hidden border-border border-l wide:block"
-			/>
+			{panel ? (
+				<aside
+					data-slot="look-panel"
+					aria-label="Picked look"
+					className="hidden border-border border-l wide:block"
+				/>
+			) : null}
 		</div>
 	);
 }

@@ -278,6 +278,7 @@ test("shows skeleton cards while the looks load", async ({ page }) => {
 	await page.goto("/looks");
 	// Then
 	await expect(page.locator('[data-slot="look-skeleton"]')).toHaveCount(6);
+	await expect(page.locator('[data-slot="look-panel"]')).toHaveCount(1);
 	release();
 	await expect(page.locator('[data-slot="look-skeleton"]')).toHaveCount(0);
 	await expect(
@@ -305,4 +306,32 @@ test("shows Retry when the wall cannot load", async ({ page }) => {
 	await expect(
 		page.getByRole("heading", { name: "No looks yet" }),
 	).toBeVisible();
+});
+
+test("leaves out the right part when there is no look to pick", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account with no looks; the first
+	// GET /api/looks answered 500, the next ones passed on
+	let failed = false;
+	await page.route("**/api/looks", (route) => {
+		if (failed) return route.continue();
+		failed = true;
+		return route.fulfill({ status: 500 });
+	});
+	const panel = page.locator('[data-slot="look-panel"]');
+	// When
+	await page.goto("/looks");
+	// Then
+	await expect(
+		page.getByRole("heading", { name: "Could not load your looks" }),
+	).toBeVisible();
+	await expect(panel).toHaveCount(0);
+	// When
+	await page.getByRole("button", { name: "Retry" }).click();
+	// Then
+	await expect(
+		page.getByRole("heading", { name: "No looks yet" }),
+	).toBeVisible();
+	await expect(panel).toHaveCount(0);
 });
