@@ -10,8 +10,10 @@
 		"Instrument Serif", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
 }
 
-/* Values from the prototype's <style> block (docs/prototype/dressup.html), under shadcn's names. */
-:root {
+/* Values from the prototype's <style> block (docs/prototype/dressup.html), under shadcn's names.
+   The wall is light in both themes, so it takes these light values too. */
+:root,
+[data-surface="wall"] {
 	--background: #fbfaf8;
 	--foreground: #1a1917;
 	--card: #ffffff;
