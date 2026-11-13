@@ -109,3 +109,40 @@ test("keeps a failed change on screen and stores it on Retry", async ({
 		"true",
 	);
 });
+
+test("shows the sign-in screen when a save finds no session", async ({
+	page,
+}) => {
+	// Given: both projects, the Colours tab on the phone; then the session
+	// is gone for the session check and for each save
+	await openColours(page);
+	const noSession = { status: 401, json: { error: "unauthorized" } };
+	await page.route("/api/me", (route) => route.fulfill(noSession));
+	await page.route("**/api/dress/changes", (route) => route.fulfill(noSession));
+	// When
+	await square(page, "Sweater #7A2E2E").click();
+	// Then
+	await expect(
+		page.getByRole("button", { name: "Sign in with Google" }),
+	).toBeVisible();
+});
+
+test("shows the stored colours after a refused change", async ({ page }) => {
+	// Given: both projects, the Colours tab on the phone; then each save is
+	// refused
+	await openColours(page);
+	await page.route("**/api/dress/changes", (route) =>
+		route.fulfill({ status: 400, json: { error: "invalid", field: "hex" } }),
+	);
+	// When
+	await square(page, "Sweater #7A2E2E").click();
+	// Then
+	await expect(square(page, "Sweater #1F3A5F")).toHaveAttribute(
+		"aria-pressed",
+		"true",
+	);
+	await expect(square(page, "Sweater #7A2E2E")).toHaveAttribute(
+		"aria-pressed",
+		"false",
+	);
+});

@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	createContext,
 	type ReactNode,
@@ -16,6 +16,7 @@ import {
 	type DressState,
 	dressStateSchema,
 } from "@/dress/state";
+import { meQueryKey } from "@/session";
 
 type DressCommands = {
 	pickMode: (id: ModeId) => void;
@@ -35,13 +36,18 @@ const DressStoreContext = createContext<DressStore | null>(null);
 
 const dressQueryKey = ["dress"] as const;
 
+class SignedOut extends Error {}
+
 async function fetchDress(): Promise<DressState> {
 	const res = await fetch("/api/dress");
+	if (res.status === 401) throw new SignedOut("GET /api/dress answered 401");
 	if (!res.ok) throw new Error(`GET /api/dress answered ${res.status}`);
 	return dressStateSchema.parse(await res.json());
 }
 
-type Sent = "stored" | "failed";
+// "refused": the server does not take the change (400), which happens when
+// another device changed the row first.
+type Sent = "stored" | "failed" | "signed-out" | "refused";
 
 async function sendChange(change: DressChange): Promise<Sent> {
 	try {
@@ -50,7 +56,10 @@ async function sendChange(change: DressChange): Promise<Sent> {
 			headers: { "content-type": "application/json" },
 			body: JSON.stringify(change),
 		});
-		return res.status === 204 ? "stored" : "failed";
+		if (res.status === 204) return "stored";
+		if (res.status === 401) return "signed-out";
+		if (res.status === 400) return "refused";
+		return "failed";
 	} catch {
 		return "failed";
 	}
@@ -66,9 +75,21 @@ export function DressStateProvider({
 	enabled: boolean;
 	children: ReactNode;
 }) {
+	const queryClient = useQueryClient();
+	// A lost session makes the session check run again; it finds none, and
+	// the session gate shows the sign-in screen.
+	const signOut = () => queryClient.invalidateQueries({ queryKey: meQueryKey });
 	const query = useQuery({
 		queryKey: dressQueryKey,
-		queryFn: fetchDress,
+		queryFn: async () => {
+			try {
+				return await fetchDress();
+			} catch (error) {
+				if (error instanceof SignedOut) void signOut();
+				throw error;
+			}
+		},
+		retry: (count, error) => !(error instanceof SignedOut) && count < 3,
 		enabled,
 		// The page keeps its own copy once loaded; a refetch is only asked for.
 		staleTime: Number.POSITIVE_INFINITY,
@@ -95,7 +116,7 @@ export function DressStateProvider({
 
 	// Sends the queue in order and stops at the first change that cannot be
 	// stored, which stays first on the queue and on the screen.
-	const flush = async (): Promise<"stored" | "failed" | "busy"> => {
+	const flush = async (): Promise<Sent | "busy"> => {
 		if (sending.current) return "busy";
 		sending.current = true;
 		try {
@@ -104,6 +125,17 @@ export function DressStateProvider({
 				if (sent === "failed") {
 					markUnsaved(true);
 					return "failed";
+				}
+				if (sent === "signed-out" || sent === "refused") {
+					queue.current = [];
+					markUnsaved(false);
+					if (sent === "signed-out") void signOut();
+					else {
+						// The server's copy wins: drop the local one and load it.
+						setChanged(null);
+						void queryClient.invalidateQueries({ queryKey: dressQueryKey });
+					}
+					return sent;
 				}
 				queue.current.shift();
 			}
