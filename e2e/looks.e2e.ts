@@ -249,3 +249,60 @@ test("shows the sign-in screen when the looks answer 401", async ({ page }) => {
 		page.getByRole("button", { name: "Sign in with Google" }),
 	).toBeVisible();
 });
+
+test("shows No looks yet and goes to Dress", async ({ page }) => {
+	// Given: both projects, a fresh account with no looks, /looks open
+	await page.goto("/looks");
+	// Then
+	await expect(
+		page.getByRole("heading", { name: "No looks yet" }),
+	).toBeVisible();
+	// When
+	await page.getByRole("link", { name: "Go to Dress" }).click();
+	// Then
+	await expect(page).toHaveURL("/");
+	await expect(page.getByRole("button", { name: "Save look" })).toBeVisible();
+});
+
+test("shows skeleton cards while the looks load", async ({ page }) => {
+	// Given: GET /api/looks held until the test lets it go
+	let release = () => {};
+	const held = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	await page.route("**/api/looks", async (route) => {
+		await held;
+		await route.continue();
+	});
+	// When
+	await page.goto("/looks");
+	// Then
+	await expect(page.locator('[data-slot="look-skeleton"]')).toHaveCount(6);
+	release();
+	await expect(page.locator('[data-slot="look-skeleton"]')).toHaveCount(0);
+	await expect(
+		page.getByRole("heading", { name: "No looks yet" }),
+	).toBeVisible();
+});
+
+test("shows Retry when the wall cannot load", async ({ page }) => {
+	// Given: the first GET /api/looks answered 500, the next ones passed on
+	let failed = false;
+	await page.route("**/api/looks", (route) => {
+		if (failed) return route.continue();
+		failed = true;
+		return route.fulfill({ status: 500 });
+	});
+	// When
+	await page.goto("/looks");
+	// Then
+	await expect(
+		page.getByRole("heading", { name: "Could not load your looks" }),
+	).toBeVisible();
+	// When
+	await page.getByRole("button", { name: "Retry" }).click();
+	// Then
+	await expect(
+		page.getByRole("heading", { name: "No looks yet" }),
+	).toBeVisible();
+});
