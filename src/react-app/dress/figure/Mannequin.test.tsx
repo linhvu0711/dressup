@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Mannequin } from "@/dress/figure/Mannequin";
 import { GARMENT_IDS, type GarmentId, type JacketId } from "@/dress/garments";
+import { STARTER_MANNEQUIN } from "@/dress/state";
 
 const paths = (markup: string) =>
 	[...markup.matchAll(/ d="([^"]*)"/g)].map((m) => m[1]);
@@ -43,7 +44,7 @@ describe("Mannequin", () => {
 	test("draws the skin, hair, and white shoes", () => {
 		// Given: no props
 		// When
-		const markup = renderToStaticMarkup(<Mannequin />);
+		const markup = renderToStaticMarkup(<Mannequin {...STARTER_MANNEQUIN} />);
 		// Then
 		expect(markup).toContain('fill="#D6A27B"');
 		expect(markup).toContain('fill="#141418"');
@@ -68,8 +69,8 @@ describe("Mannequin", () => {
 		// When
 		const markup = renderToStaticMarkup(
 			<>
-				<Mannequin />
-				<Mannequin />
+				<Mannequin {...STARTER_MANNEQUIN} />
+				<Mannequin {...STARTER_MANNEQUIN} />
 			</>,
 		);
 		const ids = [...markup.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]);
@@ -83,7 +84,10 @@ describe("Mannequin", () => {
 			// Given: one garment in the test colour
 			// When
 			const markup = renderToStaticMarkup(
-				<Mannequin layers={[{ garment: id, color: "#12AB34" }]} />,
+				<Mannequin
+					{...STARTER_MANNEQUIN}
+					layers={[{ garment: id, color: "#12AB34" }]}
+				/>,
 			);
 			// Then
 			expect(markup).toContain(`data-garment="${id}"`);
@@ -97,6 +101,7 @@ describe("Mannequin", () => {
 		const draw = (garment: JacketId, color: `#${string}`, open: boolean) =>
 			renderToStaticMarkup(
 				<Mannequin
+					{...STARTER_MANNEQUIN}
 					layers={[{ garment, color }]}
 					openJackets={open ? [garment] : []}
 				/>,
@@ -125,6 +130,7 @@ describe("Mannequin", () => {
 		// When
 		const markup = renderToStaticMarkup(
 			<Mannequin
+				{...STARTER_MANNEQUIN}
 				layers={[
 					{ garment: "chino_p", color: "#C9B38C" },
 					{ garment: "polo_l", color: "#F3F1EC" },
@@ -153,6 +159,7 @@ describe("Mannequin", () => {
 		const garments = cases.map(([g, open]) => {
 			const port = renderToStaticMarkup(
 				<Mannequin
+					{...STARTER_MANNEQUIN}
 					layers={[{ garment: g, color: "#12AB34" }]}
 					openJackets={open && (g === "chore" || g === "padded") ? [g] : []}
 				/>,
@@ -164,7 +171,7 @@ describe("Mannequin", () => {
 				proto: paths(proto.DRAW[g]("#12AB34", open)),
 			};
 		});
-		const bare = renderToStaticMarkup(<Mannequin />);
+		const bare = renderToStaticMarkup(<Mannequin {...STARTER_MANNEQUIN} />);
 		const body = paths(bare.slice(bare.indexOf("</defs>")));
 		// Then
 		for (const { g, open, port, proto: want } of garments) {

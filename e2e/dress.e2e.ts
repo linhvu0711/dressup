@@ -256,3 +256,34 @@ test("starts each weather tab's cards at the top", async ({ page }) => {
 	// Then
 	expect(top).toBe(0);
 });
+
+test("draws the stage and the mode cards in the account's skin and hair", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account with skin #8D5524 and hair #B55239
+	const stage = page.locator('svg[aria-label="Mannequin in Polo + sweater"]');
+	await page.goto("/");
+	await expect(stage).toBeVisible();
+	for (const [part, hex] of [
+		["skin", "#8D5524"],
+		["hair", "#B55239"],
+	]) {
+		const res = await page.request.post("/api/dress/changes", {
+			data: { kind: "mannequin", part, hex },
+		});
+		expect(res.status()).toBe(204);
+	}
+	// When
+	await page.reload();
+	// Then
+	await expect(stage).toBeVisible();
+	const card = await page
+		.locator('[data-slot="mode-pic"] svg')
+		.first()
+		.innerHTML();
+	expect({
+		stageSkin: (await stage.innerHTML()).includes('fill="#8D5524"'),
+		stageHair: (await stage.innerHTML()).includes('fill="#B55239"'),
+		cardSkin: card.includes('fill="#8D5524"'),
+	}).toEqual({ stageSkin: true, stageHair: true, cardSkin: true });
+});
