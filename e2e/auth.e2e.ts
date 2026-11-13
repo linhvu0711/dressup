@@ -114,7 +114,7 @@ test.describe("sign out", () => {
 	test("signs out from Settings", async ({ page, context }, testInfo) => {
 		// Given: this project's own session, so the shared one stays
 		const cookies = JSON.parse(
-			readFileSync(signOutFile(testInfo.project.name), "utf8"),
+			readFileSync(signOutFile(testInfo.project.name, "settings"), "utf8"),
 		);
 		await context.addCookies(cookies);
 		const token = cookies.find(
@@ -136,5 +136,52 @@ test.describe("sign out", () => {
 			headers: { cookie: `better-auth.session_token=${token}` },
 		});
 		expect(me.status()).toBe(401);
+	});
+	test("stays signed out when an older session check answers late", async ({
+		page,
+		context,
+	}, testInfo) => {
+		// Given: the session check that opening Settings sends, held until
+		// after Sign out
+		await context.addCookies(
+			JSON.parse(
+				readFileSync(signOutFile(testInfo.project.name, "late-check"), "utf8"),
+			),
+		);
+		await page.goto("/");
+		await expect(page.locator("h1")).toHaveText("Dress");
+		let release = () => {};
+		const held = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		let caught = () => {};
+		const checkSent = new Promise<void>((resolve) => {
+			caught = resolve;
+		});
+		await page.route("/api/me", async (route) => {
+			const { cookie } = await route.request().allHeaders();
+			caught();
+			await held;
+			// continue() would take the cookies from the browser, which sign-out
+			// cleared; a real request left earlier, with the old ones.
+			const response = await page.request.get("/api/me", {
+				headers: { cookie },
+			});
+			await route.fulfill({ response });
+		});
+		await page.getByRole("link", { name: "Settings" }).click();
+		await checkSent;
+		// When
+		await page.getByRole("button", { name: "Sign out" }).click();
+		await expect(page.locator("h1")).toHaveText("dressup");
+		const late = page.waitForResponse("**/api/me");
+		release();
+		// Then: the late check still says signed in, from the cookie cache
+		expect((await late).status()).toBe(200);
+		// The app reads the answer a few ticks after it arrives; before the fix
+		// the shell came back well inside this time.
+		await page.waitForTimeout(500);
+		await expect(page.locator("h1")).toHaveText("dressup");
+		await expect(page.getByRole("navigation", { name: "Main" })).toHaveCount(0);
 	});
 });

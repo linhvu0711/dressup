@@ -12,6 +12,9 @@ export function SettingsPage() {
 
 	async function signOut() {
 		await authClient.signOut();
+		// A check sent before sign-out still carries the old cookies, and its
+		// late 200 would put the person back in the app.
+		await queryClient.cancelQueries({ queryKey: meQueryKey });
 		queryClient.setQueryData(meQueryKey, null);
 		navigate("/", { replace: true });
 	}
