@@ -5,6 +5,9 @@ import { type DressState, hexSchema, modeIdSchema } from "@/dress/state";
 
 export const LOOK_NAME_MAX = 60;
 
+// Looks for each account (docs/adr/0008-open-sign-up-with-limits.md).
+export const LOOK_LIMIT = 300;
+
 const lookIdSchema = z.uuid().brand<"LookId">();
 
 export type LookId = z.infer<typeof lookIdSchema>;

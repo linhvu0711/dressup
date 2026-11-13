@@ -101,7 +101,10 @@ export function createApp(getDb: (env: Env) => Db) {
 		const body = await readBody(c, lookInputSchema);
 		if ("refused" in body) return body.refused;
 		const saved = await saveLook(getDb(c.env), c.var.user.id, body.data);
-		if (!saved) return c.json({ error: "conflict", field: "id" }, 409);
+		if (!saved.ok)
+			return saved.error === "conflict"
+				? c.json({ error: "conflict", field: "id" }, 409)
+				: c.json({ error: "look_limit" }, 409);
 		return c.json({ look: saved.look }, saved.created ? 201 : 200);
 	});
 
