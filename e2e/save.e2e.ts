@@ -128,20 +128,27 @@ test("shows the sign-in screen when a save finds no session", async ({
 });
 
 test("shows the stored colours after a refused change", async ({ page }) => {
-	// Given: both projects, the Colours tab on the phone; then each save is
-	// refused
+	// Given: both projects, the Colours tab on the phone; Sweater #7A2E2E
+	// picked and stored; then each save is refused and a reload of the
+	// colours never answers
 	await openColours(page);
+	const stored = page.waitForResponse(
+		(r) => r.url().endsWith("/api/dress/changes") && r.status() === 204,
+	);
+	await square(page, "Sweater #7A2E2E").click();
+	await stored;
 	await page.route("**/api/dress/changes", (route) =>
 		route.fulfill({ status: 400, json: { error: "invalid", field: "hex" } }),
 	);
+	await page.route("**/api/dress", () => {});
 	// When
-	await square(page, "Sweater #7A2E2E").click();
+	await square(page, "Sweater #E6DFD0").click();
 	// Then
-	await expect(square(page, "Sweater #1F3A5F")).toHaveAttribute(
+	await expect(square(page, "Sweater #7A2E2E")).toHaveAttribute(
 		"aria-pressed",
 		"true",
 	);
-	await expect(square(page, "Sweater #7A2E2E")).toHaveAttribute(
+	await expect(square(page, "Sweater #E6DFD0")).toHaveAttribute(
 		"aria-pressed",
 		"false",
 	);

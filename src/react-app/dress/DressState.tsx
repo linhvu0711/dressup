@@ -137,7 +137,14 @@ export function DressStateProvider({
 					}
 					return sent;
 				}
-				queue.current.shift();
+				const done = queue.current.shift();
+				// The cache follows what the server stored, so a later refusal
+				// goes back to that and not to the first load.
+				if (done)
+					queryClient.setQueryData<DressState>(dressQueryKey, (old) => {
+						const next = old && applyChange(old, done);
+						return next?.ok ? next.state : old;
+					});
 			}
 			if (unsavedRef.current) {
 				markUnsaved(false);
