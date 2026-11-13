@@ -19,12 +19,11 @@ export function ModePicker({
 }: {
 	tab: PickerTab;
 	onTab: (tab: PickerTab) => void;
-	modeId: ModeId;
+	modeId: ModeId | null;
 	onPick: (id: ModeId) => void;
 }) {
 	const dress = useDressState();
-	if (dress.status !== "ready") return null;
-	const { state } = dress;
+	const state = dress.status === "ready" ? dress.state : null;
 	const modes =
 		tab === "Training"
 			? MODES.filter((m) => m.training)
@@ -53,48 +52,59 @@ export function ModePicker({
 					className="-mx-1.5 min-h-0 flex-1 overflow-auto px-1.5"
 				>
 					<div className="grid grid-cols-3 gap-x-2.5 gap-y-3 pt-[5px] pb-[18px] wide:grid-cols-2 wide:gap-x-3.5 wide:gap-y-4">
-						{modes.map((mode) => {
-							const picked = mode.id === modeId;
-							return (
-								<button
-									key={mode.id}
-									type="button"
-									aria-pressed={picked}
-									onClick={() => onPick(mode.id)}
-									className="group flex min-w-0 flex-col gap-1.5 text-left"
-								>
+						{/* While the colours load: 6 grey cards, as
+						docs/prototype/dressup.html:828-829. */}
+						{!state
+							? Array.from({ length: 6 }, (_, i) => (
 									<span
-										data-slot="mode-pic"
-										className={cn(
-											"relative block aspect-[2/3] w-full overflow-hidden rounded-[14px] bg-[#D3CFC9] transition-[filter] duration-200 group-hover:brightness-[1.03] [&>svg]:absolute [&>svg]:inset-0 [&>svg]:size-full",
-											picked &&
-												"outline-2 outline-foreground outline-offset-[2.5px] outline-solid",
-										)}
-									>
-										<Mannequin
-											decorative
-											lite
-											viewBox="10 14 380 590"
-											layers={outfitOf(mode, state.picked)}
-											openJackets={state.open}
-										/>
-										{mode.training && tab !== "Training" ? (
-											<span className="absolute bottom-[7px] left-[7px] rounded-full bg-[rgba(26,25,23,.78)] px-2 py-0.5 font-semibold text-[10px] text-white">
-												Training
+										// biome-ignore lint/suspicious/noArrayIndexKey: the cards are all alike and never move.
+										key={i}
+										data-slot="mode-placeholder"
+										className="block aspect-[2/3] w-full animate-placeholder rounded-[14px] bg-[#D3CFC9] motion-reduce:animate-none"
+									/>
+								))
+							: modes.map((mode) => {
+									const picked = mode.id === modeId;
+									return (
+										<button
+											key={mode.id}
+											type="button"
+											aria-pressed={picked}
+											onClick={() => onPick(mode.id)}
+											className="group flex min-w-0 flex-col gap-1.5 text-left"
+										>
+											<span
+												data-slot="mode-pic"
+												className={cn(
+													"relative block aspect-[2/3] w-full overflow-hidden rounded-[14px] bg-[#D3CFC9] transition-[filter] duration-200 group-hover:brightness-[1.03] [&>svg]:absolute [&>svg]:inset-0 [&>svg]:size-full",
+													picked &&
+														"outline-2 outline-foreground outline-offset-[2.5px] outline-solid",
+												)}
+											>
+												<Mannequin
+													decorative
+													lite
+													viewBox="10 14 380 590"
+													layers={outfitOf(mode, state.picked)}
+													openJackets={state.open}
+												/>
+												{mode.training && tab !== "Training" ? (
+													<span className="absolute bottom-[7px] left-[7px] rounded-full bg-[rgba(26,25,23,.78)] px-2 py-0.5 font-semibold text-[10px] text-white">
+														Training
+													</span>
+												) : null}
 											</span>
-										) : null}
-									</span>
-									<span
-										className={cn(
-											"font-medium text-muted-foreground text-xs leading-[1.3]",
-											picked && "text-foreground",
-										)}
-									>
-										{mode.name}
-									</span>
-								</button>
-							);
-						})}
+											<span
+												className={cn(
+													"font-medium text-muted-foreground text-xs leading-[1.3]",
+													picked && "text-foreground",
+												)}
+											>
+												{mode.name}
+											</span>
+										</button>
+									);
+								})}
 					</div>
 				</div>
 			</TabsContent>

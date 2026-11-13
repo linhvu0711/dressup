@@ -56,3 +56,25 @@ test("keeps the colours after a reload and on a second device", async ({
 	}
 	await second.close();
 });
+
+test("shows the grey mannequin while the colours load", async ({ page }) => {
+	// Given: GET /api/dress held until the test lets it go
+	let release = () => {};
+	const held = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	await page.route("/api/dress", async (route) => {
+		await held;
+		await route.continue();
+	});
+	// When
+	await page.goto("/");
+	// Then
+	await expect(page.locator('svg[aria-label="Loading"]')).toBeVisible();
+	await expect(page.locator('[data-slot="mode-placeholder"]')).toHaveCount(6);
+	release();
+	await expect(
+		page.locator('svg[aria-label="Mannequin in Polo + sweater"]'),
+	).toBeVisible();
+	await expect(page.locator('svg[aria-label="Loading"]')).toHaveCount(0);
+});

@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ColourRows, type LiveColour } from "@/dress/ColourRows";
 import { useDressState } from "@/dress/DressState";
 import { Mannequin } from "@/dress/figure/Mannequin";
+import { MannequinPlaceholder } from "@/dress/figure/MannequinPlaceholder";
 import { ModePicker, type PickerTab } from "@/dress/ModePicker";
 import { modeById, outfitOf } from "@/dress/modes";
 import { Stage } from "@/dress/Stage";
@@ -27,21 +28,25 @@ export function DressPage() {
 	// The colour the picker shows before "Add". It stays out of the store,
 	// which holds only what the person keeps.
 	const [live, setLive] = useState<LiveColour | null>(null);
-	if (dress.status !== "ready") return <h1 className="sr-only">Dress</h1>;
-	const { state, pickMode } = dress;
-	const mode = modeById(state.modeId);
-	const colours = live
-		? { ...state.picked, [live.garment]: live.hex }
-		: state.picked;
+	const state = dress.status === "ready" ? dress.state : null;
+	const mode = state ? modeById(state.modeId) : null;
+	const colours =
+		state && live
+			? { ...state.picked, [live.garment]: live.hex }
+			: state?.picked;
 	return (
 		<div className="flex min-h-0 flex-1 flex-col wide:grid wide:grid-cols-[minmax(300px,372px)_minmax(0,1fr)_minmax(300px,372px)] wide:grid-rows-[minmax(0,1fr)]">
 			<h1 className="sr-only">Dress</h1>
 			<Stage className="flex-[0_0_46%] rounded-b-[24px] wide:col-start-2 wide:row-start-1 wide:my-4 wide:rounded-[26px]">
-				<Mannequin
-					layers={outfitOf(mode, colours)}
-					openJackets={state.open}
-					label={`Mannequin in ${mode.name}`}
-				/>
+				{state && mode ? (
+					<Mannequin
+						layers={outfitOf(mode, colours)}
+						openJackets={state.open}
+						label={`Mannequin in ${mode.name}`}
+					/>
+				) : (
+					<MannequinPlaceholder />
+				)}
 			</Stage>
 			<div className="flex min-h-0 flex-1 flex-col px-4 pt-3 wide:contents">
 				<Tabs
@@ -64,8 +69,10 @@ export function DressPage() {
 						<ModePicker
 							tab={tab}
 							onTab={setTab}
-							modeId={state.modeId}
-							onPick={pickMode}
+							modeId={state?.modeId ?? null}
+							onPick={(id) => {
+								if (dress.status === "ready") dress.pickMode(id);
+							}}
 						/>
 					</TabsContent>
 					<TabsContent
