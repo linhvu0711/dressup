@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
+import { LIMIT_FILE } from "./global-setup";
 
 const dialog = (page: Page) => page.getByRole("dialog", { name: "Save look" });
 
@@ -103,11 +104,16 @@ test("keeps the form open when saving fails", async ({ page }) => {
 
 test("shows the sign-in screen when the save answers 401", async ({ page }) => {
 	// Given: both projects, the Dress page shown; then the session is gone
-	// for the session check and for each save
+	// for the session check and for each save. The form's own read of the
+	// looks goes through, so the 401 comes from the save.
 	await openDress(page);
 	const noSession = { status: 401, json: { error: "unauthorized" } };
 	await page.route("/api/me", (route) => route.fulfill(noSession));
-	await page.route("**/api/looks", (route) => route.fulfill(noSession));
+	await page.route("**/api/looks", (route) =>
+		route.request().method() === "POST"
+			? route.fulfill(noSession)
+			: route.continue(),
+	);
 	// When
 	await page.getByRole("button", { name: "Save look" }).click();
 	await dialog(page).getByRole("button", { name: "Save", exact: true }).click();
@@ -115,6 +121,51 @@ test("shows the sign-in screen when the save answers 401", async ({ page }) => {
 	await expect(
 		page.getByRole("button", { name: "Sign in with Google" }),
 	).toBeVisible();
+});
+
+const LIMIT_HINT =
+	"You have 300 looks. That is the limit. Delete one to save a new one.";
+
+test.describe("an account with 300 looks", () => {
+	test.use({ storageState: LIMIT_FILE });
+
+	test("turns Save off and shows the limit hint at 300 looks", async ({
+		page,
+	}) => {
+		// Given: both projects, the account with 300 looks, the Dress page shown
+		await openDress(page);
+		// When
+		await page.getByRole("button", { name: "Save look" }).click();
+		// Then
+		await expect(dialog(page).getByRole("alert")).toHaveText(LIMIT_HINT);
+		await expect(
+			dialog(page).getByRole("button", { name: "Save", exact: true }),
+		).toBeDisabled();
+		await expect(
+			dialog(page).getByRole("button", { name: "Cancel", exact: true }),
+		).toBeEnabled();
+	});
+});
+
+test("shows the limit hint when the save answers look_limit", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account, the save form open; each save
+	// answered 409 look_limit, as from a second tab that filled the account
+	await openDress(page);
+	await page.route("**/api/looks", (route) =>
+		route.request().method() === "POST"
+			? route.fulfill({ status: 409, json: { error: "look_limit" } })
+			: route.continue(),
+	);
+	await page.getByRole("button", { name: "Save look" }).click();
+	// When
+	await dialog(page).getByRole("button", { name: "Save", exact: true }).click();
+	// Then
+	await expect(dialog(page).getByRole("alert")).toHaveText(LIMIT_HINT);
+	await expect(
+		dialog(page).getByRole("button", { name: "Save", exact: true }),
+	).toBeDisabled();
 });
 
 const isPhone = (page: Page) => (page.viewportSize()?.width ?? 0) < 900;

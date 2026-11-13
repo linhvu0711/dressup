@@ -2,9 +2,13 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { eq, like } from "drizzle-orm";
 import { schema } from "../src/worker/db";
-import { E2E_USER, withTestAuth } from "./sessions";
+import { E2E_USER, LIMIT_USER, withTestAuth } from "./sessions";
 
 export const SESSION_FILE = "e2e/.auth/session.json";
+export const LIMIT_FILE = "e2e/.auth/limit.json";
+// LOOK_LIMIT of src/react-app/looks/look.ts, whose "@/" imports the e2e
+// type check cannot follow.
+const LIMIT_LOOKS = 300;
 // Each test changes the colours it saves, and tests run in parallel, so
 // each one claims its own fresh account from this pool (e2e/fixtures.ts).
 export const POOL_SIZE = 300;
@@ -29,6 +33,33 @@ export default async function globalSetup() {
 		mkdirSync("e2e/.auth", { recursive: true });
 		const cookies = await newSessionCookies();
 		writeFileSync(SESSION_FILE, JSON.stringify({ cookies, origins: [] }));
+		// Its looks go with the user row.
+		await db.delete(schema.user).where(eq(schema.user.id, LIMIT_USER.id));
+		await helpers.saveUser(helpers.createUser(LIMIT_USER));
+		const looks = Array.from({ length: LIMIT_LOOKS }, (_, n) => ({
+			id: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
+			userId: LIMIT_USER.id,
+			modeId: "polo-sweater-chore",
+			name: "",
+			colours: {
+				chino_p: "#C9B38C",
+				polo_l: "#F3F1EC",
+				sweater: "#1F3A5F",
+				chore: "#55633F",
+			} as const,
+			open: [],
+		}));
+		// D1 takes at most 100 bound values in one statement; a look binds 6.
+		for (let i = 0; i < looks.length; i += 10)
+			await db.insert(schema.look).values(looks.slice(i, i + 10));
+		const limitCookies = await helpers.getCookies({
+			userId: LIMIT_USER.id,
+			domain: "localhost",
+		});
+		writeFileSync(
+			LIMIT_FILE,
+			JSON.stringify({ cookies: limitCookies, origins: [] }),
+		);
 		// The pool's dress rows go with its users.
 		await db.delete(schema.user).where(like(schema.user.id, "e2e-pool-%"));
 		rmSync("e2e/.auth/claims", { recursive: true, force: true });
