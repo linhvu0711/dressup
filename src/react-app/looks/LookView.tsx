@@ -1,5 +1,5 @@
-import { ArrowLeft, Trash2 } from "lucide-react";
-import { Link } from "react-router";
+import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
+import { Link, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { useDressState } from "@/dress/DressState";
@@ -22,6 +22,7 @@ export function LookView({
 }) {
 	const dress = useDressState();
 	const toast = useToast();
+	const navigate = useNavigate();
 	const mode = modeById(look.modeId);
 	const name = lookName(look);
 	return (
@@ -36,6 +37,20 @@ export function LookView({
 					{name}
 				</h2>
 				<span className="flex-1" />
+				<Button
+					variant="icon"
+					size="icon"
+					aria-label="Edit this look"
+					title="Edit this look"
+					disabled={dress.status !== "ready"}
+					onClick={() => {
+						if (dress.status !== "ready") return;
+						dress.editLook(look);
+						navigate("/");
+					}}
+				>
+					<Pencil size={18} strokeWidth={1.9} aria-hidden />
+				</Button>
 				<Button
 					variant="icon"
 					size="icon"

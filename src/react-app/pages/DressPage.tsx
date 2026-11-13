@@ -1,4 +1,4 @@
-import { BookmarkPlus } from "lucide-react";
+import { BookmarkCheck, BookmarkPlus, X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -9,6 +9,7 @@ import { MannequinPlaceholder } from "@/dress/figure/MannequinPlaceholder";
 import { ModePicker, type PickerTab } from "@/dress/ModePicker";
 import { modeById, outfitOf } from "@/dress/modes";
 import { Stage } from "@/dress/Stage";
+import { lookName } from "@/looks/look";
 import { SaveLookDialog } from "@/looks/SaveLookDialog";
 import { SettingsLink } from "@/shell/SettingsLink";
 
@@ -27,13 +28,17 @@ type Panel = "mode" | "colours";
 // Laptop: modes on the left, the stage in the middle, colours on the right.
 export function DressPage() {
 	const dress = useDressState();
-	const [panel, setPanel] = useState<Panel>("mode");
+	// The pencil on a look opens the colours (docs/prototype/dressup.html:1064).
+	const [panel, setPanel] = useState<Panel>(() =>
+		dress.status === "ready" && dress.editing ? "colours" : "mode",
+	);
 	const [pickedTab, setTab] = useState<PickerTab | null>(null);
 	// The colour the picker shows before "Add". It stays out of the store,
 	// which holds only what the person keeps.
 	const [live, setLive] = useState<LiveColour | null>(null);
 	const [saving, setSaving] = useState(false);
 	const state = dress.status === "ready" ? dress.state : null;
+	const editing = dress.status === "ready" ? dress.editing : null;
 	const mode = state ? modeById(state.modeId) : null;
 	// A stored mode may be in any tab, so until a tab is picked the modes
 	// open on the one that holds it.
@@ -48,7 +53,25 @@ export function DressPage() {
 			<Stage
 				className="flex-[0_0_46%] rounded-b-[24px] wide:col-start-2 wide:row-start-1 wide:my-4 wide:rounded-[26px]"
 				corner={
-					<SettingsLink className="wide:hidden border-transparent bg-card shadow-lift" />
+					<>
+						<SettingsLink className="wide:hidden border-transparent bg-card shadow-lift" />
+						{editing && dress.status === "ready" ? (
+							// The edit bar of docs/prototype/dressup.html:81-83, 822.
+							<div className="flex h-9 min-w-0 items-center gap-1.5 rounded-full bg-card pr-1 pl-3.5 font-medium text-[12.5px] shadow-lift">
+								<span className="truncate">Editing: {lookName(editing)}</span>
+								<Button
+									variant="icon"
+									size="icon-sm"
+									aria-label="Stop editing"
+									title="Stop editing"
+									className="size-[26px] flex-none border-transparent"
+									onClick={dress.stopEditing}
+								>
+									<X size={15} strokeWidth={1.9} aria-hidden />
+								</Button>
+							</div>
+						) : null}
+					</>
 				}
 				action={
 					// The prototype's bookmark button, off while the dress loads
@@ -56,13 +79,17 @@ export function DressPage() {
 					<Button
 						variant="primary"
 						size="icon-lg"
-						aria-label="Save look"
-						title="Save look"
+						aria-label={editing ? "Save changes" : "Save look"}
+						title={editing ? "Save changes" : "Save look"}
 						disabled={!state}
 						className="shadow-lift"
 						onClick={() => setSaving(true)}
 					>
-						<BookmarkPlus size={20} strokeWidth={1.9} aria-hidden />
+						{editing ? (
+							<BookmarkCheck size={20} strokeWidth={1.9} aria-hidden />
+						) : (
+							<BookmarkPlus size={20} strokeWidth={1.9} aria-hidden />
+						)}
 					</Button>
 				}
 			>

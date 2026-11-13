@@ -3,6 +3,7 @@
 - Weather group: Hot, Cool, or Cold. Each mode is in exactly one. "Training" is a fourth tab that shows the two training modes.
 - Mannequin: the figure drawn by code as SVG. Front view, no face, white shoes. Each account sets its skin and hair colour.
 - Dress page: where the user picks a mode and colours.
+- Edit state: the Dress page while it holds a saved look to change. It shows "Editing: <name>"; the save form then offers "Save changes" and "Save as new", and the cross puts the outfit from before back.
 - Account: one Google sign-in. Each account has a private space. No account sees another account's data.
 - Colour square: one saved colour in a garment's row. Each garment has its own row. A new account starts with a starter set.
 - Outfit: what the mannequin wears now: the mode, the picked colour of each garment, and each jacket open or closed. The account keeps it, with its colour squares.

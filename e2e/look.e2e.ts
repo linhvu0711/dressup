@@ -26,6 +26,40 @@ async function twoLooksNavyOpen(page: Page) {
 	await openLook(page, "Navy day");
 }
 
+const sweater = (page: Page) =>
+	page.locator(
+		'svg[aria-label="Mannequin in Polo + sweater"] [data-garment="sweater"]',
+	);
+
+async function pickColour(page: Page, name: string) {
+	// The page sends changes from a queue; leaving before the 204 can cut
+	// the change off.
+	const stored = page.waitForResponse(
+		(res) => res.url().endsWith("/api/dress/changes") && res.status() === 204,
+	);
+	await page.getByRole("button", { name, exact: true }).click();
+	await stored;
+}
+
+async function goTo(page: Page, name: "Dress" | "Looks") {
+	await page
+		.getByRole("link", { name, exact: true })
+		.filter({ visible: true })
+		.click();
+}
+
+// "Navy day" saved in a red sweater, then a navy sweater on, then the look
+// opened from the wall and its pencil clicked.
+async function editRedNavyDay(page: Page) {
+	await openColours(page);
+	await pickColour(page, "Sweater #7A2E2E");
+	await saveLook(page, "Navy day");
+	await pickColour(page, "Sweater #1F3A5F");
+	await goTo(page, "Looks");
+	await card(page, "Navy day").click();
+	await page.getByRole("button", { name: "Edit this look" }).click();
+}
+
 const toast = (page: Page) => page.locator('[data-slot="toast"]');
 
 async function openLook(page: Page, name: string) {
@@ -222,4 +256,68 @@ test("shows the wall when the look to delete is gone", async ({ page }) => {
 	await expect(toast(page)).toHaveText("This look is gone");
 	await expect(page).toHaveURL("/looks");
 	await expect(page.locator('[data-slot="look-card"]')).toHaveText(["Keep"]);
+});
+
+test("opens the look on the Dress page in the edit state", async ({ page }) => {
+	// Given: both projects, "Navy day" saved red, a navy sweater on, the look open
+	// When
+	await editRedNavyDay(page);
+	// Then
+	await expect(page).toHaveURL("/");
+	await expect(page.getByText("Editing: Navy day")).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Stop editing" }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Save changes" }),
+	).toBeVisible();
+	await expect(page.getByRole("button", { name: "Save look" })).toHaveCount(0);
+	await expect
+		.poll(() => sweater(page).innerHTML())
+		.toContain('fill="#7A2E2E"');
+});
+
+test("ends the edit state with the cross", async ({ page }) => {
+	// Given: both projects, "Navy day" in the edit state over a navy sweater
+	await editRedNavyDay(page);
+	await expect(page.getByText("Editing: Navy day")).toBeVisible();
+	// When
+	await page.getByRole("button", { name: "Stop editing" }).click();
+	// Then
+	await expect(page.getByText("Editing:")).toHaveCount(0);
+	await expect(page.getByRole("button", { name: "Save look" })).toBeVisible();
+	expect(await sweater(page).innerHTML()).toContain('fill="#1F3A5F"');
+	await expect
+		.poll(
+			async () =>
+				(
+					(await (await page.request.get("/api/dress")).json()) as {
+						picked: Record<string, string>;
+					}
+				).picked.sweater,
+		)
+		.toBe("#1F3A5F");
+});
+
+test("shows the whole cross for a long name on a phone", async ({ page }) => {
+	test.skip(!isPhone(page), "the stage is narrow under 900 px");
+	// Given: phone, a look named with 60 W's, open
+	await openDress(page);
+	const name = "W".repeat(60);
+	await saveLook(page, name);
+	await page.goto("/looks");
+	await card(page, name).click();
+	// When
+	await page.getByRole("button", { name: "Edit this look" }).click();
+	// Then
+	const cross = await page
+		.getByRole("button", { name: "Stop editing" })
+		.boundingBox();
+	const save = await page
+		.getByRole("button", { name: "Save changes" })
+		.boundingBox();
+	expect({
+		leftOfSave: (cross?.x ?? 0) + (cross?.width ?? 0) <= (save?.x ?? 0),
+		inside: (cross?.x ?? 0) + (cross?.width ?? 0) <= 375,
+	}).toEqual({ leftOfSave: true, inside: true });
 });

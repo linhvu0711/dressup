@@ -2,6 +2,7 @@ import { AlertDialog } from "radix-ui";
 import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
+import { useDressState } from "@/dress/DressState";
 import { LookGone, useDeleteLook } from "./api";
 import { useLeaveGoneLook } from "./gone";
 import { type Look, lookName } from "./look";
@@ -19,6 +20,7 @@ export function DeleteLookDialog({
 	const navigate = useNavigate();
 	const toast = useToast();
 	const leaveGoneLook = useLeaveGoneLook();
+	const dress = useDressState();
 	return (
 		<AlertDialog.Root open onOpenChange={(open) => open || onClose()}>
 			<AlertDialog.Portal>
@@ -40,6 +42,11 @@ export function DeleteLookDialog({
 							onClick={() =>
 								del.mutate(look.id, {
 									onSuccess: () => {
+										if (
+											dress.status === "ready" &&
+											dress.editing?.id === look.id
+										)
+											dress.endEditing();
 										onClose();
 										navigate("/looks", { replace: true });
 										toast("Look deleted");

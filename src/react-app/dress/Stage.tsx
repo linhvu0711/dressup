@@ -24,7 +24,7 @@ export function Stage({
 		>
 			{children}
 			{corner ? (
-				<div className="absolute top-3 left-3 flex items-center gap-2">
+				<div className="absolute top-3 left-3 flex max-w-[calc(100%-80px)] items-center gap-2">
 					{corner}
 				</div>
 			) : null}
