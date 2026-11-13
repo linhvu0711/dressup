@@ -162,6 +162,53 @@ describe("dress state", () => {
 		});
 	});
 
+	const WEAR: DressChange = {
+		kind: "wear",
+		modeId: "polo-sweater-chore",
+		colours: {
+			chino_p: "#C9B38C",
+			polo_l: "#F3F1EC",
+			sweater: "#C0392B",
+			chore: "#55633F",
+		},
+		open: ["chore"],
+	};
+
+	test("wears a look: its mode, colours, and jackets, with a new colour first in its row", () => {
+		// Given: a fresh state
+		// When
+		const result = applyChange(startDressState(), WEAR);
+		// Then
+		if (!result.ok) throw new Error("the wear change was refused");
+		const s = result.state;
+		expect({
+			ok: result.ok,
+			modeId: s.modeId,
+			sweaterRow: s.swatches.sweater,
+			picked: {
+				sweater: s.picked.sweater,
+				chino_p: s.picked.chino_p,
+				chore: s.picked.chore,
+			},
+			open: s.open,
+		}).toEqual({
+			ok: true,
+			modeId: "polo-sweater-chore",
+			sweaterRow: ["#C0392B", "#1F3A5F", "#8C8A84", "#E6DFD0", "#7A2E2E"],
+			picked: { sweater: "#C0392B", chino_p: "#C9B38C", chore: "#55633F" },
+			open: ["chore"],
+		});
+	});
+
+	test("keeps the jacket a worn look does not have", () => {
+		// Given: a fresh state with the padded jacket open
+		const s = setJacket(startDressState(), "padded", true);
+		// When
+		const result = applyChange(s, WEAR);
+		// Then
+		expect(result.ok && result.state.open).toEqual(["padded", "chore"]);
+	});
+
 	test("refuses to pick a colour the row does not hold", () => {
 		// Given: a fresh state, the passing pick with its hex changed
 		// When

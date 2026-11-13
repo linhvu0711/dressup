@@ -144,6 +144,40 @@ async function aliceAfterGet() {
 }
 
 describe("POST /api/dress/changes", () => {
+	test("stores a wear change once when it comes twice", async () => {
+		// Given: alice after one GET /api/dress
+		const { h, headers } = await aliceAfterGet();
+		const wear = {
+			kind: "wear",
+			modeId: "polo-sweater-chore",
+			colours: {
+				chino_p: "#C9B38C",
+				polo_l: "#F3F1EC",
+				sweater: "#C0392B",
+				chore: "#55633F",
+			},
+			open: ["chore"],
+		};
+		// When
+		const first = await post(h, headers, wear);
+		const second = await post(h, headers, wear);
+		const s = await get(h, headers);
+		// Then
+		expect({
+			statuses: [first.status, second.status],
+			modeId: s.modeId,
+			sweater: s.swatches.sweater,
+			pickedSweater: s.picked.sweater,
+			open: s.open,
+		}).toEqual({
+			statuses: [204, 204],
+			modeId: "polo-sweater-chore",
+			sweater: ["#C0392B", "#1F3A5F", "#8C8A84", "#E6DFD0", "#7A2E2E"],
+			pickedSweater: "#C0392B",
+			open: ["chore"],
+		});
+	});
+
 	test("stores a change of each kind", async () => {
 		// Given: alice after one GET /api/dress
 		const { h, headers } = await aliceAfterGet();
