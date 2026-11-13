@@ -3,6 +3,7 @@ import {
 	createContext,
 	type ReactNode,
 	useContext,
+	useEffect,
 	useRef,
 	useState,
 } from "react";
@@ -33,8 +34,6 @@ type DressStore = { unsaved: boolean; retry: () => void } & (
 );
 
 const DressStoreContext = createContext<DressStore | null>(null);
-
-const dressQueryKey = ["dress"] as const;
 
 class SignedOut extends Error {}
 
@@ -68,14 +67,17 @@ async function sendChange(change: DressChange): Promise<Sent> {
 // The one place that holds the dress state. It starts from the server's copy;
 // a change shows at once from React state, and a queue sends the changes to
 // the server one at a time, in the order they were made.
+// `userId`: the signed-in account, or null while there is none. Each account
+// has its own cache entry, so one never shows another's colours.
 export function DressStateProvider({
-	enabled,
+	userId,
 	children,
 }: {
-	enabled: boolean;
+	userId: string | null;
 	children: ReactNode;
 }) {
 	const queryClient = useQueryClient();
+	const dressQueryKey = ["dress", userId] as const;
 	// A lost session makes the session check run again; it finds none, and
 	// the session gate shows the sign-in screen.
 	const signOut = () => queryClient.invalidateQueries({ queryKey: meQueryKey });
@@ -90,7 +92,7 @@ export function DressStateProvider({
 			}
 		},
 		retry: (count, error) => !(error instanceof SignedOut) && count < 3,
-		enabled,
+		enabled: userId !== null,
 		// The page keeps its own copy once loaded; a refetch is only asked for.
 		staleTime: Number.POSITIVE_INFINITY,
 		refetchOnWindowFocus: false,
@@ -113,6 +115,19 @@ export function DressStateProvider({
 		unsavedRef.current = value;
 		setUnsaved(value);
 	};
+	// Changes belong to the account that made them. Another account can sign
+	// in from a second tab; then they are dropped, and its own copy loads.
+	const [owner, setOwner] = useState(userId);
+	if (owner !== userId) {
+		setOwner(userId);
+		setChanged(null);
+		setUnsaved(false);
+	}
+	// biome-ignore lint/correctness/useExhaustiveDependencies: the queue is emptied when the account changes, which is all this reads.
+	useEffect(() => {
+		queue.current = [];
+		unsavedRef.current = false;
+	}, [userId]);
 
 	// Sends the queue in order and stops at the first change that cannot be
 	// stored, which stays first on the queue and on the screen.

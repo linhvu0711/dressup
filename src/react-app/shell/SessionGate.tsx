@@ -8,6 +8,7 @@ import { UnsavedBar } from "./UnsavedBar";
 
 export function SessionGate() {
 	const me = useMe();
+	const userId = me.data?.id ?? null;
 	// A failed check shows the sign-in screen too, so the person can try again.
 	if (!me.isPending && !me.data) return <SignInPage />;
 	const signedIn = !!me.data;
@@ -15,7 +16,7 @@ export function SessionGate() {
 	// not drawn twice; the dress store loads only with a session.
 	return (
 		<Toaster>
-			<DressStateProvider enabled={signedIn}>
+			<DressStateProvider userId={userId}>
 				<AppShell notice={signedIn ? <UnsavedBar /> : null}>
 					{signedIn ? <Outlet /> : null}
 				</AppShell>

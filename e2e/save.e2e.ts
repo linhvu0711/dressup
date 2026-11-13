@@ -1,5 +1,6 @@
+import { readFileSync } from "node:fs";
 import type { Page } from "@playwright/test";
-import { expect, test } from "./fixtures";
+import { claimAccount, expect, test } from "./fixtures";
 
 const ROWS = '[data-slot="colour-rows"]';
 
@@ -172,6 +173,35 @@ test("shows the stored colours after a refused change", async ({ page }) => {
 		"true",
 	);
 	await expect(square(page, "Sweater #E6DFD0")).toHaveAttribute(
+		"aria-pressed",
+		"false",
+	);
+});
+
+test("shows the other account's colours after it signs in in another tab", async ({
+	page,
+}) => {
+	// Given: both projects, the Colours tab on the phone; Sweater #7A2E2E
+	// picked and stored; then the browser holds a second account's session
+	await openColours(page);
+	const stored = page.waitForResponse(
+		(r) => r.url().endsWith("/api/dress/changes") && r.status() === 204,
+	);
+	await square(page, "Sweater #7A2E2E").click();
+	await stored;
+	const other = JSON.parse(readFileSync(claimAccount(), "utf8"));
+	await page.context().clearCookies();
+	await page.context().addCookies(other.cookies);
+	// When: the tab is shown again, so the session check runs again
+	await page.evaluate(() =>
+		window.dispatchEvent(new Event("visibilitychange")),
+	);
+	// Then
+	await expect(square(page, "Sweater #1F3A5F")).toHaveAttribute(
+		"aria-pressed",
+		"true",
+	);
+	await expect(square(page, "Sweater #7A2E2E")).toHaveAttribute(
 		"aria-pressed",
 		"false",
 	);
