@@ -8,6 +8,9 @@
 	"main": "./src/worker/index.ts",
 	"compatibility_date": "2025-10-08",
 	"compatibility_flags": ["nodejs_compat"],
+	"workers_dev": true,
+	// A version preview would run against the production D1 with the production secrets.
+	"preview_urls": false,
 	"observability": {
 		"enabled": true
 	},
