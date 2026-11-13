@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { modeById } from "@/dress/modes";
 import type { DressState } from "@/dress/state";
-import { useSaveLook } from "./api";
-import { LOOK_NAME_MAX, type LookId, lookFromDress } from "./look";
+import { SaveError, useLooks, useSaveLook } from "./api";
+import { LOOK_LIMIT, LOOK_NAME_MAX, type LookId, lookFromDress } from "./look";
 
 // The save form of docs/prototype/dressup.html:930-939, with no tags (#15).
 export function SaveLookDialog({
@@ -21,7 +21,13 @@ export function SaveLookDialog({
 	const [name, setName] = useState("");
 	const box = useRef<HTMLInputElement>(null);
 	const save = useSaveLook();
+	const looks = useLooks();
 	const toast = useToast();
+	// #11's "Save as new" is off with Save; "Save changes" keeps the same id
+	// and is not counted. A 409 look_limit means another tab filled the account.
+	const full =
+		(looks.data?.length ?? 0) >= LOOK_LIMIT ||
+		(save.error instanceof SaveError && save.error.code === "look_limit");
 
 	return (
 		<Dialog.Root open onOpenChange={(open) => open || onClose()}>
@@ -46,6 +52,9 @@ export function SaveLookDialog({
 						className="flex flex-col gap-4"
 						onSubmit={(e) => {
 							e.preventDefault();
+							// The prototype's saveDo stops here at the limit
+							// (docs/prototype/dressup.html:1044).
+							if (full) return;
 							save.mutate(lookFromDress(state, id, name), {
 								onSuccess: () => {
 									toast("Saved to Looks");
@@ -73,7 +82,12 @@ export function SaveLookDialog({
 								className="h-10 min-w-0 rounded-[12px] border border-input bg-card px-3 text-[14px] outline-none focus-visible:border-ring"
 							/>
 						</div>
-						{save.isError ? (
+						{full ? (
+							<p role="alert" className="text-[12.5px] text-destructive">
+								You have 300 looks. That is the limit. Delete one to save a new
+								one.
+							</p>
+						) : save.isError ? (
 							<p role="alert" className="text-[13px] text-destructive">
 								Not saved. Try again.
 							</p>
@@ -82,7 +96,11 @@ export function SaveLookDialog({
 							<Button type="button" onClick={onClose}>
 								Cancel
 							</Button>
-							<Button type="submit" variant="primary" disabled={save.isPending}>
+							<Button
+								type="submit"
+								variant="primary"
+								disabled={save.isPending || full}
+							>
 								Save
 							</Button>
 						</div>

@@ -53,6 +53,7 @@ export async function makeHarness() {
 			clientId: testEnv.GOOGLE_CLIENT_ID,
 			clientSecret: testEnv.GOOGLE_CLIENT_SECRET,
 		},
+		signupsClosed: false,
 	};
 	const app = createApp(() => db);
 	const helpers = (

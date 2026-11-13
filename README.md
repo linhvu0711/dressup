@@ -31,6 +31,15 @@ Copy `.dev.vars.example` to `.dev.vars` and fill in each value. Wrangler reads `
 - `BETTER_AUTH_SECRET`: signs the session cookies. Use at least 32 random characters, for example from `openssl rand -base64 32`.
 - `BETTER_AUTH_URL`: the app's address. In dev it is `http://localhost:5173`.
 
+## Stop new sign-ups
+
+`SIGNUPS_CLOSED` stops new accounts.
+
+- Set to `true`: a Google account with no dressup account gets "No new accounts for now". People with an account sign in as before.
+- Not set, or any other value: sign-up is open.
+
+On Cloudflare, set it in the dashboard, under the Worker's Settings, in Variables and Secrets, as a plain text variable. `keep_vars` in `wrangler.jsonc` keeps it on each deploy. In dev, put `SIGNUPS_CLOSED=true` in `.dev.vars`.
+
 ## The prototype is the reference
 
 `docs/prototype/dressup.html` is a working model of the whole app. Build the app to look and behave like it.

@@ -1,6 +1,11 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, count, desc, eq, sql } from "drizzle-orm";
 import type { ModeId } from "@/dress/modes";
-import type { Look, LookId, LookInput } from "@/looks/look";
+import {
+	LOOK_LIMIT,
+	type Look,
+	type LookId,
+	type LookInput,
+} from "@/looks/look";
 import type { Db } from "./db";
 import { look } from "./db/look-schema";
 
@@ -24,16 +29,27 @@ export async function listLooks(db: Db, userId: string): Promise<Look[]> {
 
 // The page makes the id when the save form opens, so a Save sent again after
 // a lost answer writes over the same look rather than making a second one.
-// An id another account holds is not touched: null.
+// An id another account holds is not touched: conflict. A new id past the
+// look limit is not saved: look_limit.
 export async function saveLook(
 	db: Db,
 	userId: string,
 	input: LookInput,
-): Promise<{ look: Look; created: boolean } | null> {
+): Promise<
+	| { ok: true; look: Look; created: boolean }
+	| { ok: false; error: "conflict" | "look_limit" }
+> {
 	const [before] = await db
 		.select({ id: look.id })
 		.from(look)
 		.where(eq(look.id, input.id));
+	if (!before) {
+		const [{ n }] = await db
+			.select({ n: count() })
+			.from(look)
+			.where(eq(look.userId, userId));
+		if (n >= LOOK_LIMIT) return { ok: false, error: "look_limit" };
+	}
 	const fields = {
 		modeId: input.modeId,
 		name: input.name,
@@ -49,5 +65,7 @@ export async function saveLook(
 			setWhere: and(eq(look.id, input.id), eq(look.userId, userId)),
 		})
 		.returning();
-	return row ? { look: toLook(row), created: !before } : null;
+	return row
+		? { ok: true, look: toLook(row), created: !before }
+		: { ok: false, error: "conflict" };
 }

@@ -7,4 +7,6 @@
 - Colour square: one saved colour in a garment's row. Each garment has its own row. A new account starts with a starter set.
 - Outfit: what the mannequin wears now: the mode, the picked colour of each garment, and each jacket open or closed. The account keeps it, with its colour squares.
 - Look: a saved outfit. It holds the mode, its own copy of each garment's colour, the jacket state (open or closed), an optional name, and tags.
+- Look limit: 300 looks for each account.
+- Sign-up switch: one on/off environment variable that stops new sign-ups. People with an account can still sign in.
 - Looks page: the wall of saved looks.

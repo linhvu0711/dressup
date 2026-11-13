@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { type Context, Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import type { z } from "zod";
@@ -5,6 +6,7 @@ import { applyChange, dressChangeSchema } from "@/dress/state";
 import { lookInputSchema } from "@/looks/look";
 import { createAuth } from "./auth";
 import type { Db } from "./db";
+import { user } from "./db/auth-schema";
 import { loadDress, saveDress } from "./dress-store";
 import { listLooks, saveLook } from "./look-store";
 
@@ -46,6 +48,7 @@ export function createApp(getDb: (env: Env) => Db) {
 					clientId: c.env.GOOGLE_CLIENT_ID,
 					clientSecret: c.env.GOOGLE_CLIENT_SECRET,
 				},
+				signupsClosed: c.env.SIGNUPS_CLOSED === "true",
 			}),
 		);
 		await next();
@@ -76,6 +79,22 @@ export function createApp(getDb: (env: Env) => Db) {
 		return c.json({ id, name, email, image: image ?? null });
 	});
 
+	app.delete("/account", withAuth, requireUser, async (c) => {
+		// One statement: the sessions, the Google link, and every app row go
+		// with the user row through their foreign keys, all or nothing. Better
+		// Auth's own delete wants a session under a day old or an email (#12).
+		await getDb(c.env).delete(user).where(eq(user.id, c.var.user.id));
+		// Sign-out also clears the 5-minute cookie cache, which would keep the
+		// deleted account on screen.
+		const { headers } = await c.var.auth.api.signOut({
+			headers: c.req.raw.headers,
+			returnHeaders: true,
+		});
+		for (const cookie of headers.getSetCookie())
+			c.header("set-cookie", cookie, { append: true });
+		return c.body(null, 204);
+	});
+
 	app.get("/dress", withAuth, requireUser, async (c) =>
 		c.json((await loadDress(getDb(c.env), c.var.user.id)).state),
 	);
@@ -101,7 +120,10 @@ export function createApp(getDb: (env: Env) => Db) {
 		const body = await readBody(c, lookInputSchema);
 		if ("refused" in body) return body.refused;
 		const saved = await saveLook(getDb(c.env), c.var.user.id, body.data);
-		if (!saved) return c.json({ error: "conflict", field: "id" }, 409);
+		if (!saved.ok)
+			return saved.error === "conflict"
+				? c.json({ error: "conflict", field: "id" }, 409)
+				: c.json({ error: "look_limit" }, 409);
 		return c.json({ look: saved.look }, saved.created ? 201 : 200);
 	});
 

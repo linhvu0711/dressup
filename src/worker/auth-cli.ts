@@ -10,5 +10,6 @@ export const auth = betterAuth(
 		secret: undefined,
 		baseURL: undefined,
 		google: { clientId: "", clientSecret: "" },
+		signupsClosed: false,
 	}),
 );

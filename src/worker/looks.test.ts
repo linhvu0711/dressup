@@ -62,6 +62,22 @@ const list = async ({ app, env }: Harness, headers: Headers) =>
 		looks: { name: string }[];
 	};
 
+// Writes n valid looks for the user straight into the table, so a test can
+// reach the look limit without 300 requests.
+function seedLooks(h: Harness, userId: string, n: number) {
+	h.sqlite.run(
+		`INSERT INTO look (id, user_id, mode_id, name, colours, open)
+		WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?)
+		SELECT printf('00000000-0000-4000-8000-%012d', i), ?, 'polo-sweater-chore', '',
+			'{"chino_p":"#C9B38C","polo_l":"#F3F1EC","sweater":"#1F3A5F","chore":"#55633F"}', '[]'
+		FROM n`,
+		[n, userId],
+	);
+}
+
+const lookCount = (h: Harness) =>
+	h.sqlite.query("select count(*) as n from look").get();
+
 describe("POST /api/looks", () => {
 	test("saves a look and lists it", async () => {
 		// Given: alice signed in
@@ -261,6 +277,54 @@ describe("POST /api/looks against the mode", () => {
 			status: 400,
 			body: { error: "invalid", field: "open" },
 		});
+	});
+});
+
+describe("POST /api/looks at the look limit", () => {
+	test("refuses look number 301", async () => {
+		// Given: alice signed in with 300 looks
+		const { h, headers } = await aliceSignedIn();
+		seedLooks(h, "alice-id", 300);
+		// When
+		const res = await post(h, headers, NAVY);
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			count: lookCount(h),
+		}).toEqual({
+			status: 409,
+			body: { error: "look_limit" },
+			count: { n: 300 },
+		});
+	});
+
+	test("saves look number 300", async () => {
+		// Given: alice signed in with 299 looks
+		const { h, headers } = await aliceSignedIn();
+		seedLooks(h, "alice-id", 299);
+		// When
+		const res = await post(h, headers, NAVY);
+		// Then
+		expect({ status: res.status, count: lookCount(h) }).toEqual({
+			status: 201,
+			count: { n: 300 },
+		});
+	});
+
+	test("changes a look at the limit", async () => {
+		// Given: alice saved NAVY and has 300 looks
+		const { h, headers } = await aliceSignedIn();
+		await post(h, headers, NAVY);
+		seedLooks(h, "alice-id", 299);
+		// When
+		const res = await post(h, headers, { ...NAVY, name: "Navy night" });
+		// Then
+		expect({
+			status: res.status,
+			name: ((await res.json()) as { look: { name: string } }).look.name,
+			count: lookCount(h),
+		}).toEqual({ status: 200, name: "Navy night", count: { n: 300 } });
 	});
 });
 

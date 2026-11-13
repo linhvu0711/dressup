@@ -33,12 +33,19 @@ function signInWithGoogle() {
 
 export function SignInPage() {
 	const [params] = useSearchParams();
+	// Better Auth sends a new Google account here while SIGNUPS_CLOSED is true.
+	const closed = params.get("error") === "signup_disabled";
 	return (
 		<div className="flex h-dvh flex-col bg-background">
 			<div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
 				<h1 className="text-[76px] leading-none tracking-[-0.02em]">dressup</h1>
+				{closed ? (
+					<h2 className="text-[28px] leading-tight">No new accounts for now</h2>
+				) : null}
 				<p className="max-w-[32ch] text-balance text-[15px] text-muted-foreground">
-					See your clothes in your colours, before you put them on.
+					{closed
+						? "The app is full at the moment. If you have an account, you can sign in."
+						: "See your clothes in your colours, before you put them on."}
 				</p>
 				<Button
 					variant="primary"
@@ -49,7 +56,7 @@ export function SignInPage() {
 					<GoogleMark />
 					Sign in with Google
 				</Button>
-				{params.has("error") && (
+				{params.has("error") && !closed && (
 					<p role="alert" className="text-[13px] text-destructive">
 						Sign-in did not work. Try again.
 					</p>

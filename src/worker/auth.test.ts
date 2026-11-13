@@ -260,6 +260,103 @@ describe("Google sign-in", () => {
 	});
 });
 
+describe("sign-up switch", () => {
+	let restore = () => {};
+	afterEach(() => restore());
+
+	const withSignups = (h: Harness, value: string | undefined): Harness => ({
+		...h,
+		env: { ...h.env, SIGNUPS_CLOSED: value } as unknown as Env,
+	});
+
+	const users = (h: Harness) =>
+		h.sqlite.query("select count(*) as n from user").get();
+
+	test("refuses a new Google account while sign-ups are closed", async () => {
+		// Given: no user; sign-ups closed
+		const h = await makeHarness();
+		restore = stubGoogle(
+			"g-new",
+			"new@example.com",
+			"New",
+			"https://example.com/n.png",
+		);
+		// When
+		const res = await finishGoogleSignIn(withSignups(h, "true"));
+		// Then
+		expect({
+			status: res.status,
+			location: res.headers.get("location"),
+			users: users(h),
+		}).toEqual({
+			status: 302,
+			location: "/?error=signup_disabled",
+			users: { n: 0 },
+		});
+	});
+
+	test("signs in an existing account while sign-ups are closed", async () => {
+		// Given: the account made by a sign-in while sign-up was open
+		const h = await makeHarness();
+		restore = stubGoogle(
+			"g-old",
+			"old@example.com",
+			"Old",
+			"https://example.com/o.png",
+		);
+		expect((await finishGoogleSignIn(h)).headers.get("location")).toBe("/");
+		// When
+		const res = await finishGoogleSignIn(withSignups(h, "true"));
+		// Then
+		const me = await h.app.request(
+			"/api/me",
+			{ headers: { cookie: cookieHeader(res) } },
+			h.env,
+		);
+		expect({
+			status: res.status,
+			location: res.headers.get("location"),
+			me: [me.status, ((await me.json()) as { email: string }).email],
+		}).toEqual({
+			status: 302,
+			location: "/",
+			me: [200, "old@example.com"],
+		});
+	});
+
+	test("keeps sign-up open unless SIGNUPS_CLOSED is true", async () => {
+		// Given: for each value, a harness with no user
+		const results = [];
+		for (const value of [undefined, "false", "yes", "TRUE"]) {
+			const h = await makeHarness();
+			restore = stubGoogle(
+				"g-new",
+				"new@example.com",
+				"New",
+				"https://example.com/n.png",
+			);
+			// When
+			const res = await finishGoogleSignIn(withSignups(h, value));
+			restore();
+			results.push({
+				value: value ?? "not set",
+				status: res.status,
+				location: res.headers.get("location"),
+				users: users(h),
+			});
+		}
+		// Then
+		expect(results).toEqual(
+			["not set", "false", "yes", "TRUE"].map((value) => ({
+				value,
+				status: 302,
+				location: "/",
+				users: { n: 1 },
+			})),
+		);
+	});
+});
+
 describe("session cookie cache", () => {
 	test("reads a cached session without the database", async () => {
 		// Given: alice signed in, with only her session token cookie

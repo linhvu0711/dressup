@@ -46,6 +46,19 @@ export function useLooks() {
 	});
 }
 
+// A refused save, with the error code of its answer when it names one, so
+// the form can tell the look limit from a save that failed.
+export class SaveError extends Error {
+	constructor(
+		readonly status: number,
+		readonly code: string | null,
+	) {
+		super(`POST /api/looks answered ${status}`);
+	}
+}
+
+const errorAnswer = z.object({ error: z.string() });
+
 export function useSaveLook() {
 	const userId = useUserId();
 	const queryClient = useQueryClient();
@@ -58,7 +71,10 @@ export function useSaveLook() {
 				body: JSON.stringify(look),
 			});
 			await on401(res, "POST /api/looks");
-			if (!res.ok) throw new Error(`POST /api/looks answered ${res.status}`);
+			if (!res.ok) {
+				const body = errorAnswer.safeParse(await res.json().catch(() => null));
+				throw new SaveError(res.status, body.success ? body.data.error : null);
+			}
 			return savedAnswer.parse(await res.json()).look;
 		},
 		onSuccess: (look) => {
