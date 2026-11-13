@@ -222,6 +222,48 @@ describe("POST /api/looks", () => {
 	});
 });
 
+describe("POST /api/looks against the mode", () => {
+	test("refuses a garment that is not in the mode", async () => {
+		// Given: NAVY with a tee colour, and the mode has no tee
+		const { h, headers } = await aliceSignedIn();
+		// When
+		const res = await post(h, headers, {
+			...NAVY,
+			colours: { ...NAVY.colours, tee_s: "#FFFFFF" },
+		});
+		// Then
+		expect({ status: res.status, body: await res.json() }).toEqual({
+			status: 400,
+			body: { error: "invalid", field: "colours.tee_s" },
+		});
+	});
+
+	test("refuses a mode garment with no colour", async () => {
+		// Given: NAVY with the long polo's colour taken out
+		const { h, headers } = await aliceSignedIn();
+		const { polo_l: _, ...colours } = NAVY.colours;
+		// When
+		const res = await post(h, headers, { ...NAVY, colours });
+		// Then
+		expect({ status: res.status, body: await res.json() }).toEqual({
+			status: 400,
+			body: { error: "invalid", field: "colours.polo_l" },
+		});
+	});
+
+	test("refuses an open jacket that is not in the mode", async () => {
+		// Given: NAVY with the padded jacket open, and the mode has no padded jacket
+		const { h, headers } = await aliceSignedIn();
+		// When
+		const res = await post(h, headers, { ...NAVY, open: ["padded"] });
+		// Then
+		expect({ status: res.status, body: await res.json() }).toEqual({
+			status: 400,
+			body: { error: "invalid", field: "open" },
+		});
+	});
+});
+
 describe("GET /api/looks", () => {
 	test("lists the newest look first", async () => {
 		// Given: alice saved "First", then "Second", one right after the other
