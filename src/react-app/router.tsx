@@ -1,4 +1,5 @@
 import { createBrowserRouter } from "react-router";
+import { ComparePage } from "./pages/ComparePage";
 import { DressPage } from "./pages/DressPage";
 import { LooksPage } from "./pages/LooksPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
@@ -12,6 +13,7 @@ export const router = createBrowserRouter([
 		children: [
 			{ index: true, element: <DressPage /> },
 			{ path: "looks", element: <LooksPage /> },
+			{ path: "looks/compare", element: <ComparePage /> },
 			{ path: "settings", element: <SettingsPage /> },
 			{ path: "*", element: <NotFoundPage /> },
 		],

@@ -1,9 +1,10 @@
 import { cn } from "cn";
 import { Scale, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { useLooks } from "@/looks/api";
+import { COMPARE_MIN } from "@/looks/compare";
 import { LookCard } from "@/looks/LookCard";
 import type { LookId } from "@/looks/look";
 import { PageHeader } from "../shell/PageHeader";
@@ -30,6 +31,7 @@ function Notice({ title, children }: { title: string; children: ReactNode }) {
 // so a wall with looks does not move when they come.
 export function LooksPage() {
 	const looks = useLooks();
+	const navigate = useNavigate();
 	// null is the wall without the pick state; the list keeps the pick order.
 	const [picked, setPicked] = useState<LookId[] | null>(null);
 	const canPick = looks.isSuccess && looks.data.length > 0;
@@ -112,7 +114,7 @@ export function LooksPage() {
 					"wide:grid wide:grid-cols-[minmax(0,1fr)_420px] wide:grid-rows-[minmax(0,1fr)]",
 			)}
 		>
-			<div className="flex min-h-0 flex-1 flex-col">
+			<div className="relative flex min-h-0 flex-1 flex-col">
 				{picked ? (
 					<PageHeader
 						start={
@@ -148,6 +150,19 @@ export function LooksPage() {
 					/>
 				)}
 				{wall}
+				{picked ? (
+					// The floating button of docs/prototype/dressup.html:889.
+					<Button
+						variant="primary"
+						size="lg"
+						className="-translate-x-1/2 absolute bottom-5 left-1/2 z-[5] shadow-float"
+						disabled={picked.length < COMPARE_MIN}
+						onClick={() => navigate("/looks/compare", { state: { picked } })}
+					>
+						<Scale size={18} strokeWidth={1.9} aria-hidden />
+						Compare {picked.length}
+					</Button>
+				) : null}
 			</div>
 			{panel ? (
 				<aside

@@ -1,9 +1,6 @@
 import { cn } from "cn";
 import { Check } from "lucide-react";
-import { useDressState } from "@/dress/DressState";
-import { Mannequin } from "@/dress/figure/Mannequin";
-import { MannequinPlaceholder } from "@/dress/figure/MannequinPlaceholder";
-import { modeById, outfitOf } from "@/dress/modes";
+import { LookFigure } from "./LookFigure";
 import { type Look, lookName } from "./look";
 
 const VIEW_BOX = "10 14 380 590";
@@ -11,9 +8,7 @@ const VIEW_BOX = "10 14 380 590";
 const CARD = "flex min-w-0 flex-col gap-[7px]";
 
 // The card of docs/prototype/dressup.html:869. A click opens nothing yet
-// (#11), so outside the pick state it is not a button. The figure takes the
-// account's skin and hair, as the stage does; until they load it is the
-// stage's grey placeholder.
+// (#11), so outside the pick state it is not a button.
 export function LookCard({
 	look,
 	pick,
@@ -21,7 +16,6 @@ export function LookCard({
 	look: Look;
 	pick?: { on: boolean; toggle: () => void };
 }) {
-	const dress = useDressState();
 	const body = (
 		<>
 			<span
@@ -30,19 +24,7 @@ export function LookCard({
 					pick?.on && "outline-2 outline-foreground outline-offset-[2.5px]",
 				)}
 			>
-				{dress.status === "ready" ? (
-					<Mannequin
-						decorative
-						lite
-						viewBox={VIEW_BOX}
-						layers={outfitOf(modeById(look.modeId), look.colours)}
-						openJackets={look.open}
-						skin={dress.state.mannequin.skin}
-						hair={dress.state.mannequin.hair}
-					/>
-				) : (
-					<MannequinPlaceholder viewBox={VIEW_BOX} />
-				)}
+				<LookFigure look={look} viewBox={VIEW_BOX} lite />
 			</span>
 			<span className="truncate font-medium text-[13.5px]">
 				{lookName(look)}
