@@ -6,6 +6,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { useToast } from "@/components/ui/toast";
 import type { GarmentId, Hex, JacketId } from "@/dress/garments";
 import type { ModeId } from "@/dress/modes";
 import {
@@ -24,9 +25,11 @@ type DressCommands = {
 	setJacket: (jacket: JacketId, open: boolean) => void;
 };
 
-type DressStore =
+// `unsaved`: a change could not be stored and waits on the queue.
+type DressStore = { unsaved: boolean; retry: () => void } & (
 	| { status: "loading" }
-	| ({ status: "ready"; state: DressState } & DressCommands);
+	| ({ status: "ready"; state: DressState } & DressCommands)
+);
 
 const DressStoreContext = createContext<DressStore | null>(null);
 
@@ -56,10 +59,17 @@ async function sendChange(change: DressChange): Promise<Sent> {
 // The one place that holds the dress state. It starts from the server's copy;
 // a change shows at once from React state, and a queue sends the changes to
 // the server one at a time, in the order they were made.
-export function DressStateProvider({ children }: { children: ReactNode }) {
+export function DressStateProvider({
+	enabled,
+	children,
+}: {
+	enabled: boolean;
+	children: ReactNode;
+}) {
 	const query = useQuery({
 		queryKey: dressQueryKey,
 		queryFn: fetchDress,
+		enabled,
 		// The page keeps its own copy once loaded; a refetch is only asked for.
 		staleTime: Number.POSITIVE_INFINITY,
 		refetchOnWindowFocus: false,
@@ -75,19 +85,43 @@ export function DressStateProvider({ children }: { children: ReactNode }) {
 	latest.current = state;
 	const queue = useRef<DressChange[]>([]);
 	const sending = useRef(false);
+	const toast = useToast();
+	const [unsaved, setUnsaved] = useState(false);
+	const unsavedRef = useRef(false);
+	const markUnsaved = (value: boolean) => {
+		unsavedRef.current = value;
+		setUnsaved(value);
+	};
 
-	const flush = async () => {
-		if (sending.current) return;
+	// Sends the queue in order and stops at the first change that cannot be
+	// stored, which stays first on the queue and on the screen.
+	const flush = async (): Promise<"stored" | "failed" | "busy"> => {
+		if (sending.current) return "busy";
 		sending.current = true;
 		try {
 			while (queue.current.length > 0) {
 				const sent = await sendChange(queue.current[0]);
-				if (sent === "failed") return;
+				if (sent === "failed") {
+					markUnsaved(true);
+					return "failed";
+				}
 				queue.current.shift();
 			}
+			if (unsavedRef.current) {
+				markUnsaved(false);
+				toast("Saved");
+			}
+			return "stored";
 		} finally {
 			sending.current = false;
 		}
+	};
+
+	// The prototype's retry, docs/prototype/dressup.html:1087.
+	const retry = () => {
+		void flush().then((result) => {
+			if (result === "failed") toast("Still no connection.");
+		});
 	};
 
 	const run = (change: DressChange): ChangeResult | null => {
@@ -104,6 +138,8 @@ export function DressStateProvider({ children }: { children: ReactNode }) {
 
 	const store: DressStore = state
 		? {
+				unsaved,
+				retry,
 				status: "ready",
 				state,
 				pickMode: (modeId) => {
@@ -124,7 +160,7 @@ export function DressStateProvider({ children }: { children: ReactNode }) {
 					run({ kind: "jacket", jacket, open });
 				},
 			}
-		: { status: "loading" };
+		: { unsaved, retry, status: "loading" };
 	return (
 		<DressStoreContext.Provider value={store}>
 			{children}

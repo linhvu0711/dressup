@@ -78,3 +78,34 @@ test("shows the grey mannequin while the colours load", async ({ page }) => {
 	).toBeVisible();
 	await expect(page.locator('svg[aria-label="Loading"]')).toHaveCount(0);
 });
+
+test("keeps a failed change on screen and stores it on Retry", async ({
+	page,
+}) => {
+	// Given: both projects, the Colours tab on the phone, every save cut off
+	await openColours(page);
+	await page.route("**/api/dress/changes", (route) => route.abort());
+	const red = square(page, "Sweater #7A2E2E");
+	const bar = page.getByRole("alert");
+	// When
+	await red.click();
+	// Then
+	await expect(red).toHaveAttribute("aria-pressed", "true");
+	await expect(bar).toHaveText(/Not saved\. Check your internet\./);
+	// When
+	await page.unroute("**/api/dress/changes");
+	await bar.getByRole("button", { name: "Retry", exact: true }).click();
+	// Then
+	await expect(bar).toHaveCount(0);
+	await expect(page.locator('[data-slot="toast"]')).toHaveText("Saved");
+	// When
+	await page.reload();
+	if (isPhone(page)) {
+		await page.getByRole("tab", { name: "Colours", exact: true }).click();
+	}
+	// Then
+	await expect(square(page, "Sweater #7A2E2E")).toHaveAttribute(
+		"aria-pressed",
+		"true",
+	);
+});
