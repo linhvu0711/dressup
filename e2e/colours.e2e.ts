@@ -9,6 +9,9 @@ async function openColours(page: Page) {
 	if (isPhone(page)) {
 		await page.getByRole("tab", { name: "Colours", exact: true }).click();
 	}
+	// The page shows only after the session check, so wait for it before a
+	// test reads the rows at once.
+	await expect(page.locator(ROWS)).toBeVisible();
 }
 
 async function showModes(page: Page) {
