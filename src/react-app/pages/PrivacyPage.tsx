@@ -81,9 +81,9 @@ export function PrivacyPage() {
 				</Section>
 
 				<Section id="privacy-delete" title="How to delete it">
-					{/* Stand-in until #12 ships "Delete my account" in Settings; #12 changes this line. */}
 					<p className="mt-2">
-						To delete your account and all its data, write to <EmailLink />.
+						In Settings, "Delete my account" deletes your account and all its
+						data at once.
 					</p>
 				</Section>
 

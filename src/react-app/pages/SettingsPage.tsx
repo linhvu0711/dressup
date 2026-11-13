@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
+import { DeleteAccount } from "@/settings/DeleteAccount";
 import { MannequinSection } from "@/settings/MannequinSection";
 import { authClient } from "../auth-client";
 import { meQueryKey, useMe } from "../session";
@@ -38,6 +39,7 @@ export function SettingsPage() {
 					<span className="flex-1" />
 					<Button onClick={signOut}>Sign out</Button>
 				</div>
+				<DeleteAccount />
 			</div>
 		</>
 	);

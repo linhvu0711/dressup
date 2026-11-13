@@ -172,3 +172,63 @@ test("shows the grey preview while the colours load", async ({ page }) => {
 	await expect(preview(page)).toBeVisible();
 	await expect(loading).toHaveCount(0);
 });
+
+const confirm = (page: Page) =>
+	page.getByRole("alertdialog", { name: "Delete your account?" });
+
+async function openDeleteConfirm(page: Page) {
+	await page.goto("/settings");
+	await page.getByRole("button", { name: "Delete my account" }).click();
+	await expect(confirm(page)).toBeVisible();
+}
+
+test("opens the delete confirm from the bin button", async ({ page }) => {
+	// Given: both projects, a fresh account, the Settings page
+	await page.goto("/settings");
+	// When
+	await page.getByRole("button", { name: "Delete my account" }).click();
+	// Then
+	await expect(confirm(page)).toContainText(
+		"All your looks and colours go away for good. You cannot undo this.",
+	);
+	await expect(
+		confirm(page).getByRole("button", { name: "Cancel", exact: true }),
+	).toBeVisible();
+	await expect(
+		confirm(page).getByRole("button", { name: "Delete", exact: true }),
+	).toBeVisible();
+});
+
+test("deletes the account and shows the sign-in screen", async ({ page }) => {
+	// Given: both projects, a fresh account, the confirm open
+	await openDeleteConfirm(page);
+	// When
+	await confirm(page)
+		.getByRole("button", { name: "Delete", exact: true })
+		.click();
+	// Then
+	await expect(page.locator("h1")).toHaveText("dressup");
+	await expect(
+		page.getByRole("button", { name: "Sign in with Google" }),
+	).toBeVisible();
+	await expect(page.locator('[data-slot="toast"]')).toHaveText(
+		"Account deleted",
+	);
+	expect((await page.request.get("/api/me")).status()).toBe(401);
+});
+
+test("keeps the account when the delete fails", async ({ page }) => {
+	// Given: both projects, a fresh account, each delete answered 500, the
+	// confirm open
+	await page.route("**/api/account", (route) => route.fulfill({ status: 500 }));
+	await openDeleteConfirm(page);
+	// When
+	await confirm(page)
+		.getByRole("button", { name: "Delete", exact: true })
+		.click();
+	// Then
+	await expect(confirm(page).getByRole("alert")).toHaveText(
+		"Not deleted. Try again.",
+	);
+	expect((await page.request.get("/api/me")).status()).toBe(200);
+});

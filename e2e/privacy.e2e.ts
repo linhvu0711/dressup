@@ -120,20 +120,15 @@ test("says where the data lives and which cookies dressup sets", async ({
 	]);
 });
 
-test("says to write to the support email to delete the account", async ({
-	page,
-}) => {
+test("says Settings deletes the account", async ({ page }) => {
 	// Given: the dev server; no cookies
 	// When
 	await page.goto("/privacy");
 	const region = page.getByRole("region", { name: "How to delete it" });
 	// Then
 	await expect(region.locator("p")).toHaveText([
-		"To delete your account and all its data, write to linh.tuan.vu.contact@gmail.com.",
+		'In Settings, "Delete my account" deletes your account and all its data at once.',
 	]);
-	await expect(
-		region.getByRole("link", { name: "linh.tuan.vu.contact@gmail.com" }),
-	).toHaveAttribute("href", "mailto:linh.tuan.vu.contact@gmail.com");
 });
 
 test("gives the support email and the date of the last change", async ({
