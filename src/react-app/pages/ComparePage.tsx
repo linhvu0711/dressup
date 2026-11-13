@@ -10,19 +10,18 @@ export function ComparePage() {
 	const location = useLocation();
 	const looks = useLooks();
 	const state = compareState.safeParse(location.state);
-	const shown = looks.isSuccess
+	// A failed refetch keeps the old looks in data, and opening this page
+	// refetches, so a network blip still shows the picks.
+	const loaded = looks.data;
+	const shown = loaded
 		? (state.data?.picked ?? []).flatMap((id) => {
-				const look = looks.data.find((l) => l.id === id);
+				const look = loaded.find((l) => l.id === id);
 				return look ? [look] : [];
 			})
 		: [];
 	// A typed address, a reload after the picks were lost, or a look gone
 	// since: the prototype has no compare view without picks.
-	if (
-		!state.success ||
-		looks.isError ||
-		(looks.isSuccess && shown.length < COMPARE_MIN)
-	)
+	if (!state.success || (loaded ? shown.length < COMPARE_MIN : looks.isError))
 		return <Navigate to="/looks" replace />;
 	return (
 		<>
@@ -30,7 +29,7 @@ export function ComparePage() {
 				start={<BackLink to="/looks" />}
 				title="Compare"
 				end={
-					looks.isSuccess ? (
+					loaded ? (
 						<span className="font-sans text-[13px] text-muted-foreground">
 							{shown.length} looks
 							{shown.length > 2 ? (

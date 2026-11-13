@@ -276,6 +276,45 @@ test("goes back to the wall", async ({ page }) => {
 	}).toEqual({ url: "/looks", h1: "Looks", pressed: 0, cards: 3 });
 });
 
+test("keeps the compare view when the looks fail to load again", async ({
+	page,
+}) => {
+	// Given: both projects, "Look 1" to "Look 3" on the wall, "Look 3" and
+	// "Look 1" ticked; then each load of the looks answers 500
+	await openLooks(page, ["Look 1", "Look 2", "Look 3"]);
+	await scaleButton(page).click();
+	for (const name of ["Look 3", "Look 1"]) await cardButton(page, name).click();
+	await page.route("**/api/looks", (route) =>
+		route.request().method() === "GET"
+			? route.fulfill({ status: 500 })
+			: route.continue(),
+	);
+	const failed = page.waitForResponse(
+		(r) => r.url().endsWith("/api/looks") && r.status() === 500,
+	);
+	// When
+	await page.getByRole("button", { name: "Compare 2", exact: true }).click();
+	await failed;
+	// Two frames give the app time to act on the failed load.
+	await page.evaluate(
+		() =>
+			new Promise((done) =>
+				requestAnimationFrame(() => requestAnimationFrame(done)),
+			),
+	);
+	await expect(compareLooks(page)).toHaveCount(2);
+	// Then
+	expect({
+		url: new URL(page.url()).pathname,
+		h1: await h1(page),
+		names: await compareLooks(page).allTextContents(),
+	}).toEqual({
+		url: "/looks/compare",
+		h1: "Compare",
+		names: ["Look 3", "Look 1"],
+	});
+});
+
 test("goes to the wall when the compare view has no picks", async ({
 	page,
 }) => {
