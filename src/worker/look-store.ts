@@ -70,6 +70,26 @@ export async function saveLook(
 		: { ok: false, error: "conflict" };
 }
 
+// Changes only a look the account has; a gone id is not made again, as
+// saveLook would: null. createdAt stays, so the look keeps its place.
+export async function updateLook(
+	db: Db,
+	userId: string,
+	input: LookInput,
+): Promise<Look | null> {
+	const [row] = await db
+		.update(look)
+		.set({
+			modeId: input.modeId,
+			name: input.name,
+			colours: input.colours,
+			open: input.open,
+		})
+		.where(and(eq(look.id, input.id), eq(look.userId, userId)))
+		.returning();
+	return row ? toLook(row) : null;
+}
+
 // Only the account's own look goes; false when there is none to delete.
 export async function deleteLook(
 	db: Db,
