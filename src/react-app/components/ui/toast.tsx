@@ -35,7 +35,9 @@ function Toaster({ children }: { children: ReactNode }) {
 						{shown.message}
 					</ToastPrimitive.Description>
 				</ToastPrimitive.Root>
-				<ToastPrimitive.Viewport className="-translate-x-1/2 pointer-events-none fixed bottom-[82px] left-1/2 z-40 flex outline-none [&>li]:pointer-events-auto" />
+				{/* Taps go through the toast, as in the prototype (dressup.html:251):
+				    on a phone it sits over "Compare 6" of the Looks page. */}
+				<ToastPrimitive.Viewport className="-translate-x-1/2 pointer-events-none fixed bottom-[82px] left-1/2 z-40 flex outline-none" />
 			</ToastPrimitive.Provider>
 		</ToastContext.Provider>
 	);

@@ -10,3 +10,4 @@
 - Look limit: 300 looks for each account.
 - Sign-up switch: one on/off environment variable that stops new sign-ups. People with an account can still sign in.
 - Looks page: the wall of saved looks.
+- Compare view: two to six looks in a row.
