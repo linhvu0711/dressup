@@ -68,6 +68,25 @@ test.describe("without a session", () => {
 			true,
 		);
 	});
+
+	test("shows No new accounts for now after a closed sign-up", async ({
+		page,
+	}) => {
+		// Given: no session
+		// When
+		await page.goto("/?error=signup_disabled");
+		// Then
+		await expect(page.locator("h2")).toHaveText("No new accounts for now");
+		await expect(
+			page.getByText(
+				"The app is full at the moment. If you have an account, you can sign in.",
+			),
+		).toBeVisible();
+		await expect(
+			page.getByRole("button", { name: "Sign in with Google" }),
+		).toBeVisible();
+		await expect(page.getByRole("alert")).toHaveCount(0);
+	});
 });
 
 // This test checks the account is the shared E2E user, so it keeps that
