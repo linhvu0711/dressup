@@ -1,16 +1,17 @@
 import { cn } from "cn";
 import type { ReactNode } from "react";
-import { SettingsLink } from "@/shell/SettingsLink";
 
 // The wall stays light in both themes, so it takes the light tokens
 // (index.css) and the controls on it keep light colours.
 export function Stage({
 	className,
 	children,
+	corner,
 	action,
 }: {
 	className?: string;
 	children: ReactNode;
+	corner?: ReactNode;
 	action?: ReactNode;
 }) {
 	return (
@@ -22,9 +23,11 @@ export function Stage({
 			)}
 		>
 			{children}
-			<div className="absolute top-3 left-3 flex items-center gap-2">
-				<SettingsLink className="wide:hidden border-transparent bg-card shadow-lift" />
-			</div>
+			{corner ? (
+				<div className="absolute top-3 left-3 flex items-center gap-2">
+					{corner}
+				</div>
+			) : null}
 			{action ? <div className="absolute top-3 right-3">{action}</div> : null}
 		</div>
 	);

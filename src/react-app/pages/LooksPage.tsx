@@ -1,12 +1,13 @@
 import { cn } from "cn";
 import { Scale, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { useLooks } from "@/looks/api";
 import { COMPARE_MAX, COMPARE_MIN } from "@/looks/compare";
 import { LookCard } from "@/looks/LookCard";
+import { LookView } from "@/looks/LookView";
 import type { LookId } from "@/looks/look";
 import { PageHeader } from "../shell/PageHeader";
 
@@ -27,10 +28,13 @@ function Notice({ title, children }: { title: string; children: ReactNode }) {
 }
 
 // The page of docs/prototype/dressup.html:888-893. From 900 px the right part
-// is kept for the picked look of #11. With no look to pick it is left out, so
-// a notice sits in the middle of the screen; it stays while the looks load,
-// so a wall with looks does not move when they come.
+// shows the opened look, or the newest before one opens (:891). With no look to
+// open it is left out, so a notice sits in the middle of the screen; it stays
+// while the looks load, so a wall with looks does not move when they come.
+// Under 900 px an opened look is a page of its own. A look the URL names but
+// the list does not have shows the page as /looks does.
 export function LooksPage() {
+	const { lookId } = useParams();
 	const looks = useLooks();
 	const navigate = useNavigate();
 	const toast = useToast();
@@ -44,6 +48,11 @@ export function LooksPage() {
 		else if (picked.length >= COMPARE_MAX) toast("Six looks is the limit.");
 		else setPicked([...picked, id]);
 	}
+	// The look in the right part: the one the URL names, else the newest.
+	const shown = looks.isSuccess
+		? (looks.data.find((l) => l.id === lookId) ?? looks.data[0])
+		: undefined;
+	const open = shown !== undefined && shown.id === lookId;
 	let wall: ReactNode;
 	if (looks.isPending) {
 		// docs/prototype/dressup.html:863
@@ -95,6 +104,7 @@ export function LooksPage() {
 					<LookCard
 						key={look.id}
 						look={look}
+						picked={look.id === shown?.id}
 						pick={
 							picked
 								? {
@@ -116,7 +126,12 @@ export function LooksPage() {
 					"wide:grid wide:grid-cols-[minmax(0,1fr)_420px] wide:grid-rows-[minmax(0,1fr)]",
 			)}
 		>
-			<div className="relative flex min-h-0 flex-1 flex-col">
+			<div
+				className={cn(
+					"relative flex min-h-0 flex-1 flex-col",
+					open && "hidden wide:flex",
+				)}
+			>
 				{picked ? (
 					<PageHeader
 						start={
@@ -170,8 +185,13 @@ export function LooksPage() {
 				<aside
 					data-slot="look-panel"
 					aria-label="Picked look"
-					className="hidden border-border border-l wide:block"
-				/>
+					className={cn(
+						"min-h-0 flex-1 flex-col wide:flex wide:border-border wide:border-l",
+						open ? "flex" : "hidden",
+					)}
+				>
+					{shown ? <LookView look={shown} /> : null}
+				</aside>
 			) : null}
 		</div>
 	);

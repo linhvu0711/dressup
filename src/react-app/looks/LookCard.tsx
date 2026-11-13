@@ -1,5 +1,6 @@
 import { cn } from "cn";
 import { Check } from "lucide-react";
+import { Link } from "react-router";
 import { LookFigure } from "./LookFigure";
 import { type Look, lookName } from "./look";
 
@@ -7,13 +8,17 @@ const VIEW_BOX = "10 14 380 590";
 
 const CARD = "flex min-w-0 flex-col gap-[7px]";
 
-// The card of docs/prototype/dressup.html:869. A click opens nothing yet
-// (#11), so outside the pick state it is not a button.
+// The card of docs/prototype/dressup.html:869: a link that opens the look.
+// From 900 px the picked card's picture has the outline of :116; under
+// 900 px the look is its own page, so no card is marked (:868). In the pick
+// state it is a button that picks the look to compare.
 export function LookCard({
 	look,
+	picked = false,
 	pick,
 }: {
 	look: Look;
+	picked?: boolean;
 	pick?: { on: boolean; toggle: () => void };
 }) {
 	const body = (
@@ -21,7 +26,9 @@ export function LookCard({
 			<span
 				className={cn(
 					"relative block aspect-[2/3] w-full overflow-hidden rounded-[14px] bg-[#D3CFC9] [&>svg]:absolute [&>svg]:inset-0 [&>svg]:size-full",
-					pick?.on && "outline-2 outline-foreground outline-offset-[2.5px]",
+					pick
+						? pick.on && "outline-2 outline-foreground outline-offset-[2.5px]"
+						: "wide:group-aria-[current=true]:outline-2 wide:group-aria-[current=true]:outline-offset-[2.5px] wide:group-aria-[current=true]:outline-foreground",
 				)}
 			>
 				<LookFigure look={look} viewBox={VIEW_BOX} lite />
@@ -33,9 +40,14 @@ export function LookCard({
 	);
 	if (!pick)
 		return (
-			<div data-slot="look-card" className={CARD}>
+			<Link
+				to={`/looks/${look.id}`}
+				data-slot="look-card"
+				aria-current={picked ? "true" : undefined}
+				className={cn(CARD, "group")}
+			>
 				{body}
-			</div>
+			</Link>
 		);
 	// The tick of docs/prototype/dressup.html:152-153.
 	return (

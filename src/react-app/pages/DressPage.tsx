@@ -10,6 +10,7 @@ import { ModePicker, type PickerTab } from "@/dress/ModePicker";
 import { modeById, outfitOf } from "@/dress/modes";
 import { Stage } from "@/dress/Stage";
 import { SaveLookDialog } from "@/looks/SaveLookDialog";
+import { SettingsLink } from "@/shell/SettingsLink";
 
 const BOUNDED = "flex min-h-0 flex-1 flex-col gap-2.5 wide:gap-3.5";
 
@@ -46,6 +47,9 @@ export function DressPage() {
 			<h1 className="sr-only">Dress</h1>
 			<Stage
 				className="flex-[0_0_46%] rounded-b-[24px] wide:col-start-2 wide:row-start-1 wide:my-4 wide:rounded-[26px]"
+				corner={
+					<SettingsLink className="wide:hidden border-transparent bg-card shadow-lift" />
+				}
 				action={
 					// The prototype's bookmark button, off while the dress loads
 					// (docs/prototype/dressup.html:823).
