@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { type Context, Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import type { z } from "zod";
@@ -5,6 +6,7 @@ import { applyChange, dressChangeSchema } from "@/dress/state";
 import { lookInputSchema } from "@/looks/look";
 import { createAuth } from "./auth";
 import type { Db } from "./db";
+import { user } from "./db/auth-schema";
 import { loadDress, saveDress } from "./dress-store";
 import { listLooks, saveLook } from "./look-store";
 
@@ -74,6 +76,22 @@ export function createApp(getDb: (env: Env) => Db) {
 	app.get("/me", withAuth, requireUser, (c) => {
 		const { id, name, email, image } = c.var.user;
 		return c.json({ id, name, email, image: image ?? null });
+	});
+
+	app.delete("/account", withAuth, requireUser, async (c) => {
+		// One statement: the sessions, the Google link, and every app row go
+		// with the user row through their foreign keys, all or nothing. Better
+		// Auth's own delete wants a session under a day old or an email (#12).
+		await getDb(c.env).delete(user).where(eq(user.id, c.var.user.id));
+		// Sign-out also clears the 5-minute cookie cache, which would keep the
+		// deleted account on screen.
+		const { headers } = await c.var.auth.api.signOut({
+			headers: c.req.raw.headers,
+			returnHeaders: true,
+		});
+		for (const cookie of headers.getSetCookie())
+			c.header("set-cookie", cookie, { append: true });
+		return c.body(null, 204);
 	});
 
 	app.get("/dress", withAuth, requireUser, async (c) =>
