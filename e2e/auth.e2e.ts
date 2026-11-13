@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
+import { signOutFile } from "./global-setup";
 
 const signedOut = { cookies: [], origins: [] };
 
@@ -104,4 +106,35 @@ test("shows the empty shell while the session is checked", async ({ page }) => {
 	).toHaveCount(0);
 	release();
 	await expect(page.locator("h1")).toHaveText("Dress");
+});
+
+test.describe("sign out", () => {
+	test.use({ storageState: signedOut });
+
+	test("signs out from Settings", async ({ page, context }, testInfo) => {
+		// Given: this project's own session, so the shared one stays
+		const cookies = JSON.parse(
+			readFileSync(signOutFile(testInfo.project.name), "utf8"),
+		);
+		await context.addCookies(cookies);
+		const token = cookies.find(
+			(c: { name: string }) => c.name === "better-auth.session_token",
+		).value;
+		await page.goto("/");
+		// When
+		await page.getByRole("link", { name: "Settings" }).click();
+		await expect(page.getByText("e2e@dressup.test")).toBeVisible();
+		await expect(page.getByText("Signed in with Google")).toBeVisible();
+		await page.getByRole("button", { name: "Sign out" }).click();
+		// Then
+		await expect(page.locator("h1")).toHaveText("dressup");
+		await expect(
+			page.getByRole("button", { name: "Sign in with Google" }),
+		).toBeVisible();
+		await expect(page).toHaveURL("/");
+		const me = await page.request.get("/api/me", {
+			headers: { cookie: `better-auth.session_token=${token}` },
+		});
+		expect(me.status()).toBe(401);
+	});
 });
