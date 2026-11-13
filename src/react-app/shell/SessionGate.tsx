@@ -1,4 +1,5 @@
 import { Outlet } from "react-router";
+import { DressStateProvider } from "@/dress/DressState";
 import { SignInPage } from "../pages/SignInPage";
 import { useMe } from "../session";
 import { AppShell } from "./AppShell";
@@ -10,7 +11,9 @@ export function SessionGate() {
 	if (!me.data) return <SignInPage />;
 	return (
 		<AppShell>
-			<Outlet />
+			<DressStateProvider>
+				<Outlet />
+			</DressStateProvider>
 		</AppShell>
 	);
 }
