@@ -7,9 +7,11 @@ import { SettingsLink } from "@/shell/SettingsLink";
 export function Stage({
 	className,
 	children,
+	action,
 }: {
 	className?: string;
 	children: ReactNode;
+	action?: ReactNode;
 }) {
 	return (
 		<div
@@ -23,6 +25,7 @@ export function Stage({
 			<div className="absolute top-3 left-3 flex items-center gap-2">
 				<SettingsLink className="wide:hidden border-transparent bg-card shadow-lift" />
 			</div>
+			{action ? <div className="absolute top-3 right-3">{action}</div> : null}
 		</div>
 	);
 }

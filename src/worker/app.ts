@@ -1,13 +1,36 @@
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { createMiddleware } from "hono/factory";
+import type { z } from "zod";
 import { applyChange, dressChangeSchema } from "@/dress/state";
+import { lookInputSchema } from "@/looks/look";
 import { createAuth } from "./auth";
 import type { Db } from "./db";
 import { loadDress, saveDress } from "./dress-store";
+import { listLooks, saveLook } from "./look-store";
 
 type Auth = ReturnType<typeof createAuth>;
 type User = Auth["$Infer"]["Session"]["user"];
 type AppEnv = { Bindings: Env; Variables: { auth: Auth; user: User } };
+
+// The parsed body, or the 400 that names the field: the whole zod path, as
+// `colours.sweater`. A body that is not JSON, or JSON but not an object
+// (an empty path), names "body".
+async function readBody<T extends z.ZodType>(
+	c: Context<AppEnv>,
+	schema: T,
+): Promise<{ data: z.output<T> } | { refused: Response }> {
+	let body: unknown;
+	try {
+		body = await c.req.json();
+	} catch {
+		return { refused: c.json({ error: "invalid", field: "body" }, 400) };
+	}
+	const parsed = schema.safeParse(body);
+	if (parsed.success) return { data: parsed.data };
+	const path = parsed.error.issues[0]?.path ?? [];
+	const field = path.length === 0 ? "body" : path.map(String).join(".");
+	return { refused: c.json({ error: "invalid", field }, 400) };
+}
 
 export function createApp(getDb: (env: Env) => Db) {
 	const app = new Hono<AppEnv>().basePath("/api");
@@ -58,32 +81,28 @@ export function createApp(getDb: (env: Env) => Db) {
 	);
 
 	app.post("/dress/changes", withAuth, requireUser, async (c) => {
-		let body: unknown;
-		try {
-			body = await c.req.json();
-		} catch {
-			return c.json({ error: "invalid", field: "body" }, 400);
-		}
-		const parsed = dressChangeSchema.safeParse(body);
-		if (!parsed.success) {
-			// A body that is JSON but not an object fails with an empty path.
-			const field = parsed.error.issues[0]?.path[0];
-			return c.json(
-				{
-					error: "invalid",
-					field: field === undefined ? "body" : String(field),
-				},
-				400,
-			);
-		}
+		const body = await readBody(c, dressChangeSchema);
+		if ("refused" in body) return body.refused;
 		const db = getDb(c.env);
 		const userId = c.var.user.id;
 		const stored = await loadDress(db, userId);
-		const result = applyChange(stored.state, parsed.data);
+		const result = applyChange(stored.state, body.data);
 		if (!result.ok)
 			return c.json({ error: result.error, field: result.field }, 400);
 		await saveDress(db, userId, stored, result.state);
 		return c.body(null, 204);
+	});
+
+	app.get("/looks", withAuth, requireUser, async (c) =>
+		c.json({ looks: await listLooks(getDb(c.env), c.var.user.id) }),
+	);
+
+	app.post("/looks", withAuth, requireUser, async (c) => {
+		const body = await readBody(c, lookInputSchema);
+		if ("refused" in body) return body.refused;
+		const saved = await saveLook(getDb(c.env), c.var.user.id, body.data);
+		if (!saved) return c.json({ error: "conflict", field: "id" }, 409);
+		return c.json({ look: saved.look }, saved.created ? 201 : 200);
 	});
 
 	app.notFound((c) => c.json({ error: "not_found" }, 404));

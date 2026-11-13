@@ -1,4 +1,6 @@
+import { BookmarkPlus } from "lucide-react";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ColourRows, type LiveColour } from "@/dress/ColourRows";
 import { useDressState } from "@/dress/DressState";
@@ -7,6 +9,7 @@ import { MannequinPlaceholder } from "@/dress/figure/MannequinPlaceholder";
 import { ModePicker, type PickerTab } from "@/dress/ModePicker";
 import { modeById, outfitOf } from "@/dress/modes";
 import { Stage } from "@/dress/Stage";
+import { SaveLookDialog } from "@/looks/SaveLookDialog";
 
 const BOUNDED = "flex min-h-0 flex-1 flex-col gap-2.5 wide:gap-3.5";
 
@@ -28,6 +31,7 @@ export function DressPage() {
 	// The colour the picker shows before "Add". It stays out of the store,
 	// which holds only what the person keeps.
 	const [live, setLive] = useState<LiveColour | null>(null);
+	const [saving, setSaving] = useState(false);
 	const state = dress.status === "ready" ? dress.state : null;
 	const mode = state ? modeById(state.modeId) : null;
 	// A stored mode may be in any tab, so until a tab is picked the modes
@@ -40,7 +44,24 @@ export function DressPage() {
 	return (
 		<div className="flex min-h-0 flex-1 flex-col wide:grid wide:grid-cols-[minmax(300px,372px)_minmax(0,1fr)_minmax(300px,372px)] wide:grid-rows-[minmax(0,1fr)]">
 			<h1 className="sr-only">Dress</h1>
-			<Stage className="flex-[0_0_46%] rounded-b-[24px] wide:col-start-2 wide:row-start-1 wide:my-4 wide:rounded-[26px]">
+			<Stage
+				className="flex-[0_0_46%] rounded-b-[24px] wide:col-start-2 wide:row-start-1 wide:my-4 wide:rounded-[26px]"
+				action={
+					// The prototype's bookmark button, off while the dress loads
+					// (docs/prototype/dressup.html:823).
+					<Button
+						variant="primary"
+						size="icon-lg"
+						aria-label="Save look"
+						title="Save look"
+						disabled={!state}
+						className="shadow-lift"
+						onClick={() => setSaving(true)}
+					>
+						<BookmarkPlus size={20} strokeWidth={1.9} aria-hidden />
+					</Button>
+				}
+			>
 				{state && mode ? (
 					<Mannequin
 						layers={outfitOf(mode, colours)}
@@ -53,6 +74,9 @@ export function DressPage() {
 					<MannequinPlaceholder />
 				)}
 			</Stage>
+			{saving && state ? (
+				<SaveLookDialog state={state} onClose={() => setSaving(false)} />
+			) : null}
 			<div className="flex min-h-0 flex-1 flex-col px-4 pt-3 wide:contents">
 				<Tabs
 					value={panel}

@@ -153,9 +153,9 @@ test("marks the tab of the open page", async ({ page }) => {
 		"aria-current",
 		"page",
 	);
-	await expect(page.getByRole("link", { name: "Dress" })).not.toHaveAttribute(
-		"aria-current",
-	);
+	await expect(
+		page.getByRole("link", { name: "Dress", exact: true }),
+	).not.toHaveAttribute("aria-current");
 });
 
 test("shows Page not found with a link to Dress", async ({ page }) => {

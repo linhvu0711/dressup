@@ -216,8 +216,12 @@ const FIRST_COLOURS = Object.fromEntries(
 	GARMENT_IDS.map((id) => [id, STARTER_COLOURS[id][0]]),
 ) as Record<GarmentId, Hex>;
 
+// A look holds only its mode's garments, so the colours may be partial.
 export const outfitOf = (
 	mode: Mode,
-	colours: Record<GarmentId, Hex> = FIRST_COLOURS,
+	colours: Partial<Record<GarmentId, Hex>> = FIRST_COLOURS,
 ): GarmentLayer[] =>
-	mode.garments.map((garment) => ({ garment, color: colours[garment] }));
+	mode.garments.map((garment) => ({
+		garment,
+		color: colours[garment] ?? FIRST_COLOURS[garment],
+	}));
