@@ -3,3 +3,4 @@
 - Weather group: Hot, Cool, or Cold. Each mode is in exactly one. "Training" is a fourth tab that shows the two training modes.
 - Mannequin: the figure drawn by code as SVG. Front view, no face, white shoes. Each account sets its skin and hair colour.
 - Dress page: where the user picks a mode and colours.
+- Account: one Google sign-in. Each account has a private space. No account sees another account's data.
