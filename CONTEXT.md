@@ -1,0 +1,5 @@
+- Garment: one kind of clothing in one length. "Short tee" and "long tee" are two garments. The app has 17, and the list is fixed.
+- Mode: a fixed set of garments worn together, for example "long polo + sweater + chino pants". The app has 23, and the list is fixed.
+- Weather group: Hot, Cool, or Cold. Each mode is in exactly one. "Training" is a fourth tab that shows the two training modes.
+- Mannequin: the figure drawn by code as SVG. Front view, no face, white shoes. Each account sets its skin and hair colour.
+- Dress page: where the user picks a mode and colours.
