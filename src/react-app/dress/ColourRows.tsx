@@ -1,11 +1,17 @@
 import { cn } from "cn";
 import { Check, Pencil, Plus, X } from "lucide-react";
+import { ToggleGroup } from "radix-ui";
 import { useState } from "react";
 import { ColourPicker } from "@/colour/ColourPicker";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { useDressState } from "@/dress/DressState";
-import { GARMENT_NAMES, type GarmentId, type Hex } from "@/dress/garments";
+import {
+	GARMENT_NAMES,
+	type GarmentId,
+	type Hex,
+	isJacket,
+} from "@/dress/garments";
 import { modeById } from "@/dress/modes";
 
 export type LiveColour = { garment: GarmentId; hex: Hex };
@@ -21,7 +27,8 @@ export function ColourRows({
 	onLive: (live: LiveColour | null) => void;
 	titleClassName: string;
 }) {
-	const { state, pickColour, addColour, removeColour } = useDressState();
+	const { state, pickColour, addColour, removeColour, setJacket } =
+		useDressState();
 	const toast = useToast();
 	const [adding, setAdding] = useState<GarmentId | null>(null);
 	const [editing, setEditing] = useState(false);
@@ -85,6 +92,32 @@ export function ColourRows({
 								<span className="font-mono font-normal text-muted-foreground text-xs">
 									{shown}
 								</span>
+								{isJacket(garment) ? (
+									<ToggleGroup.Root
+										type="single"
+										aria-label={`${name} front`}
+										value={state.open.includes(garment) ? "open" : "closed"}
+										onValueChange={(value) => {
+											if (value) setJacket(garment, value === "open");
+										}}
+										className="ml-auto flex flex-none gap-0.5 rounded-full bg-muted p-[3px]"
+									>
+										{(
+											[
+												["open", "Open"],
+												["closed", "Closed"],
+											] as const
+										).map(([value, label]) => (
+											<ToggleGroup.Item
+												key={value}
+												value={value}
+												className="h-7 rounded-full px-3 font-medium text-muted-foreground text-xs transition-[background-color,color] duration-150 focus-visible:outline-2 focus-visible:outline-ring data-[state=on]:bg-card data-[state=on]:text-foreground data-[state=on]:shadow-[0_1px_3px_rgba(40,32,20,.16)]"
+											>
+												{label}
+											</ToggleGroup.Item>
+										))}
+									</ToggleGroup.Root>
+								) : null}
 							</div>
 							<div className="flex flex-wrap items-center gap-[11px] py-[3px]">
 								{state.swatches[garment].map((hex) => (

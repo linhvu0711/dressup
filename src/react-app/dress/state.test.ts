@@ -5,6 +5,7 @@ import {
 	pickColour,
 	pickMode,
 	removeColour,
+	setJacket,
 	startDressState,
 } from "@/dress/state";
 
@@ -111,5 +112,19 @@ describe("dress state", () => {
 			row: state.swatches.sweater,
 			picked: state.picked.sweater,
 		}).toEqual({ removed: false, row: ["#1F3A5F"], picked: "#1F3A5F" });
+	});
+	test("sets a jacket open and closed", () => {
+		// Given: a fresh state
+		const start = startDressState();
+		// When
+		const open = setJacket(start, "chore", true);
+		const again = setJacket(open, "chore", true);
+		const closed = setJacket(again, "chore", false);
+		// Then
+		expect([open.open, again.open, closed.open]).toEqual([
+			["chore"],
+			["chore"],
+			[],
+		]);
 	});
 });

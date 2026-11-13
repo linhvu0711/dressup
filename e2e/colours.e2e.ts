@@ -372,3 +372,27 @@ test("keeps the last square and says so", async ({ page }) => {
 	).toBeVisible();
 	expect(await labels(page, "Sweater")).toEqual(["Sweater #1F3A5F, remove"]);
 });
+
+test("opens and closes the chore jacket", async ({ page }) => {
+	// Given: both projects, a fresh page, Polo + sweater + chore picked, the
+	// Colours tab on the phone
+	await page.goto("/");
+	await page
+		.getByRole("button", { name: "Polo + sweater + chore", exact: true })
+		.click();
+	if (isPhone(page)) {
+		await page.getByRole("tab", { name: "Colours", exact: true }).click();
+	}
+	const front = page.getByRole("radiogroup", {
+		name: "Chore jacket front",
+		exact: true,
+	});
+	const jacket = garmentIn(page, "Polo + sweater + chore", "chore");
+	// When
+	await front.getByRole("radio", { name: "Open", exact: true }).click();
+	const opened = await jacket.getAttribute("data-front");
+	await front.getByRole("radio", { name: "Closed", exact: true }).click();
+	const closed = await jacket.getAttribute("data-front");
+	// Then
+	expect([opened, closed]).toEqual(["open", "closed"]);
+});

@@ -71,3 +71,12 @@ export function removeColour(
 		s.picked[garment] === hex ? { ...s.picked, [garment]: rest[0] } : s.picked;
 	return { state: { ...s, swatches, picked }, removed: true };
 }
+
+export function setJacket(
+	s: DressState,
+	jacket: JacketId,
+	open: boolean,
+): DressState {
+	const rest = s.open.filter((id) => id !== jacket);
+	return { ...s, open: open ? [...rest, jacket] : rest };
+}

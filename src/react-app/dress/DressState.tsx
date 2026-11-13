@@ -5,7 +5,7 @@ import {
 	useRef,
 	useState,
 } from "react";
-import type { GarmentId, Hex } from "@/dress/garments";
+import type { GarmentId, Hex, JacketId } from "@/dress/garments";
 import type { ModeId } from "@/dress/modes";
 import {
 	addColour,
@@ -13,6 +13,7 @@ import {
 	pickColour,
 	pickMode,
 	removeColour,
+	setJacket,
 	startDressState,
 } from "@/dress/state";
 
@@ -22,6 +23,7 @@ type DressStore = {
 	pickColour: (garment: GarmentId, hex: Hex) => void;
 	addColour: (garment: GarmentId, hex: Hex) => { added: boolean };
 	removeColour: (garment: GarmentId, hex: Hex) => { removed: boolean };
+	setJacket: (jacket: JacketId, open: boolean) => void;
 };
 
 const DressStoreContext = createContext<DressStore | null>(null);
@@ -56,6 +58,8 @@ export function DressStateProvider({ children }: { children: ReactNode }) {
 			update(next);
 			return { removed };
 		},
+		setJacket: (jacket, open) =>
+			update(setJacket(latest.current, jacket, open)),
 	};
 	return (
 		<DressStoreContext.Provider value={store}>
