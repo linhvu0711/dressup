@@ -67,3 +67,7 @@ export function lookFromDress(
 		open: state.open.filter((j) => mode.garments.includes(j)),
 	};
 }
+
+// A look with no name shows its mode's name (docs/prototype/dressup.html:791).
+export const lookName = (look: Look): string =>
+	look.name || modeById(look.modeId).name;

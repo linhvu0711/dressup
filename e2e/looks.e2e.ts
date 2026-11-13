@@ -116,3 +116,136 @@ test("shows the sign-in screen when the save answers 401", async ({ page }) => {
 		page.getByRole("button", { name: "Sign in with Google" }),
 	).toBeVisible();
 });
+
+const isPhone = (page: Page) => (page.viewportSize()?.width ?? 0) < 900;
+
+async function openColours(page: Page) {
+	await openDress(page);
+	if (isPhone(page)) {
+		await page.getByRole("tab", { name: "Colours", exact: true }).click();
+	}
+}
+
+async function saveLook(page: Page, name: string) {
+	await page.getByRole("button", { name: "Save look" }).click();
+	if (name) await nameBox(page).fill(name);
+	await dialog(page).getByRole("button", { name: "Save", exact: true }).click();
+	await expect(dialog(page)).toHaveCount(0);
+}
+
+const card = (page: Page, name: string) =>
+	page.locator('[data-slot="look-card"]').filter({ hasText: name });
+
+const sweaterOf = (page: Page, name: string) =>
+	card(page, name).locator('[data-garment="sweater"]');
+
+test("shows a saved look with its name and one with no name", async ({
+	page,
+}) => {
+	// Given: both projects, the Colours tab on the phone
+	await openColours(page);
+	// When
+	await page
+		.getByRole("button", { name: "Sweater #7A2E2E", exact: true })
+		.click();
+	await saveLook(page, "Red sweater");
+	await saveLook(page, "");
+	await page.goto("/looks");
+	// Then
+	await expect(page.locator('[data-slot="look-card"]')).toHaveText([
+		"Polo + sweater",
+		"Red sweater",
+	]);
+	for (const name of ["Polo + sweater", "Red sweater"])
+		expect(await sweaterOf(page, name).innerHTML()).toContain('fill="#7A2E2E"');
+});
+
+test("keeps a look's colour after its square is removed", async ({ page }) => {
+	// Given: both projects; Sweater #7A2E2E picked and a look "Red sweater" saved
+	await openColours(page);
+	const red = page.getByRole("button", {
+		name: "Sweater #7A2E2E",
+		exact: true,
+	});
+	await red.click();
+	await saveLook(page, "Red sweater");
+	// When
+	await page.getByRole("button", { name: "Edit colours" }).click();
+	await page
+		.getByRole("button", { name: "Sweater #7A2E2E, remove", exact: true })
+		.click();
+	await page.getByRole("button", { name: "Done" }).click();
+	// Then
+	await expect(red).toHaveCount(0);
+	// When
+	await page.getByRole("link", { name: "Looks" }).click();
+	// Then
+	await expect(card(page, "Red sweater")).toBeVisible();
+	expect(await sweaterOf(page, "Red sweater").innerHTML()).toContain(
+		'fill="#7A2E2E"',
+	);
+});
+
+test("draws a look card in the account's skin and hair", async ({ page }) => {
+	// Given: both projects, a fresh account with skin #8D5524 and hair
+	// #B55239, and one look saved
+	await openDress(page);
+	for (const [part, hex] of [
+		["skin", "#8D5524"],
+		["hair", "#B55239"],
+	]) {
+		const res = await page.request.post("/api/dress/changes", {
+			data: { kind: "mannequin", part, hex },
+		});
+		expect(res.status()).toBe(204);
+	}
+	await saveLook(page, "Mine");
+	// When
+	await page.goto("/looks");
+	// Then
+	const drawn = await card(page, "Mine").locator("svg").innerHTML();
+	expect({
+		skin: drawn.includes('fill="#8D5524"'),
+		hair: drawn.includes('fill="#B55239"'),
+	}).toEqual({ skin: true, hair: true });
+});
+
+test("fills the page on a phone and keeps the right part free from 900 px", async ({
+	page,
+}) => {
+	// Given: both projects, one look saved through the form, then /looks open
+	await openDress(page);
+	await saveLook(page, "");
+	await page.goto("/looks");
+	await expect(page.locator('[data-slot="look-card"]')).toHaveCount(1);
+	// When
+	const wall = await page.locator('[data-slot="look-wall"]').boundingBox();
+	const panel = page.locator('[data-slot="look-panel"]');
+	// Then
+	if (isPhone(page)) {
+		expect({ x: wall?.x, width: wall?.width }).toEqual({ x: 0, width: 375 });
+		await expect(panel).toBeHidden();
+	} else {
+		const box = await panel.boundingBox();
+		expect({
+			panelX: box?.x,
+			panelWidth: box?.width,
+			wallRight: (wall?.x ?? 0) + (wall?.width ?? 0),
+		}).toEqual({ panelX: 1020, panelWidth: 420, wallRight: 1020 });
+	}
+});
+
+test("shows the sign-in screen when the looks answer 401", async ({ page }) => {
+	// Given: both projects, the Dress page shown; then the session is gone
+	// for the session check and for the looks
+	await openDress(page);
+	const noSession = { status: 401, json: { error: "unauthorized" } };
+	await page.route("/api/me", (route) => route.fulfill(noSession));
+	await page.route("**/api/looks", (route) => route.fulfill(noSession));
+	// When
+	await page.getByRole("link", { name: "Looks" }).click();
+	// Then
+	await expect(
+		page.getByRole("button", { name: "Sign in with Google" }),
+	).toBeVisible();
+});
