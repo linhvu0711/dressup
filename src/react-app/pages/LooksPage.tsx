@@ -3,8 +3,9 @@ import { Scale, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import { useLooks } from "@/looks/api";
-import { COMPARE_MIN } from "@/looks/compare";
+import { COMPARE_MAX, COMPARE_MIN } from "@/looks/compare";
 import { LookCard } from "@/looks/LookCard";
 import type { LookId } from "@/looks/look";
 import { PageHeader } from "../shell/PageHeader";
@@ -32,15 +33,16 @@ function Notice({ title, children }: { title: string; children: ReactNode }) {
 export function LooksPage() {
 	const looks = useLooks();
 	const navigate = useNavigate();
+	const toast = useToast();
 	// null is the wall without the pick state; the list keeps the pick order.
 	const [picked, setPicked] = useState<LookId[] | null>(null);
 	const canPick = looks.isSuccess && looks.data.length > 0;
 	const panel = looks.isPending || canPick;
 	function toggle(id: LookId) {
 		if (!picked) return;
-		setPicked(
-			picked.includes(id) ? picked.filter((p) => p !== id) : [...picked, id],
-		);
+		if (picked.includes(id)) setPicked(picked.filter((p) => p !== id));
+		else if (picked.length >= COMPARE_MAX) toast("Six looks is the limit.");
+		else setPicked([...picked, id]);
 	}
 	let wall: ReactNode;
 	if (looks.isPending) {

@@ -290,3 +290,43 @@ test("goes to the wall when the compare view has no picks", async ({
 		h1: await h1(page),
 	}).toEqual({ url: "/looks", h1: "Looks" });
 });
+
+test("ticks no seventh look", async ({ page }) => {
+	// Given: both projects, "Look 1" to "Look 7", "Compare" clicked, the
+	// cards "Look 7" to "Look 2" ticked
+	await openLooks(page, [
+		"Look 1",
+		"Look 2",
+		"Look 3",
+		"Look 4",
+		"Look 5",
+		"Look 6",
+		"Look 7",
+	]);
+	await scaleButton(page).click();
+	for (const name of [
+		"Look 7",
+		"Look 6",
+		"Look 5",
+		"Look 4",
+		"Look 3",
+		"Look 2",
+	])
+		await cardButton(page, name).click();
+	await expect(page.locator("h1")).toHaveText("6 picked");
+	// When
+	await cardButton(page, "Look 1").click();
+	await expect(page.locator('[data-slot="toast"]')).toBeVisible();
+	// Then
+	expect({
+		toast: await page.locator('[data-slot="toast"]').textContent(),
+		h1: await h1(page),
+		look1: await pressedOf(page, "Look 1"),
+		compare: await compareButton(page).textContent(),
+	}).toEqual({
+		toast: "Six looks is the limit.",
+		h1: "6 picked",
+		look1: "false",
+		compare: "Compare 6",
+	});
+});
