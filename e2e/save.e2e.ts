@@ -57,6 +57,29 @@ test("keeps the colours after a reload and on a second device", async ({
 	await second.close();
 });
 
+test("opens the modes on the tab of the stored mode", async ({ page }) => {
+	// Given: both projects, a claimed account; "Tee + casual shorts" picked
+	// under Hot and stored
+	await page.goto("/");
+	await page.getByRole("tab", { name: "Hot", exact: true }).click();
+	const stored = page.waitForResponse(
+		(res) => res.url().endsWith("/api/dress/changes") && res.status() === 204,
+	);
+	await page
+		.getByRole("button", { name: "Tee + casual shorts", exact: true })
+		.click();
+	await stored;
+	// When
+	await page.reload();
+	// Then
+	await expect(
+		page.getByRole("tab", { name: "Hot", exact: true }),
+	).toHaveAttribute("aria-selected", "true");
+	await expect(
+		page.getByRole("button", { name: "Tee + casual shorts", exact: true }),
+	).toHaveAttribute("aria-pressed", "true");
+});
+
 test("shows the grey mannequin while the colours load", async ({ page }) => {
 	// Given: GET /api/dress held until the test lets it go
 	let release = () => {};

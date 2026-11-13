@@ -24,12 +24,15 @@ type Panel = "mode" | "colours";
 export function DressPage() {
 	const dress = useDressState();
 	const [panel, setPanel] = useState<Panel>("mode");
-	const [tab, setTab] = useState<PickerTab>("Cold");
+	const [pickedTab, setTab] = useState<PickerTab | null>(null);
 	// The colour the picker shows before "Add". It stays out of the store,
 	// which holds only what the person keeps.
 	const [live, setLive] = useState<LiveColour | null>(null);
 	const state = dress.status === "ready" ? dress.state : null;
 	const mode = state ? modeById(state.modeId) : null;
+	// A stored mode may be in any tab, so until a tab is picked the modes
+	// open on the one that holds it.
+	const tab = pickedTab ?? mode?.group ?? "Cold";
 	const colours =
 		state && live
 			? { ...state.picked, [live.garment]: live.hex }
