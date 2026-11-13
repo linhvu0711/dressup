@@ -1,5 +1,7 @@
-import { describe, expect, test } from "bun:test";
-import { makeHarness } from "./test/harness";
+import { afterEach, describe, expect, test } from "bun:test";
+import type { BetterAuthOptions } from "better-auth";
+import { authOptions } from "./auth";
+import { makeHarness, stubGoogle } from "./test/harness";
 
 async function withUser(id: string, email: string, name: string) {
 	const h = await makeHarness();
@@ -93,5 +95,162 @@ describe("migrations", () => {
 			"user",
 			"verification",
 		]);
+	});
+});
+
+type Harness = Awaited<ReturnType<typeof makeHarness>>;
+
+const cookieHeader = (res: Response) =>
+	res.headers
+		.getSetCookie()
+		.map((c) => c.split(";")[0])
+		.join("; ");
+
+async function startGoogleSignIn({ app, env }: Harness) {
+	const res = await app.request(
+		"/api/auth/sign-in/social",
+		{
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+				origin: "http://localhost:5173",
+			},
+			body: JSON.stringify({
+				provider: "google",
+				callbackURL: "/",
+				errorCallbackURL: "/",
+			}),
+		},
+		env,
+	);
+	const { url } = (await res.json()) as { url: string };
+	const google = new URL(url);
+	return {
+		res,
+		google,
+		state: google.searchParams.get("state") ?? "",
+		cookie: cookieHeader(res),
+	};
+}
+
+async function finishGoogleSignIn(h: Harness) {
+	const start = await startGoogleSignIn(h);
+	return h.app.request(
+		`/api/auth/callback/google?code=abc&state=${start.state}`,
+		{ headers: { cookie: start.cookie }, redirect: "manual" },
+		h.env,
+	);
+}
+
+describe("Google sign-in", () => {
+	let restore = () => {};
+	afterEach(() => restore());
+
+	test("sends sign-in to Google with our callback address", async () => {
+		// Given
+		const h = await makeHarness();
+		// When
+		const { res, google } = await startGoogleSignIn(h);
+		// Then
+		expect(res.status).toBe(200);
+		expect({
+			origin: google.origin,
+			path: google.pathname,
+			clientId: google.searchParams.get("client_id"),
+			redirectUri: google.searchParams.get("redirect_uri"),
+		}).toEqual({
+			origin: "https://accounts.google.com",
+			path: "/o/oauth2/v2/auth",
+			clientId: "test-client",
+			redirectUri: "http://localhost:5173/api/auth/callback/google",
+		});
+	});
+
+	test("sends a cancelled Google sign-in back with the error", async () => {
+		// Given: a started sign-in, its state and its state cookie
+		const h = await makeHarness();
+		const { state, cookie } = await startGoogleSignIn(h);
+		// When
+		const res = await h.app.request(
+			`/api/auth/callback/google?error=access_denied&state=${state}`,
+			{ headers: { cookie }, redirect: "manual" },
+			h.env,
+		);
+		// Then
+		expect(res.status).toBe(302);
+		expect(res.headers.get("location")).toBe("/?error=access_denied");
+	});
+
+	test("makes one user on the first Google sign-in and reuses it", async () => {
+		// Given
+		const h = await makeHarness();
+		restore = stubGoogle(
+			"g-123",
+			"carol@example.com",
+			"Carol",
+			"https://example.com/c.png",
+		);
+		// When
+		const first = await finishGoogleSignIn(h);
+		const me = await h.app.request(
+			"/api/me",
+			{ headers: { cookie: cookieHeader(first) } },
+			h.env,
+		);
+		const second = await finishGoogleSignIn(h);
+		// Then
+		const ids = h.sqlite.query<{ id: string }, []>("select id from user").all();
+		const accounts = h.sqlite
+			.query<{ provider_id: string; account_id: string }, []>(
+				"select provider_id, account_id from account",
+			)
+			.all();
+		const meBody = (await me.json()) as {
+			id: string;
+			name: string;
+			email: string;
+			image: string | null;
+		};
+		expect({
+			first: [first.status, first.headers.get("location")],
+			second: [second.status, second.headers.get("location")],
+			sessionCookie: cookieHeader(second).includes(
+				"better-auth.session_token=",
+			),
+			me: meBody,
+			users: ids.length,
+			sameUser: ids[0]?.id === meBody.id,
+			accounts,
+		}).toEqual({
+			first: [302, "/"],
+			second: [302, "/"],
+			sessionCookie: true,
+			me: {
+				id: meBody.id,
+				name: "Carol",
+				email: "carol@example.com",
+				image: "https://example.com/c.png",
+			},
+			users: 1,
+			sameUser: true,
+			accounts: [{ provider_id: "google", account_id: "g-123" }],
+		});
+	});
+
+	test("turns on Google sign-in only", async () => {
+		// Given
+		const { settings } = await makeHarness();
+		// When
+		const options: BetterAuthOptions = authOptions(settings);
+		// Then
+		expect({
+			providers: Object.keys(options.socialProviders ?? {}),
+			plugins: options.plugins,
+			emailAndPassword: options.emailAndPassword,
+		}).toEqual({
+			providers: ["google"],
+			plugins: undefined,
+			emailAndPassword: undefined,
+		});
 	});
 });

@@ -14,6 +14,17 @@ export function authOptions(s: AuthSettings) {
 		database: drizzleAdapter(s.db, { provider: "sqlite", schema }),
 		secret: s.secret,
 		baseURL: s.baseURL,
+		socialProviders: {
+			google: {
+				clientId: s.google.clientId,
+				clientSecret: s.google.clientSecret,
+			},
+		},
+		// Every OAuth error lands on the sign-in screen with ?error=, never on
+		// Better Auth's own error page.
+		onAPIError: { errorURL: "/" },
+		// Workers send no X-Forwarded-For; without this all rate limits share one key.
+		advanced: { ipAddress: { ipAddressHeaders: ["cf-connecting-ip"] } },
 	} satisfies BetterAuthOptions;
 }
 
