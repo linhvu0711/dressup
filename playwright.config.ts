@@ -5,7 +5,11 @@ export default defineConfig({
 	testMatch: "**/*.e2e.ts",
 	fullyParallel: true,
 	forbidOnly: !!process.env.CI,
-	use: { baseURL: "http://localhost:5173" },
+	globalSetup: "./e2e/global-setup.ts",
+	use: {
+		baseURL: "http://localhost:5173",
+		storageState: "e2e/.auth/session.json",
+	},
 	webServer: {
 		command: "bun run dev",
 		url: "http://localhost:5173",

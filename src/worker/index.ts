@@ -1,9 +1,5 @@
-import { Hono } from "hono";
+import { drizzle } from "drizzle-orm/d1";
+import { createApp } from "./app";
+import { schema } from "./db";
 
-const app = new Hono<{ Bindings: Env }>().basePath("/api");
-
-app.get("/health", (c) => c.json({ ok: true }));
-
-app.notFound((c) => c.json({ error: "not_found" }, 404));
-
-export default app;
+export default createApp((env) => drizzle(env.DB, { schema }));

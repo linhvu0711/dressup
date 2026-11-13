@@ -13,9 +13,23 @@ bun run check     # Biome lint and format, and the type check
 bun test          # unit tests
 bun run e2e       # click-through in a hidden browser at phone and laptop size
 bun run build     # production build
+bun run db:generate       # a SQL migration from the Drizzle schema
+bun run db:migrate:local  # apply the migrations to the local database
+bun run auth:schema       # write the Better Auth tables after its config changes
+bun run deploy            # build, migrate the remote database, then deploy
 ```
 
 Before the first `bun run e2e`, run `bunx playwright install chromium` once. After a build, `bunx wrangler deploy --dry-run` checks the Worker bundle without deploying it.
+
+Run `bun run db:migrate:local` once before the first `bun run dev`, and again after a new migration.
+
+## Settings
+
+Copy `.dev.vars.example` to `.dev.vars` and fill in each value. Wrangler reads `.dev.vars` in dev. On Cloudflare, the same names are Worker secrets (#8).
+
+- `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`: the Google OAuth client. Its redirect address is `<BETTER_AUTH_URL>/api/auth/callback/google`.
+- `BETTER_AUTH_SECRET`: signs the session cookies. Use at least 32 random characters, for example from `openssl rand -base64 32`.
+- `BETTER_AUTH_URL`: the app's address. In dev it is `http://localhost:5173`.
 
 ## The prototype is the reference
 
