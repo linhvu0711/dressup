@@ -5,3 +5,4 @@
 - Dress page: where the user picks a mode and colours.
 - Account: one Google sign-in. Each account has a private space. No account sees another account's data.
 - Colour square: one saved colour in a garment's row. Each garment has its own row. A new account starts with a starter set.
+- Outfit: what the mannequin wears now: the mode, the picked colour of each garment, and each jacket open or closed. The account keeps it, with its colour squares.

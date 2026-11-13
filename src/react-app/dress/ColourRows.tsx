@@ -27,11 +27,13 @@ export function ColourRows({
 	onLive: (live: LiveColour | null) => void;
 	titleClassName: string;
 }) {
-	const { state, pickColour, addColour, removeColour, setJacket } =
-		useDressState();
+	const dress = useDressState();
 	const toast = useToast();
 	const [adding, setAdding] = useState<GarmentId | null>(null);
 	const [editing, setEditing] = useState(false);
+	if (dress.status !== "ready")
+		return <LoadingRows titleClassName={titleClassName} />;
+	const { state, pickColour, addColour, removeColour, setJacket } = dress;
 	const mode = modeById(state.modeId);
 	const garments = [...mode.garments].reverse();
 
@@ -175,6 +177,44 @@ export function ColourRows({
 						}}
 					/>
 				) : null}
+			</div>
+		</>
+	);
+}
+
+const PLACEHOLDER = "animate-placeholder bg-muted motion-reduce:animate-none";
+
+// The prototype keeps its rows while it loads, since its data is local; here
+// the rows wait for the server, so they show as grey bars and squares, in the
+// look of the prototype's text placeholder (docs/prototype/dressup.html:863).
+function LoadingRows({ titleClassName }: { titleClassName: string }) {
+	return (
+		<>
+			<div className={cn(titleClassName, "gap-2")}>
+				<span className="flex-1">Colours</span>
+			</div>
+			<div
+				data-slot="colour-rows-loading"
+				className="-mx-1.5 min-h-0 flex-1 overflow-hidden px-1.5"
+			>
+				{[0, 1, 2].map((row) => (
+					<div
+						key={row}
+						className="flex flex-col gap-2.5 border-border border-b pt-3.5 pb-4 last:border-b-0"
+					>
+						<div className="flex min-h-[30px] items-center">
+							<div className={cn("h-3.5 w-[40%] rounded-[6px]", PLACEHOLDER)} />
+						</div>
+						<div className="flex gap-[11px] py-[3px]">
+							{[0, 1, 2, 3].map((square) => (
+								<div
+									key={square}
+									className={cn("size-[34px] rounded-[10px]", PLACEHOLDER)}
+								/>
+							))}
+						</div>
+					</div>
+				))}
 			</div>
 		</>
 	);

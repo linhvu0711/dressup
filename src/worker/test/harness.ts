@@ -5,7 +5,7 @@ import { drizzle } from "drizzle-orm/bun-sqlite";
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 import { createApp } from "../app";
 import { type AuthSettings, authOptions } from "../auth";
-import { schema } from "../db";
+import { type Db, schema } from "../db";
 
 export const testEnv = {
 	GOOGLE_CLIENT_ID: "test-client",
@@ -18,8 +18,33 @@ export const testEnv = {
 // rows from one test would change the counts another test reads.
 export async function makeHarness() {
 	const sqlite = new Database(":memory:");
-	const db = drizzle({ client: sqlite, schema });
-	migrate(db, { migrationsFolder: "./migrations" });
+	// bun:sqlite leaves foreign keys off; D1 has them on, and the dress rows
+	// go with their user only through them.
+	sqlite.run("PRAGMA foreign_keys = ON");
+	// drizzle's bun:sqlite driver has no batch; D1 runs a batch as one
+	// transaction, one batch at a time, so this does the same.
+	const local = drizzle({ client: sqlite, schema });
+	migrate(local, { migrationsFolder: "./migrations" });
+	let last: Promise<unknown> = Promise.resolve();
+	const runBatch = async (queries: readonly unknown[]) => {
+		sqlite.run("BEGIN");
+		try {
+			const results = [];
+			for (const query of queries) results.push(await query);
+			sqlite.run("COMMIT");
+			return results;
+		} catch (error) {
+			sqlite.run("ROLLBACK");
+			throw error;
+		}
+	};
+	const db: Db = Object.assign(local, {
+		batch: (queries: readonly unknown[]) => {
+			const run = last.then(() => runBatch(queries));
+			last = run.catch(() => {});
+			return run;
+		},
+	}) as unknown as Db;
 	const settings: AuthSettings = {
 		db,
 		secret: testEnv.BETTER_AUTH_SECRET,

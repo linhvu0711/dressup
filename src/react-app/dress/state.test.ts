@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { modeById, outfitOf } from "@/dress/modes";
 import {
 	addColour,
+	applyChange,
+	type DressChange,
 	pickColour,
 	pickMode,
 	removeColour,
@@ -126,5 +128,65 @@ describe("dress state", () => {
 			["chore"],
 			[],
 		]);
+	});
+
+	test("applies a change of each kind", () => {
+		// Given: a fresh state
+		let s = startDressState();
+		const changes: DressChange[] = [
+			{ kind: "mode", modeId: "tee-sweater" },
+			{ kind: "add", garment: "sweater", hex: "#C0392B" },
+			{ kind: "pick", garment: "sweater", hex: "#8C8A84" },
+			{ kind: "remove", garment: "sweater", hex: "#7A2E2E" },
+			{ kind: "jacket", jacket: "chore", open: true },
+		];
+		// When
+		const oks = changes.map((change) => {
+			const result = applyChange(s, change);
+			if (result.ok) s = result.state;
+			return result.ok;
+		});
+		// Then
+		expect({
+			oks,
+			modeId: s.modeId,
+			sweater: s.swatches.sweater,
+			pickedSweater: s.picked.sweater,
+			open: s.open,
+		}).toEqual({
+			oks: [true, true, true, true, true],
+			modeId: "tee-sweater",
+			sweater: ["#C0392B", "#1F3A5F", "#8C8A84", "#E6DFD0"],
+			pickedSweater: "#8C8A84",
+			open: ["chore"],
+		});
+	});
+
+	test("refuses to pick a colour the row does not hold", () => {
+		// Given: a fresh state, the passing pick with its hex changed
+		// When
+		const result = applyChange(startDressState(), {
+			kind: "pick",
+			garment: "sweater",
+			hex: "#C0392B",
+		});
+		// Then
+		expect(result).toEqual({ ok: false, error: "not_in_row", field: "hex" });
+	});
+
+	test("refuses to remove the last square", () => {
+		// Given: the sweater row cut to one square
+		let s = startDressState();
+		for (const hex of ["#8C8A84", "#E6DFD0", "#7A2E2E"] as const) {
+			s = removeColour(s, "sweater", hex).state;
+		}
+		// When
+		const result = applyChange(s, {
+			kind: "remove",
+			garment: "sweater",
+			hex: "#1F3A5F",
+		});
+		// Then
+		expect(result).toEqual({ ok: false, error: "last_square", field: "hex" });
 	});
 });

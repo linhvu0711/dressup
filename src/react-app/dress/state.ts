@@ -1,11 +1,13 @@
+import { z } from "zod";
 import {
 	GARMENT_IDS,
 	type GarmentId,
 	type Hex,
+	JACKET_IDS,
 	type JacketId,
 	STARTER_COLOURS,
 } from "@/dress/garments";
-import { DEFAULT_MODE_ID, type ModeId } from "@/dress/modes";
+import { DEFAULT_MODE_ID, MODES, type ModeId } from "@/dress/modes";
 
 // What the Dress page keeps for a person. Colours are keyed by garment, not
 // by mode, so a garment keeps its colour in every mode that has it
@@ -79,4 +81,80 @@ export function setJacket(
 ): DressState {
 	const rest = s.open.filter((id) => id !== jacket);
 	return { ...s, open: open ? [...rest, jacket] : rest };
+}
+
+// One thing a person does on the Dress page. The page and the server both
+// apply it with applyChange, so they keep one set of rules.
+export type DressChange =
+	| { kind: "mode"; modeId: ModeId }
+	| { kind: "pick"; garment: GarmentId; hex: Hex }
+	| { kind: "add"; garment: GarmentId; hex: Hex }
+	| { kind: "remove"; garment: GarmentId; hex: Hex }
+	| { kind: "jacket"; jacket: JacketId; open: boolean };
+
+const hex = z
+	.string()
+	.regex(/^#[0-9A-F]{6}$/)
+	.transform((code) => code as Hex);
+const garment = z.enum(GARMENT_IDS);
+
+const modeId = z.enum(MODES.map((m) => m.id) as [ModeId, ...ModeId[]]);
+
+export const dressStateSchema: z.ZodType<DressState> = z.object({
+	modeId,
+	swatches: z.record(garment, z.array(hex)),
+	picked: z.record(garment, hex),
+	open: z.array(z.enum(JACKET_IDS)),
+});
+
+export const dressChangeSchema: z.ZodType<DressChange> = z.discriminatedUnion(
+	"kind",
+	[
+		z.object({
+			kind: z.literal("mode"),
+			modeId,
+		}),
+		z.object({ kind: z.literal("pick"), garment, hex }),
+		z.object({ kind: z.literal("add"), garment, hex }),
+		z.object({ kind: z.literal("remove"), garment, hex }),
+		z.object({
+			kind: z.literal("jacket"),
+			jacket: z.enum(JACKET_IDS),
+			open: z.boolean(),
+		}),
+	],
+);
+
+export type ChangeResult =
+	| { ok: true; state: DressState }
+	| { ok: false; error: "not_in_row" | "last_square"; field: "hex" };
+
+export function applyChange(s: DressState, change: DressChange): ChangeResult {
+	switch (change.kind) {
+		case "mode":
+			return { ok: true, state: pickMode(s, change.modeId) };
+		case "pick":
+			if (!s.swatches[change.garment].includes(change.hex))
+				return { ok: false, error: "not_in_row", field: "hex" };
+			return {
+				ok: true,
+				state: pickColour(s, change.garment, change.hex),
+			};
+		case "add":
+			return {
+				ok: true,
+				state: addColour(s, change.garment, change.hex).state,
+			};
+		case "remove": {
+			const { state, removed } = removeColour(s, change.garment, change.hex);
+			return removed
+				? { ok: true, state }
+				: { ok: false, error: "last_square", field: "hex" };
+		}
+		case "jacket":
+			return {
+				ok: true,
+				state: setJacket(s, change.jacket, change.open),
+			};
+	}
 }

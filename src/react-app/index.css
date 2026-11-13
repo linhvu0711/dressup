@@ -3,6 +3,14 @@
 
 @theme static {
 	--breakpoint-wide: 56.25rem;
+	/* The pulse of the loading placeholders (docs/prototype/dressup.html:85-86). */
+	--animate-placeholder: placeholder 1.4s ease-in-out infinite;
+
+	@keyframes placeholder {
+		50% {
+			opacity: 0.45;
+		}
+	}
 	--font-sans:
 		"Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 	--font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
