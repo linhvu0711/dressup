@@ -1,6 +1,8 @@
 import {
+	GARMENT_IDS,
 	type GarmentId,
 	type GarmentLayer,
+	type Hex,
 	STARTER_COLOURS,
 } from "@/dress/garments";
 
@@ -210,8 +212,12 @@ export function modeById(id: ModeId): Mode {
 	return mode;
 }
 
-export const outfitOf = (mode: Mode): GarmentLayer[] =>
-	mode.garments.map((garment) => ({
-		garment,
-		color: STARTER_COLOURS[garment][0],
-	}));
+const FIRST_COLOURS = Object.fromEntries(
+	GARMENT_IDS.map((id) => [id, STARTER_COLOURS[id][0]]),
+) as Record<GarmentId, Hex>;
+
+export const outfitOf = (
+	mode: Mode,
+	colours: Record<GarmentId, Hex> = FIRST_COLOURS,
+): GarmentLayer[] =>
+	mode.garments.map((garment) => ({ garment, color: colours[garment] }));

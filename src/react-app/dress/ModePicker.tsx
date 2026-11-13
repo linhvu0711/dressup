@@ -1,5 +1,6 @@
 import { cn } from "cn";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useDressState } from "@/dress/DressState";
 import { Mannequin } from "@/dress/figure/Mannequin";
 import { MODES, type ModeId, outfitOf, type WeatherGroup } from "@/dress/modes";
 
@@ -21,6 +22,7 @@ export function ModePicker({
 	modeId: ModeId;
 	onPick: (id: ModeId) => void;
 }) {
+	const { state } = useDressState();
 	const modes =
 		tab === "Training"
 			? MODES.filter((m) => m.training)
@@ -71,7 +73,8 @@ export function ModePicker({
 											decorative
 											lite
 											viewBox="10 14 380 590"
-											layers={outfitOf(mode)}
+											layers={outfitOf(mode, state.picked)}
+											openJackets={state.open}
 										/>
 										{mode.training && tab !== "Training" ? (
 											<span className="absolute bottom-[7px] left-[7px] rounded-full bg-[rgba(26,25,23,.78)] px-2 py-0.5 font-semibold text-[10px] text-white">
