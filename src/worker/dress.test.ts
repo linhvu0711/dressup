@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { applyChange, type DressChange } from "@/dress/state";
+import { loadDress, saveDress } from "./dress-store";
 import { makeHarness } from "./test/harness";
 
 type Dress = {
@@ -312,5 +314,50 @@ describe("POST /api/dress/changes", () => {
 				padded: ["#C0392B", "#1B1B1F", "#1F3A5F", "#55633F"],
 			},
 		]);
+	});
+});
+
+// Two requests that each read the stored state before either writes.
+async function atOnce(h: Harness, changes: DressChange[]) {
+	const db = h.settings.db;
+	const reads = await Promise.all(changes.map(() => loadDress(db, "alice-id")));
+	for (const [i, stored] of reads.entries()) {
+		const result = applyChange(stored.state, changes[i]);
+		if (result.ok) await saveDress(db, "alice-id", stored, result.state);
+	}
+	return (await loadDress(db, "alice-id")).state;
+}
+
+describe("two devices at the same moment", () => {
+	test("stores the same new colour from both", async () => {
+		// Given: alice after one GET
+		const { h } = await aliceAfterGet();
+		// When
+		const s = await atOnce(h, [
+			{ kind: "add", garment: "sweater", hex: "#C0392B" },
+			{ kind: "add", garment: "sweater", hex: "#C0392B" },
+		]);
+		// Then
+		expect(s.swatches.sweater).toEqual([
+			"#C0392B",
+			"#1F3A5F",
+			"#8C8A84",
+			"#E6DFD0",
+			"#7A2E2E",
+		]);
+	});
+
+	test("keeps one square when both remove from a row of two", async () => {
+		// Given: alice with the sweater row cut to #1F3A5F and #8C8A84
+		const { h, headers } = await aliceAfterGet();
+		for (const hex of ["#E6DFD0", "#7A2E2E"])
+			await post(h, headers, { kind: "remove", garment: "sweater", hex });
+		// When
+		const s = await atOnce(h, [
+			{ kind: "remove", garment: "sweater", hex: "#1F3A5F" },
+			{ kind: "remove", garment: "sweater", hex: "#8C8A84" },
+		]);
+		// Then
+		expect(s.swatches.sweater).toHaveLength(1);
 	});
 });

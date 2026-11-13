@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
 	GARMENT_IDS,
 	type GarmentId,
@@ -118,6 +118,8 @@ export async function saveDress(
 			);
 		const was = old.swatches[garment];
 		const now = after.swatches[garment];
+		// The count runs in the batch, not on the state read before it: two
+		// devices removing two squares of a row of two at once keep one.
 		for (const hex of was.filter((h) => !now.includes(h)))
 			writes.push(
 				db
@@ -127,20 +129,25 @@ export async function saveDress(
 							eq(colourSquare.userId, userId),
 							eq(colourSquare.garment, garment),
 							eq(colourSquare.hex, hex),
+							sql`(select count(*) from ${colourSquare} where ${colourSquare.userId} = ${userId} and ${colourSquare.garment} = ${garment}) > 1`,
 						),
 					),
 			);
 		// A new square goes first in its row (state.ts addColour), so it
-		// takes a position below the smallest.
+		// takes a position below the smallest. Another device may have added
+		// the same colour since the read; then the square is already there.
 		const added = now.filter((h) => !was.includes(h));
 		added.forEach((hex, i) => {
 			writes.push(
-				db.insert(colourSquare).values({
-					userId,
-					garment,
-					hex,
-					position: before.firstPosition[garment] - added.length + i,
-				}),
+				db
+					.insert(colourSquare)
+					.values({
+						userId,
+						garment,
+						hex,
+						position: before.firstPosition[garment] - added.length + i,
+					})
+					.onConflictDoNothing(),
 			);
 		});
 	}
