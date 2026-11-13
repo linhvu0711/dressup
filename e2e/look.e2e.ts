@@ -9,6 +9,8 @@ import {
 	storedLooks,
 } from "./looks-helpers";
 
+test.use({ permissions: ["clipboard-read", "clipboard-write"] });
+
 const panel = (page: Page) => page.locator('[data-slot="look-panel"]');
 
 const toast = (page: Page) => page.locator('[data-slot="toast"]');
@@ -101,4 +103,22 @@ test("shows the wall for a link to a look it does not have", async ({
 	await expect(card(page, "Navy day")).toBeVisible();
 	await expect(page.getByRole("link", { name: "Back" })).toBeHidden();
 	await expect(toast(page)).toHaveCount(0);
+});
+
+test("copies a code and shows the toast", async ({ page }) => {
+	// Given: both projects, a fresh account; a look "Navy day" from the
+	// starter colours, open
+	await openDress(page);
+	await saveLook(page, "Navy day");
+	await openLook(page, "Navy day");
+	// When
+	await page
+		.locator('[data-slot="look-view"]')
+		.getByRole("button", { name: "Copy #1F3A5F" })
+		.click();
+	// Then
+	await expect(toast(page)).toHaveText("#1F3A5F copied");
+	expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+		"#1F3A5F",
+	);
 });

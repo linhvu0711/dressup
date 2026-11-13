@@ -1,6 +1,7 @@
 import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import { useDressState } from "@/dress/DressState";
 import { Mannequin } from "@/dress/figure/Mannequin";
 import { MannequinPlaceholder } from "@/dress/figure/MannequinPlaceholder";
@@ -14,6 +15,7 @@ import { type Look, lookName } from "./look";
 // the right part of the Looks page, the head row under the stage.
 export function LookView({ look }: { look: Look }) {
 	const dress = useDressState();
+	const toast = useToast();
 	const mode = modeById(look.modeId);
 	const name = lookName(look);
 	return (
@@ -65,7 +67,22 @@ export function LookView({ look }: { look: Look }) {
 								) : null}
 							</span>
 							<span className="flex-1" />
-							<span className="font-mono text-xs">{hex}</span>
+							<button
+								type="button"
+								aria-label={`Copy ${hex}`}
+								title="Copy"
+								className="rounded-full border border-border px-[9px] py-1 font-mono text-xs hover:bg-muted"
+								onClick={() =>
+									// The prototype toasts even when the copy fails
+									// (docs/prototype/dressup.html:1068); this says so.
+									navigator.clipboard.writeText(hex).then(
+										() => toast(`${hex} copied`),
+										() => toast("Not copied. Try again."),
+									)
+								}
+							>
+								{hex}
+							</button>
 						</div>
 					);
 				})}
