@@ -323,10 +323,20 @@ test("ticks no seventh look", async ({ page }) => {
 		h1: await h1(page),
 		look1: await pressedOf(page, "Look 1"),
 		compare: await compareButton(page).textContent(),
+		// On a phone the toast sits over the button; a tap still reaches it.
+		compareTakesTaps: await compareButton(page).evaluate((el) => {
+			const box = el.getBoundingClientRect();
+			const hit = document.elementFromPoint(
+				box.left + box.width / 2,
+				box.top + box.height / 2,
+			);
+			return !!hit && el.contains(hit);
+		}),
 	}).toEqual({
 		toast: "Six looks is the limit.",
 		h1: "6 picked",
 		look1: "false",
 		compare: "Compare 6",
+		compareTakesTaps: true,
 	});
 });
