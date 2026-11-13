@@ -47,22 +47,21 @@ export type StoredDress = {
 // The account's dress state. An account with no outfit yet gets the starter
 // set first, so accounts made before these tables get it too.
 export async function loadDress(db: Db, userId: string): Promise<StoredDress> {
-	let [mode] = await db.select().from(outfit).where(eq(outfit.userId, userId));
-	if (!mode) {
-		await seed(db, userId);
-		[mode] = await db.select().from(outfit).where(eq(outfit.userId, userId));
-	}
-	const garments = await db
-		.select()
-		.from(outfitGarment)
-		.where(eq(outfitGarment.userId, userId));
-	const squares = await db
-		.select()
-		.from(colourSquare)
-		.where(eq(colourSquare.userId, userId))
-		// Two devices that add at once give their squares the same position;
-		// the hex keeps their order the same on each load.
-		.orderBy(colourSquare.position, colourSquare.hex);
+	const outfitRow = db.select().from(outfit).where(eq(outfit.userId, userId));
+	if ((await outfitRow).length === 0) await seed(db, userId);
+	// One batch, so a save from another device cannot land between the reads
+	// and leave a pick that is not in its row.
+	const [[mode], garments, squares] = await db.batch([
+		outfitRow,
+		db.select().from(outfitGarment).where(eq(outfitGarment.userId, userId)),
+		db
+			.select()
+			.from(colourSquare)
+			.where(eq(colourSquare.userId, userId))
+			// Two devices that add at once give their squares the same position;
+			// the hex keeps their order the same on each load.
+			.orderBy(colourSquare.position, colourSquare.hex),
+	]);
 	const swatches = Object.fromEntries(
 		GARMENT_IDS.map((id) => [id, [] as Hex[]]),
 	) as Record<GarmentId, Hex[]>;

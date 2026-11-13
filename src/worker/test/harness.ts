@@ -22,21 +22,27 @@ export async function makeHarness() {
 	// go with their user only through them.
 	sqlite.run("PRAGMA foreign_keys = ON");
 	// drizzle's bun:sqlite driver has no batch; D1 runs a batch as one
-	// transaction, so this does the same.
+	// transaction, one batch at a time, so this does the same.
 	const local = drizzle({ client: sqlite, schema });
 	migrate(local, { migrationsFolder: "./migrations" });
+	let last: Promise<unknown> = Promise.resolve();
+	const runBatch = async (queries: readonly unknown[]) => {
+		sqlite.run("BEGIN");
+		try {
+			const results = [];
+			for (const query of queries) results.push(await query);
+			sqlite.run("COMMIT");
+			return results;
+		} catch (error) {
+			sqlite.run("ROLLBACK");
+			throw error;
+		}
+	};
 	const db: Db = Object.assign(local, {
-		batch: async (queries: readonly unknown[]) => {
-			sqlite.run("BEGIN");
-			try {
-				const results = [];
-				for (const query of queries) results.push(await query);
-				sqlite.run("COMMIT");
-				return results;
-			} catch (error) {
-				sqlite.run("ROLLBACK");
-				throw error;
-			}
+		batch: (queries: readonly unknown[]) => {
+			const run = last.then(() => runBatch(queries));
+			last = run.catch(() => {});
+			return run;
 		},
 	}) as unknown as Db;
 	const settings: AuthSettings = {
