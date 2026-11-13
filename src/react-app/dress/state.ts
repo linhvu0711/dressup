@@ -113,20 +113,22 @@ export type DressChange =
 	| { kind: "jacket"; jacket: JacketId; open: boolean }
 	| { kind: "mannequin"; part: MannequinPart; hex: Hex };
 
-const hex = z
+export const hexSchema = z
 	.string()
 	.regex(/^#[0-9A-F]{6}$/)
 	.transform((code) => code as Hex);
 const garment = z.enum(GARMENT_IDS);
 
-const modeId = z.enum(MODES.map((m) => m.id) as [ModeId, ...ModeId[]]);
+export const modeIdSchema = z.enum(
+	MODES.map((m) => m.id) as [ModeId, ...ModeId[]],
+);
 
 export const dressStateSchema: z.ZodType<DressState> = z.object({
-	modeId,
-	swatches: z.record(garment, z.array(hex)),
-	picked: z.record(garment, hex),
+	modeId: modeIdSchema,
+	swatches: z.record(garment, z.array(hexSchema)),
+	picked: z.record(garment, hexSchema),
 	open: z.array(z.enum(JACKET_IDS)),
-	mannequin: z.object({ skin: hex, hair: hex }),
+	mannequin: z.object({ skin: hexSchema, hair: hexSchema }),
 });
 
 export const dressChangeSchema: z.ZodType<DressChange> = z.discriminatedUnion(
@@ -134,11 +136,11 @@ export const dressChangeSchema: z.ZodType<DressChange> = z.discriminatedUnion(
 	[
 		z.object({
 			kind: z.literal("mode"),
-			modeId,
+			modeId: modeIdSchema,
 		}),
-		z.object({ kind: z.literal("pick"), garment, hex }),
-		z.object({ kind: z.literal("add"), garment, hex }),
-		z.object({ kind: z.literal("remove"), garment, hex }),
+		z.object({ kind: z.literal("pick"), garment, hex: hexSchema }),
+		z.object({ kind: z.literal("add"), garment, hex: hexSchema }),
+		z.object({ kind: z.literal("remove"), garment, hex: hexSchema }),
 		z.object({
 			kind: z.literal("jacket"),
 			jacket: z.enum(JACKET_IDS),
@@ -147,7 +149,7 @@ export const dressChangeSchema: z.ZodType<DressChange> = z.discriminatedUnion(
 		z.object({
 			kind: z.literal("mannequin"),
 			part: z.enum(MANNEQUIN_PARTS),
-			hex,
+			hex: hexSchema,
 		}),
 	],
 );
