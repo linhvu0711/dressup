@@ -1,13 +1,17 @@
 import { cn } from "cn";
-import type { ReactNode } from "react";
+import { Scale, X } from "lucide-react";
+import { type ReactNode, useState } from "react";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { useLooks } from "@/looks/api";
 import { LookCard } from "@/looks/LookCard";
+import type { LookId } from "@/looks/look";
 import { PageHeader } from "../shell/PageHeader";
 
 const WALL =
 	"grid min-h-0 flex-1 auto-rows-min grid-cols-2 gap-x-3.5 gap-y-5 overflow-auto px-4 pt-[5px] pb-24 wide:grid-cols-[repeat(auto-fill,minmax(176px,1fr))] wide:gap-x-[18px] wide:gap-y-[26px] wide:px-6";
+
+const NOTE = "font-sans text-[13px] text-muted-foreground";
 
 const PULSE = "animate-placeholder motion-reduce:animate-none";
 
@@ -26,7 +30,16 @@ function Notice({ title, children }: { title: string; children: ReactNode }) {
 // so a wall with looks does not move when they come.
 export function LooksPage() {
 	const looks = useLooks();
-	const panel = looks.isPending || (looks.isSuccess && looks.data.length > 0);
+	// null is the wall without the pick state; the list keeps the pick order.
+	const [picked, setPicked] = useState<LookId[] | null>(null);
+	const canPick = looks.isSuccess && looks.data.length > 0;
+	const panel = looks.isPending || canPick;
+	function toggle(id: LookId) {
+		if (!picked) return;
+		setPicked(
+			picked.includes(id) ? picked.filter((p) => p !== id) : [...picked, id],
+		);
+	}
 	let wall: ReactNode;
 	if (looks.isPending) {
 		// docs/prototype/dressup.html:863
@@ -75,7 +88,18 @@ export function LooksPage() {
 		wall = (
 			<div data-slot="look-wall" className={WALL}>
 				{looks.data.map((look) => (
-					<LookCard key={look.id} look={look} />
+					<LookCard
+						key={look.id}
+						look={look}
+						pick={
+							picked
+								? {
+										on: picked.includes(look.id),
+										toggle: () => toggle(look.id),
+									}
+								: undefined
+						}
+					/>
 				))}
 			</div>
 		);
@@ -89,7 +113,40 @@ export function LooksPage() {
 			)}
 		>
 			<div className="flex min-h-0 flex-1 flex-col">
-				<PageHeader title="Looks" />
+				{picked ? (
+					<PageHeader
+						start={
+							<Button
+								variant="icon"
+								size="icon"
+								aria-label="Stop picking"
+								title="Stop picking"
+								onClick={() => setPicked(null)}
+							>
+								<X size={18} strokeWidth={1.9} aria-hidden />
+							</Button>
+						}
+						title={`${picked.length} picked`}
+						end={<span className={NOTE}>Pick 2 to 6</span>}
+					/>
+				) : (
+					<PageHeader
+						title="Looks"
+						end={
+							canPick ? (
+								<Button
+									variant="icon"
+									size="icon"
+									aria-label="Compare"
+									title="Compare"
+									onClick={() => setPicked([])}
+								>
+									<Scale size={18} strokeWidth={1.9} aria-hidden />
+								</Button>
+							) : null
+						}
+					/>
+				)}
 				{wall}
 			</div>
 			{panel ? (
