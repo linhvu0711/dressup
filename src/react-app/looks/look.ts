@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { GARMENT_IDS, type GarmentId, JACKET_IDS } from "@/dress/garments";
-import { MODES } from "@/dress/modes";
-import { hexSchema, modeIdSchema } from "@/dress/state";
+import { MODES, modeById } from "@/dress/modes";
+import { type DressState, hexSchema, modeIdSchema } from "@/dress/state";
 
 export const LOOK_NAME_MAX = 60;
 
@@ -51,3 +51,19 @@ export type LookInput = z.infer<typeof lookInputSchema>;
 export const lookSchema = lookInputSchema;
 
 export type Look = LookInput;
+
+// The outfit on the mannequin as a look: only its mode's garments.
+export function lookFromDress(
+	state: DressState,
+	id: LookId,
+	name: string,
+): LookInput {
+	const mode = modeById(state.modeId);
+	return {
+		id,
+		modeId: state.modeId,
+		name,
+		colours: Object.fromEntries(mode.garments.map((g) => [g, state.picked[g]])),
+		open: state.open.filter((j) => mode.garments.includes(j)),
+	};
+}
