@@ -2,7 +2,20 @@
 
 A web app that shows your clothes on a drawn mannequin, in your colours, so you can judge which colours go together before you put them on.
 
-Status: design is done. The build has not started.
+Status: the build has started. The app lives at the repo root, made from Cloudflare's Vite, React, and Hono template.
+
+## Commands
+
+```sh
+bun install       # install the packages
+bun run dev       # the app at http://localhost:5173
+bun run check     # Biome lint and format, and the type check
+bun test          # unit tests
+bun run e2e       # click-through in a hidden browser at phone and laptop size
+bun run build     # production build
+```
+
+Before the first `bun run e2e`, run `bunx playwright install chromium` once. After a build, `bunx wrangler deploy --dry-run` checks the Worker bundle without deploying it.
 
 ## The prototype is the reference
 
