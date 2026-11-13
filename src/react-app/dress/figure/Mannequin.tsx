@@ -1,10 +1,18 @@
 import { useId } from "react";
 import { BodySkin, Head, Shoes } from "@/dress/figure/body";
+import { GARMENT_DRAWINGS } from "@/dress/figure/garments";
 import { Defs, FigureContext } from "@/dress/figure/parts";
-import type { Hex } from "@/dress/garments";
+import {
+	type GarmentLayer,
+	type Hex,
+	isJacket,
+	type JacketId,
+} from "@/dress/garments";
 
 // Ported from `figure` in docs/prototype/dressup.html:799-811.
 export function Mannequin({
+	layers = [],
+	openJackets = [],
 	skin = "#D6A27B",
 	hair = "#141418",
 	viewBox = "0 10 400 800",
@@ -12,6 +20,8 @@ export function Mannequin({
 	label = "Mannequin",
 	decorative = false,
 }: {
+	layers?: readonly GarmentLayer[];
+	openJackets?: readonly JacketId[];
 	skin?: Hex;
 	hair?: Hex;
 	viewBox?: string;
@@ -55,6 +65,20 @@ export function Mannequin({
 				<g transform="matrix(1.12 0 0 1 -24 0)">
 					<BodySkin />
 					<Shoes />
+					{layers.map(({ garment, color }) => {
+						const open = isJacket(garment) && openJackets.includes(garment);
+						return (
+							<g
+								key={garment}
+								data-garment={garment}
+								data-front={
+									isJacket(garment) ? (open ? "open" : "closed") : undefined
+								}
+							>
+								{GARMENT_DRAWINGS[garment](color, open)}
+							</g>
+						);
+					})}
 				</g>
 				<g transform="translate(200 150) scale(1.04) translate(-200 -150)">
 					<Head />

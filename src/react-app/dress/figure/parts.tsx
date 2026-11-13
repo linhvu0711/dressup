@@ -1,4 +1,11 @@
-import { createContext, type ReactNode, useContext, useId } from "react";
+import {
+	createContext,
+	createElement,
+	Fragment,
+	type ReactNode,
+	useContext,
+	useId,
+} from "react";
 import type { Hex } from "@/dress/garments";
 
 // Ported from docs/prototype/dressup.html:440-484. Path data and numbers stay
@@ -368,3 +375,72 @@ export function Defs() {
 		</defs>
 	);
 }
+
+// Short factories with the prototype's names, so the garment drawings read
+// line for line like docs/prototype/dressup.html:533-702.
+export const f = (...nodes: ReactNode[]) =>
+	createElement(Fragment, null, ...nodes);
+export const sh = (d: string, op?: number, b?: number) => (
+	<Sh d={d} op={op} b={b} />
+);
+export const hl = (d: string, op?: number, b?: number) => (
+	<Hl d={d} op={op} b={b} />
+);
+export const shl = (d: string, op?: number, w?: number, b?: number) => (
+	<Shl d={d} op={op} w={w} b={b} />
+);
+export const hll = (d: string, op?: number, w?: number, b?: number) => (
+	<Hll d={d} op={op} w={w} b={b} />
+);
+export const ln = (d: string, op?: number, w?: number, dash?: string) => (
+	<Ln d={d} op={op} w={w} dash={dash} />
+);
+export const cyl = (
+	x: number,
+	y: number,
+	w: number,
+	h: number,
+	op?: number,
+) => <Cyl x={x} y={y} w={w} h={h} op={op} />;
+export const btn = (x: number, y: number, r?: number) => (
+	<Btn x={x} y={y} r={r} />
+);
+export const piece = (
+	d: string,
+	fill: string,
+	inner?: ReactNode,
+	opt?: PieceOptions,
+) => (
+	<Piece d={d} fill={fill} opt={opt}>
+		{inner}
+	</Piece>
+);
+export const arm = (node: ReactNode) => <Arm>{node}</Arm>;
+export const layer = (node: ReactNode) => <Layer>{node}</Layer>;
+
+// A full-canvas rect filled with one of the fabric patterns of the defs.
+export function Fabric({
+	name,
+	opacity,
+	transform,
+}: {
+	name: "knit" | "rib" | "twill";
+	opacity?: number;
+	transform?: string;
+}) {
+	const url = useUrl();
+	return (
+		<rect
+			width="400"
+			height="820"
+			fill={url(name)}
+			opacity={opacity}
+			transform={transform}
+		/>
+	);
+}
+export const fabric = (
+	name: "knit" | "rib" | "twill",
+	opacity?: number,
+	transform?: string,
+) => <Fabric name={name} opacity={opacity} transform={transform} />;
