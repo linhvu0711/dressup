@@ -88,12 +88,17 @@ test("opens a look as a page under 900 px and beside the wall from 900 px", asyn
 	await page.goto("/looks");
 	const { looks } = await storedLooks(page);
 	const wall = page.locator('[data-slot="look-wall"]');
+	const heading = panel(page).getByRole("heading", { name: "Navy day" });
+	const stage = panel(page).locator('[data-surface="wall"]');
 	// When
 	await card(page, "Navy day").click();
 	// Then
 	if (isPhone(page)) {
 		await expect(page).toHaveURL(`/looks/${looks[0].id}`);
 		await expect(page.getByRole("link", { name: "Back" })).toBeVisible();
+		// The page's head row is on top, over the stage.
+		const [h, s] = [await heading.boundingBox(), await stage.boundingBox()];
+		expect(h && s && h.y + h.height <= s.y).toBe(true);
 		await expect(wall).toBeHidden();
 		await page.getByRole("link", { name: "Back" }).click();
 		await expect(page).toHaveURL("/looks");
@@ -105,9 +110,10 @@ test("opens a look as a page under 900 px and beside the wall from 900 px", asyn
 			"aria-current",
 			"true",
 		);
-		await expect(
-			panel(page).getByRole("heading", { name: "Navy day" }),
-		).toBeVisible();
+		await expect(heading).toBeVisible();
+		// Beside the wall the head row sits under the stage (prototype :880).
+		const [h, s] = [await heading.boundingBox(), await stage.boundingBox()];
+		expect(h && s && s.y + s.height <= h.y).toBe(true);
 	}
 });
 

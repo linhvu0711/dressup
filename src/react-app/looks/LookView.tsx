@@ -27,7 +27,7 @@ export function LookView({
 	const name = lookName(look);
 	return (
 		<div data-slot="look-view" className="flex min-h-0 flex-1 flex-col">
-			<div className="order-first flex min-h-[62px] flex-none items-center gap-3 px-4 pt-[14px] pb-2 wide:order-none wide:px-6 wide:pt-4">
+			<div className="flex min-h-[62px] flex-none items-center gap-3 px-4 pt-[14px] pb-2 wide:px-6 wide:pt-[18px]">
 				<Button asChild variant="icon" size="icon" className="wide:hidden">
 					<Link to="/looks" aria-label="Back" title="Back">
 						<ArrowLeft size={18} strokeWidth={1.9} aria-hidden />
@@ -62,7 +62,7 @@ export function LookView({
 					<Trash2 size={18} strokeWidth={1.9} aria-hidden />
 				</Button>
 			</div>
-			<Stage className="mx-3 flex-[0_0_52%] rounded-[24px] wide:mx-4 wide:mt-4 wide:flex-[0_0_50%] wide:rounded-[22px]">
+			<Stage className="mx-3 flex-[0_0_52%] rounded-[24px] wide:-order-1 wide:mx-4 wide:mt-4 wide:flex-[0_0_50%] wide:rounded-[22px]">
 				{dress.status === "ready" ? (
 					<Mannequin
 						layers={outfitOf(mode, look.colours)}
