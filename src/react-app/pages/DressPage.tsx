@@ -71,13 +71,11 @@ export function DressPage() {
 						value="colours"
 						className={`${PANEL} wide:col-start-3`}
 					>
-						<div className="flex min-h-[34px] flex-none items-center text-[13px] wide:hidden">
-							<span className="text-muted-foreground">{mode.name}</span>
-						</div>
-						<div data-slot="colours-title" className={COLUMN_TITLE}>
-							Colours
-						</div>
-						<ColourRows live={live} onLive={setLive} />
+						<ColourRows
+							live={live}
+							onLive={setLive}
+							titleClassName={COLUMN_TITLE}
+						/>
 					</TabsContent>
 				</Tabs>
 			</div>

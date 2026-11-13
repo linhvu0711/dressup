@@ -12,6 +12,7 @@ import {
 	type DressState,
 	pickColour,
 	pickMode,
+	removeColour,
 	startDressState,
 } from "@/dress/state";
 
@@ -20,6 +21,7 @@ type DressStore = {
 	pickMode: (id: ModeId) => void;
 	pickColour: (garment: GarmentId, hex: Hex) => void;
 	addColour: (garment: GarmentId, hex: Hex) => { added: boolean };
+	removeColour: (garment: GarmentId, hex: Hex) => { removed: boolean };
 };
 
 const DressStoreContext = createContext<DressStore | null>(null);
@@ -44,6 +46,15 @@ export function DressStateProvider({ children }: { children: ReactNode }) {
 			const { state: next, added } = addColour(latest.current, garment, hex);
 			update(next);
 			return { added };
+		},
+		removeColour: (garment, hex) => {
+			const { state: next, removed } = removeColour(
+				latest.current,
+				garment,
+				hex,
+			);
+			update(next);
+			return { removed };
 		},
 	};
 	return (

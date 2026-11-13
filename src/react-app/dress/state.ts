@@ -55,3 +55,19 @@ export function addColour(
 		: s.swatches;
 	return { state: pickColour({ ...s, swatches }, garment, hex), added };
 }
+
+// A row keeps at least one square. When the picked one goes, the row's new
+// first square goes on (docs/prototype/dressup.html:1025-1026).
+export function removeColour(
+	s: DressState,
+	garment: GarmentId,
+	hex: Hex,
+): { state: DressState; removed: boolean } {
+	const row = s.swatches[garment];
+	if (row.length <= 1) return { state: s, removed: false };
+	const rest = row.filter((c) => c !== hex);
+	const swatches = { ...s.swatches, [garment]: rest };
+	const picked =
+		s.picked[garment] === hex ? { ...s.picked, [garment]: rest[0] } : s.picked;
+	return { state: { ...s, swatches, picked }, removed: true };
+}

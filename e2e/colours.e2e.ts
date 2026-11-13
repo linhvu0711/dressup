@@ -329,3 +329,46 @@ test("picks the square it has and says so", async ({ page }) => {
 		page.getByRole("button", { name: "Sweater #8C8A84", exact: true }),
 	).toHaveAttribute("aria-pressed", "true");
 });
+
+test("removes a square in edit mode", async ({ page }) => {
+	// Given: both projects, a fresh page, the Colours tab on the phone
+	await openColours(page);
+	// When
+	await page.getByRole("button", { name: "Edit colours", exact: true }).click();
+	await page
+		.getByRole("button", { name: "Sweater #E6DFD0, remove", exact: true })
+		.click();
+	await page.getByRole("button", { name: "Done", exact: true }).click();
+	// Then
+	expect(await labels(page, "Sweater")).toEqual([
+		"Sweater #1F3A5F",
+		"Sweater #8C8A84",
+		"Sweater #7A2E2E",
+	]);
+	await expect(
+		page.getByRole("button", { name: "Edit colours", exact: true }),
+	).toBeVisible();
+});
+
+test("keeps the last square and says so", async ({ page }) => {
+	// Given: both projects, a fresh page, the Colours tab on the phone, edit
+	// mode on, the Sweater row cut to one square
+	await openColours(page);
+	await page.getByRole("button", { name: "Edit colours", exact: true }).click();
+	for (const hex of ["#8C8A84", "#E6DFD0", "#7A2E2E"]) {
+		await page
+			.getByRole("button", { name: `Sweater ${hex}, remove`, exact: true })
+			.click();
+	}
+	// When
+	await page
+		.getByRole("button", { name: "Sweater #1F3A5F, remove", exact: true })
+		.click();
+	// Then
+	await expect(
+		page
+			.locator('[data-slot="toast"]')
+			.getByText("A row keeps one colour.", { exact: true }),
+	).toBeVisible();
+	expect(await labels(page, "Sweater")).toEqual(["Sweater #1F3A5F, remove"]);
+});
