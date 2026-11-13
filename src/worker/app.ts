@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import { createAuth } from "./auth";
 import type { Db } from "./db";
+import { loadDress } from "./dress-store";
 
 type Auth = ReturnType<typeof createAuth>;
 type User = Auth["$Infer"]["Session"]["user"];
@@ -50,6 +51,10 @@ export function createApp(getDb: (env: Env) => Db) {
 		const { id, name, email, image } = c.var.user;
 		return c.json({ id, name, email, image: image ?? null });
 	});
+
+	app.get("/dress", withAuth, requireUser, async (c) =>
+		c.json(await loadDress(getDb(c.env), c.var.user.id)),
+	);
 
 	app.notFound((c) => c.json({ error: "not_found" }, 404));
 

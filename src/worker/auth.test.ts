@@ -78,7 +78,7 @@ describe("GET /api/me", () => {
 });
 
 describe("migrations", () => {
-	test("makes the four auth tables from the migrations", async () => {
+	test("makes the auth and dress tables from the migrations", async () => {
 		// Given
 		const { sqlite } = await makeHarness();
 		// When
@@ -91,6 +91,9 @@ describe("migrations", () => {
 		expect(rows.map((r) => r.name)).toEqual([
 			"__drizzle_migrations",
 			"account",
+			"colour_square",
+			"outfit",
+			"outfit_garment",
 			"session",
 			"user",
 			"verification",
