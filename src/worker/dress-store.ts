@@ -60,7 +60,9 @@ export async function loadDress(db: Db, userId: string): Promise<StoredDress> {
 		.select()
 		.from(colourSquare)
 		.where(eq(colourSquare.userId, userId))
-		.orderBy(colourSquare.position);
+		// Two devices that add at once give their squares the same position;
+		// the hex keeps their order the same on each load.
+		.orderBy(colourSquare.position, colourSquare.hex);
 	const swatches = Object.fromEntries(
 		GARMENT_IDS.map((id) => [id, [] as Hex[]]),
 	) as Record<GarmentId, Hex[]>;
