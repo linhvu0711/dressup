@@ -39,6 +39,8 @@ export function TagNameField({
 	useEffect(() => box.current?.focus(), []);
 
 	const save = async () => {
+		// Enter is not held off by the disabled button.
+		if (saving) return;
 		const trimmed = name.trim();
 		// An empty or unchanged name sends nothing (docs/prototype/dressup.html:1073, 1080).
 		if (!trimmed || trimmed === initial) return onCancel();

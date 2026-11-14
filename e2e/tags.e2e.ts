@@ -115,6 +115,32 @@ test("keeps a chip clicked while a new tag is saved", async ({ page }) => {
 	expect(await pressed(page).allTextContents()).toEqual(["Work", "Trip"]);
 });
 
+test("sends a new tag once when Enter is pressed twice", async ({ page }) => {
+	// Given: both projects, a fresh account, the save form open; POST
+	// /api/tags held until the test lets it go
+	await openDress(page);
+	await page.getByRole("button", { name: "Save look" }).click();
+	let release = () => {};
+	const held = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	let posts = 0;
+	await page.route("**/api/tags", async (route) => {
+		if (route.request().method() === "POST") {
+			posts += 1;
+			await held;
+		}
+		await route.continue();
+	});
+	// When
+	await typeNewTag(page, "Trip");
+	await page.keyboard.press("Enter");
+	release();
+	await expect(pressed(page).filter({ hasText: /^Trip$/ })).toHaveCount(1);
+	// Then
+	expect(posts).toBe(1);
+});
+
 test("shows the red hint for a name the account has", async ({ page }) => {
 	// Given: both projects, a fresh account, tag "Work" made in the form
 	await openDress(page);
