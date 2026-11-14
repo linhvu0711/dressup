@@ -78,7 +78,7 @@ describe("GET /api/me", () => {
 });
 
 describe("migrations", () => {
-	test("makes the auth, dress, and look tables from the migrations", async () => {
+	test("makes the auth, dress, look, and tag tables from the migrations", async () => {
 		// Given
 		const { sqlite } = await makeHarness();
 		// When
@@ -93,10 +93,12 @@ describe("migrations", () => {
 			"account",
 			"colour_square",
 			"look",
+			"look_tag",
 			"mannequin",
 			"outfit",
 			"outfit_garment",
 			"session",
+			"tag",
 			"user",
 			"verification",
 		]);

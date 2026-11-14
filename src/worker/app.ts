@@ -4,11 +4,13 @@ import { createMiddleware } from "hono/factory";
 import type { z } from "zod";
 import { applyChange, dressChangeSchema } from "@/dress/state";
 import { lookInputSchema } from "@/looks/look";
+import { newTagSchema } from "@/tags/tag";
 import { createAuth } from "./auth";
 import type { Db } from "./db";
 import { user } from "./db/auth-schema";
 import { loadDress, saveDress } from "./dress-store";
 import { deleteLook, listLooks, saveLook, updateLook } from "./look-store";
+import { addTag, listTags } from "./tag-store";
 
 type Auth = ReturnType<typeof createAuth>;
 type User = Auth["$Infer"]["Session"]["user"];
@@ -147,6 +149,18 @@ export function createApp(getDb: (env: Env) => Db) {
 		);
 		if (!deleted) return c.json({ error: "not_found" }, 404);
 		return c.body(null, 204);
+	});
+
+	app.get("/tags", withAuth, requireUser, async (c) =>
+		c.json({ tags: await listTags(getDb(c.env), c.var.user.id) }),
+	);
+
+	app.post("/tags", withAuth, requireUser, async (c) => {
+		const body = await readBody(c, newTagSchema);
+		if ("refused" in body) return body.refused;
+		const added = await addTag(getDb(c.env), c.var.user.id, body.data.name);
+		if (!added.ok) return c.json({ error: "duplicate", field: "name" }, 400);
+		return c.json({ tag: added.tag }, 201);
 	});
 
 	app.notFound((c) => c.json({ error: "not_found" }, 404));
