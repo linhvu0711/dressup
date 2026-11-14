@@ -40,7 +40,14 @@ export function LooksPage() {
 	const navigate = useNavigate();
 	const toast = useToast();
 	// null is the wall without the pick state; the list keeps the pick order.
-	const [picked, setPicked] = useState<LookId[] | null>(null);
+	const [pickedIds, setPicked] = useState<LookId[] | null>(null);
+	// A look deleted here or on another device leaves the list, and its pick
+	// goes with it, so the count and Compare see only looks that still exist.
+	const list = looks.data;
+	const picked =
+		pickedIds && list
+			? pickedIds.filter((id) => list.some((l) => l.id === id))
+			: pickedIds;
 	const canPick = looks.isSuccess && looks.data.length > 0;
 	const panel = looks.isPending || canPick;
 	function toggle(id: LookId) {

@@ -152,6 +152,27 @@ test("keeps Compare off with one look", async ({ page }) => {
 	});
 });
 
+test("drops a deleted look from the picks", async ({ page }) => {
+	// Given: laptop, where the right part shows the newest look "Look 2"
+	// beside the wall; both looks picked
+	test.skip(isPhone(page), "a phone shows no look beside the wall");
+	await openLooks(page, ["Look 1", "Look 2"]);
+	await scaleButton(page).click();
+	await cardButton(page, "Look 1").click();
+	await cardButton(page, "Look 2").click();
+	await expect(page.locator("h1")).toHaveText("2 picked");
+	// When
+	await page.getByRole("button", { name: "Delete this look" }).click();
+	await page.getByRole("button", { name: "Delete", exact: true }).click();
+	await expect(page.locator('[data-slot="look-card"]')).toHaveCount(1);
+	// Then
+	expect({ h1: await h1(page), ...(await compareState(page)) }).toEqual({
+		h1: "1 picked",
+		name: "Compare 1",
+		enabled: false,
+	});
+});
+
 const isPhone = (page: Page) => (page.viewportSize()?.width ?? 0) < 900;
 
 const compareLooks = (page: Page) => page.locator('[data-slot="compare-look"]');
