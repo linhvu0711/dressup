@@ -1,4 +1,4 @@
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { sameTagName, type Tag, type TagId } from "@/tags/tag";
 import type { Db } from "./db";
 import { tag } from "./db/tag-schema";
@@ -35,4 +35,40 @@ export async function addTag(
 		.values({ id: crypto.randomUUID(), userId, name })
 		.returning({ id: tag.id, name: tag.name });
 	return { ok: true, tag: toTag(row) };
+}
+
+// Changes only a tag the account has. A name the account's other tags hold
+// is refused, so a change of letter case alone is taken.
+export async function renameTag(
+	db: Db,
+	userId: string,
+	input: Tag,
+): Promise<
+	{ ok: true; tag: Tag } | { ok: false; error: "not_found" | "duplicate" }
+> {
+	const tags = await listTags(db, userId);
+	if (tags.some((t) => t.id !== input.id && sameTagName(t.name, input.name)))
+		return { ok: false, error: "duplicate" };
+	const [row] = await db
+		.update(tag)
+		.set({ name: input.name })
+		.where(and(eq(tag.id, input.id), eq(tag.userId, userId)))
+		.returning({ id: tag.id, name: tag.name });
+	return row
+		? { ok: true, tag: toTag(row) }
+		: { ok: false, error: "not_found" };
+}
+
+// Only the account's own tag goes, and with it the tag on each look; false
+// when there is none to delete.
+export async function deleteTag(
+	db: Db,
+	userId: string,
+	id: string,
+): Promise<boolean> {
+	const rows = await db
+		.delete(tag)
+		.where(and(eq(tag.id, id), eq(tag.userId, userId)))
+		.returning({ id: tag.id });
+	return rows.length > 0;
 }

@@ -53,6 +53,10 @@ const send = (
 const addTag = (h: Harness, headers: Headers, name: string) =>
 	send(h, headers, "POST", "/api/tags", { name });
 
+// The id the server made for the tag.
+const added = async (h: Harness, headers: Headers, name: string) =>
+	((await (await addTag(h, headers, name)).json()) as { tag: Tag }).tag.id;
+
 const tagsOf = async (h: Harness, headers: Headers) =>
 	(
 		(await (await send(h, headers, "GET", "/api/tags")).json()) as {
@@ -205,5 +209,174 @@ describe("GET and POST /api/tags", () => {
 			{ status: 401, body: { error: "unauthorized" } },
 			{ status: 401, body: { error: "unauthorized" } },
 		]);
+	});
+});
+
+describe("PUT and DELETE /api/tags/:id", () => {
+	const rename = (h: Harness, headers: Headers, id: string, name: string) =>
+		send(h, headers, "PUT", `/api/tags/${id}`, { id, name });
+
+	const remove = (h: Harness, headers: Headers, id: string) =>
+		send(h, headers, "DELETE", `/api/tags/${id}`);
+
+	test("renames a tag", async () => {
+		// Given: alice posted "Work"
+		const { h, headers } = await aliceSignedIn();
+		const work = await added(h, headers, "Work");
+		// When
+		const res = await rename(h, headers, work, "Office");
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			names: await namesOf(h, headers),
+		}).toEqual({
+			status: 200,
+			body: { tag: { id: work, name: "Office" } },
+			names: ["Office"],
+		});
+	});
+
+	test("renames a tag to its own name in another letter case", async () => {
+		// Given: alice posted "Work"
+		const { h, headers } = await aliceSignedIn();
+		const work = await added(h, headers, "Work");
+		// When
+		const res = await rename(h, headers, work, "WORK");
+		// Then
+		expect({
+			status: res.status,
+			name: ((await res.json()) as { tag: Tag }).tag.name,
+		}).toEqual({ status: 200, name: "WORK" });
+	});
+
+	test("refuses a rename to another tag's name", async () => {
+		// Given: alice posted "Work" and "Trip"
+		const { h, headers } = await aliceSignedIn();
+		await added(h, headers, "Work");
+		const trip = await added(h, headers, "Trip");
+		// When
+		const res = await rename(h, headers, trip, "work");
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			names: await namesOf(h, headers),
+		}).toEqual({
+			status: 400,
+			body: { error: "duplicate", field: "name" },
+			names: ["Work", "Trip"],
+		});
+	});
+
+	test("refuses a rename to an empty name", async () => {
+		// Given: alice posted "Work"
+		const { h, headers } = await aliceSignedIn();
+		const work = await added(h, headers, "Work");
+		// When
+		const res = await rename(h, headers, work, "");
+		// Then
+		expect({ status: res.status, body: await res.json() }).toEqual({
+			status: 400,
+			body: { error: "invalid", field: "name" },
+		});
+	});
+
+	test("answers 404 for a rename of another account's tag", async () => {
+		// Given: alice posted "Work"; bob signed in
+		const { h, headers } = await aliceSignedIn();
+		const work = await added(h, headers, "Work");
+		const bob = await withBob(h);
+		// When
+		const res = await rename(h, bob, work, "Mine");
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			aliceNames: await namesOf(h, headers),
+		}).toEqual({
+			status: 404,
+			body: { error: "not_found" },
+			aliceNames: ["Work"],
+		});
+	});
+
+	test("deletes a tag", async () => {
+		// Given: alice posted "Work"
+		const { h, headers } = await aliceSignedIn();
+		const work = await added(h, headers, "Work");
+		// When
+		const res = await remove(h, headers, work);
+		// Then
+		expect({ status: res.status, tags: await tagsOf(h, headers) }).toEqual({
+			status: 204,
+			tags: [],
+		});
+	});
+
+	test("renames a tag once when the same rename comes twice", async () => {
+		// Given: alice posted "Work"
+		const { h, headers } = await aliceSignedIn();
+		const work = await added(h, headers, "Work");
+		// When
+		const first = await rename(h, headers, work, "Office");
+		const second = await rename(h, headers, work, "Office");
+		// Then
+		expect({
+			first: first.status,
+			second: second.status,
+			names: await namesOf(h, headers),
+		}).toEqual({ first: 200, second: 200, names: ["Office"] });
+	});
+
+	test("answers 404 when the same delete comes twice", async () => {
+		// Given: alice posted "Work"
+		const { h, headers } = await aliceSignedIn();
+		const work = await added(h, headers, "Work");
+		// When
+		const first = await remove(h, headers, work);
+		const second = await remove(h, headers, work);
+		// Then
+		expect({
+			first: first.status,
+			second: second.status,
+			tags: await tagsOf(h, headers),
+		}).toEqual({ first: 204, second: 404, tags: [] });
+	});
+
+	test("refuses PUT and DELETE /api/tags/:id without a session", async () => {
+		// Given: alice posted "Work"; no session headers
+		const { h, headers } = await aliceSignedIn();
+		const work = await added(h, headers, "Work");
+		// When
+		const put = await rename(h, new Headers(), work, "Office");
+		const del = await remove(h, new Headers(), work);
+		// Then
+		expect([
+			{ status: put.status, body: await put.json() },
+			{ status: del.status, body: await del.json() },
+		]).toEqual([
+			{ status: 401, body: { error: "unauthorized" } },
+			{ status: 401, body: { error: "unauthorized" } },
+		]);
+	});
+
+	test("answers 404 for a delete of another account's tag", async () => {
+		// Given: alice posted "Work"; bob signed in
+		const { h, headers } = await aliceSignedIn();
+		const work = await added(h, headers, "Work");
+		const bob = await withBob(h);
+		// When
+		const res = await remove(h, bob, work);
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			aliceNames: await namesOf(h, headers),
+		}).toEqual({
+			status: 404,
+			body: { error: "not_found" },
+			aliceNames: ["Work"],
+		});
 	});
 });
