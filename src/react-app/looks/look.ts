@@ -2,7 +2,7 @@ import { z } from "zod";
 import { GARMENT_IDS, type GarmentId, JACKET_IDS } from "@/dress/garments";
 import { MODES, modeById } from "@/dress/modes";
 import { type DressState, hexSchema, modeIdSchema } from "@/dress/state";
-import { tagIdSchema } from "@/tags/tag";
+import { type TagId, tagIdSchema } from "@/tags/tag";
 
 export const LOOK_NAME_MAX = 60;
 
@@ -66,6 +66,7 @@ export function lookFromDress(
 	state: DressState,
 	id: LookId,
 	name: string,
+	tags: TagId[],
 ): LookInput {
 	const mode = modeById(state.modeId);
 	return {
@@ -74,7 +75,7 @@ export function lookFromDress(
 		name,
 		colours: Object.fromEntries(mode.garments.map((g) => [g, state.picked[g]])),
 		open: state.open.filter((j) => mode.garments.includes(j)),
-		tags: [],
+		tags,
 	};
 }
 

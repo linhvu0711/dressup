@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
-import { type Me, meQueryKey } from "../session";
+import { useSignOutOn401, useUserId } from "../session";
 import { type Look, type LookId, type LookInput, lookSchema } from "./look";
 
 export const looksQueryKey = (userId: string | null) =>
@@ -8,25 +8,6 @@ export const looksQueryKey = (userId: string | null) =>
 
 const looksAnswer = z.object({ looks: z.array(lookSchema) });
 const savedAnswer = z.object({ look: lookSchema });
-
-// The signed-in account, read from the session check's cache. useMe would
-// check the session again each time a form or page mounts; the session gate
-// rebuilds the page when the account changes, so the cached id holds.
-function useUserId() {
-	return useQueryClient().getQueryData<Me | null>(meQueryKey)?.id ?? null;
-}
-
-// A lost session makes the session check run again; it finds none, and the
-// session gate shows the sign-in screen (as DressState does).
-function useSignOutOn401() {
-	const queryClient = useQueryClient();
-	return async (res: Response, what: string) => {
-		if (res.status === 401) {
-			void queryClient.invalidateQueries({ queryKey: meQueryKey });
-			throw new Error(`${what} answered 401`);
-		}
-	};
-}
 
 export function useLooks() {
 	const userId = useUserId();

@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { modeById } from "@/dress/modes";
 import type { DressState } from "@/dress/state";
+import { TagPicker } from "@/tags/TagPicker";
+import type { TagId } from "@/tags/tag";
 import {
 	LookGone,
 	SaveError,
@@ -20,7 +22,8 @@ import {
 	lookFromDress,
 } from "./look";
 
-// The save form of docs/prototype/dressup.html:930-939, with no tags (#15).
+// The save form of docs/prototype/dressup.html:930-939, with the tag chips of
+// :935-937.
 // In the edit state it changes the look, or saves a copy with "Save as new".
 // Either ends the edit state and keeps the colours (:1046-1049).
 export function SaveLookDialog({
@@ -38,6 +41,7 @@ export function SaveLookDialog({
 	// server writes the same look again rather than a second one.
 	const [id] = useState(() => crypto.randomUUID() as LookId);
 	const [name, setName] = useState(editing?.name ?? "");
+	const [tags, setTags] = useState<TagId[]>(editing?.tags ?? []);
 	const box = useRef<HTMLInputElement>(null);
 	const save = useSaveLook();
 	const update = useUpdateLook();
@@ -63,7 +67,7 @@ export function SaveLookDialog({
 		// The prototype's saveDo stops here at the limit
 		// (docs/prototype/dressup.html:1044).
 		if (full) return;
-		save.mutate(lookFromDress(state, id, name), {
+		save.mutate(lookFromDress(state, id, name, tags), {
 			onSuccess: () => {
 				toast("Saved to Looks");
 				onSaved();
@@ -96,7 +100,7 @@ export function SaveLookDialog({
 						onSubmit={(e) => {
 							e.preventDefault();
 							if (!editing) return saveNew();
-							update.mutate(lookFromDress(state, editing.id, name), {
+							update.mutate(lookFromDress(state, editing.id, name, tags), {
 								onSuccess: () => {
 									toast("Changes saved");
 									onSaved();
@@ -129,6 +133,7 @@ export function SaveLookDialog({
 								className="h-10 min-w-0 rounded-[12px] border border-input bg-card px-3 text-[14px] outline-none focus-visible:border-ring"
 							/>
 						</div>
+						<TagPicker picked={tags} onChange={setTags} />
 						{alert === "full" ? (
 							<p role="alert" className="text-[12.5px] text-destructive">
 								You have 300 looks. That is the limit. Delete one to save a new
