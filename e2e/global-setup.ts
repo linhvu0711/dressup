@@ -1,14 +1,12 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { eq, like } from "drizzle-orm";
+import { LOOK_LIMIT } from "@/looks/look";
 import { schema } from "../src/worker/db";
 import { E2E_USER, LIMIT_USER, withTestAuth } from "./sessions";
 
 export const SESSION_FILE = "e2e/.auth/session.json";
 export const LIMIT_FILE = "e2e/.auth/limit.json";
-// LOOK_LIMIT of src/react-app/looks/look.ts, whose "@/" imports the e2e
-// type check cannot follow.
-const LIMIT_LOOKS = 300;
 // Each test changes the colours it saves, and tests run in parallel, so
 // each one claims its own fresh account from this pool (e2e/fixtures.ts).
 export const POOL_SIZE = 300;
@@ -36,7 +34,7 @@ export default async function globalSetup() {
 		// Its looks go with the user row.
 		await db.delete(schema.user).where(eq(schema.user.id, LIMIT_USER.id));
 		await helpers.saveUser(helpers.createUser(LIMIT_USER));
-		const looks = Array.from({ length: LIMIT_LOOKS }, (_, n) => ({
+		const looks = Array.from({ length: LOOK_LIMIT }, (_, n) => ({
 			id: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
 			userId: LIMIT_USER.id,
 			modeId: "polo-sweater-chore",
