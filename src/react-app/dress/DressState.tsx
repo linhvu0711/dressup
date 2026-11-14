@@ -17,7 +17,9 @@ import {
 	type DressState,
 	dressStateSchema,
 	type MannequinPart,
+	type Outfit,
 } from "@/dress/state";
+import type { Look } from "@/looks/look";
 import { meQueryKey } from "@/session";
 
 type DressCommands = {
@@ -27,6 +29,13 @@ type DressCommands = {
 	removeColour: (garment: GarmentId, hex: Hex) => { removed: boolean };
 	setJacket: (jacket: JacketId, open: boolean) => void;
 	setMannequinColour: (part: MannequinPart, hex: Hex) => void;
+	// The edit state: the saved look the page holds to change, or null.
+	editing: Look | null;
+	editLook: (look: Look) => void;
+	// Ends the edit state and puts the outfit from before back.
+	stopEditing: () => void;
+	// Ends the edit state and keeps the colours, after a save or a delete.
+	endEditing: () => void;
 };
 
 // `unsaved`: a change could not be stored and waits on the queue.
@@ -119,11 +128,14 @@ export function DressStateProvider({
 	};
 	// Changes belong to the account that made them. Another account can sign
 	// in from a second tab; then they are dropped, and its own copy loads.
+	// In memory only: a reload ends the edit state and keeps the colours.
+	const [edit, setEdit] = useState<{ look: Look; before: Outfit } | null>(null);
 	const [owner, setOwner] = useState(userId);
 	if (owner !== userId) {
 		setOwner(userId);
 		setChanged(null);
 		setUnsaved(false);
+		setEdit(null);
 	}
 	// biome-ignore lint/correctness/useExhaustiveDependencies: the queue is emptied when the account changes, which is all this reads.
 	useEffect(() => {
@@ -149,7 +161,10 @@ export function DressStateProvider({
 					if (sent === "signed-out") void signOut();
 					else {
 						// The server's copy wins: drop the local one and load it.
+						// A "wear" may have gone with the queue, so the look is no
+						// longer on, and "Save changes" would write the wrong outfit.
 						setChanged(null);
+						setEdit(null);
 						void queryClient.invalidateQueries({ queryKey: dressQueryKey });
 					}
 					return sent;
@@ -218,6 +233,30 @@ export function DressStateProvider({
 				setMannequinColour: (part, hex) => {
 					run({ kind: "mannequin", part, hex });
 				},
+				editing: edit?.look ?? null,
+				editLook: (look) => {
+					const now = latest.current;
+					if (!now) return;
+					// A second look keeps the outfit from before the first
+					// (docs/prototype/dressup.html:1061).
+					const before = edit?.before ?? {
+						modeId: now.modeId,
+						colours: now.picked,
+						open: now.open,
+					};
+					setEdit({ look, before });
+					run({
+						kind: "wear",
+						modeId: look.modeId,
+						colours: look.colours,
+						open: look.open,
+					});
+				},
+				stopEditing: () => {
+					if (edit) run({ kind: "wear", ...edit.before });
+					setEdit(null);
+				},
+				endEditing: () => setEdit(null),
 			}
 		: { unsaved, retry, status: "loading" };
 	return (

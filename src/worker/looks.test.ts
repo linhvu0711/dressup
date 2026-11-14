@@ -368,6 +368,244 @@ describe("GET /api/looks", () => {
 	});
 });
 
+const NAVY_PATH = `/api/looks/${NAVY.id}`;
+
+const remove = ({ app, env }: Harness, headers: Headers, path = NAVY_PATH) =>
+	app.request(path, { method: "DELETE", headers }, env);
+
+const names = async (h: Harness, headers: Headers) =>
+	(await list(h, headers)).looks.map((l) => l.name);
+
+describe("DELETE /api/looks/:id", () => {
+	test("deletes a look", async () => {
+		// Given: alice saved NAVY
+		const { h, headers } = await aliceSignedIn();
+		await post(h, headers, NAVY);
+		// When
+		const res = await remove(h, headers);
+		// Then
+		expect({
+			status: res.status,
+			looks: (await list(h, headers)).looks,
+		}).toEqual({ status: 204, looks: [] });
+	});
+
+	test("answers 404 when the same delete comes twice", async () => {
+		// Given: alice saved NAVY
+		const { h, headers } = await aliceSignedIn();
+		await post(h, headers, NAVY);
+		// When
+		const first = await remove(h, headers);
+		const second = await remove(h, headers);
+		// Then
+		expect({
+			statuses: [first.status, second.status],
+			body: await second.json(),
+			looks: (await list(h, headers)).looks,
+		}).toEqual({
+			statuses: [204, 404],
+			body: { error: "not_found" },
+			looks: [],
+		});
+	});
+
+	test("answers 404 for a delete of another account's look", async () => {
+		// Given: alice saved NAVY; bob is signed in too
+		const { h, headers } = await aliceSignedIn();
+		await post(h, headers, NAVY);
+		const bob = await withBob(h);
+		// When
+		const res = await remove(h, bob);
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			aliceNames: await names(h, headers),
+		}).toEqual({
+			status: 404,
+			body: { error: "not_found" },
+			aliceNames: ["Navy day"],
+		});
+	});
+
+	test("refuses DELETE /api/looks/:id without a session", async () => {
+		// Given: alice saved NAVY; no session headers
+		const { h, headers } = await aliceSignedIn();
+		await post(h, headers, NAVY);
+		// When
+		const res = await remove(h, new Headers());
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			rows: h.sqlite.query("select count(*) as n from look").get(),
+		}).toEqual({
+			status: 401,
+			body: { error: "unauthorized" },
+			rows: { n: 1 },
+		});
+	});
+});
+
+const put = (
+	{ app, env }: Harness,
+	headers: Headers,
+	body: unknown,
+	path = NAVY_PATH,
+) =>
+	app.request(
+		path,
+		{
+			method: "PUT",
+			headers: {
+				...Object.fromEntries(headers),
+				"content-type": "application/json",
+			},
+			body: JSON.stringify(body),
+		},
+		env,
+	);
+
+const NAVY_NIGHT = {
+	...NAVY,
+	name: "Navy night",
+	colours: { ...NAVY.colours, sweater: "#7A2E2E" },
+};
+
+async function aliceWithTwoLooks() {
+	const { h, headers } = await aliceSignedIn();
+	await post(h, headers, NAVY);
+	await post(h, headers, { ...NAVY, id: SECOND_ID, name: "Second" });
+	return { h, headers };
+}
+
+describe("PUT /api/looks/:id", () => {
+	test("changes a look and keeps its place", async () => {
+		// Given: alice saved NAVY, then a second look
+		const { h, headers } = await aliceWithTwoLooks();
+		// When
+		const res = await put(h, headers, NAVY_NIGHT);
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			names: await names(h, headers),
+		}).toEqual({
+			status: 200,
+			body: { look: NAVY_NIGHT },
+			names: ["Second", "Navy night"],
+		});
+	});
+
+	test("changes a look once when the same change comes twice", async () => {
+		// Given: alice saved NAVY
+		const { h, headers } = await aliceSignedIn();
+		await post(h, headers, NAVY);
+		// When
+		const first = await put(h, headers, NAVY_NIGHT);
+		const second = await put(h, headers, NAVY_NIGHT);
+		// Then
+		expect({
+			statuses: [first.status, second.status],
+			names: await names(h, headers),
+			rows: h.sqlite.query("select count(*) as n from look").get(),
+		}).toEqual({
+			statuses: [200, 200],
+			names: ["Navy night"],
+			rows: { n: 1 },
+		});
+	});
+
+	test("refuses a changed look with a code that is not a hex colour", async () => {
+		// Given: alice saved two looks; the change with a lower-case code
+		const { h, headers } = await aliceWithTwoLooks();
+		// When
+		const res = await put(h, headers, {
+			...NAVY_NIGHT,
+			colours: { ...NAVY_NIGHT.colours, sweater: "#7a2e2e" },
+		});
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			names: await names(h, headers),
+		}).toEqual({
+			status: 400,
+			body: { error: "invalid", field: "colours.sweater" },
+			names: ["Second", "Navy day"],
+		});
+	});
+
+	test("refuses a changed look whose id is not the one in the path", async () => {
+		// Given: alice saved two looks; the change with the second look's id
+		const { h, headers } = await aliceWithTwoLooks();
+		// When
+		const res = await put(h, headers, { ...NAVY_NIGHT, id: SECOND_ID });
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			names: await names(h, headers),
+		}).toEqual({
+			status: 400,
+			body: { error: "invalid", field: "id" },
+			names: ["Second", "Navy day"],
+		});
+	});
+
+	test("answers 404 for a look that is gone", async () => {
+		// Given: alice saved NAVY, then deleted it
+		const { h, headers } = await aliceSignedIn();
+		await post(h, headers, NAVY);
+		await remove(h, headers);
+		// When
+		const res = await put(h, headers, NAVY_NIGHT);
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			looks: (await list(h, headers)).looks,
+		}).toEqual({ status: 404, body: { error: "not_found" }, looks: [] });
+	});
+
+	test("answers 404 for a change to another account's look", async () => {
+		// Given: alice saved NAVY; bob is signed in too
+		const { h, headers } = await aliceSignedIn();
+		await post(h, headers, NAVY);
+		const bob = await withBob(h);
+		// When
+		const res = await put(h, bob, NAVY_NIGHT);
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			aliceNames: await names(h, headers),
+		}).toEqual({
+			status: 404,
+			body: { error: "not_found" },
+			aliceNames: ["Navy day"],
+		});
+	});
+
+	test("refuses PUT /api/looks/:id without a session", async () => {
+		// Given: alice saved NAVY; no session headers
+		const { h, headers } = await aliceSignedIn();
+		await post(h, headers, NAVY);
+		// When
+		const res = await put(h, new Headers(), NAVY_NIGHT);
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			names: await names(h, headers),
+		}).toEqual({
+			status: 401,
+			body: { error: "unauthorized" },
+			names: ["Navy day"],
+		});
+	});
+});
+
 describe("look rows", () => {
 	test("deletes the looks with their user", async () => {
 		// Given: alice saved two looks

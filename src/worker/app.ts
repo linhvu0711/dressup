@@ -8,7 +8,7 @@ import { createAuth } from "./auth";
 import type { Db } from "./db";
 import { user } from "./db/auth-schema";
 import { loadDress, saveDress } from "./dress-store";
-import { listLooks, saveLook } from "./look-store";
+import { deleteLook, listLooks, saveLook, updateLook } from "./look-store";
 
 type Auth = ReturnType<typeof createAuth>;
 type User = Auth["$Infer"]["Session"]["user"];
@@ -125,6 +125,28 @@ export function createApp(getDb: (env: Env) => Db) {
 				? c.json({ error: "conflict", field: "id" }, 409)
 				: c.json({ error: "look_limit" }, 409);
 		return c.json({ look: saved.look }, saved.created ? 201 : 200);
+	});
+
+	// A gone look and another account's look answer the same 404, so ids of
+	// other accounts cannot be told from missing ones.
+	app.put("/looks/:id", withAuth, requireUser, async (c) => {
+		const body = await readBody(c, lookInputSchema);
+		if ("refused" in body) return body.refused;
+		if (body.data.id !== c.req.param("id"))
+			return c.json({ error: "invalid", field: "id" }, 400);
+		const look = await updateLook(getDb(c.env), c.var.user.id, body.data);
+		if (!look) return c.json({ error: "not_found" }, 404);
+		return c.json({ look }, 200);
+	});
+
+	app.delete("/looks/:id", withAuth, requireUser, async (c) => {
+		const deleted = await deleteLook(
+			getDb(c.env),
+			c.var.user.id,
+			c.req.param("id"),
+		);
+		if (!deleted) return c.json({ error: "not_found" }, 404);
+		return c.body(null, 204);
 	});
 
 	app.notFound((c) => c.json({ error: "not_found" }, 404));

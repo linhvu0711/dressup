@@ -1,31 +1,16 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
 import { LIMIT_FILE } from "./global-setup";
-
-const dialog = (page: Page) => page.getByRole("dialog", { name: "Save look" });
-
-const nameBox = (page: Page) =>
-	page.getByRole("textbox", { name: "Name (you can leave it empty)" });
-
-async function openDress(page: Page) {
-	await page.goto("/");
-	await expect(
-		page.locator('svg[aria-label="Mannequin in Polo + sweater"]'),
-	).toBeVisible();
-}
-
-type StoredLook = {
-	id: string;
-	name: string;
-	modeId: string;
-	colours: Record<string, string>;
-	open: string[];
-};
-
-const storedLooks = async (page: Page) =>
-	(await (await page.request.get("/api/looks")).json()) as {
-		looks: StoredLook[];
-	};
+import {
+	card,
+	dialog,
+	isPhone,
+	nameBox,
+	openColours,
+	openDress,
+	saveLook,
+	storedLooks,
+} from "./looks-helpers";
 
 test("opens the save form from the bookmark button", async ({ page }) => {
 	// Given: both projects, a fresh account, the Dress page shown
@@ -167,25 +152,6 @@ test("shows the limit hint when the save answers look_limit", async ({
 		dialog(page).getByRole("button", { name: "Save", exact: true }),
 	).toBeDisabled();
 });
-
-const isPhone = (page: Page) => (page.viewportSize()?.width ?? 0) < 900;
-
-async function openColours(page: Page) {
-	await openDress(page);
-	if (isPhone(page)) {
-		await page.getByRole("tab", { name: "Colours", exact: true }).click();
-	}
-}
-
-async function saveLook(page: Page, name: string) {
-	await page.getByRole("button", { name: "Save look" }).click();
-	if (name) await nameBox(page).fill(name);
-	await dialog(page).getByRole("button", { name: "Save", exact: true }).click();
-	await expect(dialog(page)).toHaveCount(0);
-}
-
-const card = (page: Page, name: string) =>
-	page.locator('[data-slot="look-card"]').filter({ hasText: name });
 
 const sweaterOf = (page: Page, name: string) =>
 	card(page, name).locator('[data-garment="sweater"]');

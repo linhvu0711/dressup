@@ -3,6 +3,7 @@ import {
 	GARMENT_IDS,
 	type GarmentId,
 	type Hex,
+	isJacket,
 	JACKET_IDS,
 	type JacketId,
 	STARTER_COLOURS,
@@ -103,6 +104,30 @@ export function setJacket(
 	return { ...s, open: open ? [...rest, jacket] : rest };
 }
 
+// What a look holds of an outfit: the mode, a colour for each garment it
+// names, and which of its jackets are open.
+export type Outfit = {
+	modeId: ModeId;
+	colours: Partial<Record<GarmentId, Hex>>;
+	open: readonly JacketId[];
+};
+
+// Puts a whole outfit on at once, as the prototype's lookEdit does
+// (docs/prototype/dressup.html:1062-1063). A jacket the outfit does not name
+// keeps its state: the state holds both jackets for every mode, a look only
+// its own mode's.
+export function wearOutfit(s: DressState, outfit: Outfit): DressState {
+	let next = pickMode(s, outfit.modeId);
+	for (const garment of GARMENT_IDS) {
+		const hex = outfit.colours[garment];
+		if (!hex) continue;
+		next = addColour(next, garment, hex).state;
+		if (isJacket(garment))
+			next = setJacket(next, garment, outfit.open.includes(garment));
+	}
+	return next;
+}
+
 // One thing a person does on the Dress page. The page and the server both
 // apply it with applyChange, so they keep one set of rules.
 export type DressChange =
@@ -111,7 +136,8 @@ export type DressChange =
 	| { kind: "add"; garment: GarmentId; hex: Hex }
 	| { kind: "remove"; garment: GarmentId; hex: Hex }
 	| { kind: "jacket"; jacket: JacketId; open: boolean }
-	| { kind: "mannequin"; part: MannequinPart; hex: Hex };
+	| { kind: "mannequin"; part: MannequinPart; hex: Hex }
+	| ({ kind: "wear" } & Outfit);
 
 export const hexSchema = z
 	.string()
@@ -150,6 +176,12 @@ export const dressChangeSchema: z.ZodType<DressChange> = z.discriminatedUnion(
 			kind: z.literal("mannequin"),
 			part: z.enum(MANNEQUIN_PARTS),
 			hex: hexSchema,
+		}),
+		z.object({
+			kind: z.literal("wear"),
+			modeId: modeIdSchema,
+			colours: z.partialRecord(garment, hexSchema),
+			open: z.array(z.enum(JACKET_IDS)),
 		}),
 	],
 );
@@ -190,5 +222,7 @@ export function applyChange(s: DressState, change: DressChange): ChangeResult {
 				ok: true,
 				state: setMannequinColour(s, change.part, change.hex),
 			};
+		case "wear":
+			return { ok: true, state: wearOutfit(s, change) };
 	}
 }

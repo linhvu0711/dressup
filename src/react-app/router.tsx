@@ -14,6 +14,7 @@ export const router = createBrowserRouter([
 			{ index: true, element: <DressPage /> },
 			{ path: "looks", element: <LooksPage /> },
 			{ path: "looks/compare", element: <ComparePage /> },
+			{ path: "looks/:lookId", element: <LooksPage /> },
 			{ path: "settings", element: <SettingsPage /> },
 			{ path: "*", element: <NotFoundPage /> },
 		],
