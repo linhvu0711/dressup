@@ -115,6 +115,28 @@ test("keeps a chip clicked while a new tag is saved", async ({ page }) => {
 	expect(await pressed(page).allTextContents()).toEqual(["Work", "Trip"]);
 });
 
+test("keeps Save off while a new tag is saved", async ({ page }) => {
+	// Given: both projects, a fresh account, the save form open; POST
+	// /api/tags held until the test lets it go
+	await openDress(page);
+	await page.getByRole("button", { name: "Save look" }).click();
+	let release = () => {};
+	const held = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	await page.route("**/api/tags", async (route) => {
+		if (route.request().method() === "POST") await held;
+		await route.continue();
+	});
+	// When
+	await typeNewTag(page, "Trip");
+	// Then
+	await expect(
+		form(page).getByRole("button", { name: "Save", exact: true }),
+	).toBeDisabled();
+	release();
+});
+
 test("sends a new tag once when Enter is pressed twice", async ({ page }) => {
 	// Given: both projects, a fresh account, the save form open; POST
 	// /api/tags held until the test lets it go

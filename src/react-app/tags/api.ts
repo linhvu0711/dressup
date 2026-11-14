@@ -38,11 +38,14 @@ async function refused(res: Response, what: string): Promise<never> {
 	throw new Error(`${what} answered ${res.status}`);
 }
 
+export const addTagKey = ["tags", "add"] as const;
+
 export function useAddTag() {
 	const userId = useUserId();
 	const queryClient = useQueryClient();
 	const on401 = useSignOutOn401();
 	return useMutation({
+		mutationKey: addTagKey,
 		mutationFn: async (name: string) => {
 			const res = await fetch("/api/tags", {
 				method: "POST",

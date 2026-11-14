@@ -1,3 +1,4 @@
+import { useIsMutating } from "@tanstack/react-query";
 import { Dialog } from "radix-ui";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -5,6 +6,7 @@ import { SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
 import { modeById } from "@/dress/modes";
 import type { DressState } from "@/dress/state";
+import { addTagKey } from "@/tags/api";
 import { TagPicker } from "@/tags/TagPicker";
 import type { TagId } from "@/tags/tag";
 import {
@@ -49,6 +51,8 @@ export function SaveLookDialog({
 	const looks = useLooks();
 	const toast = useToast();
 	const leaveGoneLook = useLeaveGoneLook();
+	// A Save before a new tag is stored would leave that tag off the look.
+	const addingTag = useIsMutating({ mutationKey: addTagKey }) > 0;
 	// "Save as new" is off with Save; "Save changes" keeps the same id and is
 	// not counted. A 409 look_limit means another tab filled the account.
 	const full =
@@ -152,7 +156,9 @@ export function SaveLookDialog({
 							{editing ? (
 								<Button
 									type="button"
-									disabled={save.isPending || update.isPending || full}
+									disabled={
+										save.isPending || update.isPending || addingTag || full
+									}
 									onClick={saveNew}
 								>
 									Save as new
@@ -162,7 +168,10 @@ export function SaveLookDialog({
 								type="submit"
 								variant="primary"
 								disabled={
-									save.isPending || update.isPending || (!editing && full)
+									save.isPending ||
+									update.isPending ||
+									addingTag ||
+									(!editing && full)
 								}
 							>
 								{editing ? "Save changes" : "Save"}
