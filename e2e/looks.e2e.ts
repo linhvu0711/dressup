@@ -66,6 +66,7 @@ test("saves a look and shows the toast", async ({ page }) => {
 			modeId: "polo-sweater",
 			colours: { chino_p: "#C9B38C", polo_l: "#F3F1EC", sweater: "#1F3A5F" },
 			open: [],
+			tags: [],
 		},
 	]);
 });
@@ -219,12 +220,17 @@ test("draws a look card in the account's skin and hair", async ({ page }) => {
 	await saveLook(page, "Mine");
 	// When
 	await page.goto("/looks");
-	// Then
-	const drawn = await card(page, "Mine").locator("svg").innerHTML();
-	expect({
-		skin: drawn.includes('fill="#8D5524"'),
-		hair: drawn.includes('fill="#B55239"'),
-	}).toEqual({ skin: true, hair: true });
+	// Then: polled, since the card draws a grey placeholder until the
+	// account's skin and hair load, and those can come after the looks
+	await expect
+		.poll(async () => {
+			const drawn = await card(page, "Mine").locator("svg").innerHTML();
+			return {
+				skin: drawn.includes('fill="#8D5524"'),
+				hair: drawn.includes('fill="#B55239"'),
+			};
+		})
+		.toEqual({ skin: true, hair: true });
 });
 
 test("fills the page on a phone and keeps the right part free from 900 px", async ({

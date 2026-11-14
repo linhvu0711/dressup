@@ -7,9 +7,18 @@ import { useToast } from "@/components/ui/toast";
 import { useLooks } from "@/looks/api";
 import { COMPARE_MAX, COMPARE_MIN } from "@/looks/compare";
 import { DeleteLookDialog } from "@/looks/DeleteLookDialog";
+import {
+	filterLabel,
+	filterLooks,
+	type LookFilter,
+	lookFilter,
+} from "@/looks/filter";
 import { LookCard } from "@/looks/LookCard";
+import { LookFilterChips } from "@/looks/LookFilterChips";
 import { LookView } from "@/looks/LookView";
 import type { Look, LookId } from "@/looks/look";
+import { useTags } from "@/tags/api";
+import { EditTagsDialog } from "@/tags/EditTagsDialog";
 import { PageHeader } from "../shell/PageHeader";
 
 const WALL =
@@ -37,6 +46,7 @@ function Notice({ title, children }: { title: string; children: ReactNode }) {
 export function LooksPage() {
 	const { lookId } = useParams();
 	const looks = useLooks();
+	const tags = useTags();
 	const navigate = useNavigate();
 	const toast = useToast();
 	// null is the wall without the pick state; the list keeps the pick order.
@@ -48,8 +58,23 @@ export function LooksPage() {
 		pickedIds && list
 			? pickedIds.filter((id) => list.some((l) => l.id === id))
 			: pickedIds;
-	const canPick = looks.isSuccess && looks.data.length > 0;
-	const panel = looks.isPending || canPick;
+	const loading = looks.isPending || tags.isPending;
+	const loaded = looks.isSuccess && tags.isSuccess;
+	const canPick = loaded && looks.data.length > 0;
+	const panel = loading || canPick;
+	const [chosen, setChosen] = useState<LookFilter>("All");
+	const filter = lookFilter(chosen, tags.data ?? []);
+	const visible = loaded ? filterLooks(looks.data, filter) : [];
+	// A chip that hides the open look closes it, so the right part shows the
+	// chip's newest look, as docs/prototype/dressup.html:892 does.
+	function choose(next: LookFilter) {
+		setChosen(next);
+		if (!lookId || !looks.data || !tags.data) return;
+		const shows = filterLooks(looks.data, lookFilter(next, tags.data));
+		if (!shows.some((l) => l.id === lookId)) {
+			navigate("/looks", { replace: true });
+		}
+	}
 	function toggle(id: LookId) {
 		if (!picked) return;
 		if (picked.includes(id)) setPicked(picked.filter((p) => p !== id));
@@ -59,13 +84,15 @@ export function LooksPage() {
 	// The confirm lives here, not in the look view: the view goes when the
 	// list drops the deleted look, and the confirm must still say so.
 	const [deleting, setDeleting] = useState<Look | null>(null);
-	// The look in the right part: the one the URL names, else the newest.
-	const shown = looks.isSuccess
-		? (looks.data.find((l) => l.id === lookId) ?? looks.data[0])
+	const [editingTags, setEditingTags] = useState(false);
+	// The look in the right part: the one the URL names, else the newest the
+	// chip shows.
+	const shown = loaded
+		? (looks.data.find((l) => l.id === lookId) ?? visible[0])
 		: undefined;
 	const open = shown !== undefined && shown.id === lookId;
 	let wall: ReactNode;
-	if (looks.isPending) {
+	if (loading) {
 		// docs/prototype/dressup.html:863
 		wall = (
 			<div className={WALL}>
@@ -86,11 +113,17 @@ export function LooksPage() {
 				))}
 			</div>
 		);
-	} else if (looks.isError) {
+	} else if (looks.isError || tags.isError) {
 		// Checked before the data: a failed refetch keeps the old looks.
 		wall = (
 			<Notice title="Could not load your looks">
-				<Button className="mt-2" onClick={() => looks.refetch()}>
+				<Button
+					className="mt-2"
+					onClick={() => {
+						void looks.refetch();
+						void tags.refetch();
+					}}
+				>
 					Retry
 				</Button>
 			</Notice>
@@ -108,10 +141,22 @@ export function LooksPage() {
 				</Button>
 			</Notice>
 		);
+	} else if (visible.length === 0) {
+		// docs/prototype/dressup.html:866
+		wall = (
+			<Notice title="No looks here">
+				<p className="max-w-[30ch] text-muted-foreground">
+					No saved look has "{filterLabel(filter, tags.data)}".
+				</p>
+				<Button className="mt-2" onClick={() => setChosen("All")}>
+					Show all
+				</Button>
+			</Notice>
+		);
 	} else {
 		wall = (
 			<div data-slot="look-wall" className={WALL}>
-				{looks.data.map((look) => (
+				{visible.map((look) => (
 					<LookCard
 						key={look.id}
 						look={look}
@@ -177,6 +222,14 @@ export function LooksPage() {
 						}
 					/>
 				)}
+				{canPick ? (
+					<LookFilterChips
+						filter={filter}
+						tags={tags.data}
+						onChange={choose}
+						onEditTags={() => setEditingTags(true)}
+					/>
+				) : null}
 				{wall}
 				{picked ? (
 					// The floating button of docs/prototype/dressup.html:889.
@@ -205,6 +258,9 @@ export function LooksPage() {
 						<LookView look={shown} onDelete={() => setDeleting(shown)} />
 					) : null}
 				</aside>
+			) : null}
+			{editingTags ? (
+				<EditTagsDialog onClose={() => setEditingTags(false)} />
 			) : null}
 			{deleting ? (
 				<DeleteLookDialog look={deleting} onClose={() => setDeleting(null)} />

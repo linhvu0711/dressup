@@ -3,8 +3,14 @@ import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import * as authSchema from "./auth-schema";
 import * as dressSchema from "./dress-schema";
 import * as lookSchema from "./look-schema";
+import * as tagSchema from "./tag-schema";
 
-export const schema = { ...authSchema, ...dressSchema, ...lookSchema };
+export const schema = {
+	...authSchema,
+	...dressSchema,
+	...lookSchema,
+	...tagSchema,
+};
 
 // Both the D1 database in the Worker and bun:sqlite in tests fit this type.
 // D1 runs a batch as one transaction; the test harness gives bun:sqlite the

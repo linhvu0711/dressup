@@ -19,6 +19,7 @@ export type StoredLook = {
 	modeId: string;
 	colours: Record<string, string>;
 	open: string[];
+	tags: string[];
 };
 
 export const storedLooks = async (page: Page) =>
