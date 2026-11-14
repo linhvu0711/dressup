@@ -104,3 +104,17 @@ test("shows the red hint for a name the account has", async ({ page }) => {
 			.allTextContents(),
 	}).toEqual({ hint: "You have this tag already", chips: ["Work"] });
 });
+
+test("shows the look's tags in the look view", async ({ page }) => {
+	// Given: both projects, a fresh account, "Navy" saved with "Work" and
+	// "Trip" on
+	await openDress(page);
+	await saveWithNewTags(page, "Navy", ["Work", "Trip"]);
+	// When
+	await page.goto("/looks");
+	await card(page, "Navy").click();
+	// Then
+	const tags = page.locator('[data-slot="look-view"] [data-slot="look-tag"]');
+	await expect(tags).toHaveCount(2);
+	expect(await tags.allTextContents()).toEqual(["Work", "Trip"]);
+});
