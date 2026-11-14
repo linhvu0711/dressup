@@ -66,6 +66,7 @@ test("saves a look and shows the toast", async ({ page }) => {
 			modeId: "polo-sweater",
 			colours: { chino_p: "#C9B38C", polo_l: "#F3F1EC", sweater: "#1F3A5F" },
 			open: [],
+			tags: [],
 		},
 	]);
 });

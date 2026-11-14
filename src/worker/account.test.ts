@@ -94,12 +94,15 @@ const NAVY = {
 	open: ["chore"],
 };
 
-// The account's colours, outfit, mannequin, and one look, through the routes.
+// The account's colours, outfit, mannequin, and one look with one tag,
+// through the routes.
 async function fillAccount(h: Harness, jar: Jar, lookId = NAVY.id) {
 	expect((await send(h, jar, "/api/dress")).status).toBe(200);
 	const skin = { kind: "mannequin", part: "skin", hex: "#8D5524" };
 	expect((await sendJson(h, jar, "/api/dress/changes", skin)).status).toBe(204);
-	const look = { ...NAVY, id: lookId };
+	const added = await sendJson(h, jar, "/api/tags", { name: "Work" });
+	const { tag } = (await added.json()) as { tag: { id: string } };
+	const look = { ...NAVY, id: lookId, tags: [tag.id] };
 	expect((await sendJson(h, jar, "/api/looks", look)).status).toBe(201);
 }
 
@@ -112,6 +115,8 @@ const TABLES = [
 	["outfit_garment", "user_id"],
 	["mannequin", "user_id"],
 	["look", "user_id"],
+	["tag", "user_id"],
+	["look_tag", "user_id"],
 ] as const;
 
 function rowsOf(h: Harness, userId: string) {
@@ -136,6 +141,8 @@ const NONE = {
 	outfit_garment: 0,
 	mannequin: 0,
 	look: 0,
+	tag: 0,
+	look_tag: 0,
 };
 
 const userCount = (h: Harness) =>

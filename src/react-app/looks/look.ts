@@ -2,11 +2,16 @@ import { z } from "zod";
 import { GARMENT_IDS, type GarmentId, JACKET_IDS } from "@/dress/garments";
 import { MODES, modeById } from "@/dress/modes";
 import { type DressState, hexSchema, modeIdSchema } from "@/dress/state";
+import { tagIdSchema } from "@/tags/tag";
 
 export const LOOK_NAME_MAX = 60;
 
 // Looks for each account (docs/adr/0008-open-sign-up-with-limits.md).
 export const LOOK_LIMIT = 300;
+
+// A look's tags go in one statement, and D1 takes at most 100 bound
+// parameters (src/worker/dress-store.ts:30-31).
+export const LOOK_TAGS_MAX = 50;
 
 const lookIdSchema = z.uuid().brand<"LookId">();
 
@@ -21,6 +26,7 @@ export const lookInputSchema = z
 		name: z.string().trim().max(LOOK_NAME_MAX),
 		colours: z.partialRecord(z.enum(GARMENT_IDS), hexSchema),
 		open: z.array(z.enum(JACKET_IDS)),
+		tags: z.array(tagIdSchema).max(LOOK_TAGS_MAX).default([]),
 	})
 	.superRefine((look, ctx) => {
 		// Zod runs this after a failed modeId too, and modeById would throw.
@@ -68,6 +74,7 @@ export function lookFromDress(
 		name,
 		colours: Object.fromEntries(mode.garments.map((g) => [g, state.picked[g]])),
 		open: state.open.filter((j) => mode.garments.includes(j)),
+		tags: [],
 	};
 }
 

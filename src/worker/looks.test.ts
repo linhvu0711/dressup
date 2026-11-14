@@ -39,6 +39,7 @@ const NAVY = {
 		chore: "#55633F",
 	},
 	open: ["chore"],
+	tags: [],
 };
 
 const SECOND_ID = "22222222-2222-4222-8222-222222222222";
@@ -617,6 +618,112 @@ describe("look rows", () => {
 		// Then
 		expect(h.sqlite.query("select count(*) as n from look").get()).toEqual({
 			n: 0,
+		});
+	});
+});
+
+const addTag = async ({ app, env }: Harness, headers: Headers, name: string) =>
+	(
+		(await (
+			await app.request(
+				"/api/tags",
+				{
+					method: "POST",
+					headers: {
+						...Object.fromEntries(headers),
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({ name }),
+				},
+				env,
+			)
+		).json()) as { tag: { id: string } }
+	).tag.id;
+
+const tagsOfLook = async (res: Response) =>
+	((await res.json()) as { look: { tags: string[] } }).look.tags;
+
+const links = (h: Harness, userId: string) =>
+	(
+		h.sqlite
+			.query("select count(*) as n from look_tag where user_id = ?")
+			.get(userId) as { n: number }
+	).n;
+
+describe("tags on looks", () => {
+	test("saves a look with two tags and lists them in the order they were made", async () => {
+		// Given: alice signed in; tags "Work" then "Trip" posted
+		const { h, headers } = await aliceSignedIn();
+		const work = await addTag(h, headers, "Work");
+		const trip = await addTag(h, headers, "Trip");
+		// When
+		await post(h, headers, { ...NAVY, tags: [trip, work] });
+		const { looks } = (await list(h, headers)) as unknown as {
+			looks: { tags: string[] }[];
+		};
+		// Then
+		expect(looks[0]?.tags).toEqual([work, trip]);
+	});
+
+	test("drops a tag of another account from a look", async () => {
+		// Given: bob posted tag "Trip"; alice signed in with tag "Work"
+		const { h, headers } = await aliceSignedIn();
+		const bob = await withBob(h);
+		const bobTrip = await addTag(h, bob, "Trip");
+		const work = await addTag(h, headers, "Work");
+		// When
+		const res = await post(h, headers, { ...NAVY, tags: [work, bobTrip] });
+		// Then
+		expect({
+			status: res.status,
+			tags: await tagsOfLook(res),
+			bobLinks: links(h, "bob-id"),
+		}).toEqual({ status: 201, tags: [work], bobLinks: 0 });
+	});
+
+	test("replaces a look's tags on a change", async () => {
+		// Given: alice saved NAVY with "Work"; tag "Trip" posted
+		const { h, headers } = await aliceSignedIn();
+		const work = await addTag(h, headers, "Work");
+		await post(h, headers, { ...NAVY, tags: [work] });
+		const trip = await addTag(h, headers, "Trip");
+		// When
+		const res = await put(h, headers, { ...NAVY, tags: [trip] });
+		// Then
+		expect({ status: res.status, tags: await tagsOfLook(res) }).toEqual({
+			status: 200,
+			tags: [trip],
+		});
+	});
+
+	test("saves a look's tags once when the same save comes twice", async () => {
+		// Given: alice signed in with tag "Work"
+		const { h, headers } = await aliceSignedIn();
+		const work = await addTag(h, headers, "Work");
+		// When
+		await post(h, headers, { ...NAVY, tags: [work] });
+		const second = await post(h, headers, { ...NAVY, tags: [work] });
+		// Then
+		expect({
+			second: second.status,
+			tags: await tagsOfLook(second),
+			links: links(h, "alice-id"),
+		}).toEqual({ second: 200, tags: [work], links: 1 });
+	});
+
+	test("refuses a look with 51 tags", async () => {
+		// Given: alice signed in
+		const { h, headers } = await aliceSignedIn();
+		const tags = Array.from(
+			{ length: 51 },
+			(_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
+		);
+		// When
+		const res = await post(h, headers, { ...NAVY, tags });
+		// Then
+		expect({ status: res.status, body: await res.json() }).toEqual({
+			status: 400,
+			body: { error: "invalid", field: "tags" },
 		});
 	});
 });
