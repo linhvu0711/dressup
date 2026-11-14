@@ -6,7 +6,9 @@ import {
 	STARTER_COLOURS,
 } from "@/dress/garments";
 
-export type WeatherGroup = "Hot" | "Cool" | "Cold";
+export const WEATHER_GROUPS = ["Hot", "Cool", "Cold"] as const;
+
+export type WeatherGroup = (typeof WEATHER_GROUPS)[number];
 
 type Row = readonly [
 	id: string,

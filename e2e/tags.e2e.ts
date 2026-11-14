@@ -118,3 +118,160 @@ test("shows the look's tags in the look view", async ({ page }) => {
 	await expect(tags).toHaveCount(2);
 	expect(await tags.allTextContents()).toEqual(["Work", "Trip"]);
 });
+
+const COLD = {
+	modeId: "polo-sweater",
+	colours: { chino_p: "#C9B38C", polo_l: "#F3F1EC", sweater: "#1F3A5F" },
+};
+const HOT = {
+	modeId: "tee-casual-shorts",
+	colours: { casual_sh: "#C9B38C", tee_s: "#F3F1EC" },
+};
+
+async function postTag(page: Page, name: string) {
+	const res = await page.request.post("/api/tags", { data: { name } });
+	expect(res.status()).toBe(201);
+	return ((await res.json()) as { tag: { id: string } }).tag.id;
+}
+
+// Each look is stored in order, so the wall shows the last one first.
+async function postLook(
+	page: Page,
+	name: string,
+	mode: typeof COLD | typeof HOT,
+	tags: string[] = [],
+) {
+	const res = await page.request.post("/api/looks", {
+		data: { id: crypto.randomUUID(), name, open: [], tags, ...mode },
+	});
+	expect(res.status()).toBe(201);
+}
+
+const chips = (page: Page) =>
+	page.getByRole("radiogroup", { name: "Filter looks" });
+
+const cards = (page: Page) => page.locator('[data-slot="look-card"]');
+
+async function openLooksPage(page: Page, count: number) {
+	await page.goto("/looks");
+	await expect(cards(page)).toHaveCount(count);
+}
+
+test("shows All, the weather groups, each tag, and the pencil", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account, tags "Work" and "Trip", one look
+	const work = await postTag(page, "Work");
+	const trip = await postTag(page, "Trip");
+	await postLook(page, "One", COLD, [work, trip]);
+	// When
+	await openLooksPage(page, 1);
+	// Then
+	expect({
+		radios: await chips(page).getByRole("radio").allTextContents(),
+		checked: await chips(page)
+			.locator('[aria-checked="true"]')
+			.allTextContents(),
+		pencil: await page.getByRole("button", { name: "Edit tags" }).count(),
+	}).toEqual({
+		radios: ["All", "Hot", "Cool", "Cold", "Work", "Trip"],
+		checked: ["All"],
+		pencil: 1,
+	});
+});
+
+test("filters the wall by a weather group and by a tag", async ({ page }) => {
+	// Given: both projects, a fresh account; "Cold work" with "Work", then
+	// "Hot one", then "Hot two" with "Work"
+	const work = await postTag(page, "Work");
+	await postLook(page, "Cold work", COLD, [work]);
+	await postLook(page, "Hot one", HOT);
+	await postLook(page, "Hot two", HOT, [work]);
+	await openLooksPage(page, 3);
+	// When
+	await chips(page).getByRole("radio", { name: "Hot" }).click();
+	await expect(cards(page)).toHaveCount(2);
+	const hot = await cards(page).allTextContents();
+	await chips(page).getByRole("radio", { name: "Work" }).click();
+	await expect(cards(page)).toHaveText(["Hot two", "Cold work"]);
+	const work2 = await cards(page).allTextContents();
+	// Then
+	expect({ hot, work: work2 }).toEqual({
+		hot: ["Hot two", "Hot one"],
+		work: ["Hot two", "Cold work"],
+	});
+});
+
+test("shows No looks here for a chip with no look", async ({ page }) => {
+	// Given: both projects, a fresh account, one look in "Polo + sweater"
+	await postLook(page, "One", COLD);
+	await openLooksPage(page, 1);
+	// When
+	await chips(page).getByRole("radio", { name: "Cool" }).click();
+	// Then
+	const title = page.getByRole("heading", { name: "No looks here" });
+	await expect(title).toBeVisible();
+	expect({
+		title: await title.textContent(),
+		line: await page.getByText("No saved look has").textContent(),
+		cards: await cards(page).count(),
+	}).toEqual({
+		title: "No looks here",
+		line: 'No saved look has "Cool".',
+		cards: 0,
+	});
+});
+
+test("shows the skeleton and no chips while the tags load", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account with one look; GET /api/tags held
+	// until the test lets it go
+	await postLook(page, "One", COLD);
+	let release = () => {};
+	const held = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	await page.route("**/api/tags", async (route) => {
+		await held;
+		await route.continue();
+	});
+	// When
+	await page.goto("/looks");
+	// Then
+	const skeletons = page.locator('[data-slot="look-skeleton"]');
+	await expect(skeletons).toHaveCount(6);
+	await expect(cards(page)).toHaveCount(0);
+	expect({
+		skeletons: await skeletons.count(),
+		chips: await chips(page).count(),
+	}).toEqual({ skeletons: 6, chips: 0 });
+	release();
+	await expect(chips(page)).toHaveCount(1);
+	expect({
+		skeletons: await skeletons.count(),
+		chips: await chips(page).count(),
+	}).toEqual({ skeletons: 0, chips: 1 });
+});
+
+test("keeps the compare picks with a chip on", async ({ page }) => {
+	// Given: both projects, a fresh account; "Cold one" in "Polo + sweater",
+	// "Hot one" in "Tee + casual shorts"
+	await postLook(page, "Cold one", COLD);
+	await postLook(page, "Hot one", HOT);
+	await openLooksPage(page, 2);
+	// When
+	await page.getByRole("button", { name: "Compare", exact: true }).click();
+	await page.getByRole("button", { name: "Cold one", exact: true }).click();
+	await chips(page).getByRole("radio", { name: "Hot" }).click();
+	await expect(cards(page)).toHaveCount(1);
+	await page.getByRole("button", { name: "Hot one", exact: true }).click();
+	// Then
+	const compare = page.getByRole("button", { name: "Compare 2" });
+	await expect(page.locator("h1")).toHaveText("2 picked");
+	expect({
+		h1: await page.locator("h1").textContent(),
+		compare: await compare.textContent(),
+		enabled: await compare.isEnabled(),
+	}).toEqual({ h1: "2 picked", compare: "Compare 2", enabled: true });
+});
