@@ -19,6 +19,8 @@ bun run auth:schema       # write the Better Auth tables after its config change
 bun run deploy            # build, migrate the remote database, then deploy
 ```
 
+GitHub runs `bun run check`, `bun test`, `bun run build`, and `bun run e2e` on every push to `main` and every pull request (`.github/workflows/ci.yml`).
+
 Before the first `bun run e2e`, run `bunx playwright install chromium` once. After a build, `bunx wrangler deploy --dry-run` checks the Worker bundle without deploying it.
 
 Run `bun run db:migrate:local` once before the first `bun run dev`, and again after a new migration.
