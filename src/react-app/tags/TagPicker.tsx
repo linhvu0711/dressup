@@ -1,6 +1,6 @@
 import { cn } from "cn";
 import { ToggleGroup } from "radix-ui";
-import { useState } from "react";
+import { type Dispatch, type SetStateAction, useState } from "react";
 import { CHIP, CHIP_DASHED } from "@/components/ui/chip";
 import { TagNameTaken, useAddTag, useTags } from "./api";
 import { TagNameField } from "./TagNameField";
@@ -13,7 +13,7 @@ export function TagPicker({
 	onChange,
 }: {
 	picked: TagId[];
-	onChange: (picked: TagId[]) => void;
+	onChange: Dispatch<SetStateAction<TagId[]>>;
 }) {
 	const tags = useTags();
 	const add = useAddTag();
@@ -49,7 +49,9 @@ export function TagPicker({
 						onSave={async (name) => {
 							try {
 								const tag = await add.mutateAsync(name);
-								onChange([...picked, tag.id]);
+								// Chips stay clickable while the add runs, so the new tag
+								// joins the picks as they are now, not as they were.
+								onChange((now) => [...now, tag.id]);
 							} catch (error) {
 								if (error instanceof TagNameTaken) throw error;
 								setFailed(true);

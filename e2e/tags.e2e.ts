@@ -92,6 +92,29 @@ test("puts two tags on a look in the save form, then takes one off in the edit s
 	});
 });
 
+test("keeps a chip clicked while a new tag is saved", async ({ page }) => {
+	// Given: both projects, a fresh account with tag "Work", the save form
+	// open; POST /api/tags held until the test lets it go
+	await postTag(page, "Work");
+	await openDress(page);
+	await page.getByRole("button", { name: "Save look" }).click();
+	let release = () => {};
+	const held = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	await page.route("**/api/tags", async (route) => {
+		if (route.request().method() === "POST") await held;
+		await route.continue();
+	});
+	// When
+	await typeNewTag(page, "Trip");
+	await form(page).getByRole("button", { name: "Work", exact: true }).click();
+	release();
+	await expect(pressed(page).filter({ hasText: /^Trip$/ })).toHaveCount(1);
+	// Then
+	expect(await pressed(page).allTextContents()).toEqual(["Work", "Trip"]);
+});
+
 test("shows the red hint for a name the account has", async ({ page }) => {
 	// Given: both projects, a fresh account, tag "Work" made in the form
 	await openDress(page);
