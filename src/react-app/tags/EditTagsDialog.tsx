@@ -4,8 +4,9 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
 import { TagNameTaken, useAddTag, useRenameTag, useTags } from "./api";
+import { DeleteTagDialog } from "./DeleteTagDialog";
 import { TagNameField } from "./TagNameField";
-import type { TagId } from "./tag";
+import type { Tag, TagId } from "./tag";
 
 type Field = { kind: "add" } | { kind: "rename"; id: TagId } | null;
 
@@ -20,6 +21,7 @@ export function EditTagsDialog({ onClose }: { onClose: () => void }) {
 	const rename = useRenameTag();
 	const [field, setField] = useState<Field>(null);
 	const [failed, setFailed] = useState(false);
+	const [deleting, setDeleting] = useState<Tag | null>(null);
 
 	const open = (next: Field) => {
 		setField(next);
@@ -97,6 +99,10 @@ export function EditTagsDialog({ onClose }: { onClose: () => void }) {
 												aria-label={`Delete ${tag.name}`}
 												title="Delete"
 												className="text-destructive"
+												onClick={() => {
+													open(null);
+													setDeleting(tag);
+												}}
 											>
 												<Trash2 size={16} strokeWidth={1.9} aria-hidden />
 											</Button>
@@ -126,6 +132,13 @@ export function EditTagsDialog({ onClose }: { onClose: () => void }) {
 						<p role="alert" className="text-[13px] text-destructive">
 							Not saved. Try again.
 						</p>
+					) : null}
+					{deleting ? (
+						<DeleteTagDialog
+							tag={deleting}
+							onClose={() => setDeleting(null)}
+							onFailed={() => setFailed(true)}
+						/>
 					) : null}
 				</Dialog.Content>
 			</Dialog.Portal>

@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
+import { looksQueryKey } from "../looks/api";
 import { useSignOutOn401, useUserId } from "../session";
-import { type Tag, tagSchema } from "./tag";
+import { type Tag, type TagId, tagSchema } from "./tag";
 
 export const tagsQueryKey = (userId: string | null) =>
 	["tags", userId] as const;
@@ -90,6 +91,30 @@ export function useRenameTag() {
 		// next load.
 		onError: () => {
 			void queryClient.invalidateQueries({ queryKey: tagsQueryKey(userId) });
+		},
+	});
+}
+
+export function useDeleteTag() {
+	const userId = useUserId();
+	const queryClient = useQueryClient();
+	const on401 = useSignOutOn401();
+	return useMutation({
+		mutationFn: async (id: TagId) => {
+			const res = await fetch(`/api/tags/${id}`, { method: "DELETE" });
+			await on401(res, "DELETE /api/tags/:id");
+			// 404: deleted on another device already, which is what was asked.
+			if (!res.ok && res.status !== 404)
+				throw new Error(`DELETE /api/tags/:id answered ${res.status}`);
+		},
+		onSuccess: (_, id) => {
+			queryClient.setQueryData<Tag[]>(tagsQueryKey(userId), (old) =>
+				old?.filter((t) => t.id !== id),
+			);
+			void queryClient.invalidateQueries({ queryKey: tagsQueryKey(userId) });
+			// The looks cache has one writer, looks/api.ts; until it loads again
+			// the look view and the chips skip a tag the list no longer holds.
+			void queryClient.invalidateQueries({ queryKey: looksQueryKey(userId) });
 		},
 	});
 }

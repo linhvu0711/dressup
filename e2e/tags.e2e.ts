@@ -1,6 +1,12 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { card, nameBox, openDress, storedLooks } from "./looks-helpers";
+import {
+	card,
+	nameBox,
+	openDress,
+	saveLook,
+	storedLooks,
+} from "./looks-helpers";
 
 const form = (page: Page, name = "Save look") =>
 	page.getByRole("dialog", { name });
@@ -334,4 +340,101 @@ test("keeps the old name and says Not saved when a rename fails", async ({
 		rows: await rows(page).allTextContents(),
 		alert: await alert.textContent(),
 	}).toEqual({ rows: ["Work"], alert: "Not saved. Try again." });
+});
+
+const radios = (page: Page) => chips(page).getByRole("radio").allTextContents();
+
+const lookTags = (page: Page) =>
+	page.locator('[data-slot="look-view"] [data-slot="look-tag"]');
+
+test("makes a tag, filters by it, renames it, and deletes it", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account; "Navy" saved in "Polo + sweater"
+	// with a new tag "Work" made in the save form, then "Plain" with no tag
+	await openDress(page);
+	await saveWithNewTags(page, "Navy", ["Work"]);
+	await saveLook(page, "Plain");
+	// When
+	await openLooksPage(page, 2);
+	await chips(page).getByRole("radio", { name: "Work" }).click();
+	await openEditTags(page);
+	await editTags(page).getByRole("button", { name: "Rename Work" }).click();
+	await editTags(page)
+		.getByRole("textbox", { name: "New name for Work" })
+		.fill("Office");
+	await page.keyboard.press("Enter");
+	await expect(rows(page)).toHaveText(["Office"]);
+	await page.keyboard.press("Escape");
+	await expect(editTags(page)).toHaveCount(0);
+	await expect(cards(page)).toHaveText(["Navy"]);
+	const renamedRadios = await radios(page);
+	const renamedCards = await cards(page).allTextContents();
+	await card(page, "Navy").click();
+	await expect(lookTags(page)).toHaveCount(1);
+	const renamedLookTags = await lookTags(page).allTextContents();
+	await openLooksPage(page, 2);
+	await chips(page).getByRole("radio", { name: "Office" }).click();
+	await openEditTags(page);
+	await editTags(page).getByRole("button", { name: "Delete Office" }).click();
+	await page
+		.getByRole("alertdialog", { name: 'Delete the tag "Office"?' })
+		.getByRole("button", { name: "Delete" })
+		.click();
+	const toast = page.locator('[data-slot="toast"]');
+	await expect(toast).toHaveText("Tag deleted");
+	const toastText = await toast.textContent();
+	await editTags(page).getByRole("button", { name: "Close" }).click();
+	await expect(editTags(page)).toHaveCount(0);
+	await expect(cards(page)).toHaveCount(2);
+	// Then
+	expect({
+		renamed: {
+			radios: renamedRadios,
+			cards: renamedCards,
+			lookTags: renamedLookTags,
+		},
+		deleted: {
+			toast: toastText,
+			checked: await chips(page)
+				.locator('[aria-checked="true"]')
+				.allTextContents(),
+			radios: await radios(page),
+			cards: await cards(page).allTextContents(),
+		},
+	}).toEqual({
+		renamed: {
+			radios: ["All", "Hot", "Cool", "Cold", "Office"],
+			cards: ["Navy"],
+			lookTags: ["Office"],
+		},
+		deleted: {
+			toast: "Tag deleted",
+			checked: ["All"],
+			radios: ["All", "Hot", "Cool", "Cold"],
+			cards: ["Plain", "Navy"],
+		},
+	});
+});
+
+test("keeps the tag when Cancel is clicked in the confirm", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account, tag "Work", one look
+	await postTag(page, "Work");
+	await postLook(page, "One", COLD);
+	await openLooksPage(page, 1);
+	// When
+	await openEditTags(page);
+	await editTags(page).getByRole("button", { name: "Delete Work" }).click();
+	const confirm = page.getByRole("alertdialog", {
+		name: 'Delete the tag "Work"?',
+	});
+	await confirm.getByRole("button", { name: "Cancel" }).click();
+	await expect(confirm).toHaveCount(0);
+	// Then
+	expect({
+		rows: await rows(page).allTextContents(),
+		confirm: await confirm.count(),
+	}).toEqual({ rows: ["Work"], confirm: 0 });
 });
