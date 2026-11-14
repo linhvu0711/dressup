@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
 import {
 	card,
+	isPhone,
 	nameBox,
 	openDress,
 	saveLook,
@@ -297,6 +298,28 @@ test("shows No looks here for a chip with no look", async ({ page }) => {
 		line: 'No saved look has "Cool".',
 		cards: 0,
 	});
+});
+
+test("shows the chip's newest look when the chip hides the open one", async ({
+	page,
+}) => {
+	test.skip(isPhone(page), "the right part shows from 900 px");
+	// Given: laptop, a fresh account; "Cold work" with "Work", then "Hot one",
+	// and "Hot one" open
+	const work = await postTag(page, "Work");
+	await postLook(page, "Cold work", COLD, [work]);
+	await postLook(page, "Hot one", HOT);
+	await openLooksPage(page, 2);
+	await card(page, "Hot one").click();
+	await expect(page).toHaveURL(/\/looks\/[0-9a-f-]{36}$/);
+	// When
+	await chips(page).getByRole("radio", { name: "Work" }).click();
+	// Then
+	await expect(
+		page
+			.locator('[data-slot="look-panel"]')
+			.getByRole("heading", { name: "Cold work" }),
+	).toBeVisible();
 });
 
 test("shows the skeleton and no chips while the tags load", async ({

@@ -65,6 +65,16 @@ export function LooksPage() {
 	const [chosen, setChosen] = useState<LookFilter>("All");
 	const filter = lookFilter(chosen, tags.data ?? []);
 	const visible = loaded ? filterLooks(looks.data, filter) : [];
+	// A chip that hides the open look closes it, so the right part shows the
+	// chip's newest look, as docs/prototype/dressup.html:892 does.
+	function choose(next: LookFilter) {
+		setChosen(next);
+		if (!lookId || !looks.data || !tags.data) return;
+		const shows = filterLooks(looks.data, lookFilter(next, tags.data));
+		if (!shows.some((l) => l.id === lookId)) {
+			navigate("/looks", { replace: true });
+		}
+	}
 	function toggle(id: LookId) {
 		if (!picked) return;
 		if (picked.includes(id)) setPicked(picked.filter((p) => p !== id));
@@ -216,7 +226,7 @@ export function LooksPage() {
 					<LookFilterChips
 						filter={filter}
 						tags={tags.data}
-						onChange={setChosen}
+						onChange={choose}
 						onEditTags={() => setEditingTags(true)}
 					/>
 				) : null}
