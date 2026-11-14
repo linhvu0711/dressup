@@ -49,8 +49,16 @@ export function SaveLookDialog({
 	const full =
 		(looks.data?.length ?? 0) >= LOOK_LIMIT ||
 		(save.error instanceof SaveError && save.error.code === "look_limit");
-	const failed =
-		save.isError || (update.isError && !(update.error instanceof LookGone));
+	// "Save changes" adds no look, so the limit cannot explain its failure:
+	// that one says "Not saved" even at 300 looks.
+	const updateFailed = update.isError && !(update.error instanceof LookGone);
+	const alert = updateFailed
+		? "failed"
+		: full
+			? "full"
+			: save.isError
+				? "failed"
+				: null;
 	const saveNew = () => {
 		// The prototype's saveDo stops here at the limit
 		// (docs/prototype/dressup.html:1044).
@@ -121,12 +129,12 @@ export function SaveLookDialog({
 								className="h-10 min-w-0 rounded-[12px] border border-input bg-card px-3 text-[14px] outline-none focus-visible:border-ring"
 							/>
 						</div>
-						{full ? (
+						{alert === "full" ? (
 							<p role="alert" className="text-[12.5px] text-destructive">
 								You have 300 looks. That is the limit. Delete one to save a new
 								one.
 							</p>
-						) : failed ? (
+						) : alert === "failed" ? (
 							<p role="alert" className="text-[13px] text-destructive">
 								Not saved. Try again.
 							</p>

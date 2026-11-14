@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
+import { LIMIT_FILE } from "./global-setup";
 import {
 	card,
 	isPhone,
@@ -430,6 +431,38 @@ test("keeps the form open when Save changes fails", async ({ page }) => {
 	await expect(changesForm(page)).toBeVisible();
 	await expect(page.getByText("Editing: Navy day")).toBeVisible();
 	expect(await sweaters(page)).toEqual([["Navy day", "#7A2E2E"]]);
+});
+
+test.describe("an account with 300 looks", () => {
+	test.use({ storageState: LIMIT_FILE });
+
+	test("says Not saved, not the limit, when Save changes fails", async ({
+		page,
+	}) => {
+		// Given: both projects, the account with 300 looks, its first look in
+		// the edit state; a PUT answers 500. Its dress changes stay off the
+		// server, since other tests share this account.
+		await page.route("**/api/dress/changes", (route) =>
+			route.fulfill({ status: 204 }),
+		);
+		await page.route("**/api/looks/*", (route) =>
+			route.request().method() === "PUT"
+				? route.fulfill({ status: 500 })
+				: route.continue(),
+		);
+		await page.goto("/looks");
+		await page.locator('[data-slot="look-card"]').first().click();
+		await page.getByRole("button", { name: "Edit this look" }).click();
+		await openChangesForm(page);
+		// When
+		await changesForm(page)
+			.getByRole("button", { name: "Save changes" })
+			.click();
+		// Then
+		await expect(changesForm(page).getByRole("alert")).toHaveText(
+			"Not saved. Try again.",
+		);
+	});
 });
 
 test("shows the wall when the edited look is gone", async ({ page }) => {
