@@ -20,6 +20,13 @@ export async function listTags(db: Db, userId: string): Promise<Tag[]> {
 	return rows.map(toTag);
 }
 
+// Two tabs can both pass the duplicate check; the index on lower(name) then
+// refuses the second write, with an error that names the index. D1 and
+// drizzle may wrap it, so the causes are read too.
+const isNameTaken = (error: unknown): boolean =>
+	error instanceof Error &&
+	(error.message.includes("tag_userId_name_uq") || isNameTaken(error.cause));
+
 // The server makes the id: an add sent again after a lost answer finds its
 // name taken, and the page reads the list again.
 export async function addTag(
@@ -30,11 +37,16 @@ export async function addTag(
 	const tags = await listTags(db, userId);
 	if (tags.some((t) => sameTagName(t.name, name)))
 		return { ok: false, error: "duplicate" };
-	const [row] = await db
-		.insert(tag)
-		.values({ id: crypto.randomUUID(), userId, name })
-		.returning({ id: tag.id, name: tag.name });
-	return { ok: true, tag: toTag(row) };
+	try {
+		const [row] = await db
+			.insert(tag)
+			.values({ id: crypto.randomUUID(), userId, name })
+			.returning({ id: tag.id, name: tag.name });
+		return { ok: true, tag: toTag(row) };
+	} catch (error) {
+		if (isNameTaken(error)) return { ok: false, error: "duplicate" };
+		throw error;
+	}
 }
 
 // Changes only a tag the account has. A name the account's other tags hold
@@ -49,14 +61,19 @@ export async function renameTag(
 	const tags = await listTags(db, userId);
 	if (tags.some((t) => t.id !== input.id && sameTagName(t.name, input.name)))
 		return { ok: false, error: "duplicate" };
-	const [row] = await db
-		.update(tag)
-		.set({ name: input.name })
-		.where(and(eq(tag.id, input.id), eq(tag.userId, userId)))
-		.returning({ id: tag.id, name: tag.name });
-	return row
-		? { ok: true, tag: toTag(row) }
-		: { ok: false, error: "not_found" };
+	try {
+		const [row] = await db
+			.update(tag)
+			.set({ name: input.name })
+			.where(and(eq(tag.id, input.id), eq(tag.userId, userId)))
+			.returning({ id: tag.id, name: tag.name });
+		return row
+			? { ok: true, tag: toTag(row) }
+			: { ok: false, error: "not_found" };
+	} catch (error) {
+		if (isNameTaken(error)) return { ok: false, error: "duplicate" };
+		throw error;
+	}
 }
 
 // Only the account's own tag goes, and with it the tag on each look; false

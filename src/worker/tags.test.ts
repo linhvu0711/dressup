@@ -416,3 +416,48 @@ describe("tags and looks", () => {
 		}).toEqual({ status: 204, looks: [{ id: NAVY.id, tags: [trip] }] });
 	});
 });
+
+// Another tab's save of the same name, written by a trigger just before this
+// request's own write, after its duplicate check has passed.
+const otherTabWrites = (h: Harness, when: "INSERT" | "UPDATE", name: string) =>
+	h.sqlite.run(
+		`CREATE TRIGGER other_tab BEFORE ${when} ON tag WHEN NEW.name = '${name}'
+		BEGIN
+			INSERT INTO tag (id, user_id, name, created_at)
+			VALUES ('other-tab', NEW.user_id, lower(NEW.name), 0);
+		END`,
+	);
+
+describe("a name another tab saves at the same time", () => {
+	test("answers duplicate when another tab adds the name first", async () => {
+		// Given: alice signed in; another tab stores "work" between this add's
+		// check and its write
+		const { h, headers } = await aliceSignedIn();
+		otherTabWrites(h, "INSERT", "Work");
+		// When
+		const res = await addTag(h, headers, "Work");
+		// Then
+		expect({ status: res.status, body: await res.json() }).toEqual({
+			status: 400,
+			body: { error: "duplicate", field: "name" },
+		});
+	});
+
+	test("answers duplicate when another tab takes the new name first", async () => {
+		// Given: alice posted "Work"; another tab stores "office" between this
+		// rename's check and its write
+		const { h, headers } = await aliceSignedIn();
+		const work = await added(h, headers, "Work");
+		otherTabWrites(h, "UPDATE", "Office");
+		// When
+		const res = await send(h, headers, "PUT", `/api/tags/${work}`, {
+			id: work,
+			name: "Office",
+		});
+		// Then
+		expect({ status: res.status, body: await res.json() }).toEqual({
+			status: 400,
+			body: { error: "duplicate", field: "name" },
+		});
+	});
+});
