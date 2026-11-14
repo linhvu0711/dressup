@@ -13,6 +13,7 @@ export function TagNameField({
 	saveLabel,
 	initial = "",
 	except,
+	className,
 	boxClassName,
 	onSave,
 	onCancel,
@@ -21,6 +22,7 @@ export function TagNameField({
 	saveLabel: string;
 	initial?: string;
 	except?: TagId;
+	className?: string;
 	boxClassName?: string;
 	// Rejects with TagNameTaken when the server finds the name taken; the
 	// caller handles every other failure.
@@ -57,7 +59,7 @@ export function TagNameField({
 	};
 
 	return (
-		<div className="flex flex-col gap-1">
+		<div className={cn("flex flex-col gap-1", className)}>
 			<div className="flex items-center gap-1">
 				<input
 					ref={box}

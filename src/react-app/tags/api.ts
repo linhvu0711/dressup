@@ -64,3 +64,32 @@ export function useAddTag() {
 		},
 	});
 }
+
+export function useRenameTag() {
+	const userId = useUserId();
+	const queryClient = useQueryClient();
+	const on401 = useSignOutOn401();
+	return useMutation({
+		mutationFn: async (input: Tag) => {
+			const res = await fetch(`/api/tags/${input.id}`, {
+				method: "PUT",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(input),
+			});
+			await on401(res, "PUT /api/tags/:id");
+			if (!res.ok) return refused(res, "PUT /api/tags/:id");
+			return tagAnswer.parse(await res.json()).tag;
+		},
+		// The renamed tag keeps its place, as the server keeps its time.
+		onSuccess: (tag) => {
+			queryClient.setQueryData<Tag[]>(tagsQueryKey(userId), (old) =>
+				old?.map((t) => (t.id === tag.id ? tag : t)),
+			);
+		},
+		// A tag gone on another device, or a name taken there, shows on the
+		// next load.
+		onError: () => {
+			void queryClient.invalidateQueries({ queryKey: tagsQueryKey(userId) });
+		},
+	});
+}

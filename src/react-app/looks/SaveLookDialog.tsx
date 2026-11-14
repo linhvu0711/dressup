@@ -1,6 +1,7 @@
 import { Dialog } from "radix-ui";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
 import { modeById } from "@/dress/modes";
 import type { DressState } from "@/dress/state";
@@ -79,7 +80,7 @@ export function SaveLookDialog({
 	return (
 		<Dialog.Root open onOpenChange={(open) => open || onClose()}>
 			<Dialog.Portal>
-				<Dialog.Overlay className="fixed inset-0 z-20 bg-[rgba(20,18,14,.42)]" />
+				<Dialog.Overlay className={SHEET_OVERLAY} />
 				<Dialog.Content
 					aria-describedby={undefined}
 					onOpenAutoFocus={(e) => {
@@ -90,7 +91,7 @@ export function SaveLookDialog({
 							box.current?.focus();
 						}
 					}}
-					className="fixed inset-x-0 bottom-0 z-[21] flex max-h-[88%] flex-col gap-4 overflow-auto rounded-t-[26px] border border-border border-b-0 bg-card p-5 pb-[22px] shadow-float outline-none duration-[260ms] ease-soft data-[state=open]:slide-in-from-bottom-8 data-[state=open]:animate-in wide:inset-x-auto wide:top-1/2 wide:bottom-auto wide:left-1/2 wide:w-[430px] wide:-translate-x-1/2 wide:-translate-y-1/2 wide:rounded-[22px] wide:border-b wide:p-6"
+					className={SHEET}
 				>
 					<Dialog.Title className="text-[25px] leading-tight">
 						{editing ? "Save changes" : "Save look"}

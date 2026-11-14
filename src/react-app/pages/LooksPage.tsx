@@ -18,6 +18,7 @@ import { LookFilterChips } from "@/looks/LookFilterChips";
 import { LookView } from "@/looks/LookView";
 import type { Look, LookId } from "@/looks/look";
 import { useTags } from "@/tags/api";
+import { EditTagsDialog } from "@/tags/EditTagsDialog";
 import { PageHeader } from "../shell/PageHeader";
 
 const WALL =
@@ -73,6 +74,7 @@ export function LooksPage() {
 	// The confirm lives here, not in the look view: the view goes when the
 	// list drops the deleted look, and the confirm must still say so.
 	const [deleting, setDeleting] = useState<Look | null>(null);
+	const [editingTags, setEditingTags] = useState(false);
 	// The look in the right part: the one the URL names, else the newest the
 	// chip shows.
 	const shown = loaded
@@ -215,7 +217,7 @@ export function LooksPage() {
 						filter={filter}
 						tags={tags.data}
 						onChange={setChosen}
-						onEditTags={() => {}}
+						onEditTags={() => setEditingTags(true)}
 					/>
 				) : null}
 				{wall}
@@ -246,6 +248,9 @@ export function LooksPage() {
 						<LookView look={shown} onDelete={() => setDeleting(shown)} />
 					) : null}
 				</aside>
+			) : null}
+			{editingTags ? (
+				<EditTagsDialog onClose={() => setEditingTags(false)} />
 			) : null}
 			{deleting ? (
 				<DeleteLookDialog look={deleting} onClose={() => setDeleting(null)} />

@@ -275,3 +275,63 @@ test("keeps the compare picks with a chip on", async ({ page }) => {
 		enabled: await compare.isEnabled(),
 	}).toEqual({ h1: "2 picked", compare: "Compare 2", enabled: true });
 });
+
+const editTags = (page: Page) =>
+	page.getByRole("dialog", { name: "Edit tags" });
+
+async function openEditTags(page: Page) {
+	await page.getByRole("button", { name: "Edit tags" }).click();
+	await expect(editTags(page)).toBeVisible();
+}
+
+const rows = (page: Page) => editTags(page).getByRole("listitem");
+
+test("opens Edit tags with each tag and a row for a new tag", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account, tags "Work" and "Trip", one look
+	await postTag(page, "Work");
+	await postTag(page, "Trip");
+	await postLook(page, "One", COLD);
+	await openLooksPage(page, 1);
+	// When
+	await openEditTags(page);
+	// Then
+	const buttons = (name: RegExp) =>
+		editTags(page).getByRole("button", { name }).count();
+	expect({
+		rows: await rows(page).allTextContents(),
+		rename: await buttons(/^Rename /),
+		delete: await buttons(/^Delete /),
+		add: await buttons(/^\+ New tag$/),
+	}).toEqual({ rows: ["Work", "Trip"], rename: 2, delete: 2, add: 1 });
+});
+
+test("keeps the old name and says Not saved when a rename fails", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account, tag "Work", one look; each
+	// rename answered 500
+	await postTag(page, "Work");
+	await postLook(page, "One", COLD);
+	await page.route("**/api/tags/*", (route) =>
+		route.request().method() === "PUT"
+			? route.fulfill({ status: 500 })
+			: route.continue(),
+	);
+	await openLooksPage(page, 1);
+	// When
+	await openEditTags(page);
+	await editTags(page).getByRole("button", { name: "Rename Work" }).click();
+	await editTags(page)
+		.getByRole("textbox", { name: "New name for Work" })
+		.fill("Office");
+	await page.keyboard.press("Enter");
+	// Then
+	const alert = editTags(page).getByRole("alert");
+	await expect(alert).toBeVisible();
+	expect({
+		rows: await rows(page).allTextContents(),
+		alert: await alert.textContent(),
+	}).toEqual({ rows: ["Work"], alert: "Not saved. Try again." });
+});
