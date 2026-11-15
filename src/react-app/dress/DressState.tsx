@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { focusManager, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	createContext,
 	type ReactNode,
@@ -104,7 +104,8 @@ export function DressStateProvider({
 		},
 		retry: (count, error) => !(error instanceof SignedOut) && count < 3,
 		enabled: userId !== null,
-		// The page keeps its own copy once loaded; a refetch is only asked for.
+		// The page keeps its own copy once loaded; it loads again on tab focus
+		// (loadOnFocus) and after a refused change.
 		staleTime: Number.POSITIVE_INFINITY,
 		refetchOnWindowFocus: false,
 		refetchOnReconnect: false,
@@ -187,6 +188,31 @@ export function DressStateProvider({
 			sending.current = false;
 		}
 	};
+
+	// A change made in another session shows when the tab gets focus again.
+	const loadOnFocus = useRef(async () => {});
+	loadOnFocus.current = async () => {
+		if (userId === null || latest.current === null) return;
+		let fresh: DressState;
+		try {
+			fresh = await fetchDress();
+		} catch (error) {
+			// A failed load keeps what the page shows; the next focus tries again.
+			if (error instanceof SignedOut) void signOut();
+			return;
+		}
+		latest.current = fresh;
+		// The cache follows the server, so a later refusal goes back to this.
+		queryClient.setQueryData<DressState>(dressQueryKey, fresh);
+		setChanged(fresh);
+	};
+	useEffect(
+		() =>
+			focusManager.subscribe((focused) => {
+				if (focused) void loadOnFocus.current();
+			}),
+		[],
+	);
 
 	// The prototype's retry, docs/prototype/dressup.html:1087.
 	const retry = () => {

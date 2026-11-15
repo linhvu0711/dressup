@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
+import { openColours } from "./looks-helpers";
 
 const WALL =
 	"linear-gradient(90deg, rgb(198, 194, 188) 0%, rgb(218, 214, 208) 40%, rgb(211, 207, 201) 70%, rgb(195, 191, 185) 100%)";
@@ -286,4 +287,104 @@ test("draws the stage and the mode cards in the account's skin and hair", async 
 		stageHair: (await stage.innerHTML()).includes('fill="#B55239"'),
 		cardSkin: card.includes('fill="#8D5524"'),
 	}).toEqual({ stageSkin: true, stageHair: true, cardSkin: true });
+});
+
+// The session check also loads on this event, as e2e/save.e2e.ts fires it.
+const focusTab = (page: Page) =>
+	page.evaluate(() => window.dispatchEvent(new Event("visibilitychange")));
+
+const square = (page: Page, name: string) =>
+	page.getByRole("button", { name, exact: true });
+
+async function changeElsewhere(
+	page: Page,
+	change: { kind: "add" | "pick"; hex: string },
+) {
+	const res = await page.request.post("/api/dress/changes", {
+		data: { ...change, garment: "sweater" },
+	});
+	expect(res.status()).toBe(204);
+}
+
+// A late answer is applied after its response event; two frames let React
+// show it before a test reads the page.
+const twoFrames = (page: Page) =>
+	page.evaluate(
+		() =>
+			new Promise((done) =>
+				requestAnimationFrame(() => requestAnimationFrame(done)),
+			),
+	);
+
+const isDressGet = (url: string, method: string) =>
+	method === "GET" && new URL(url).pathname === "/api/dress";
+
+test.describe("load on focus", () => {
+	test("shows a colour picked in another session when the tab gets focus", async ({
+		page,
+	}) => {
+		// Given: both projects, a fresh account, the Colours tab on the phone;
+		// sweater #2E5E4E added and picked from another session
+		await openColours(page);
+		await changeElsewhere(page, { kind: "add", hex: "#2E5E4E" });
+		await changeElsewhere(page, { kind: "pick", hex: "#2E5E4E" });
+		// When
+		await focusTab(page);
+		// Then
+		await expect(square(page, "Sweater #2E5E4E")).toHaveAttribute(
+			"aria-pressed",
+			"true",
+		);
+		await expect
+			.poll(() =>
+				page
+					.locator(
+						'svg[aria-label="Mannequin in Polo + sweater"] [data-garment="sweater"]',
+					)
+					.innerHTML(),
+			)
+			.toContain('fill="#2E5E4E"');
+	});
+
+	test("keeps the colours when a load on focus fails", async ({ page }) => {
+		// Given: both projects, a fresh account, the Colours tab on the phone;
+		// sweater #7A2E2E picked from another session; each load answered 500
+		await openColours(page);
+		await changeElsewhere(page, { kind: "pick", hex: "#7A2E2E" });
+		await page.route("/api/dress", (route) => route.fulfill({ status: 500 }));
+		const failed = page.waitForResponse(
+			(r) => isDressGet(r.url(), r.request().method()) && r.status() === 500,
+		);
+		// When
+		await focusTab(page);
+		await failed;
+		await twoFrames(page);
+		// Then
+		expect({
+			navy: await square(page, "Sweater #1F3A5F").getAttribute("aria-pressed"),
+			alerts: await page.getByRole("alert").count(),
+			toasts: await page.locator('[data-slot="toast"]').count(),
+		}).toEqual({ navy: "true", alerts: 0, toasts: 0 });
+	});
+
+	test("shows the sign-in screen when a load on focus finds no session", async ({
+		page,
+	}) => {
+		// Given: both projects, a fresh account, the Colours tab on the phone;
+		// then the session check passes once and finds no session after, and
+		// each load finds no session
+		await openColours(page);
+		const noSession = { status: 401, json: { error: "unauthorized" } };
+		let checks = 0;
+		await page.route("/api/me", (route) =>
+			checks++ === 0 ? route.continue() : route.fulfill(noSession),
+		);
+		await page.route("/api/dress", (route) => route.fulfill(noSession));
+		// When
+		await focusTab(page);
+		// Then
+		await expect(
+			page.getByRole("button", { name: "Sign in with Google" }),
+		).toBeVisible();
+	});
 });
