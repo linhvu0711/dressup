@@ -10,6 +10,7 @@ import type { Db } from "./db";
 import { user } from "./db/auth-schema";
 import { loadDress, saveDress } from "./dress-store";
 import { deleteLook, listLooks, saveLook, updateLook } from "./look-store";
+import { mcpRoute } from "./mcp";
 import { addTag, deleteTag, listTags, renameTag } from "./tag-store";
 
 type Auth = ReturnType<typeof createAuth>;
@@ -76,6 +77,10 @@ export function createApp(getDb: (env: Env) => Db) {
 
 	app.on(["GET", "POST"], "/auth/*", withAuth, (c) =>
 		c.var.auth.handler(c.req.raw),
+	);
+
+	app.on(["GET", "POST", "DELETE"], "/mcp", withAuth, (c) =>
+		mcpRoute(c.var.auth, getDb(c.env), c.env.BETTER_AUTH_URL, c.req.raw),
 	);
 
 	app.get("/health", (c) => c.json({ ok: true }));
