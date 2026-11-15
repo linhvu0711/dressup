@@ -1,5 +1,5 @@
 import { BookmarkCheck, BookmarkPlus, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ColourRows, type LiveColour } from "@/dress/ColourRows";
@@ -37,12 +37,16 @@ export function DressPage() {
 	// which holds only what the person keeps.
 	const [live, setLive] = useState<LiveColour | null>(null);
 	const [saving, setSaving] = useState(false);
-	// The form saves the outfit behind it, so no load on focus may swap it.
-	const showSaveForm = (open: boolean) => {
-		setSaving(open);
-		if (dress.status === "ready") dress.holdLoads(open);
-	};
 	const state = dress.status === "ready" ? dress.state : null;
+	const formShown = saving && state !== null;
+	const holdLoads = dress.status === "ready" ? dress.holdLoads : null;
+	// The form saves the outfit behind it, so no load on focus may swap it.
+	// The hold ends with the form, also when the page goes away under it.
+	useEffect(() => {
+		if (!formShown || !holdLoads) return;
+		holdLoads(true);
+		return () => holdLoads(false);
+	}, [formShown, holdLoads]);
 	const editing = dress.status === "ready" ? dress.editing : null;
 	const mode = state ? modeById(state.modeId) : null;
 	// A stored mode may be in any tab, so until a tab is picked the modes
@@ -88,7 +92,7 @@ export function DressPage() {
 						title={editing ? "Save changes" : "Save look"}
 						disabled={!state}
 						className="shadow-lift"
-						onClick={() => showSaveForm(true)}
+						onClick={() => setSaving(true)}
 					>
 						{editing ? (
 							<BookmarkCheck size={20} strokeWidth={1.9} aria-hidden />
@@ -110,14 +114,14 @@ export function DressPage() {
 					<MannequinPlaceholder />
 				)}
 			</Stage>
-			{saving && state ? (
+			{formShown && state ? (
 				<SaveLookDialog
 					state={state}
 					editing={editing}
 					onSaved={() => {
 						if (dress.status === "ready") dress.endEditing();
 					}}
-					onClose={() => showSaveForm(false)}
+					onClose={() => setSaving(false)}
 				/>
 			) : null}
 			<div className="flex min-h-0 flex-1 flex-col px-4 pt-3 wide:contents">

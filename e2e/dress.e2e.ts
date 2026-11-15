@@ -530,6 +530,31 @@ test.describe("load on focus", () => {
 		}).toEqual({ loads: 0, saved: ["#1F3A5F"] });
 	});
 
+	test("loads on focus again after leaving the Dress page with the Save look form open", async ({
+		page,
+	}) => {
+		// Given: both projects, a fresh account; /looks, then the Dress page by
+		// its link, the Save look form open, then Back to /looks; then sweater
+		// #7A2E2E picked from another session
+		await page.goto("/looks");
+		await page
+			.getByRole("link", { name: "Dress", exact: true })
+			.filter({ visible: true })
+			.click();
+		await page.getByRole("button", { name: "Save look" }).click();
+		await expect(dialog(page)).toBeVisible();
+		await page.goBack();
+		await expect(page).toHaveURL("/looks");
+		await changeElsewhere(page, { kind: "pick", hex: "#7A2E2E" });
+		const loaded = page.waitForResponse((r) =>
+			isDressGet(r.url(), r.request().method()),
+		);
+		// When
+		await focusTab(page);
+		// Then
+		expect((await loaded).status()).toBe(200);
+	});
+
 	test("keeps a colour picked while a load on focus is out", async ({
 		page,
 	}) => {
