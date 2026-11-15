@@ -20,7 +20,7 @@ import {
 	type Outfit,
 } from "@/dress/state";
 import type { Look } from "@/looks/look";
-import { meQueryKey } from "@/session";
+import { type Me, meQueryKey } from "@/session";
 
 type DressCommands = {
 	pickMode: (id: ModeId) => void;
@@ -210,6 +210,14 @@ export function DressStateProvider({
 			if (error instanceof SignedOut) void signOut();
 			return;
 		}
+		// The answer is for whoever holds the cookie now; another account can
+		// sign in from a second tab. The session check of the same focus says who.
+		if (queryClient.isFetching({ queryKey: meQueryKey }) > 0)
+			await queryClient.refetchQueries(
+				{ queryKey: meQueryKey },
+				{ cancelRefetch: false },
+			);
+		if (queryClient.getQueryData<Me | null>(meQueryKey)?.id !== userId) return;
 		if (changes.current !== at || queue.current.length > 0 || sending.current)
 			return;
 		latest.current = fresh;

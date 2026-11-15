@@ -1,5 +1,6 @@
+import { readFileSync } from "node:fs";
 import type { Page } from "@playwright/test";
-import { expect, test } from "./fixtures";
+import { claimAccount, expect, test } from "./fixtures";
 import { card, openColours, openDress, saveLook } from "./looks-helpers";
 
 const WALL =
@@ -583,5 +584,69 @@ test.describe("load on focus", () => {
 			red: await square(page, "Sweater #7A2E2E").getAttribute("aria-pressed"),
 			navy: await square(page, "Sweater #1F3A5F").getAttribute("aria-pressed"),
 		}).toEqual({ red: "true", navy: "false" });
+	});
+
+	test("keeps each account's colours when another account signs in from a second tab", async ({
+		page,
+	}) => {
+		// Given: both projects, a fresh account, the Colours tab on the phone;
+		// Sweater #7A2E2E picked and stored; then the browser holds a second
+		// account's session, and each session check waits until the page has
+		// read the load of the same focus
+		await openColours(page);
+		const stored = changeStored(page);
+		await square(page, "Sweater #7A2E2E").click();
+		await stored;
+		const first = await page.context().storageState();
+		const other = JSON.parse(readFileSync(claimAccount(), "utf8"));
+		let loaded: Promise<unknown> = Promise.resolve();
+		await page.route("/api/me", async (route) => {
+			await loaded;
+			await twoFrames(page);
+			await route.continue();
+		});
+		// The page is rebuilt for each account (src/react-app/shell/SessionGate.tsx),
+		// so a tab picked before the switch is no longer picked after it.
+		const phone = (page.viewportSize()?.width ?? 0) < 900;
+		const marker = page.getByRole("tab", {
+			name: phone ? "Colours" : "Hot",
+			exact: true,
+		});
+		const markSwitch = async () => {
+			if (!phone) await marker.click();
+			await expect(marker).toHaveAttribute("aria-selected", "true");
+		};
+		const showColours = async () => {
+			await expect(marker).toHaveAttribute("aria-selected", "false");
+			if (phone) await marker.click();
+		};
+		await markSwitch();
+		await page.context().clearCookies();
+		await page.context().addCookies(other.cookies);
+		loaded = page.waitForResponse((r) =>
+			isDressGet(r.url(), r.request().method()),
+		);
+		await focusTab(page);
+		await showColours();
+		await expect(square(page, "Sweater #1F3A5F")).toHaveAttribute(
+			"aria-pressed",
+			"true",
+		);
+		// When: the first account signs in again, with no reload
+		await markSwitch();
+		await page.context().clearCookies();
+		await page.context().addCookies(first.cookies);
+		loaded = page.waitForResponse((r) =>
+			isDressGet(r.url(), r.request().method()),
+		);
+		const checked = sessionChecked(page);
+		await focusTab(page);
+		await checked;
+		await showColours();
+		// Then
+		await expect(square(page, "Sweater #7A2E2E")).toHaveAttribute(
+			"aria-pressed",
+			"true",
+		);
 	});
 });
