@@ -119,6 +119,9 @@ export function DressStateProvider({
 	const latest = useRef(state);
 	latest.current = state;
 	const queue = useRef<DressChange[]>([]);
+	// Moves on each change, account switch, and load on focus, so a load that
+	// one overtook is dropped: its answer may be older.
+	const changes = useRef(0);
 	const sending = useRef(false);
 	const toast = useToast();
 	const [unsaved, setUnsaved] = useState(false);
@@ -142,6 +145,7 @@ export function DressStateProvider({
 	useEffect(() => {
 		queue.current = [];
 		unsavedRef.current = false;
+		changes.current++;
 	}, [userId]);
 
 	// Sends the queue in order and stops at the first change that cannot be
@@ -197,6 +201,7 @@ export function DressStateProvider({
 		// change the outfit "Save changes" writes. A failed change stays first
 		// on the queue, so the queue covers a wait to retry too.
 		if (queue.current.length > 0 || sending.current || edit !== null) return;
+		const at = ++changes.current;
 		let fresh: DressState;
 		try {
 			fresh = await fetchDress();
@@ -205,7 +210,8 @@ export function DressStateProvider({
 			if (error instanceof SignedOut) void signOut();
 			return;
 		}
-		if (queue.current.length > 0 || sending.current) return;
+		if (changes.current !== at || queue.current.length > 0 || sending.current)
+			return;
 		latest.current = fresh;
 		// The cache follows the server, so a later refusal goes back to this.
 		queryClient.setQueryData<DressState>(dressQueryKey, fresh);
@@ -233,6 +239,7 @@ export function DressStateProvider({
 			latest.current = result.state;
 			setChanged(result.state);
 			queue.current.push(change);
+			changes.current++;
 			void flush();
 		}
 		return result;

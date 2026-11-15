@@ -496,4 +496,92 @@ test.describe("load on focus", () => {
 			loads: seen.loads,
 		}).toEqual({ editing: 1, loads: 0 });
 	});
+
+	test("keeps a colour picked while a load on focus is out", async ({
+		page,
+	}) => {
+		// Given: both projects, a fresh account, the Colours tab on the phone;
+		// sweater #7A2E2E picked from another session; each load reads the
+		// server at once, then holds its answer until the test lets it go
+		await openColours(page);
+		await changeElsewhere(page, { kind: "pick", hex: "#7A2E2E" });
+		let fetched = () => {};
+		const read = new Promise<void>((resolve) => {
+			fetched = resolve;
+		});
+		let release = () => {};
+		const held = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		await page.route("/api/dress", async (route) => {
+			const response = await route.fetch();
+			fetched();
+			await held;
+			await route.fulfill({ response });
+		});
+		// When
+		await focusTab(page);
+		await read;
+		const stored = changeStored(page);
+		await square(page, "Sweater #E6DFD0").click();
+		await stored;
+		const answered = page.waitForResponse((r) =>
+			isDressGet(r.url(), r.request().method()),
+		);
+		release();
+		await answered;
+		await twoFrames(page);
+		// Then
+		expect({
+			beige: await square(page, "Sweater #E6DFD0").getAttribute("aria-pressed"),
+			red: await square(page, "Sweater #7A2E2E").getAttribute("aria-pressed"),
+		}).toEqual({ beige: "true", red: "false" });
+	});
+
+	test("keeps the newest load when an older one answers last", async ({
+		page,
+	}) => {
+		// Given: both projects, a fresh account, the Colours tab on the phone;
+		// the first load reads the server at once, then holds its answer until
+		// the test lets it go; later loads pass
+		await openColours(page);
+		let fetched = () => {};
+		const read = new Promise<void>((resolve) => {
+			fetched = resolve;
+		});
+		let release = () => {};
+		const held = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		let loads = 0;
+		await page.route("/api/dress", async (route) => {
+			if (loads++ > 0) return route.continue();
+			const response = await route.fetch();
+			fetched();
+			await held;
+			await route.fulfill({ response });
+		});
+		// When
+		await focusTab(page);
+		await read;
+		await changeElsewhere(page, { kind: "pick", hex: "#7A2E2E" });
+		const second = page.waitForResponse((r) =>
+			isDressGet(r.url(), r.request().method()),
+		);
+		const checked = sessionChecked(page);
+		await focusTab(page);
+		await second;
+		await checked;
+		const first = page.waitForResponse((r) =>
+			isDressGet(r.url(), r.request().method()),
+		);
+		release();
+		await first;
+		await twoFrames(page);
+		// Then
+		expect({
+			red: await square(page, "Sweater #7A2E2E").getAttribute("aria-pressed"),
+			navy: await square(page, "Sweater #1F3A5F").getAttribute("aria-pressed"),
+		}).toEqual({ red: "true", navy: "false" });
+	});
 });
