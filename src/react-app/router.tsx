@@ -1,4 +1,5 @@
 import { createBrowserRouter } from "react-router";
+import { AllowPage } from "./pages/AllowPage";
 import { ComparePage } from "./pages/ComparePage";
 import { DressPage } from "./pages/DressPage";
 import { LooksPage } from "./pages/LooksPage";
@@ -20,4 +21,5 @@ export const router = createBrowserRouter([
 		],
 	},
 	{ path: "privacy", element: <PrivacyPage /> },
+	{ path: "allow", element: <AllowPage /> },
 ]);

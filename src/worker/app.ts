@@ -5,11 +5,12 @@ import type { z } from "zod";
 import { applyChange, dressChangeSchema } from "@/dress/state";
 import { lookInputSchema } from "@/looks/look";
 import { newTagSchema, tagSchema } from "@/tags/tag";
-import { createAuth } from "./auth";
+import { createAuth, createClientDiscovery } from "./auth";
 import type { Db } from "./db";
 import { user } from "./db/auth-schema";
 import { loadDress, saveDress } from "./dress-store";
 import { deleteLook, listLooks, saveLook, updateLook } from "./look-store";
+import { mcpRoute } from "./mcp";
 import { addTag, deleteTag, listTags, renameTag } from "./tag-store";
 
 type Auth = ReturnType<typeof createAuth>;
@@ -37,7 +38,11 @@ async function readBody<T extends z.ZodType>(
 }
 
 export function createApp(getDb: (env: Env) => Db) {
-	const app = new Hono<AppEnv>().basePath("/api");
+	const root = new Hono<AppEnv>();
+	const app = root.basePath("/api");
+	// One per isolate: the plugin keeps its document cache and fetch limits in
+	// this object, and the auth instance is new on every request.
+	const clientDiscovery = createClientDiscovery();
 
 	const withAuth = createMiddleware<AppEnv>(async (c, next) => {
 		c.set(
@@ -51,10 +56,15 @@ export function createApp(getDb: (env: Env) => Db) {
 					clientSecret: c.env.GOOGLE_CLIENT_SECRET,
 				},
 				signupsClosed: c.env.SIGNUPS_CLOSED === "true",
+				clientDiscovery,
 			}),
 		);
 		await next();
 	});
+
+	// AI apps look for metadata at the site root (RFC 8414, RFC 9728); better-auth
+	// answers those paths (P5).
+	root.get("/.well-known/*", withAuth, (c) => c.var.auth.handler(c.req.raw));
 
 	const requireUser = createMiddleware<AppEnv>(async (c, next) => {
 		const { headers, response: session } = await c.var.auth.api.getSession({
@@ -72,6 +82,10 @@ export function createApp(getDb: (env: Env) => Db) {
 
 	app.on(["GET", "POST"], "/auth/*", withAuth, (c) =>
 		c.var.auth.handler(c.req.raw),
+	);
+
+	app.on(["GET", "POST", "DELETE"], "/mcp", withAuth, (c) =>
+		mcpRoute(c.var.auth, getDb(c.env), c.env.BETTER_AUTH_URL, c.req.raw),
 	);
 
 	app.get("/health", (c) => c.json({ ok: true }));
@@ -187,7 +201,8 @@ export function createApp(getDb: (env: Env) => Db) {
 		return c.body(null, 204);
 	});
 
-	app.notFound((c) => c.json({ error: "not_found" }, 404));
+	// Hono runs the not-found handler of the instance that got the request.
+	root.notFound((c) => c.json({ error: "not_found" }, 404));
 
-	return app;
+	return root;
 }

@@ -17,9 +17,13 @@
 		"test": "bun test"
 	},
 	"dependencies": {
+		"@better-auth/cimd": "1.7.25",
+		"@better-auth/mcp": "1.7.25",
+		"@better-auth/oauth-provider": "1.7.25",
+		"@modelcontextprotocol/server": "2.4.0",
 		"@tailwindcss/vite": "4.3.5",
 		"@tanstack/react-query": "5.107.1",
-		"better-auth": "1.7.22",
+		"better-auth": "1.7.25",
 		"class-variance-authority": "^0.7.1",
 		"cn": "^0.5.2",
 		"drizzle-orm": "0.45.4",
@@ -42,7 +46,7 @@
 		"@types/react": "19.2.7",
 		"@types/react-dom": "19.2.3",
 		"@vitejs/plugin-react": "5.1.1",
-		"auth": "1.7.22",
+		"auth": "1.7.25",
 		"drizzle-kit": "0.31.11",
 		"typescript": "5.9.3",
 		"vite": "^7.0.0",

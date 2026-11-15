@@ -1,0 +1,3 @@
+# AI apps connect through MCP and sign in with a client metadata document
+
+AI apps reach dressup through one MCP route, `/api/mcp`. better-auth's MCP plugin is the sign-in server, not Cloudflare's workers-oauth-provider, so one library holds the users, the sessions, and the AI app access. An AI app can connect only if it has a Client ID Metadata Document: a JSON file on the app's own website that gives its name, logo, and return address. Dynamic Client Registration and fixed keys are off. The Allow page then shows a name the app cannot fake, and a stranger cannot add rows to the database by registering apps. Cursor, Gemini CLI, and the xAI API support only those other ways, so they cannot connect (checked 2026-11-14).
