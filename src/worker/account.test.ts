@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+	aiSession,
 	connectAiApp,
-	cookie,
 	finishGoogleSignIn,
 	type Jar,
 	makeHarness,
+	send,
 	startGoogleSignIn,
 	store,
 	stubOutside,
@@ -16,19 +17,6 @@ type Harness = Awaited<ReturnType<typeof makeHarness>>;
 
 const googleSignIn = async (h: Harness): Promise<Jar> =>
 	(await finishGoogleSignIn(h, await startGoogleSignIn(h))).jar;
-
-const send = (h: Harness, jar: Jar, path: string, init: RequestInit = {}) =>
-	h.app.request(
-		path,
-		{
-			...init,
-			headers: {
-				...(init.headers as Record<string, string>),
-				...(jar.size ? { cookie: cookie(jar) } : {}),
-			},
-		},
-		h.env,
-	);
 
 const sendJson = (h: Harness, jar: Jar, path: string, body: unknown) =>
 	send(h, jar, path, {
@@ -318,6 +306,36 @@ describe("DELETE /api/account", () => {
 		}).toEqual({
 			status: 204,
 			rows: { oauth_consent: 0, oauth_refresh_token: 0, oauth_access_token: 0 },
+		});
+	});
+
+	test("deletes the account's AI action count with the account", async () => {
+		// Given: alice took one AI action
+		const h = await makeHarness();
+		restore = stubOutside({
+			google: {
+				sub: "g-alice",
+				email: "alice@example.com",
+				name: "Alice",
+				picture: "https://example.com/a.png",
+			},
+			documents: { [TEST_APP_ID]: testAppDocument },
+		}).restore;
+		const ai = await aiSession(h);
+		await ai.call("list_tags");
+		const count = () =>
+			(
+				h.sqlite.query("select count(*) as n from ai_action_count").get() as {
+					n: number;
+				}
+			).n;
+		expect(count()).toBe(1);
+		// When
+		const res = await deleteAccount(h, ai.jar);
+		// Then
+		expect({ status: res.status, rows: count() }).toEqual({
+			status: 204,
+			rows: 0,
 		});
 	});
 });

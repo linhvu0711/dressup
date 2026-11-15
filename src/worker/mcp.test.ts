@@ -1,51 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
 	connectAiApp,
+	INITIALIZE,
 	makeHarness,
+	message,
+	post,
 	stubOutside,
 	TEST_APP_ID,
 	testAppDocument,
 } from "./test/harness";
-
-type Harness = Awaited<ReturnType<typeof makeHarness>>;
-
-const INITIALIZE = {
-	jsonrpc: "2.0",
-	id: 1,
-	method: "initialize",
-	params: {
-		protocolVersion: "2025-11-25",
-		capabilities: {},
-		clientInfo: { name: "test", version: "1" },
-	},
-};
-
-const post = (
-	h: Harness,
-	body: unknown,
-	headers: Record<string, string> = {},
-) =>
-	h.app.request(
-		"/api/mcp",
-		{
-			method: "POST",
-			headers: {
-				"content-type": "application/json",
-				accept: "application/json, text/event-stream",
-				...headers,
-			},
-			body: JSON.stringify(body),
-		},
-		h.env,
-	);
-
-// The answer comes as one server-sent event; its data line is the JSON-RPC
-// message.
-async function message<T>(res: Response): Promise<T> {
-	const text = await res.text();
-	const data = text.split("\n").find((line) => line.startsWith("data: "));
-	return JSON.parse(data?.slice("data: ".length) ?? text) as T;
-}
 
 describe("/api/mcp", () => {
 	let outside: ReturnType<typeof stubOutside> | undefined;
@@ -145,16 +108,19 @@ describe("/api/mcp", () => {
 		);
 		// Then
 		const { garments, modes } = called.result.structuredContent;
+		const tool = listed.result.tools.find(
+			(t) => t.name === "list_garments_and_modes",
+		);
 		expect({
-			tools: listed.result.tools.map((t) => t.name),
-			readOnly: listed.result.tools[0]?.annotations?.readOnlyHint,
+			listed: tool !== undefined,
+			readOnly: tool?.annotations?.readOnlyHint,
 			garments: garments.length,
 			modes: modes.length,
 			firstGarment: garments[0],
 			jackets: garments.filter((g) => g.jacket).map((g) => g.id),
 			firstMode: modes[0],
 		}).toEqual({
-			tools: ["list_garments_and_modes"],
+			listed: true,
 			readOnly: true,
 			garments: 17,
 			modes: 23,

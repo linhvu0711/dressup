@@ -1,4 +1,15 @@
-import { and, asc, count, desc, eq, exists, inArray, sql } from "drizzle-orm";
+import {
+	and,
+	asc,
+	count,
+	desc,
+	eq,
+	exists,
+	inArray,
+	or,
+	sql,
+} from "drizzle-orm";
+import type { GarmentId, Hex, JacketId } from "@/dress/garments";
 import type { ModeId } from "@/dress/modes";
 import {
 	LOOK_LIMIT,
@@ -8,6 +19,7 @@ import {
 } from "@/looks/look";
 import type { TagId } from "@/tags/tag";
 import type { Db } from "./db";
+import { user } from "./db/auth-schema";
 import { look } from "./db/look-schema";
 import { lookTag, tag } from "./db/tag-schema";
 
@@ -37,11 +49,28 @@ const tagLinks = (db: Db, userId: string, lookId?: string) =>
 		.orderBy(asc(tag.createdAt), asc(sql`${tag}.rowid`));
 
 // Only the account's own tags go on the look, and only when the look is the
-// account's: an id from another account writes no row.
-const tagWrites = (db: Db, userId: string, lookId: string, tagIds: TagId[]) => {
+// account's: an id from another account writes no row. With a mode, only
+// while the look still has that mode, so a refused change writes no tag.
+const tagWrites = (
+	db: Db,
+	userId: string,
+	lookId: string,
+	tagIds: TagId[],
+	modeId?: ModeId,
+) => {
+	const theLook = and(
+		eq(look.id, lookId),
+		eq(look.userId, userId),
+		modeId === undefined ? undefined : eq(look.modeId, modeId),
+	);
+	const lookIsThere = exists(
+		db.select({ one: sql`1` }).from(look).where(theLook),
+	);
 	const clear = db
 		.delete(lookTag)
-		.where(and(eq(lookTag.lookId, lookId), eq(lookTag.userId, userId)));
+		.where(
+			and(eq(lookTag.lookId, lookId), eq(lookTag.userId, userId), lookIsThere),
+		);
 	if (tagIds.length === 0) return [clear];
 	const insert = db.insert(lookTag).select(
 		db
@@ -55,12 +84,7 @@ const tagWrites = (db: Db, userId: string, lookId: string, tagIds: TagId[]) => {
 				and(
 					eq(tag.userId, userId),
 					inArray(tag.id, [...new Set(tagIds)]),
-					exists(
-						db
-							.select({ one: sql`1` })
-							.from(look)
-							.where(and(eq(look.id, lookId), eq(look.userId, userId))),
-					),
+					lookIsThere,
 				),
 			),
 	);
@@ -83,7 +107,8 @@ export async function listLooks(db: Db, userId: string): Promise<Look[]> {
 // The page makes the id when the save form opens, so a Save sent again after
 // a lost answer writes over the same look rather than making a second one.
 // An id another account holds is not touched: conflict. A new id past the
-// look limit is not saved: look_limit.
+// look limit is not saved: look_limit. The count sits in the insert, so two
+// saves at once cannot both pass it.
 export async function saveLook(
 	db: Db,
 	userId: string,
@@ -96,13 +121,6 @@ export async function saveLook(
 		.select({ id: look.id })
 		.from(look)
 		.where(eq(look.id, input.id));
-	if (!before) {
-		const [{ n }] = await db
-			.select({ n: count() })
-			.from(look)
-			.where(eq(look.userId, userId));
-		if (n >= LOOK_LIMIT) return { ok: false, error: "look_limit" };
-	}
 	const fields = {
 		modeId: input.modeId,
 		name: input.name,
@@ -112,7 +130,41 @@ export async function saveLook(
 	const [rows, ...rest] = await db.batch([
 		db
 			.insert(look)
-			.values({ id: input.id, userId, ...fields })
+			.select(
+				db
+					.select({
+						id: sql<string>`${input.id}`.as("id"),
+						userId: user.id,
+						modeId: sql<string>`${input.modeId}`.as("mode_id"),
+						name: sql<string>`${input.name}`.as("name"),
+						colours: sql<string>`${JSON.stringify(input.colours)}`.as(
+							"colours",
+						),
+						open: sql<string>`${JSON.stringify(input.open)}`.as("open"),
+						createdAt:
+							sql<number>`(cast(unixepoch('subsecond') * 1000 as integer))`.as(
+								"created_at",
+							),
+					})
+					.from(user)
+					.where(
+						and(
+							eq(user.id, userId),
+							or(
+								sql`(${db
+									.select({ n: count() })
+									.from(look)
+									.where(eq(look.userId, userId))}) < ${LOOK_LIMIT}`,
+								exists(
+									db
+										.select({ one: sql`1` })
+										.from(look)
+										.where(eq(look.id, input.id)),
+								),
+							),
+						),
+					),
+			)
 			.onConflictDoUpdate({
 				target: look.id,
 				set: fields,
@@ -123,9 +175,13 @@ export async function saveLook(
 		tagLinks(db, userId, input.id),
 	]);
 	const [row] = rows;
-	return row
-		? { ok: true, look: toLook(row, rest.at(-1) as Link[]), created: !before }
-		: { ok: false, error: "conflict" };
+	if (row)
+		return {
+			ok: true,
+			look: toLook(row, rest.at(-1) as Link[]),
+			created: !before,
+		};
+	return { ok: false, error: before ? "conflict" : "look_limit" };
 }
 
 // Changes only a look the account has; a gone id is not made again, as
@@ -151,6 +207,59 @@ export async function updateLook(
 	]);
 	const [row] = rows;
 	return row ? toLook(row, rest.at(-1) as Link[]) : null;
+}
+
+export type LookPatch = {
+	name?: string;
+	colours?: Partial<Record<GarmentId, Hex>>;
+	open?: JacketId[];
+	tags?: TagId[];
+};
+
+// Writes only the fields given, so two changes made from one read keep each
+// other's fields. Colours and open jackets are written only while the look
+// still has the mode they were checked against: "moved" when the page
+// changed it since. null when the look is gone.
+export async function changeLook(
+	db: Db,
+	userId: string,
+	id: string,
+	patch: LookPatch,
+	modeId: ModeId,
+): Promise<Look | null | "moved"> {
+	const guardMode = patch.colours !== undefined || patch.open !== undefined;
+	const [rows, ...rest] = await db.batch([
+		db
+			.update(look)
+			.set({
+				// Always one column, so a tags-only change still returns the row.
+				id: sql`${look.id}`,
+				...(patch.name !== undefined && { name: patch.name }),
+				...(patch.open !== undefined && { open: patch.open }),
+				...(patch.colours !== undefined && {
+					colours: sql`json_patch(${look.colours}, ${JSON.stringify(patch.colours)})`,
+				}),
+			})
+			.where(
+				and(
+					eq(look.id, id),
+					eq(look.userId, userId),
+					guardMode ? eq(look.modeId, modeId) : undefined,
+				),
+			)
+			.returning(),
+		...(patch.tags === undefined
+			? []
+			: tagWrites(db, userId, id, patch.tags, guardMode ? modeId : undefined)),
+		tagLinks(db, userId, id),
+	]);
+	const [row] = rows;
+	if (row) return toLook(row, rest.at(-1) as Link[]);
+	const [still] = await db
+		.select({ id: look.id })
+		.from(look)
+		.where(and(eq(look.id, id), eq(look.userId, userId)));
+	return still ? "moved" : null;
 }
 
 // Only the account's own look goes; false when there is none to delete.

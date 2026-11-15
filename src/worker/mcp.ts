@@ -3,47 +3,18 @@ import { createResourceServerChallenge } from "@better-auth/oauth-provider";
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import { APIError } from "better-auth/api";
 import { and, eq } from "drizzle-orm";
-import { GARMENT_IDS, GARMENT_NAMES, isJacket } from "@/dress/garments";
-import { MODES } from "@/dress/modes";
+import { registerAiActions } from "./ai-actions";
 import { type createAuth, mcpResource } from "./auth";
 import type { Db } from "./db";
 import { oauthConsent } from "./db/auth-schema";
 
 type Auth = ReturnType<typeof createAuth>;
 
-const list = {
-	garments: GARMENT_IDS.map((id) => ({
-		id,
-		name: GARMENT_NAMES[id],
-		jacket: isJacket(id),
-	})),
-	modes: MODES.map((m) => ({
-		id: m.id,
-		name: m.name,
-		weatherGroup: m.group,
-		garments: [...m.garments],
-	})),
-};
-
-function dressupServer() {
+function dressupServer(db: Db, userId: string) {
 	const server = new McpServer({ name: "dressup", version: "1.0.0" });
-	server.registerTool(
-		"list_garments_and_modes",
-		{
-			title: "List garments and modes",
-			description:
-				"The 17 garments and the 23 modes dressup knows. A mode is a set of garments worn together.",
-			annotations: { readOnlyHint: true },
-		},
-		() => ({
-			content: [{ type: "text", text: JSON.stringify(list) }],
-			structuredContent: list,
-		}),
-	);
+	registerAiActions(server, { db, userId });
 	return server;
 }
-
-const mcpHandler = createMcpHandler(() => dressupServer());
 
 // The same 401 requireMcpAuth gives, so an AI app reads every refusal one way.
 function refuse(request: Request, baseURL: string, description: string) {
@@ -98,7 +69,7 @@ export function mcpRoute(
 			if (!allow) return refuse(req, baseURL, "this app is no longer allowed");
 			const token =
 				req.headers.get("authorization")?.replace(/^\S+\s+/, "") ?? "";
-			return mcpHandler.fetch(req, {
+			return createMcpHandler(() => dressupServer(db, sub)).fetch(req, {
 				authInfo: {
 					token,
 					clientId: azp,

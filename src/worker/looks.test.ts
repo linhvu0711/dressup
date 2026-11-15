@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { makeHarness } from "./test/harness";
+import { lookInputSchema } from "@/looks/look";
+import { changeLook, listLooks, saveLook } from "./look-store";
+import { makeHarness, seedLooks } from "./test/harness";
 
 type Harness = Awaited<ReturnType<typeof makeHarness>>;
 
@@ -62,19 +64,6 @@ const list = async ({ app, env }: Harness, headers: Headers) =>
 	(await (await app.request("/api/looks", { headers }, env)).json()) as {
 		looks: { name: string }[];
 	};
-
-// Writes n valid looks for the user straight into the table, so a test can
-// reach the look limit without 300 requests.
-function seedLooks(h: Harness, userId: string, n: number) {
-	h.sqlite.run(
-		`INSERT INTO look (id, user_id, mode_id, name, colours, open)
-		WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?)
-		SELECT printf('00000000-0000-4000-8000-%012d', i), ?, 'polo-sweater-chore', '',
-			'{"chino_p":"#C9B38C","polo_l":"#F3F1EC","sweater":"#1F3A5F","chore":"#55633F"}', '[]'
-		FROM n`,
-		[n, userId],
-	);
-}
 
 const lookCount = (h: Harness) =>
 	h.sqlite.query("select count(*) as n from look").get();
@@ -725,5 +714,62 @@ describe("tags on looks", () => {
 			status: 400,
 			body: { error: "invalid", field: "tags" },
 		});
+	});
+});
+
+describe("two look changes made from one read", () => {
+	test("keeps both of two look changes made from one read", async () => {
+		// Given: NAVY saved, and the one read both changes make before either
+		// writes. Two calls through the harness do not overlap, so the test
+		// sets the order itself.
+		const h = await withAlice();
+		const { db } = h.settings;
+		await saveLook(db, "alice-id", lookInputSchema.parse(NAVY));
+		const [read] = await listLooks(db, "alice-id");
+		// When
+		await changeLook(
+			db,
+			"alice-id",
+			NAVY.id,
+			{ name: "Navy night" },
+			read.modeId,
+		);
+		await changeLook(
+			db,
+			"alice-id",
+			NAVY.id,
+			{ colours: { sweater: "#7A2E2E" } },
+			read.modeId,
+		);
+		// Then
+		const [look] = await listLooks(db, "alice-id");
+		expect({
+			name: look.name,
+			sweater: look.colours.sweater,
+			chino_p: look.colours.chino_p,
+		}).toEqual({ name: "Navy night", sweater: "#7A2E2E", chino_p: "#C9B38C" });
+	});
+});
+
+describe("two look saves at once", () => {
+	test("saves one of two looks sent at once at look 299", async () => {
+		// Given
+		const h = await withAlice();
+		await seedLooks(h, "alice-id", 299);
+		const first = lookInputSchema.parse({ ...NAVY, id: SECOND_ID });
+		const second = lookInputSchema.parse({
+			...NAVY,
+			id: "33333333-3333-4333-8333-333333333333",
+		});
+		// When
+		const results = await Promise.all([
+			saveLook(h.settings.db, "alice-id", first),
+			saveLook(h.settings.db, "alice-id", second),
+		]);
+		// Then
+		expect({
+			count: h.sqlite.query("select count(*) as n from look").get(),
+			oks: results.map((r) => r.ok).sort(),
+		}).toEqual({ count: { n: 300 }, oks: [false, true] });
 	});
 });

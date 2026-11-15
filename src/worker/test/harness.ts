@@ -282,3 +282,134 @@ export async function connectAiApp(
 	};
 	return { jar, allowUrl, consent, token };
 }
+
+export const send = (
+	h: Harness,
+	jar: Jar,
+	path: string,
+	init: RequestInit = {},
+) =>
+	h.app.request(
+		path,
+		{
+			...init,
+			headers: {
+				...(init.headers as Record<string, string>),
+				...(jar.size ? { cookie: cookie(jar) } : {}),
+			},
+		},
+		h.env,
+	);
+
+export const INITIALIZE = {
+	jsonrpc: "2.0",
+	id: 1,
+	method: "initialize",
+	params: {
+		protocolVersion: "2025-11-25",
+		capabilities: {},
+		clientInfo: { name: "test", version: "1" },
+	},
+};
+
+export const post = (
+	h: Harness,
+	body: unknown,
+	headers: Record<string, string> = {},
+) =>
+	h.app.request(
+		"/api/mcp",
+		{
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+				accept: "application/json, text/event-stream",
+				...headers,
+			},
+			body: JSON.stringify(body),
+		},
+		h.env,
+	);
+
+// The answer comes as one server-sent event; its data line is the JSON-RPC
+// message.
+export async function message<T>(res: Response): Promise<T> {
+	const text = await res.text();
+	const data = text.split("\n").find((line) => line.startsWith("data: "));
+	return JSON.parse(data?.slice("data: ".length) ?? text) as T;
+}
+
+type ToolResult = {
+	isError?: boolean;
+	content: { type: string; text: string }[];
+	structuredContent?: Record<string, unknown>;
+};
+
+export type ListedTool = {
+	name: string;
+	title?: string;
+	annotations?: Record<string, unknown>;
+};
+
+// A connected AI app after its handshake. Needs stubOutside with the test
+// app.
+export async function aiSession(h: Harness) {
+	const { jar, token } = await connectAiApp(h, { accept: true });
+	const session = {
+		authorization: `Bearer ${token?.body.access_token}`,
+		"mcp-protocol-version": "2025-11-25",
+	};
+	await post(h, INITIALIZE, session);
+	await post(
+		h,
+		{ jsonrpc: "2.0", method: "notifications/initialized" },
+		session,
+	);
+	let id = 1;
+	const call = async (name: string, args: Record<string, unknown> = {}) => {
+		id += 1;
+		const { result, error } = await message<{
+			result?: ToolResult;
+			error?: unknown;
+		}>(
+			await post(
+				h,
+				{
+					jsonrpc: "2.0",
+					id,
+					method: "tools/call",
+					params: { name, arguments: args },
+				},
+				session,
+			),
+		);
+		if (!result)
+			throw new Error(`tools/call ${name}: ${JSON.stringify(error)}`);
+		return {
+			isError: result.isError ?? false,
+			text: result.content[0]?.text,
+			data: result.structuredContent,
+		};
+	};
+	const list = async () => {
+		id += 1;
+		const { result } = await message<{ result: { tools: ListedTool[] } }>(
+			await post(h, { jsonrpc: "2.0", id, method: "tools/list" }, session),
+		);
+		return result.tools;
+	};
+	return { jar, call, list };
+}
+
+// Writes n valid looks for the user straight into the table, so a test can
+// reach the look limit without 300 requests.
+export function seedLooks(h: Harness, userId: string, n: number) {
+	h.sqlite.run(
+		`INSERT INTO look (id, user_id, mode_id, name, colours, open)
+		WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?)
+		SELECT printf('00000000-0000-4000-8000-%012d', i), ?, 'polo-sweater-chore', '',
+			'{"chino_p":"#C9B38C","polo_l":"#F3F1EC","sweater":"#1F3A5F","chore":"#55633F"}', '[]'
+		FROM n`,
+		[n, userId],
+	);
+}
