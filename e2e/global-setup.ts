@@ -9,7 +9,7 @@ export const SESSION_FILE = "e2e/.auth/session.json";
 export const LIMIT_FILE = "e2e/.auth/limit.json";
 // Each test changes the colours it saves, and tests run in parallel, so
 // each one claims its own fresh account from this pool (e2e/fixtures.ts).
-export const POOL_SIZE = 300;
+export const POOL_SIZE = 400;
 export const poolFile = (n: number) => `e2e/.auth/pool/${n}.json`;
 export const claimFile = (n: number) => `e2e/.auth/claims/${n}`;
 
