@@ -350,3 +350,66 @@ test("shows Could not load your AI apps when the list fails", async ({
 		empty: 0,
 	});
 });
+
+test("disconnects an AI app", async ({ page, context }, testInfo) => {
+	// Given: both projects, this project's account with Test App allowed,
+	// /settings showing its row
+	await signInWithAiApp(context, testInfo.project.name, "disconnect");
+	await routeTestAppLogo(page);
+	await page.goto("/settings");
+	await expect(aiAppRow(page)).toHaveCount(1);
+	// When
+	await page
+		.getByRole("button", { name: "Disconnect Test App", exact: true })
+		.click();
+	// Then
+	const toast = page.locator('[data-slot="toast"]');
+	await expect(toast).toHaveText("Disconnected");
+	await expect(aiAppRow(page)).toHaveCount(0);
+	expect({
+		toast: await toast.textContent(),
+		rows: await aiAppRow(page).count(),
+		empty: await page.getByText(NO_AI_APPS, { exact: true }).textContent(),
+		stored: await (await page.request.get("/api/ai-apps")).json(),
+	}).toEqual({
+		toast: "Disconnected",
+		rows: 0,
+		empty: NO_AI_APPS,
+		stored: { apps: [] },
+	});
+});
+
+test("keeps the app and says Not disconnected when the disconnect fails", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account; the list holds Test App, and its
+	// disconnect is answered 500
+	await page.route("**/api/ai-apps**", (route) =>
+		route.request().method() === "DELETE"
+			? route.fulfill({ status: 500 })
+			: route.fulfill({
+					json: {
+						apps: [
+							{
+								id: "allow-1",
+								name: "Test App",
+								logo: null,
+								connectedAt: "2026-11-14T12:00:00.000Z",
+							},
+						],
+					},
+				}),
+	);
+	await page.goto("/settings");
+	// When
+	await page
+		.getByRole("button", { name: "Disconnect Test App", exact: true })
+		.click();
+	// Then
+	const alert = aiAppRow(page).getByRole("alert");
+	await expect(alert).toHaveText("Not disconnected. Try again.");
+	expect({
+		alert: await alert.textContent(),
+		rows: await aiAppRow(page).count(),
+	}).toEqual({ alert: "Not disconnected. Try again.", rows: 1 });
+});

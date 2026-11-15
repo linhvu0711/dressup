@@ -1,6 +1,6 @@
 import { AppLogo } from "@/ai-apps/AppLogo";
 import type { AiApp } from "@/ai-apps/ai-app";
-import { useAiApps } from "@/ai-apps/api";
+import { useAiApps, useDisconnectAiApp } from "@/ai-apps/api";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 
@@ -90,7 +90,10 @@ const connectedOn = (iso: string) =>
 		year: "numeric",
 	});
 
+// Each row has its own Disconnect, so a failure shows under its own row.
 function AiAppRow({ app }: { app: AiApp }) {
+	const disconnect = useDisconnectAiApp();
+	const toast = useToast();
 	return (
 		<div data-slot="ai-app">
 			<div className="flex min-h-[58px] min-w-0 items-center gap-2.5 border-b border-border py-[11px]">
@@ -102,8 +105,23 @@ function AiAppRow({ app }: { app: AiApp }) {
 					</small>
 				</div>
 				<span className="flex-1" />
-				<Button aria-label={`Disconnect ${app.name}`}>Disconnect</Button>
+				<Button
+					aria-label={`Disconnect ${app.name}`}
+					disabled={disconnect.isPending}
+					onClick={() =>
+						disconnect.mutate(app.id, {
+							onSuccess: () => toast("Disconnected"),
+						})
+					}
+				>
+					Disconnect
+				</Button>
 			</div>
+			{disconnect.isError ? (
+				<p role="alert" className="mt-1.5 text-[13px] text-destructive">
+					Not disconnected. Try again.
+				</p>
+			) : null}
 		</div>
 	);
 }
