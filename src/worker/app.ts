@@ -5,7 +5,7 @@ import type { z } from "zod";
 import { dressChangeSchema } from "@/dress/state";
 import { lookInputSchema } from "@/looks/look";
 import { newTagSchema, tagSchema } from "@/tags/tag";
-import { listAiApps } from "./ai-app-store";
+import { disconnectAiApp, listAiApps } from "./ai-app-store";
 import { createAuth, createClientDiscovery } from "./auth";
 import type { Db } from "./db";
 import { user } from "./db/auth-schema";
@@ -199,6 +199,17 @@ export function createApp(getDb: (env: Env) => Db) {
 			c.req.param("id"),
 		);
 		if (!deleted) return c.json({ error: "not_found" }, 404);
+		return c.body(null, 204);
+	});
+
+	// A gone allow and another account's allow answer the same 404, as looks do.
+	app.delete("/ai-apps/:id", withAuth, requireUser, async (c) => {
+		const disconnected = await disconnectAiApp(
+			getDb(c.env),
+			c.var.user.id,
+			c.req.param("id"),
+		);
+		if (!disconnected) return c.json({ error: "not_found" }, 404);
 		return c.body(null, 204);
 	});
 

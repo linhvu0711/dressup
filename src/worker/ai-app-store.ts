@@ -1,7 +1,7 @@
 import { and, asc, eq } from "drizzle-orm";
 import type { AiApp } from "@/ai-apps/ai-app";
 import type { Db } from "./db";
-import { oauthClient, oauthConsent } from "./db/auth-schema";
+import { oauthClient, oauthConsent, oauthRefreshToken } from "./db/auth-schema";
 
 // An AI app is connected while its allow row for the account exists: the
 // row better-auth writes on Allow.
@@ -42,4 +42,34 @@ export async function isAiAppAllowed(
 		)
 		.limit(1);
 	return allow !== undefined;
+}
+
+// False when the account has no allow of that id: gone already, or another
+// account's. The refresh tokens go too, since one would get new passes until
+// it ends; both deletes run as one batch, all or nothing.
+export async function disconnectAiApp(
+	db: Db,
+	userId: string,
+	id: string,
+): Promise<boolean> {
+	const [allow] = await db
+		.select({ clientId: oauthConsent.clientId })
+		.from(oauthConsent)
+		.where(and(eq(oauthConsent.id, id), eq(oauthConsent.userId, userId)))
+		.limit(1);
+	if (!allow) return false;
+	await db.batch([
+		db
+			.delete(oauthRefreshToken)
+			.where(
+				and(
+					eq(oauthRefreshToken.userId, userId),
+					eq(oauthRefreshToken.clientId, allow.clientId),
+				),
+			),
+		db
+			.delete(oauthConsent)
+			.where(and(eq(oauthConsent.id, id), eq(oauthConsent.userId, userId))),
+	]);
+	return true;
 }
