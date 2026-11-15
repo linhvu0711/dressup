@@ -60,6 +60,39 @@ const addTag = async (h: Harness, ai: Session, name: string) => {
 	return ((await res.json()) as { tag: { id: string } }).tag.id;
 };
 
+// A second account, bob, and a way to send as him.
+async function asBob(h: Harness) {
+	await h.helpers.saveUser(
+		h.helpers.createUser({
+			id: "bob-id",
+			email: "bob@example.com",
+			name: "Bob",
+		}),
+	);
+	const headers = Object.fromEntries(
+		await h.helpers.getAuthHeaders({ userId: "bob-id" }),
+	);
+	return (method: string, path: string, body?: unknown) =>
+		h.app.request(
+			path,
+			body === undefined
+				? { method, headers }
+				: {
+						method,
+						headers: { ...headers, "content-type": "application/json" },
+						body: JSON.stringify(body),
+					},
+			h.env,
+		);
+}
+
+const tags = async (h: Harness, ai: Session) =>
+	(
+		(await (await send(h, ai.jar, "/api/tags")).json()) as {
+			tags: { id: string; name: string }[];
+		}
+	).tags;
+
 const looks = async (h: Harness, ai: Session) =>
 	(
 		(await (await send(h, ai.jar, "/api/looks")).json()) as {
@@ -519,37 +552,175 @@ describe("look changes", () => {
 	test("refuses to delete another account's look", async () => {
 		// Given: bob saved NAVY
 		const { h, ai } = await connected();
-		await h.helpers.saveUser(
-			h.helpers.createUser({
-				id: "bob-id",
-				email: "bob@example.com",
-				name: "Bob",
-			}),
-		);
-		const bob = await h.helpers.getAuthHeaders({ userId: "bob-id" });
-		const bobPost = await h.app.request(
-			"/api/looks",
-			{
-				method: "POST",
-				headers: {
-					...Object.fromEntries(bob),
-					"content-type": "application/json",
-				},
-				body: JSON.stringify(NAVY),
-			},
-			h.env,
-		);
-		expect(bobPost.status).toBe(201);
+		const bob = await asBob(h);
+		expect((await bob("POST", "/api/looks", NAVY)).status).toBe(201);
 		// When
 		const { isError, text } = await ai.call("delete_look", { id: NAVY.id });
 		// Then
-		const bobLooks = (await (
-			await h.app.request("/api/looks", { headers: bob }, h.env)
-		).json()) as { looks: unknown[] };
+		const bobLooks = (await (await bob("GET", "/api/looks")).json()) as {
+			looks: unknown[];
+		};
 		expect({ isError, text, bobLooks: bobLooks.looks.length }).toEqual({
 			isError: true,
 			text: "No look with this id.",
 			bobLooks: 1,
+		});
+	});
+});
+
+describe("tags", () => {
+	const R = { readOnlyHint: true };
+	const W = { readOnlyHint: false, destructiveHint: false };
+	const D = { readOnlyHint: false, destructiveHint: true };
+
+	test("lists every AI action with its marks", async () => {
+		// Given
+		const { ai } = await connected();
+		// When
+		const listed = await ai.list();
+		// Then
+		expect(listed.map((t) => [t.name, t.annotations])).toEqual([
+			["list_garments_and_modes", R],
+			["get_outfit", R],
+			["set_mode", W],
+			["pick_colour", W],
+			["add_colour_square", W],
+			["remove_colour_square", D],
+			["set_jacket", W],
+			["set_mannequin_colour", W],
+			["list_looks", R],
+			["save_look", W],
+			["change_look", W],
+			["delete_look", D],
+			["list_tags", R],
+			["add_tag", W],
+			["rename_tag", W],
+			["delete_tag", D],
+		]);
+		expect(listed.every((t) => typeof t.title === "string")).toBe(true);
+	});
+
+	test("lists no tags with its own text", async () => {
+		// Given
+		const { ai } = await connected();
+		// When
+		const result = await ai.call("list_tags");
+		// Then
+		expect(result).toEqual({
+			isError: false,
+			text: "You have no tags yet.",
+			data: { tags: [] },
+		});
+	});
+
+	test("lists the tags", async () => {
+		// Given
+		const { h, ai } = await connected();
+		const work = await addTag(h, ai, "Work");
+		// When
+		const { data } = await ai.call("list_tags");
+		// Then
+		expect(data).toEqual({ tags: [{ id: work, name: "Work" }] });
+	});
+
+	test("adds a tag", async () => {
+		// Given
+		const { h, ai } = await connected();
+		// When
+		const { isError, data } = await ai.call("add_tag", { name: "Work" });
+		// Then
+		const stored = await tags(h, ai);
+		expect({
+			isError,
+			names: stored.map((t) => t.name),
+			sameId: stored[0]?.id === (data as { tag: { id: string } }).tag.id,
+		}).toEqual({ isError: false, names: ["Work"], sameId: true });
+	});
+
+	test("refuses a tag name already used", async () => {
+		// Given
+		const { h, ai } = await connected();
+		await addTag(h, ai, "Work");
+		// When
+		const { isError, text } = await ai.call("add_tag", { name: "work" });
+		// Then
+		expect({
+			isError,
+			text,
+			names: (await tags(h, ai)).map((t) => t.name),
+		}).toEqual({
+			isError: true,
+			text: "You already have a tag called work.",
+			names: ["Work"],
+		});
+	});
+
+	test("renames a tag", async () => {
+		// Given
+		const { h, ai } = await connected();
+		const work = await addTag(h, ai, "Work");
+		// When
+		const { isError } = await ai.call("rename_tag", {
+			id: work,
+			name: "Office",
+		});
+		// Then
+		expect({ isError, tags: await tags(h, ai) }).toEqual({
+			isError: false,
+			tags: [{ id: work, name: "Office" }],
+		});
+	});
+
+	test("refuses to rename a tag that is gone", async () => {
+		// Given
+		const { h, ai } = await connected();
+		const work = await addTag(h, ai, "Work");
+		expect(
+			(await send(h, ai.jar, `/api/tags/${work}`, { method: "DELETE" })).status,
+		).toBe(204);
+		// When
+		const { isError, text } = await ai.call("rename_tag", {
+			id: work,
+			name: "Office",
+		});
+		// Then
+		expect({ isError, text, tags: await tags(h, ai) }).toEqual({
+			isError: true,
+			text: "No tag with this id.",
+			tags: [],
+		});
+	});
+
+	test("deletes a tag", async () => {
+		// Given
+		const { h, ai } = await connected();
+		const work = await addTag(h, ai, "Work");
+		// When
+		const { isError } = await ai.call("delete_tag", { id: work });
+		// Then
+		expect({ isError, tags: await tags(h, ai) }).toEqual({
+			isError: false,
+			tags: [],
+		});
+	});
+
+	test("refuses to delete another account's tag", async () => {
+		// Given
+		const { h, ai } = await connected();
+		const bob = await asBob(h);
+		const posted = await bob("POST", "/api/tags", { name: "Work" });
+		expect(posted.status).toBe(201);
+		const bobWork = ((await posted.json()) as { tag: { id: string } }).tag.id;
+		// When
+		const { isError, text } = await ai.call("delete_tag", { id: bobWork });
+		// Then
+		const bobTags = (await (await bob("GET", "/api/tags")).json()) as {
+			tags: unknown[];
+		};
+		expect({ isError, text, bobTags: bobTags.tags.length }).toEqual({
+			isError: true,
+			text: "No tag with this id.",
+			bobTags: 1,
 		});
 	});
 });

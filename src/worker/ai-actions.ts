@@ -24,7 +24,7 @@ import {
 	type Look,
 	lookInputSchema,
 } from "@/looks/look";
-import type { Tag } from "@/tags/tag";
+import { newTagSchema, TAG_NAME_MAX, type Tag, tagSchema } from "@/tags/tag";
 import {
 	issueText,
 	lastSquare,
@@ -33,13 +33,16 @@ import {
 	noLook,
 	noLooks,
 	noTag,
+	noTags,
 	notInRow,
 	serverError,
+	tagNameLength,
+	tagNameTaken,
 } from "./ai-messages";
 import type { Db } from "./db";
 import { changeDress, loadDress } from "./dress-store";
 import { changeLook, deleteLook, listLooks, saveLook } from "./look-store";
-import { listTags } from "./tag-store";
+import { addTag, deleteTag, listTags, renameTag } from "./tag-store";
 
 type Account = { db: Db; userId: string };
 
@@ -376,5 +379,78 @@ export function registerAiActions(server: McpServer, account: Account) {
 			(await deleteLook(db, userId, id))
 				? answer({ deleted: id })
 				: refusal(noLook),
+	);
+
+	tool(
+		"list_tags",
+		{
+			title: "List tags",
+			description: "The tags, in the order they were made.",
+			annotations: READ,
+			inputSchema: noArgs,
+		},
+		async () => {
+			const tags = await listTags(db, userId);
+			return tags.length === 0 ? answer({ tags }, noTags) : answer({ tags });
+		},
+	);
+
+	tool(
+		"add_tag",
+		{
+			title: "Add a tag",
+			description: `Adds a tag. A name has 1 to ${TAG_NAME_MAX} characters, and each name is used once.`,
+			annotations: WRITE,
+			inputSchema: z.object({ name: z.string().describe("The tag's name.") }),
+		},
+		async (args) => {
+			const parsed = newTagSchema.safeParse(args);
+			if (!parsed.success) return refusal(tagNameLength());
+			const added = await addTag(db, userId, parsed.data.name);
+			return added.ok
+				? answer({ tag: added.tag })
+				: refusal(tagNameTaken(parsed.data.name));
+		},
+	);
+
+	tool(
+		"rename_tag",
+		{
+			title: "Rename a tag",
+			description: "Renames a tag. Its looks keep it.",
+			annotations: WRITE,
+			inputSchema: z.object({
+				id: z.string().describe("The tag's id."),
+				name: z.string().describe("The tag's new name."),
+			}),
+		},
+		async (args) => {
+			const parsed = tagSchema.safeParse(args);
+			if (!parsed.success)
+				return refusal(
+					parsed.error.issues.some((issue) => issue.path[0] === "id")
+						? noTag
+						: tagNameLength(),
+				);
+			const renamed = await renameTag(db, userId, parsed.data);
+			if (renamed.ok) return answer({ tag: renamed.tag });
+			return refusal(
+				renamed.error === "not_found" ? noTag : tagNameTaken(parsed.data.name),
+			);
+		},
+	);
+
+	tool(
+		"delete_tag",
+		{
+			title: "Delete a tag",
+			description: "Deletes a tag and takes it off every look. The looks stay.",
+			annotations: DELETE,
+			inputSchema: z.object({ id: z.string().describe("The tag's id.") }),
+		},
+		async ({ id }) =>
+			(await deleteTag(db, userId, id))
+				? answer({ deleted: id })
+				: refusal(noTag),
 	);
 }
