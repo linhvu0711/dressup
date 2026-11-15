@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { makeHarness } from "./test/harness";
+import { makeHarness, seedLooks } from "./test/harness";
 
 type Harness = Awaited<ReturnType<typeof makeHarness>>;
 
@@ -62,19 +62,6 @@ const list = async ({ app, env }: Harness, headers: Headers) =>
 	(await (await app.request("/api/looks", { headers }, env)).json()) as {
 		looks: { name: string }[];
 	};
-
-// Writes n valid looks for the user straight into the table, so a test can
-// reach the look limit without 300 requests.
-function seedLooks(h: Harness, userId: string, n: number) {
-	h.sqlite.run(
-		`INSERT INTO look (id, user_id, mode_id, name, colours, open)
-		WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?)
-		SELECT printf('00000000-0000-4000-8000-%012d', i), ?, 'polo-sweater-chore', '',
-			'{"chino_p":"#C9B38C","polo_l":"#F3F1EC","sweater":"#1F3A5F","chore":"#55633F"}', '[]'
-		FROM n`,
-		[n, userId],
-	);
-}
 
 const lookCount = (h: Harness) =>
 	h.sqlite.query("select count(*) as n from look").get();

@@ -18,9 +18,27 @@ import {
 	dressChangeSchema,
 	MANNEQUIN_PARTS,
 } from "@/dress/state";
-import { issueText, lastSquare, notInRow } from "./ai-messages";
+import {
+	LOOK_LIMIT,
+	LOOK_NAME_MAX,
+	type Look,
+	lookInputSchema,
+} from "@/looks/look";
+import type { Tag } from "@/tags/tag";
+import {
+	issueText,
+	lastSquare,
+	lookIssueText,
+	lookLimit,
+	noLooks,
+	noTag,
+	notInRow,
+	serverError,
+} from "./ai-messages";
 import type { Db } from "./db";
 import { changeDress, loadDress } from "./dress-store";
+import { listLooks, saveLook } from "./look-store";
+import { listTags } from "./tag-store";
 
 type Account = { db: Db; userId: string };
 
@@ -64,6 +82,15 @@ const outfitView = (state: DressState) => ({
 	hair: state.mannequin.hair,
 });
 
+const lookView = (look: Look, tags: Tag[]) => ({
+	id: look.id,
+	name: look.name,
+	modeId: look.modeId,
+	colours: look.colours,
+	open: look.open,
+	tags: tags.filter((t) => look.tags.includes(t.id)),
+});
+
 const noArgs = z.object({});
 
 const field = {
@@ -74,6 +101,16 @@ const field = {
 	colour: z
 		.string()
 		.describe("A colour as #RRGGBB with capital letters, such as #1F3A5F."),
+	colours: z
+		.record(z.string(), z.string())
+		.describe(
+			"A colour as #RRGGBB for each garment of the mode, keyed by garment id.",
+		),
+	open: z
+		.array(z.string())
+		.describe(`The open jackets of the mode: ${JACKET_IDS.join(" or ")}.`),
+	lookName: z.string().describe(`At most ${LOOK_NAME_MAX} characters.`),
+	tags: z.array(z.string()).describe("Tag ids."),
 };
 
 export function registerAiActions(server: McpServer, account: Account) {
@@ -90,9 +127,15 @@ export function registerAiActions(server: McpServer, account: Account) {
 		run: (args: z.output<S>) => Promise<CallToolResult>,
 	) {
 		const inputSchema: z.ZodObject = config.inputSchema;
-		server.registerTool(name, { ...config, inputSchema }, (args) =>
-			run(args as z.output<S>),
-		);
+		server.registerTool(name, { ...config, inputSchema }, async (args) => {
+			try {
+				return await run(args as z.output<S>);
+			} catch {
+				// The SDK would send the error's own message to the AI app
+				// (@modelcontextprotocol/server mcp-oHn3ureC.mjs:1617-1621).
+				return refusal(serverError);
+			}
+		});
 	}
 
 	tool(
@@ -208,5 +251,61 @@ export function registerAiActions(server: McpServer, account: Account) {
 		},
 		({ part, colour }) =>
 			changeOutfit({ kind: "mannequin", part, hex: colour }),
+	);
+
+	tool(
+		"list_looks",
+		{
+			title: "List looks",
+			description:
+				"The saved looks, newest first, each with its mode, colours, open jackets, name, and tags.",
+			annotations: READ,
+			inputSchema: noArgs,
+		},
+		async () => {
+			const [all, tags] = await Promise.all([
+				listLooks(db, userId),
+				listTags(db, userId),
+			]);
+			if (all.length === 0) return answer({ looks: [] }, noLooks);
+			return answer({ looks: all.map((look) => lookView(look, tags)) });
+		},
+	);
+
+	tool(
+		"save_look",
+		{
+			title: "Save a look",
+			description: `Saves a new look with a mode, a colour for each garment of the mode, open jackets, a name, and tags. The outfit on the mannequin does not change. An account keeps at most ${LOOK_LIMIT} looks.`,
+			annotations: WRITE,
+			inputSchema: z.object({
+				modeId: field.modeId,
+				colours: field.colours,
+				open: field.open.optional(),
+				name: field.lookName.optional(),
+				tags: field.tags.optional(),
+			}),
+		},
+		async ({ modeId, colours, open = [], name = "", tags = [] }) => {
+			// The server makes the id, so a save sent twice makes two looks.
+			const input = {
+				id: crypto.randomUUID(),
+				modeId,
+				name,
+				colours,
+				open,
+				tags,
+			};
+			const parsed = lookInputSchema.safeParse(input);
+			if (!parsed.success)
+				return refusal(lookIssueText(parsed.error.issues[0], input));
+			const accountTags = await listTags(db, userId);
+			if (!tags.every((id) => accountTags.some((t) => t.id === id)))
+				return refusal(noTag);
+			const saved = await saveLook(db, userId, parsed.data);
+			if (saved.ok) return answer({ look: lookView(saved.look, accountTags) });
+			if (saved.error === "look_limit") return refusal(lookLimit());
+			throw new Error("a new look id is taken");
+		},
 	);
 }
