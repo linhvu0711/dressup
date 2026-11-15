@@ -750,3 +750,26 @@ describe("two look changes made from one read", () => {
 		}).toEqual({ name: "Navy night", sweater: "#7A2E2E", chino_p: "#C9B38C" });
 	});
 });
+
+describe("two look saves at once", () => {
+	test("saves one of two looks sent at once at look 299", async () => {
+		// Given
+		const h = await withAlice();
+		await seedLooks(h, "alice-id", 299);
+		const first = lookInputSchema.parse({ ...NAVY, id: SECOND_ID });
+		const second = lookInputSchema.parse({
+			...NAVY,
+			id: "33333333-3333-4333-8333-333333333333",
+		});
+		// When
+		const results = await Promise.all([
+			saveLook(h.settings.db, "alice-id", first),
+			saveLook(h.settings.db, "alice-id", second),
+		]);
+		// Then
+		expect({
+			count: h.sqlite.query("select count(*) as n from look").get(),
+			oks: results.map((r) => r.ok).sort(),
+		}).toEqual({ count: { n: 300 }, oks: [false, true] });
+	});
+});
