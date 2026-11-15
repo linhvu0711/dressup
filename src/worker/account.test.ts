@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
 	connectAiApp,
-	cookie,
 	finishGoogleSignIn,
 	type Jar,
 	makeHarness,
+	send,
 	startGoogleSignIn,
 	store,
 	stubOutside,
@@ -16,19 +16,6 @@ type Harness = Awaited<ReturnType<typeof makeHarness>>;
 
 const googleSignIn = async (h: Harness): Promise<Jar> =>
 	(await finishGoogleSignIn(h, await startGoogleSignIn(h))).jar;
-
-const send = (h: Harness, jar: Jar, path: string, init: RequestInit = {}) =>
-	h.app.request(
-		path,
-		{
-			...init,
-			headers: {
-				...(init.headers as Record<string, string>),
-				...(jar.size ? { cookie: cookie(jar) } : {}),
-			},
-		},
-		h.env,
-	);
 
 const sendJson = (h: Harness, jar: Jar, path: string, body: unknown) =>
 	send(h, jar, path, {
