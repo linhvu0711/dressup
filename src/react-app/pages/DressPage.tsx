@@ -1,5 +1,5 @@
 import { BookmarkCheck, BookmarkPlus, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ColourRows, type LiveColour } from "@/dress/ColourRows";
@@ -38,6 +38,15 @@ export function DressPage() {
 	const [live, setLive] = useState<LiveColour | null>(null);
 	const [saving, setSaving] = useState(false);
 	const state = dress.status === "ready" ? dress.state : null;
+	const formShown = saving && state !== null;
+	const holdLoads = dress.status === "ready" ? dress.holdLoads : null;
+	// The form saves the outfit behind it, so no load on focus may swap it.
+	// The hold ends with the form, also when the page goes away under it.
+	useEffect(() => {
+		if (!formShown || !holdLoads) return;
+		holdLoads(true);
+		return () => holdLoads(false);
+	}, [formShown, holdLoads]);
 	const editing = dress.status === "ready" ? dress.editing : null;
 	const mode = state ? modeById(state.modeId) : null;
 	// A stored mode may be in any tab, so until a tab is picked the modes
@@ -105,7 +114,7 @@ export function DressPage() {
 					<MannequinPlaceholder />
 				)}
 			</Stage>
-			{saving && state ? (
+			{formShown && state ? (
 				<SaveLookDialog
 					state={state}
 					editing={editing}

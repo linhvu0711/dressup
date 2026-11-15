@@ -1,5 +1,14 @@
+import { readFileSync } from "node:fs";
 import type { Page } from "@playwright/test";
-import { expect, test } from "./fixtures";
+import { claimAccount, expect, test } from "./fixtures";
+import {
+	card,
+	dialog,
+	openColours,
+	openDress,
+	saveLook,
+	storedLooks,
+} from "./looks-helpers";
 
 const WALL =
 	"linear-gradient(90deg, rgb(198, 194, 188) 0%, rgb(218, 214, 208) 40%, rgb(211, 207, 201) 70%, rgb(195, 191, 185) 100%)";
@@ -286,4 +295,415 @@ test("draws the stage and the mode cards in the account's skin and hair", async 
 		stageHair: (await stage.innerHTML()).includes('fill="#B55239"'),
 		cardSkin: card.includes('fill="#8D5524"'),
 	}).toEqual({ stageSkin: true, stageHair: true, cardSkin: true });
+});
+
+// The session check also loads on this event, as e2e/save.e2e.ts fires it.
+const focusTab = (page: Page) =>
+	page.evaluate(() => window.dispatchEvent(new Event("visibilitychange")));
+
+const square = (page: Page, name: string) =>
+	page.getByRole("button", { name, exact: true });
+
+async function changeElsewhere(
+	page: Page,
+	change: { kind: "add" | "pick"; hex: string },
+) {
+	const res = await page.request.post("/api/dress/changes", {
+		data: { ...change, garment: "sweater" },
+	});
+	expect(res.status()).toBe(204);
+}
+
+// A late answer is applied after its response event; two frames let React
+// show it before a test reads the page.
+const twoFrames = (page: Page) =>
+	page.evaluate(
+		() =>
+			new Promise((done) =>
+				requestAnimationFrame(() => requestAnimationFrame(done)),
+			),
+	);
+
+const isDressGet = (url: string, method: string) =>
+	method === "GET" && new URL(url).pathname === "/api/dress";
+
+// Counts the loads of the dress state from now on.
+function countLoads(page: Page) {
+	const seen = { loads: 0 };
+	page.on("request", (r) => {
+		if (isDressGet(r.url(), r.method())) seen.loads++;
+	});
+	return seen;
+}
+
+// The session check runs on the same focus event, so its answer marks the
+// moment a load on focus would already have been sent.
+const sessionChecked = (page: Page) =>
+	page.waitForResponse((r) => new URL(r.url()).pathname === "/api/me");
+
+const storedSweater = async (page: Page) =>
+	(
+		(await (await page.request.get("/api/dress")).json()) as {
+			picked: { sweater: string };
+		}
+	).picked.sweater;
+
+const changeStored = (page: Page) =>
+	page.waitForResponse(
+		(r) => r.url().endsWith("/api/dress/changes") && r.status() === 204,
+	);
+
+test.describe("load on focus", () => {
+	test("shows a colour picked in another session when the tab gets focus", async ({
+		page,
+	}) => {
+		// Given: both projects, a fresh account, the Colours tab on the phone;
+		// sweater #2E5E4E added and picked from another session
+		await openColours(page);
+		await changeElsewhere(page, { kind: "add", hex: "#2E5E4E" });
+		await changeElsewhere(page, { kind: "pick", hex: "#2E5E4E" });
+		// When
+		await focusTab(page);
+		// Then
+		await expect(square(page, "Sweater #2E5E4E")).toHaveAttribute(
+			"aria-pressed",
+			"true",
+		);
+		await expect
+			.poll(() =>
+				page
+					.locator(
+						'svg[aria-label="Mannequin in Polo + sweater"] [data-garment="sweater"]',
+					)
+					.innerHTML(),
+			)
+			.toContain('fill="#2E5E4E"');
+	});
+
+	test("keeps the colours when a load on focus fails", async ({ page }) => {
+		// Given: both projects, a fresh account, the Colours tab on the phone;
+		// sweater #7A2E2E picked from another session; each load answered 500
+		await openColours(page);
+		await changeElsewhere(page, { kind: "pick", hex: "#7A2E2E" });
+		await page.route("/api/dress", (route) => route.fulfill({ status: 500 }));
+		const failed = page.waitForResponse(
+			(r) => isDressGet(r.url(), r.request().method()) && r.status() === 500,
+		);
+		// When
+		await focusTab(page);
+		await failed;
+		await twoFrames(page);
+		// Then
+		expect({
+			navy: await square(page, "Sweater #1F3A5F").getAttribute("aria-pressed"),
+			alerts: await page.getByRole("alert").count(),
+			toasts: await page.locator('[data-slot="toast"]').count(),
+		}).toEqual({ navy: "true", alerts: 0, toasts: 0 });
+	});
+
+	test("shows the sign-in screen when a load on focus finds no session", async ({
+		page,
+	}) => {
+		// Given: both projects, a fresh account, the Colours tab on the phone;
+		// then the session check passes once and finds no session after, and
+		// each load finds no session
+		await openColours(page);
+		const noSession = { status: 401, json: { error: "unauthorized" } };
+		let checks = 0;
+		await page.route("/api/me", (route) =>
+			checks++ === 0 ? route.continue() : route.fulfill(noSession),
+		);
+		await page.route("/api/dress", (route) => route.fulfill(noSession));
+		// When
+		await focusTab(page);
+		// Then
+		await expect(
+			page.getByRole("button", { name: "Sign in with Google" }),
+		).toBeVisible();
+	});
+
+	test("does not load on focus while a change is sending", async ({ page }) => {
+		// Given: both projects, a fresh account, the Colours tab on the phone;
+		// each save held until the test lets it go; Sweater #7A2E2E clicked
+		await openColours(page);
+		let release = () => {};
+		const held = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		await page.route("**/api/dress/changes", async (route) => {
+			await held;
+			await route.continue();
+		});
+		await square(page, "Sweater #7A2E2E").click();
+		const seen = countLoads(page);
+		// When
+		const checked = sessionChecked(page);
+		await focusTab(page);
+		await checked;
+		const stored = changeStored(page);
+		release();
+		await stored;
+		// Then
+		expect({ loads: seen.loads, stored: await storedSweater(page) }).toEqual({
+			loads: 0,
+			stored: "#7A2E2E",
+		});
+	});
+
+	test("does not load on focus while a change waits to retry", async ({
+		page,
+	}) => {
+		// Given: both projects, a fresh account, the Colours tab on the phone;
+		// every save cut off; Sweater #7A2E2E clicked and not saved; then
+		// sweater #E6DFD0 picked from another session
+		await openColours(page);
+		await page.route("**/api/dress/changes", (route) => route.abort());
+		await square(page, "Sweater #7A2E2E").click();
+		const bar = page.getByRole("alert");
+		await expect(bar).toHaveText(/Not saved\. Check your internet\./);
+		await changeElsewhere(page, { kind: "pick", hex: "#E6DFD0" });
+		const seen = countLoads(page);
+		// When
+		const checked = sessionChecked(page);
+		await focusTab(page);
+		await checked;
+		await page.unroute("**/api/dress/changes");
+		await bar.getByRole("button", { name: "Retry", exact: true }).click();
+		await expect(page.locator('[data-slot="toast"]')).toHaveText("Saved");
+		// Then
+		expect({
+			loads: seen.loads,
+			pressed: await square(page, "Sweater #7A2E2E").getAttribute(
+				"aria-pressed",
+			),
+			stored: await storedSweater(page),
+		}).toEqual({ loads: 0, pressed: "true", stored: "#7A2E2E" });
+	});
+
+	test("keeps the edit state and does not load on focus", async ({ page }) => {
+		// Given: both projects, a fresh account; "Navy day" saved and open in
+		// the edit state, its outfit stored; then sweater #7A2E2E picked from
+		// another session
+		await openDress(page);
+		await saveLook(page, "Navy day");
+		await page.goto("/looks");
+		await card(page, "Navy day").click();
+		const worn = changeStored(page);
+		await page.getByRole("button", { name: "Edit this look" }).click();
+		await worn;
+		await expect(page.getByText("Editing: Navy day")).toBeVisible();
+		await changeElsewhere(page, { kind: "pick", hex: "#7A2E2E" });
+		const seen = countLoads(page);
+		// When
+		const checked = sessionChecked(page);
+		await focusTab(page);
+		await checked;
+		// Then
+		expect({
+			editing: await page.getByText("Editing: Navy day").count(),
+			loads: seen.loads,
+		}).toEqual({ editing: 1, loads: 0 });
+	});
+
+	test("does not load on focus while the Save look form is open", async ({
+		page,
+	}) => {
+		// Given: both projects, a fresh account, the Dress page; the Save look
+		// form open; then sweater #7A2E2E picked from another session
+		await openDress(page);
+		await page.getByRole("button", { name: "Save look" }).click();
+		await expect(dialog(page)).toBeVisible();
+		await changeElsewhere(page, { kind: "pick", hex: "#7A2E2E" });
+		const seen = countLoads(page);
+		// When
+		const checked = sessionChecked(page);
+		await focusTab(page);
+		await checked;
+		await dialog(page)
+			.getByRole("button", { name: "Save", exact: true })
+			.click();
+		await expect(dialog(page)).toHaveCount(0);
+		// Then: the look holds the outfit the form opened on
+		expect({
+			loads: seen.loads,
+			saved: (await storedLooks(page)).looks.map((l) => l.colours.sweater),
+		}).toEqual({ loads: 0, saved: ["#1F3A5F"] });
+	});
+
+	test("loads on focus again after leaving the Dress page with the Save look form open", async ({
+		page,
+	}) => {
+		// Given: both projects, a fresh account; /looks, then the Dress page by
+		// its link, the Save look form open, then Back to /looks; then sweater
+		// #7A2E2E picked from another session
+		await page.goto("/looks");
+		await page
+			.getByRole("link", { name: "Dress", exact: true })
+			.filter({ visible: true })
+			.click();
+		await page.getByRole("button", { name: "Save look" }).click();
+		await expect(dialog(page)).toBeVisible();
+		await page.goBack();
+		await expect(page).toHaveURL("/looks");
+		await changeElsewhere(page, { kind: "pick", hex: "#7A2E2E" });
+		const loaded = page.waitForResponse((r) =>
+			isDressGet(r.url(), r.request().method()),
+		);
+		// When
+		await focusTab(page);
+		// Then
+		expect((await loaded).status()).toBe(200);
+	});
+
+	test("keeps a colour picked while a load on focus is out", async ({
+		page,
+	}) => {
+		// Given: both projects, a fresh account, the Colours tab on the phone;
+		// sweater #7A2E2E picked from another session; each load reads the
+		// server at once, then holds its answer until the test lets it go
+		await openColours(page);
+		await changeElsewhere(page, { kind: "pick", hex: "#7A2E2E" });
+		let fetched = () => {};
+		const read = new Promise<void>((resolve) => {
+			fetched = resolve;
+		});
+		let release = () => {};
+		const held = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		await page.route("/api/dress", async (route) => {
+			const response = await route.fetch();
+			fetched();
+			await held;
+			await route.fulfill({ response });
+		});
+		// When
+		await focusTab(page);
+		await read;
+		const stored = changeStored(page);
+		await square(page, "Sweater #E6DFD0").click();
+		await stored;
+		const answered = page.waitForResponse((r) =>
+			isDressGet(r.url(), r.request().method()),
+		);
+		release();
+		await answered;
+		await twoFrames(page);
+		// Then
+		expect({
+			beige: await square(page, "Sweater #E6DFD0").getAttribute("aria-pressed"),
+			red: await square(page, "Sweater #7A2E2E").getAttribute("aria-pressed"),
+		}).toEqual({ beige: "true", red: "false" });
+	});
+
+	test("keeps the newest load when an older one answers last", async ({
+		page,
+	}) => {
+		// Given: both projects, a fresh account, the Colours tab on the phone;
+		// the first load reads the server at once, then holds its answer until
+		// the test lets it go; later loads pass
+		await openColours(page);
+		let fetched = () => {};
+		const read = new Promise<void>((resolve) => {
+			fetched = resolve;
+		});
+		let release = () => {};
+		const held = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		let loads = 0;
+		await page.route("/api/dress", async (route) => {
+			if (loads++ > 0) return route.continue();
+			const response = await route.fetch();
+			fetched();
+			await held;
+			await route.fulfill({ response });
+		});
+		// When
+		await focusTab(page);
+		await read;
+		await changeElsewhere(page, { kind: "pick", hex: "#7A2E2E" });
+		const second = page.waitForResponse((r) =>
+			isDressGet(r.url(), r.request().method()),
+		);
+		const checked = sessionChecked(page);
+		await focusTab(page);
+		await second;
+		await checked;
+		const first = page.waitForResponse((r) =>
+			isDressGet(r.url(), r.request().method()),
+		);
+		release();
+		await first;
+		await twoFrames(page);
+		// Then
+		expect({
+			red: await square(page, "Sweater #7A2E2E").getAttribute("aria-pressed"),
+			navy: await square(page, "Sweater #1F3A5F").getAttribute("aria-pressed"),
+		}).toEqual({ red: "true", navy: "false" });
+	});
+
+	test("keeps each account's colours when another account signs in from a second tab", async ({
+		page,
+	}) => {
+		// Given: both projects, a fresh account, the Colours tab on the phone;
+		// Sweater #7A2E2E picked and stored; then the browser holds a second
+		// account's session, and each session check waits until the page has
+		// read the load of the same focus
+		await openColours(page);
+		const stored = changeStored(page);
+		await square(page, "Sweater #7A2E2E").click();
+		await stored;
+		const first = await page.context().storageState();
+		const other = JSON.parse(readFileSync(claimAccount(), "utf8"));
+		let loaded: Promise<unknown> = Promise.resolve();
+		await page.route("/api/me", async (route) => {
+			await loaded;
+			await twoFrames(page);
+			await route.continue();
+		});
+		// The page is rebuilt for each account (src/react-app/shell/SessionGate.tsx),
+		// so a tab picked before the switch is no longer picked after it.
+		const phone = (page.viewportSize()?.width ?? 0) < 900;
+		const marker = page.getByRole("tab", {
+			name: phone ? "Colours" : "Hot",
+			exact: true,
+		});
+		const markSwitch = async () => {
+			if (!phone) await marker.click();
+			await expect(marker).toHaveAttribute("aria-selected", "true");
+		};
+		const showColours = async () => {
+			await expect(marker).toHaveAttribute("aria-selected", "false");
+			if (phone) await marker.click();
+		};
+		await markSwitch();
+		await page.context().clearCookies();
+		await page.context().addCookies(other.cookies);
+		loaded = page.waitForResponse((r) =>
+			isDressGet(r.url(), r.request().method()),
+		);
+		await focusTab(page);
+		await showColours();
+		await expect(square(page, "Sweater #1F3A5F")).toHaveAttribute(
+			"aria-pressed",
+			"true",
+		);
+		// When: the first account signs in again, with no reload
+		await markSwitch();
+		await page.context().clearCookies();
+		await page.context().addCookies(first.cookies);
+		loaded = page.waitForResponse((r) =>
+			isDressGet(r.url(), r.request().method()),
+		);
+		const checked = sessionChecked(page);
+		await focusTab(page);
+		await checked;
+		await showColours();
+		// Then
+		await expect(square(page, "Sweater #7A2E2E")).toHaveAttribute(
+			"aria-pressed",
+			"true",
+		);
+	});
 });

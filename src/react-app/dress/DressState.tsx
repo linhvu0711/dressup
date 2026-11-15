@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { focusManager, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	createContext,
 	type ReactNode,
@@ -20,7 +20,7 @@ import {
 	type Outfit,
 } from "@/dress/state";
 import type { Look } from "@/looks/look";
-import { meQueryKey } from "@/session";
+import { type Me, meQueryKey } from "@/session";
 
 type DressCommands = {
 	pickMode: (id: ModeId) => void;
@@ -36,6 +36,8 @@ type DressCommands = {
 	stopEditing: () => void;
 	// Ends the edit state and keeps the colours, after a save or a delete.
 	endEditing: () => void;
+	// Holds the load on tab focus while a form shows the outfit it will save.
+	holdLoads: (hold: boolean) => void;
 };
 
 // `unsaved`: a change could not be stored and waits on the queue.
@@ -104,7 +106,8 @@ export function DressStateProvider({
 		},
 		retry: (count, error) => !(error instanceof SignedOut) && count < 3,
 		enabled: userId !== null,
-		// The page keeps its own copy once loaded; a refetch is only asked for.
+		// The page keeps its own copy once loaded; it loads again on tab focus
+		// (loadOnFocus) and after a refused change.
 		staleTime: Number.POSITIVE_INFINITY,
 		refetchOnWindowFocus: false,
 		refetchOnReconnect: false,
@@ -118,6 +121,9 @@ export function DressStateProvider({
 	const latest = useRef(state);
 	latest.current = state;
 	const queue = useRef<DressChange[]>([]);
+	// Moves on each change, account switch, and load on focus, so a load that
+	// one overtook is dropped: its answer may be older.
+	const changes = useRef(0);
 	const sending = useRef(false);
 	const toast = useToast();
 	const [unsaved, setUnsaved] = useState(false);
@@ -130,17 +136,20 @@ export function DressStateProvider({
 	// in from a second tab; then they are dropped, and its own copy loads.
 	// In memory only: a reload ends the edit state and keeps the colours.
 	const [edit, setEdit] = useState<{ look: Look; before: Outfit } | null>(null);
+	const [held, setHeld] = useState(false);
 	const [owner, setOwner] = useState(userId);
 	if (owner !== userId) {
 		setOwner(userId);
 		setChanged(null);
 		setUnsaved(false);
 		setEdit(null);
+		setHeld(false);
 	}
 	// biome-ignore lint/correctness/useExhaustiveDependencies: the queue is emptied when the account changes, which is all this reads.
 	useEffect(() => {
 		queue.current = [];
 		unsavedRef.current = false;
+		changes.current++;
 	}, [userId]);
 
 	// Sends the queue in order and stops at the first change that cannot be
@@ -188,6 +197,48 @@ export function DressStateProvider({
 		}
 	};
 
+	// A change made in another session shows when the tab gets focus again.
+	const loadOnFocus = useRef(async () => {});
+	loadOnFocus.current = async () => {
+		if (userId === null || latest.current === null) return;
+		// Changes still out would be shown as lost, and a load mid-edit or
+		// behind the save form would change the outfit the save writes. A
+		// failed change stays first on the queue, so the queue covers a wait
+		// to retry too.
+		if (queue.current.length > 0 || sending.current || edit !== null || held)
+			return;
+		const at = ++changes.current;
+		let fresh: DressState;
+		try {
+			fresh = await fetchDress();
+		} catch (error) {
+			// A failed load keeps what the page shows; the next focus tries again.
+			if (error instanceof SignedOut) void signOut();
+			return;
+		}
+		// The answer is for whoever holds the cookie now; another account can
+		// sign in from a second tab. The session check of the same focus says who.
+		if (queryClient.isFetching({ queryKey: meQueryKey }) > 0)
+			await queryClient.refetchQueries(
+				{ queryKey: meQueryKey },
+				{ cancelRefetch: false },
+			);
+		if (queryClient.getQueryData<Me | null>(meQueryKey)?.id !== userId) return;
+		if (changes.current !== at || queue.current.length > 0 || sending.current)
+			return;
+		latest.current = fresh;
+		// The cache follows the server, so a later refusal goes back to this.
+		queryClient.setQueryData<DressState>(dressQueryKey, fresh);
+		setChanged(fresh);
+	};
+	useEffect(
+		() =>
+			focusManager.subscribe((focused) => {
+				if (focused) void loadOnFocus.current();
+			}),
+		[],
+	);
+
 	// The prototype's retry, docs/prototype/dressup.html:1087.
 	const retry = () => {
 		void flush().then((result) => {
@@ -202,6 +253,7 @@ export function DressStateProvider({
 			latest.current = result.state;
 			setChanged(result.state);
 			queue.current.push(change);
+			changes.current++;
 			void flush();
 		}
 		return result;
@@ -257,6 +309,7 @@ export function DressStateProvider({
 					setEdit(null);
 				},
 				endEditing: () => setEdit(null),
+				holdLoads: setHeld,
 			}
 		: { unsaved, retry, status: "loading" };
 	return (
