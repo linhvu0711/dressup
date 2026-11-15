@@ -25,6 +25,7 @@ import {
 	lookInputSchema,
 } from "@/looks/look";
 import { newTagSchema, TAG_NAME_MAX, type Tag, tagSchema } from "@/tags/tag";
+import { countAiAction } from "./ai-action-store";
 import {
 	issueText,
 	lastSquare,
@@ -38,6 +39,7 @@ import {
 	serverError,
 	tagNameLength,
 	tagNameTaken,
+	tooManyActions,
 } from "./ai-messages";
 import type { Db } from "./db";
 import { changeDress, loadDress } from "./dress-store";
@@ -133,6 +135,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		const inputSchema: z.ZodObject = config.inputSchema;
 		server.registerTool(name, { ...config, inputSchema }, async (args) => {
 			try {
+				if (!(await countAiAction(db, userId))) return refusal(tooManyActions);
 				return await run(args as z.output<S>);
 			} catch {
 				// The SDK would send the error's own message to the AI app

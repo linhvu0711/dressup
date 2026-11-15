@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import {
 	aiSession,
 	makeHarness,
@@ -722,5 +722,60 @@ describe("tags", () => {
 			text: "No tag with this id.",
 			bobTags: 1,
 		});
+	});
+});
+
+describe("AI action limit", () => {
+	afterEach(() => setSystemTime());
+
+	// Starts a clock minute so the 61 calls cannot cross into the next one.
+	async function sixtyActions() {
+		const { h, ai } = await connected();
+		const start = Math.ceil(Date.now() / 60_000) * 60_000 + 1000;
+		setSystemTime(start);
+		for (let i = 0; i < 60; i++)
+			expect((await ai.call("list_tags")).isError).toBe(false);
+		return { h, ai, start };
+	}
+
+	test("refuses the 61st AI action in one minute", async () => {
+		// Given
+		const { ai } = await sixtyActions();
+		// When
+		const { isError, text } = await ai.call("list_tags");
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "Too many actions. Wait a minute and try again.",
+		});
+	});
+
+	test("takes AI actions again in the next minute", async () => {
+		// Given
+		const { ai, start } = await sixtyActions();
+		expect((await ai.call("list_tags")).isError).toBe(true);
+		setSystemTime(start + 60_000);
+		// When
+		const { isError, text } = await ai.call("list_tags");
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: false,
+			text: "You have no tags yet.",
+		});
+	});
+
+	test("leaves the app's own routes without a new limit", async () => {
+		// Given
+		const { h, ai } = await sixtyActions();
+		expect((await ai.call("list_tags")).isError).toBe(true);
+		// When
+		const statuses: number[] = [];
+		for (let i = 0; i < 61; i++)
+			statuses.push((await send(h, ai.jar, "/api/tags")).status);
+		// Then
+		expect({
+			count: statuses.length,
+			statuses: [...new Set(statuses)],
+		}).toEqual({ count: 61, statuses: [200] });
 	});
 });

@@ -97,6 +97,7 @@ describe("migrations", () => {
 		expect(rows.map((r) => r.name)).toEqual([
 			"__drizzle_migrations",
 			"account",
+			"ai_action_count",
 			"colour_square",
 			"jwks",
 			"look",

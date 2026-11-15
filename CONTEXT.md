@@ -16,3 +16,5 @@
 - AI app: an outside AI assistant, such as Claude, Claude Code, ChatGPT, or Codex, that acts in an account for its user.
 - Connected AI app: an AI app the user allowed on the Allow page. Settings lists each one. Disconnect stops it at once.
 - Allow page: the dressup page where the user lets one AI app see and change their outfit, colours, looks, and tags.
+- AI action: one thing an AI app does in an account, such as saving a look or picking a colour.
+- AI action limit: 60 AI actions a minute for each account.

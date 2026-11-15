@@ -43,6 +43,13 @@
       "when": 1794710307103,
       "tag": "0005_bent_abomination",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1794715450046,
+      "tag": "0006_legal_magma",
+      "breakpoints": true
     }
   ]
 }

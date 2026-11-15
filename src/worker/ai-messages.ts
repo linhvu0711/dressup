@@ -57,6 +57,8 @@ export const lastSquare = (garment: string, hex: string): string =>
 
 export const serverError = "dressup could not do this. Try again.";
 
+export const tooManyActions = "Too many actions. Wait a minute and try again.";
+
 export const noLook = "No look with this id.";
 
 export const noTag = "No tag with this id.";
