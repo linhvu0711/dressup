@@ -1,3 +1,5 @@
+import { AppLogo } from "@/ai-apps/AppLogo";
+import type { AiApp } from "@/ai-apps/ai-app";
 import { useAiApps } from "@/ai-apps/api";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
@@ -64,6 +66,44 @@ export function AiAppsSection() {
 					, then <code className="font-mono">/mcp</code> to sign in.
 				</li>
 			</ol>
+			{apps.isError ? (
+				<>
+					<p role="alert" className="mt-3 text-[13px] text-destructive">
+						Could not load your AI apps. Try again.
+					</p>
+					<Button className="mt-2 self-start" onClick={() => apps.refetch()}>
+						Try again
+					</Button>
+				</>
+			) : (
+				apps.data?.map((app) => <AiAppRow key={app.id} app={app} />)
+			)}
 		</>
+	);
+}
+
+// A fixed locale, so the date reads the same on every machine: 14 Nov 2026.
+const connectedOn = (iso: string) =>
+	new Date(iso).toLocaleDateString("en-GB", {
+		day: "numeric",
+		month: "short",
+		year: "numeric",
+	});
+
+function AiAppRow({ app }: { app: AiApp }) {
+	return (
+		<div data-slot="ai-app">
+			<div className="flex min-h-[58px] min-w-0 items-center gap-2.5 border-b border-border py-[11px]">
+				<AppLogo name={app.name} logo={app.logo ?? undefined} size={34} />
+				<div data-slot="ai-app-name" className="min-w-0 truncate">
+					{app.name}
+					<small className="block text-xs text-muted-foreground">
+						Connected {connectedOn(app.connectedAt)}
+					</small>
+				</div>
+				<span className="flex-1" />
+				<Button aria-label={`Disconnect ${app.name}`}>Disconnect</Button>
+			</div>
+		</div>
 	);
 }

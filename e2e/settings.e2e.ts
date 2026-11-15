@@ -1,5 +1,7 @@
-import type { Page } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import type { BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
+import { aiAppFile, type aiAppTests } from "./global-setup";
 
 const preview = (page: Page) =>
 	page.locator('svg[aria-label="Mannequin preview"]');
@@ -281,5 +283,70 @@ test.describe("AI app address on the clipboard", () => {
 			toast: await page.locator('[data-slot="toast"]').textContent(),
 			clipboard: await page.evaluate(() => navigator.clipboard.readText()),
 		}).toEqual({ toast: "Copied", clipboard: AI_ADDRESS });
+	});
+});
+
+// This project's own account with "Test App" allowed (e2e/global-setup.ts).
+async function signInWithAiApp(
+	context: BrowserContext,
+	project: string,
+	use: (typeof aiAppTests)[number],
+) {
+	await context.clearCookies();
+	await context.addCookies(
+		JSON.parse(readFileSync(aiAppFile(project, use), "utf8")).cookies,
+	);
+}
+
+const routeTestAppLogo = (page: Page) =>
+	page.route("https://client.example/logo.png", (route) =>
+		route.fulfill({ path: "public/icon-64.png" }),
+	);
+
+const aiAppRow = (page: Page) => page.locator('[data-slot="ai-app"]');
+
+test("lists a connected AI app with its logo and connect date", async ({
+	page,
+	context,
+}, testInfo) => {
+	// Given: both projects, this project's account with Test App allowed
+	await signInWithAiApp(context, testInfo.project.name, "list");
+	await routeTestAppLogo(page);
+	// When
+	await page.goto("/settings");
+	// Then
+	const logo = aiAppRow(page).getByRole("img", { name: "Test App" });
+	await expect(logo).toBeVisible();
+	expect({
+		logo: await logo.isVisible(),
+		text: await aiAppRow(page)
+			.locator('[data-slot="ai-app-name"]')
+			.textContent(),
+		empty: await page.getByText(NO_AI_APPS, { exact: true }).count(),
+	}).toEqual({ logo: true, text: "Test AppConnected 14 Nov 2026", empty: 0 });
+});
+
+test("shows Could not load your AI apps when the list fails", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account, the list answered 500
+	await page.route("**/api/ai-apps", (route) =>
+		route.fulfill({ status: 500, json: {} }),
+	);
+	// When
+	await page.goto("/settings");
+	// Then
+	const alert = page.getByRole("alert");
+	await expect(alert).toHaveText("Could not load your AI apps. Try again.");
+	expect({
+		alert: await alert.textContent(),
+		tryAgain: await page
+			.getByRole("button", { name: "Try again", exact: true })
+			.isVisible(),
+		empty: await page.getByText(NO_AI_APPS, { exact: true }).count(),
+	}).toEqual({
+		alert: "Could not load your AI apps. Try again.",
+		tryAgain: true,
+		empty: 0,
 	});
 });
