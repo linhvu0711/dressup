@@ -5,6 +5,7 @@ import type { z } from "zod";
 import { dressChangeSchema } from "@/dress/state";
 import { lookInputSchema } from "@/looks/look";
 import { newTagSchema, tagSchema } from "@/tags/tag";
+import { listAiApps } from "./ai-app-store";
 import { createAuth, createClientDiscovery } from "./auth";
 import type { Db } from "./db";
 import { user } from "./db/auth-schema";
@@ -163,6 +164,10 @@ export function createApp(getDb: (env: Env) => Db) {
 
 	app.get("/tags", withAuth, requireUser, async (c) =>
 		c.json({ tags: await listTags(getDb(c.env), c.var.user.id) }),
+	);
+
+	app.get("/ai-apps", withAuth, requireUser, async (c) =>
+		c.json({ apps: await listAiApps(getDb(c.env), c.var.user.id) }),
 	);
 
 	app.post("/tags", withAuth, requireUser, async (c) => {

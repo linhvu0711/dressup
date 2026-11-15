@@ -2,11 +2,10 @@ import { requireMcpAuth } from "@better-auth/mcp";
 import { createResourceServerChallenge } from "@better-auth/oauth-provider";
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import { APIError } from "better-auth/api";
-import { and, eq } from "drizzle-orm";
 import { registerAiActions } from "./ai-actions";
+import { isAiAppAllowed } from "./ai-app-store";
 import { type createAuth, mcpResource } from "./auth";
 import type { Db } from "./db";
-import { oauthConsent } from "./db/auth-schema";
 
 type Auth = ReturnType<typeof createAuth>;
 
@@ -59,14 +58,8 @@ export function mcpRoute(
 				return refuse(req, baseURL, "malformed pass");
 			// Access tokens are JWTs that live an hour and cannot be revoked; the
 			// allow row is what Disconnect removes.
-			const [allow] = await db
-				.select({ id: oauthConsent.id })
-				.from(oauthConsent)
-				.where(
-					and(eq(oauthConsent.userId, sub), eq(oauthConsent.clientId, azp)),
-				)
-				.limit(1);
-			if (!allow) return refuse(req, baseURL, "this app is no longer allowed");
+			if (!(await isAiAppAllowed(db, sub, azp)))
+				return refuse(req, baseURL, "this app is no longer allowed");
 			const token =
 				req.headers.get("authorization")?.replace(/^\S+\s+/, "") ?? "";
 			return createMcpHandler(() => dressupServer(db, sub)).fetch(req, {
