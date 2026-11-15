@@ -19,6 +19,14 @@ export const signOutFile = (
 	test: (typeof signOutTests)[number],
 ) => `e2e/.auth/signout-${test}-${project}.json`;
 
+// Per project, one account for the list case and one for Disconnect: cases
+// run in parallel, and Disconnect removes the row the list case reads.
+export const aiAppTests = ["list", "disconnect"] as const;
+export const aiAppFile = (project: string, test: (typeof aiAppTests)[number]) =>
+	`e2e/.auth/ai-app-${test}-${project}.json`;
+
+const TEST_APP_ID = "https://client.example/meta.json";
+
 export default async function globalSetup() {
 	// No TTY on stdin, so wrangler applies without its confirm prompt.
 	execFileSync("bun", ["run", "db:migrate:local"], {
@@ -58,6 +66,47 @@ export default async function globalSetup() {
 			LIMIT_FILE,
 			JSON.stringify({ cookies: limitCookies, origins: [] }),
 		);
+		// Its allows and tokens go with the client row.
+		await db
+			.delete(schema.oauthClient)
+			.where(eq(schema.oauthClient.clientId, TEST_APP_ID));
+		await db.insert(schema.oauthClient).values({
+			id: "e2e-test-app",
+			clientId: TEST_APP_ID,
+			name: "Test App",
+			icon: "https://client.example/logo.png",
+			redirectUris: ["http://127.0.0.1/callback"],
+		});
+		// Noon UTC reads as 14 Nov 2026 from UTC-11 to UTC+11.
+		const connectedAt = new Date("2026-11-14T12:00:00Z");
+		for (const project of ["phone", "laptop"])
+			for (const test of aiAppTests) {
+				const userId = `e2e-ai-${test}-${project}`;
+				await db.delete(schema.user).where(eq(schema.user.id, userId));
+				await helpers.saveUser(
+					helpers.createUser({
+						id: userId,
+						email: `ai-${test}-${project}@dressup.test`,
+						name: `AI App Person ${test} ${project}`,
+					}),
+				);
+				await db.insert(schema.oauthConsent).values({
+					id: userId,
+					clientId: TEST_APP_ID,
+					userId,
+					scopes: ["openid", "offline_access"],
+					createdAt: connectedAt,
+					updatedAt: connectedAt,
+				});
+				const aiCookies = await helpers.getCookies({
+					userId,
+					domain: "localhost",
+				});
+				writeFileSync(
+					aiAppFile(project, test),
+					JSON.stringify({ cookies: aiCookies, origins: [] }),
+				);
+			}
 		// The pool's dress rows go with its users.
 		await db.delete(schema.user).where(like(schema.user.id, "e2e-pool-%"));
 		rmSync("e2e/.auth/claims", { recursive: true, force: true });

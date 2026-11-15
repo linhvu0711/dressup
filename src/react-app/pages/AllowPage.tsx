@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowLeftRight } from "lucide-react";
-import { useState } from "react";
 import { useSearchParams } from "react-router";
+import { AppLogo } from "@/ai-apps/AppLogo";
 import { Button } from "@/components/ui/button";
 import { authClient } from "../auth-client";
 import { useMe } from "../session";
@@ -20,31 +20,6 @@ const DressupIcon = () => (
 		className="rounded-[23%]"
 	/>
 );
-
-// A missing or broken logo shows the first letter of the app's name.
-function AppLogo({ name, logo }: { name: string; logo?: string }) {
-	const [broken, setBroken] = useState(false);
-	if (logo && !broken)
-		return (
-			<img
-				src={logo}
-				alt={name}
-				width={56}
-				height={56}
-				className="rounded-[12px]"
-				onError={() => setBroken(true)}
-			/>
-		);
-	return (
-		<div
-			role="img"
-			aria-label={name}
-			className="grid size-14 place-items-center rounded-[12px] border border-border bg-muted font-serif text-[32px]"
-		>
-			{name.charAt(0).toUpperCase()}
-		</div>
-	);
-}
 
 function AllowScreen() {
 	const [params] = useSearchParams();
@@ -103,7 +78,7 @@ function AllowScreen() {
 					aria-hidden
 				/>
 				{app.data ? (
-					<AppLogo name={name} logo={app.data.logo_uri} />
+					<AppLogo name={name} logo={app.data.logo_uri} size={56} />
 				) : (
 					<div className={`size-14 rounded-[12px] ${PLACEHOLDER}`} />
 				)}
