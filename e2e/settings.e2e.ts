@@ -232,3 +232,54 @@ test("keeps the account when the delete fails", async ({ page }) => {
 	);
 	expect((await page.request.get("/api/me")).status()).toBe(200);
 });
+
+const AI_ADDRESS = "http://localhost:5173/api/mcp";
+const NO_AI_APPS = "No AI apps connected yet.";
+
+test("shows the AI app address, the steps, and No AI apps connected yet", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account
+	// When
+	await page.goto("/settings");
+	// Then
+	const empty = page.getByText(NO_AI_APPS, { exact: true });
+	const steps = page.locator('[data-slot="ai-app-steps"]');
+	await expect(empty).toBeVisible();
+	const [emptyBox, stepsBox] = [
+		await empty.boundingBox(),
+		await steps.boundingBox(),
+	];
+	expect({
+		address: await page.locator('[data-slot="ai-app-address"]').textContent(),
+		empty: await empty.textContent(),
+		steps: await steps.locator("li").allTextContents(),
+		emptyAboveSteps: (emptyBox?.y ?? 0) < (stepsBox?.y ?? 0),
+	}).toEqual({
+		address: AI_ADDRESS,
+		empty: NO_AI_APPS,
+		steps: [
+			"Claude: Customize, Connectors, Add, Add custom connector, then paste the address.",
+			"ChatGPT: Plugins, +, Add custom MCP server, then paste the address.",
+			`Claude Code: run claude mcp add --transport http dressup ${AI_ADDRESS}, then /mcp to sign in.`,
+		],
+		emptyAboveSteps: true,
+	});
+});
+
+test.describe("AI app address on the clipboard", () => {
+	test.use({ permissions: ["clipboard-read", "clipboard-write"] });
+
+	test("copies the AI app address", async ({ page }) => {
+		// Given: both projects, a fresh account, /settings
+		await page.goto("/settings");
+		// When
+		await page.getByRole("button", { name: "Copy", exact: true }).click();
+		// Then
+		await expect(page.locator('[data-slot="toast"]')).toHaveText("Copied");
+		expect({
+			toast: await page.locator('[data-slot="toast"]').textContent(),
+			clipboard: await page.evaluate(() => navigator.clipboard.readText()),
+		}).toEqual({ toast: "Copied", clipboard: AI_ADDRESS });
+	});
+});

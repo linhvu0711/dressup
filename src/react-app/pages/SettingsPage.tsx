@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
+import { AiAppsSection } from "@/settings/AiAppsSection";
 import { DeleteAccount } from "@/settings/DeleteAccount";
 import { MannequinSection } from "@/settings/MannequinSection";
 import { authClient } from "../auth-client";
@@ -31,6 +32,7 @@ export function SettingsPage() {
 			/>
 			<div className="mx-auto flex w-full max-w-[560px] flex-col px-[18px] pt-1.5 pb-11">
 				<MannequinSection />
+				<AiAppsSection />
 				<h2 className="mt-[26px] mb-1.5 font-sans text-[12.5px] font-medium text-muted-foreground">
 					Account
 				</h2>
