@@ -36,6 +36,8 @@ type DressCommands = {
 	stopEditing: () => void;
 	// Ends the edit state and keeps the colours, after a save or a delete.
 	endEditing: () => void;
+	// Holds the load on tab focus while a form shows the outfit it will save.
+	holdLoads: (hold: boolean) => void;
 };
 
 // `unsaved`: a change could not be stored and waits on the queue.
@@ -134,12 +136,14 @@ export function DressStateProvider({
 	// in from a second tab; then they are dropped, and its own copy loads.
 	// In memory only: a reload ends the edit state and keeps the colours.
 	const [edit, setEdit] = useState<{ look: Look; before: Outfit } | null>(null);
+	const [held, setHeld] = useState(false);
 	const [owner, setOwner] = useState(userId);
 	if (owner !== userId) {
 		setOwner(userId);
 		setChanged(null);
 		setUnsaved(false);
 		setEdit(null);
+		setHeld(false);
 	}
 	// biome-ignore lint/correctness/useExhaustiveDependencies: the queue is emptied when the account changes, which is all this reads.
 	useEffect(() => {
@@ -197,10 +201,12 @@ export function DressStateProvider({
 	const loadOnFocus = useRef(async () => {});
 	loadOnFocus.current = async () => {
 		if (userId === null || latest.current === null) return;
-		// Changes still out would be shown as lost, and a load mid-edit would
-		// change the outfit "Save changes" writes. A failed change stays first
-		// on the queue, so the queue covers a wait to retry too.
-		if (queue.current.length > 0 || sending.current || edit !== null) return;
+		// Changes still out would be shown as lost, and a load mid-edit or
+		// behind the save form would change the outfit the save writes. A
+		// failed change stays first on the queue, so the queue covers a wait
+		// to retry too.
+		if (queue.current.length > 0 || sending.current || edit !== null || held)
+			return;
 		const at = ++changes.current;
 		let fresh: DressState;
 		try {
@@ -303,6 +309,7 @@ export function DressStateProvider({
 					setEdit(null);
 				},
 				endEditing: () => setEdit(null),
+				holdLoads: setHeld,
 			}
 		: { unsaved, retry, status: "loading" };
 	return (

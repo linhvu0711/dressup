@@ -37,6 +37,11 @@ export function DressPage() {
 	// which holds only what the person keeps.
 	const [live, setLive] = useState<LiveColour | null>(null);
 	const [saving, setSaving] = useState(false);
+	// The form saves the outfit behind it, so no load on focus may swap it.
+	const showSaveForm = (open: boolean) => {
+		setSaving(open);
+		if (dress.status === "ready") dress.holdLoads(open);
+	};
 	const state = dress.status === "ready" ? dress.state : null;
 	const editing = dress.status === "ready" ? dress.editing : null;
 	const mode = state ? modeById(state.modeId) : null;
@@ -83,7 +88,7 @@ export function DressPage() {
 						title={editing ? "Save changes" : "Save look"}
 						disabled={!state}
 						className="shadow-lift"
-						onClick={() => setSaving(true)}
+						onClick={() => showSaveForm(true)}
 					>
 						{editing ? (
 							<BookmarkCheck size={20} strokeWidth={1.9} aria-hidden />
@@ -112,7 +117,7 @@ export function DressPage() {
 					onSaved={() => {
 						if (dress.status === "ready") dress.endEditing();
 					}}
-					onClose={() => setSaving(false)}
+					onClose={() => showSaveForm(false)}
 				/>
 			) : null}
 			<div className="flex min-h-0 flex-1 flex-col px-4 pt-3 wide:contents">

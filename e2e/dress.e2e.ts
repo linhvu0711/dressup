@@ -1,7 +1,14 @@
 import { readFileSync } from "node:fs";
 import type { Page } from "@playwright/test";
 import { claimAccount, expect, test } from "./fixtures";
-import { card, openColours, openDress, saveLook } from "./looks-helpers";
+import {
+	card,
+	dialog,
+	openColours,
+	openDress,
+	saveLook,
+	storedLooks,
+} from "./looks-helpers";
 
 const WALL =
 	"linear-gradient(90deg, rgb(198, 194, 188) 0%, rgb(218, 214, 208) 40%, rgb(211, 207, 201) 70%, rgb(195, 191, 185) 100%)";
@@ -496,6 +503,31 @@ test.describe("load on focus", () => {
 			editing: await page.getByText("Editing: Navy day").count(),
 			loads: seen.loads,
 		}).toEqual({ editing: 1, loads: 0 });
+	});
+
+	test("does not load on focus while the Save look form is open", async ({
+		page,
+	}) => {
+		// Given: both projects, a fresh account, the Dress page; the Save look
+		// form open; then sweater #7A2E2E picked from another session
+		await openDress(page);
+		await page.getByRole("button", { name: "Save look" }).click();
+		await expect(dialog(page)).toBeVisible();
+		await changeElsewhere(page, { kind: "pick", hex: "#7A2E2E" });
+		const seen = countLoads(page);
+		// When
+		const checked = sessionChecked(page);
+		await focusTab(page);
+		await checked;
+		await dialog(page)
+			.getByRole("button", { name: "Save", exact: true })
+			.click();
+		await expect(dialog(page)).toHaveCount(0);
+		// Then: the look holds the outfit the form opened on
+		expect({
+			loads: seen.loads,
+			saved: (await storedLooks(page)).looks.map((l) => l.colours.sweater),
+		}).toEqual({ loads: 0, saved: ["#1F3A5F"] });
 	});
 
 	test("keeps a colour picked while a load on focus is out", async ({
