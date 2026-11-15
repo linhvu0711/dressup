@@ -168,4 +168,24 @@ describe("/api/mcp", () => {
 			},
 		});
 	});
+
+	test("refuses a pass whose allow was removed", async () => {
+		// Given: a connected app whose allow row is gone; its token has 3600 s
+		// left
+		const { h, bearer } = await connected();
+		h.sqlite.run("delete from oauth_consent where client_id = ?", [
+			TEST_APP_ID,
+		]);
+		// When
+		const res = await post(h, INITIALIZE, bearer);
+		// Then
+		expect({
+			status: res.status,
+			wwwAuthenticate: res.headers.get("www-authenticate"),
+		}).toEqual({
+			status: 401,
+			wwwAuthenticate:
+				'Bearer error="invalid_token", error_description="this app is no longer allowed", resource_metadata="http://localhost:5173/.well-known/oauth-protected-resource/api/mcp"',
+		});
+	});
 });
