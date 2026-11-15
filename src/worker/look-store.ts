@@ -1,4 +1,5 @@
 import { and, asc, count, desc, eq, exists, inArray, sql } from "drizzle-orm";
+import type { GarmentId, Hex, JacketId } from "@/dress/garments";
 import type { ModeId } from "@/dress/modes";
 import {
 	LOOK_LIMIT,
@@ -37,11 +38,28 @@ const tagLinks = (db: Db, userId: string, lookId?: string) =>
 		.orderBy(asc(tag.createdAt), asc(sql`${tag}.rowid`));
 
 // Only the account's own tags go on the look, and only when the look is the
-// account's: an id from another account writes no row.
-const tagWrites = (db: Db, userId: string, lookId: string, tagIds: TagId[]) => {
+// account's: an id from another account writes no row. With a mode, only
+// while the look still has that mode, so a refused change writes no tag.
+const tagWrites = (
+	db: Db,
+	userId: string,
+	lookId: string,
+	tagIds: TagId[],
+	modeId?: ModeId,
+) => {
+	const theLook = and(
+		eq(look.id, lookId),
+		eq(look.userId, userId),
+		modeId === undefined ? undefined : eq(look.modeId, modeId),
+	);
+	const lookIsThere = exists(
+		db.select({ one: sql`1` }).from(look).where(theLook),
+	);
 	const clear = db
 		.delete(lookTag)
-		.where(and(eq(lookTag.lookId, lookId), eq(lookTag.userId, userId)));
+		.where(
+			and(eq(lookTag.lookId, lookId), eq(lookTag.userId, userId), lookIsThere),
+		);
 	if (tagIds.length === 0) return [clear];
 	const insert = db.insert(lookTag).select(
 		db
@@ -55,12 +73,7 @@ const tagWrites = (db: Db, userId: string, lookId: string, tagIds: TagId[]) => {
 				and(
 					eq(tag.userId, userId),
 					inArray(tag.id, [...new Set(tagIds)]),
-					exists(
-						db
-							.select({ one: sql`1` })
-							.from(look)
-							.where(and(eq(look.id, lookId), eq(look.userId, userId))),
-					),
+					lookIsThere,
 				),
 			),
 	);
@@ -151,6 +164,59 @@ export async function updateLook(
 	]);
 	const [row] = rows;
 	return row ? toLook(row, rest.at(-1) as Link[]) : null;
+}
+
+export type LookPatch = {
+	name?: string;
+	colours?: Partial<Record<GarmentId, Hex>>;
+	open?: JacketId[];
+	tags?: TagId[];
+};
+
+// Writes only the fields given, so two changes made from one read keep each
+// other's fields. Colours and open jackets are written only while the look
+// still has the mode they were checked against: "moved" when the page
+// changed it since. null when the look is gone.
+export async function changeLook(
+	db: Db,
+	userId: string,
+	id: string,
+	patch: LookPatch,
+	modeId: ModeId,
+): Promise<Look | null | "moved"> {
+	const guardMode = patch.colours !== undefined || patch.open !== undefined;
+	const [rows, ...rest] = await db.batch([
+		db
+			.update(look)
+			.set({
+				// Always one column, so a tags-only change still returns the row.
+				id: sql`${look.id}`,
+				...(patch.name !== undefined && { name: patch.name }),
+				...(patch.open !== undefined && { open: patch.open }),
+				...(patch.colours !== undefined && {
+					colours: sql`json_patch(${look.colours}, ${JSON.stringify(patch.colours)})`,
+				}),
+			})
+			.where(
+				and(
+					eq(look.id, id),
+					eq(look.userId, userId),
+					guardMode ? eq(look.modeId, modeId) : undefined,
+				),
+			)
+			.returning(),
+		...(patch.tags === undefined
+			? []
+			: tagWrites(db, userId, id, patch.tags, guardMode ? modeId : undefined)),
+		tagLinks(db, userId, id),
+	]);
+	const [row] = rows;
+	if (row) return toLook(row, rest.at(-1) as Link[]);
+	const [still] = await db
+		.select({ id: look.id })
+		.from(look)
+		.where(and(eq(look.id, id), eq(look.userId, userId)));
+	return still ? "moved" : null;
 }
 
 // Only the account's own look goes; false when there is none to delete.

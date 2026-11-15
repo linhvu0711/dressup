@@ -430,3 +430,126 @@ describe("looks", () => {
 		});
 	});
 });
+
+describe("look changes", () => {
+	async function withNavy() {
+		const { h, ai } = await connected();
+		const saved = await sendJson(h, ai, "POST", "/api/looks", NAVY);
+		expect(saved.status).toBe(201);
+		return { h, ai };
+	}
+
+	test("changes a look's name, a colour, and its tags", async () => {
+		// Given
+		const { h, ai } = await withNavy();
+		const work = await addTag(h, ai, "Work");
+		// When
+		const { isError } = await ai.call("change_look", {
+			id: NAVY.id,
+			name: "Navy night",
+			colours: { sweater: "#7A2E2E" },
+			tags: [work],
+		});
+		// Then
+		expect({ isError, stored: (await looks(h, ai))[0] }).toEqual({
+			isError: false,
+			stored: {
+				...NAVY,
+				name: "Navy night",
+				colours: {
+					chino_p: "#C9B38C",
+					polo_l: "#F3F1EC",
+					sweater: "#7A2E2E",
+					chore: "#55633F",
+				},
+				open: ["chore"],
+				tags: [work],
+			},
+		});
+	});
+
+	test("changes only a look's tags", async () => {
+		// Given
+		const { h, ai } = await withNavy();
+		const work = await addTag(h, ai, "Work");
+		// When
+		const { isError } = await ai.call("change_look", {
+			id: NAVY.id,
+			tags: [work],
+		});
+		// Then
+		expect({ isError, stored: (await looks(h, ai))[0] }).toEqual({
+			isError: false,
+			stored: { ...NAVY, tags: [work] },
+		});
+	});
+
+	test("refuses a change to a look that is gone", async () => {
+		// Given
+		const { h, ai } = await withNavy();
+		expect(
+			(await send(h, ai.jar, `/api/looks/${NAVY.id}`, { method: "DELETE" }))
+				.status,
+		).toBe(204);
+		// When
+		const { isError, text } = await ai.call("change_look", {
+			id: NAVY.id,
+			name: "Navy night",
+		});
+		// Then
+		expect({ isError, text, looks: (await looks(h, ai)).length }).toEqual({
+			isError: true,
+			text: "No look with this id.",
+			looks: 0,
+		});
+	});
+
+	test("deletes a look", async () => {
+		// Given
+		const { h, ai } = await withNavy();
+		// When
+		const { isError } = await ai.call("delete_look", { id: NAVY.id });
+		// Then
+		expect({ isError, looks: (await looks(h, ai)).length }).toEqual({
+			isError: false,
+			looks: 0,
+		});
+	});
+
+	test("refuses to delete another account's look", async () => {
+		// Given: bob saved NAVY
+		const { h, ai } = await connected();
+		await h.helpers.saveUser(
+			h.helpers.createUser({
+				id: "bob-id",
+				email: "bob@example.com",
+				name: "Bob",
+			}),
+		);
+		const bob = await h.helpers.getAuthHeaders({ userId: "bob-id" });
+		const bobPost = await h.app.request(
+			"/api/looks",
+			{
+				method: "POST",
+				headers: {
+					...Object.fromEntries(bob),
+					"content-type": "application/json",
+				},
+				body: JSON.stringify(NAVY),
+			},
+			h.env,
+		);
+		expect(bobPost.status).toBe(201);
+		// When
+		const { isError, text } = await ai.call("delete_look", { id: NAVY.id });
+		// Then
+		const bobLooks = (await (
+			await h.app.request("/api/looks", { headers: bob }, h.env)
+		).json()) as { looks: unknown[] };
+		expect({ isError, text, bobLooks: bobLooks.looks.length }).toEqual({
+			isError: true,
+			text: "No look with this id.",
+			bobLooks: 1,
+		});
+	});
+});

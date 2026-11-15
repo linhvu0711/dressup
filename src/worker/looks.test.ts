@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { lookInputSchema } from "@/looks/look";
+import { changeLook, listLooks, saveLook } from "./look-store";
 import { makeHarness, seedLooks } from "./test/harness";
 
 type Harness = Awaited<ReturnType<typeof makeHarness>>;
@@ -712,5 +714,39 @@ describe("tags on looks", () => {
 			status: 400,
 			body: { error: "invalid", field: "tags" },
 		});
+	});
+});
+
+describe("two look changes made from one read", () => {
+	test("keeps both of two look changes made from one read", async () => {
+		// Given: NAVY saved, and the one read both changes make before either
+		// writes. Two calls through the harness do not overlap, so the test
+		// sets the order itself.
+		const h = await withAlice();
+		const { db } = h.settings;
+		await saveLook(db, "alice-id", lookInputSchema.parse(NAVY));
+		const [read] = await listLooks(db, "alice-id");
+		// When
+		await changeLook(
+			db,
+			"alice-id",
+			NAVY.id,
+			{ name: "Navy night" },
+			read.modeId,
+		);
+		await changeLook(
+			db,
+			"alice-id",
+			NAVY.id,
+			{ colours: { sweater: "#7A2E2E" } },
+			read.modeId,
+		);
+		// Then
+		const [look] = await listLooks(db, "alice-id");
+		expect({
+			name: look.name,
+			sweater: look.colours.sweater,
+			chino_p: look.colours.chino_p,
+		}).toEqual({ name: "Navy night", sweater: "#7A2E2E", chino_p: "#C9B38C" });
 	});
 });

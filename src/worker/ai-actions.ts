@@ -30,6 +30,7 @@ import {
 	lastSquare,
 	lookIssueText,
 	lookLimit,
+	noLook,
 	noLooks,
 	noTag,
 	notInRow,
@@ -37,7 +38,7 @@ import {
 } from "./ai-messages";
 import type { Db } from "./db";
 import { changeDress, loadDress } from "./dress-store";
-import { listLooks, saveLook } from "./look-store";
+import { changeLook, deleteLook, listLooks, saveLook } from "./look-store";
 import { listTags } from "./tag-store";
 
 type Account = { db: Db; userId: string };
@@ -307,5 +308,73 @@ export function registerAiActions(server: McpServer, account: Account) {
 			if (saved.error === "look_limit") return refusal(lookLimit());
 			throw new Error("a new look id is taken");
 		},
+	);
+
+	tool(
+		"change_look",
+		{
+			title: "Change a look",
+			description:
+				"Changes a saved look's name, colours, open jackets, or tags. Colours given replace those garments' colours and the others stay. Open jackets and tags given replace the look's.",
+			annotations: WRITE,
+			inputSchema: z.object({
+				id: z.string().describe("The look's id."),
+				name: field.lookName.optional(),
+				colours: field.colours.optional(),
+				open: field.open.optional(),
+				tags: field.tags.optional(),
+			}),
+		},
+		async ({ id, ...patch }) => {
+			const [all, accountTags] = await Promise.all([
+				listLooks(db, userId),
+				listTags(db, userId),
+			]);
+			const stored = all.find((look) => look.id === id);
+			if (!stored) return refusal(noLook);
+			// The whole look is checked; only the given fields are written.
+			const merged = {
+				...stored,
+				name: patch.name ?? stored.name,
+				colours: { ...stored.colours, ...patch.colours },
+				open: patch.open ?? stored.open,
+				tags: patch.tags ?? stored.tags,
+			};
+			const parsed = lookInputSchema.safeParse(merged);
+			if (!parsed.success)
+				return refusal(lookIssueText(parsed.error.issues[0], merged));
+			if (!parsed.data.tags.every((t) => accountTags.some((a) => a.id === t)))
+				return refusal(noTag);
+			const { name, colours, open, tags } = parsed.data;
+			const changed = await changeLook(
+				db,
+				userId,
+				id,
+				{
+					name: patch.name === undefined ? undefined : name,
+					colours: patch.colours === undefined ? undefined : colours,
+					open: patch.open === undefined ? undefined : open,
+					tags: patch.tags === undefined ? undefined : tags,
+				},
+				stored.modeId,
+			);
+			if (changed === null) return refusal(noLook);
+			if (changed === "moved") return refusal(serverError);
+			return answer({ look: lookView(changed, accountTags) });
+		},
+	);
+
+	tool(
+		"delete_look",
+		{
+			title: "Delete a look",
+			description: "Deletes a saved look for good.",
+			annotations: DELETE,
+			inputSchema: z.object({ id: z.string().describe("The look's id.") }),
+		},
+		async ({ id }) =>
+			(await deleteLook(db, userId, id))
+				? answer({ deleted: id })
+				: refusal(noLook),
 	);
 }
