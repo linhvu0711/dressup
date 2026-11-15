@@ -193,6 +193,10 @@ export function DressStateProvider({
 	const loadOnFocus = useRef(async () => {});
 	loadOnFocus.current = async () => {
 		if (userId === null || latest.current === null) return;
+		// Changes still out would be shown as lost, and a load mid-edit would
+		// change the outfit "Save changes" writes. A failed change stays first
+		// on the queue, so the queue covers a wait to retry too.
+		if (queue.current.length > 0 || sending.current || edit !== null) return;
 		let fresh: DressState;
 		try {
 			fresh = await fetchDress();
@@ -201,6 +205,7 @@ export function DressStateProvider({
 			if (error instanceof SignedOut) void signOut();
 			return;
 		}
+		if (queue.current.length > 0 || sending.current) return;
 		latest.current = fresh;
 		// The cache follows the server, so a later refusal goes back to this.
 		queryClient.setQueryData<DressState>(dressQueryKey, fresh);

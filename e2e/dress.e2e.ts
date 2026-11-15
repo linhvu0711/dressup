@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { openColours } from "./looks-helpers";
+import { card, openColours, openDress, saveLook } from "./looks-helpers";
 
 const WALL =
 	"linear-gradient(90deg, rgb(198, 194, 188) 0%, rgb(218, 214, 208) 40%, rgb(211, 207, 201) 70%, rgb(195, 191, 185) 100%)";
@@ -319,6 +319,32 @@ const twoFrames = (page: Page) =>
 const isDressGet = (url: string, method: string) =>
 	method === "GET" && new URL(url).pathname === "/api/dress";
 
+// Counts the loads of the dress state from now on.
+function countLoads(page: Page) {
+	const seen = { loads: 0 };
+	page.on("request", (r) => {
+		if (isDressGet(r.url(), r.method())) seen.loads++;
+	});
+	return seen;
+}
+
+// The session check runs on the same focus event, so its answer marks the
+// moment a load on focus would already have been sent.
+const sessionChecked = (page: Page) =>
+	page.waitForResponse((r) => new URL(r.url()).pathname === "/api/me");
+
+const storedSweater = async (page: Page) =>
+	(
+		(await (await page.request.get("/api/dress")).json()) as {
+			picked: { sweater: string };
+		}
+	).picked.sweater;
+
+const changeStored = (page: Page) =>
+	page.waitForResponse(
+		(r) => r.url().endsWith("/api/dress/changes") && r.status() === 204,
+	);
+
 test.describe("load on focus", () => {
 	test("shows a colour picked in another session when the tab gets focus", async ({
 		page,
@@ -386,5 +412,88 @@ test.describe("load on focus", () => {
 		await expect(
 			page.getByRole("button", { name: "Sign in with Google" }),
 		).toBeVisible();
+	});
+
+	test("does not load on focus while a change is sending", async ({ page }) => {
+		// Given: both projects, a fresh account, the Colours tab on the phone;
+		// each save held until the test lets it go; Sweater #7A2E2E clicked
+		await openColours(page);
+		let release = () => {};
+		const held = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		await page.route("**/api/dress/changes", async (route) => {
+			await held;
+			await route.continue();
+		});
+		await square(page, "Sweater #7A2E2E").click();
+		const seen = countLoads(page);
+		// When
+		const checked = sessionChecked(page);
+		await focusTab(page);
+		await checked;
+		const stored = changeStored(page);
+		release();
+		await stored;
+		// Then
+		expect({ loads: seen.loads, stored: await storedSweater(page) }).toEqual({
+			loads: 0,
+			stored: "#7A2E2E",
+		});
+	});
+
+	test("does not load on focus while a change waits to retry", async ({
+		page,
+	}) => {
+		// Given: both projects, a fresh account, the Colours tab on the phone;
+		// every save cut off; Sweater #7A2E2E clicked and not saved; then
+		// sweater #E6DFD0 picked from another session
+		await openColours(page);
+		await page.route("**/api/dress/changes", (route) => route.abort());
+		await square(page, "Sweater #7A2E2E").click();
+		const bar = page.getByRole("alert");
+		await expect(bar).toHaveText(/Not saved\. Check your internet\./);
+		await changeElsewhere(page, { kind: "pick", hex: "#E6DFD0" });
+		const seen = countLoads(page);
+		// When
+		const checked = sessionChecked(page);
+		await focusTab(page);
+		await checked;
+		await page.unroute("**/api/dress/changes");
+		await bar.getByRole("button", { name: "Retry", exact: true }).click();
+		await expect(page.locator('[data-slot="toast"]')).toHaveText("Saved");
+		// Then
+		expect({
+			loads: seen.loads,
+			pressed: await square(page, "Sweater #7A2E2E").getAttribute(
+				"aria-pressed",
+			),
+			stored: await storedSweater(page),
+		}).toEqual({ loads: 0, pressed: "true", stored: "#7A2E2E" });
+	});
+
+	test("keeps the edit state and does not load on focus", async ({ page }) => {
+		// Given: both projects, a fresh account; "Navy day" saved and open in
+		// the edit state, its outfit stored; then sweater #7A2E2E picked from
+		// another session
+		await openDress(page);
+		await saveLook(page, "Navy day");
+		await page.goto("/looks");
+		await card(page, "Navy day").click();
+		const worn = changeStored(page);
+		await page.getByRole("button", { name: "Edit this look" }).click();
+		await worn;
+		await expect(page.getByText("Editing: Navy day")).toBeVisible();
+		await changeElsewhere(page, { kind: "pick", hex: "#7A2E2E" });
+		const seen = countLoads(page);
+		// When
+		const checked = sessionChecked(page);
+		await focusTab(page);
+		await checked;
+		// Then
+		expect({
+			editing: await page.getByText("Editing: Navy day").count(),
+			loads: seen.loads,
+		}).toEqual({ editing: 1, loads: 0 });
 	});
 });
