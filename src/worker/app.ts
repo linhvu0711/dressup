@@ -2,13 +2,13 @@ import { eq } from "drizzle-orm";
 import { type Context, Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import type { z } from "zod";
-import { applyChange, dressChangeSchema } from "@/dress/state";
+import { dressChangeSchema } from "@/dress/state";
 import { lookInputSchema } from "@/looks/look";
 import { newTagSchema, tagSchema } from "@/tags/tag";
 import { createAuth, createClientDiscovery } from "./auth";
 import type { Db } from "./db";
 import { user } from "./db/auth-schema";
-import { loadDress, saveDress } from "./dress-store";
+import { changeDress, loadDress } from "./dress-store";
 import { deleteLook, listLooks, saveLook, updateLook } from "./look-store";
 import { mcpRoute } from "./mcp";
 import { addTag, deleteTag, listTags, renameTag } from "./tag-store";
@@ -118,13 +118,9 @@ export function createApp(getDb: (env: Env) => Db) {
 	app.post("/dress/changes", withAuth, requireUser, async (c) => {
 		const body = await readBody(c, dressChangeSchema);
 		if ("refused" in body) return body.refused;
-		const db = getDb(c.env);
-		const userId = c.var.user.id;
-		const stored = await loadDress(db, userId);
-		const result = applyChange(stored.state, body.data);
+		const result = await changeDress(getDb(c.env), c.var.user.id, body.data);
 		if (!result.ok)
 			return c.json({ error: result.error, field: result.field }, 400);
-		await saveDress(db, userId, stored, result.state);
 		return c.body(null, 204);
 	});
 

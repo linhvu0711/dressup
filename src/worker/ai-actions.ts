@@ -4,11 +4,23 @@ import type {
 	ToolAnnotations,
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { GARMENT_IDS, GARMENT_NAMES, isJacket } from "@/dress/garments";
+import {
+	GARMENT_IDS,
+	GARMENT_NAMES,
+	type GarmentId,
+	type Hex,
+	isJacket,
+	JACKET_IDS,
+} from "@/dress/garments";
 import { MODES } from "@/dress/modes";
-import type { DressState } from "@/dress/state";
+import {
+	type DressState,
+	dressChangeSchema,
+	MANNEQUIN_PARTS,
+} from "@/dress/state";
+import { issueText, lastSquare, notInRow } from "./ai-messages";
 import type { Db } from "./db";
-import { loadDress } from "./dress-store";
+import { changeDress, loadDress } from "./dress-store";
 
 type Account = { db: Db; userId: string };
 
@@ -27,6 +39,13 @@ const garmentsAndModes = {
 };
 
 const READ: ToolAnnotations = { readOnlyHint: true };
+const WRITE: ToolAnnotations = { readOnlyHint: false, destructiveHint: false };
+const DELETE: ToolAnnotations = { readOnlyHint: false, destructiveHint: true };
+
+const refusal = (text: string): CallToolResult => ({
+	content: [{ type: "text", text }],
+	isError: true,
+});
 
 const answer = (
 	data: Record<string, unknown>,
@@ -46,6 +65,16 @@ const outfitView = (state: DressState) => ({
 });
 
 const noArgs = z.object({});
+
+const field = {
+	modeId: z.string().describe("A mode id, such as polo-sweater."),
+	garment: z.string().describe("A garment id, such as sweater."),
+	jacket: z.string().describe(`${JACKET_IDS.join(" or ")}.`),
+	part: z.string().describe(`${MANNEQUIN_PARTS.join(" or ")}.`),
+	colour: z
+		.string()
+		.describe("A colour as #RRGGBB with capital letters, such as #1F3A5F."),
+};
 
 export function registerAiActions(server: McpServer, account: Account) {
 	const { db, userId } = account;
@@ -88,5 +117,96 @@ export function registerAiActions(server: McpServer, account: Account) {
 			inputSchema: noArgs,
 		},
 		async () => answer(outfitView((await loadDress(db, userId)).state)),
+	);
+
+	// Checks the change with the Dress page's rules before it reaches the
+	// store, so a refusal names the value the AI app sent.
+	async function changeOutfit(change: Record<string, unknown>) {
+		const parsed = dressChangeSchema.safeParse(change);
+		if (!parsed.success)
+			return refusal(issueText(parsed.error.issues[0], change));
+		const result = await changeDress(db, userId, parsed.data);
+		if (result.ok) return answer(outfitView(result.state));
+		const { garment, hex } = parsed.data as { garment: GarmentId; hex: Hex };
+		return result.error === "not_in_row"
+			? refusal(notInRow(garment, hex, result.state.swatches[garment]))
+			: refusal(lastSquare(garment, hex));
+	}
+
+	tool(
+		"set_mode",
+		{
+			title: "Change the mode",
+			description:
+				"Puts the mannequin in another mode, a set of garments worn together.",
+			annotations: WRITE,
+			inputSchema: z.object({ modeId: field.modeId }),
+		},
+		({ modeId }) => changeOutfit({ kind: "mode", modeId }),
+	);
+
+	tool(
+		"pick_colour",
+		{
+			title: "Pick a colour",
+			description:
+				"Picks one of a garment's colour squares for the outfit. The colour must already be a square in that garment's row.",
+			annotations: WRITE,
+			inputSchema: z.object({ garment: field.garment, colour: field.colour }),
+		},
+		({ garment, colour }) =>
+			changeOutfit({ kind: "pick", garment, hex: colour }),
+	);
+
+	tool(
+		"add_colour_square",
+		{
+			title: "Add a colour square",
+			description:
+				"Adds a colour square to a garment's row and picks it. A colour the row already has is picked, not added twice.",
+			annotations: WRITE,
+			inputSchema: z.object({ garment: field.garment, colour: field.colour }),
+		},
+		({ garment, colour }) =>
+			changeOutfit({ kind: "add", garment, hex: colour }),
+	);
+
+	tool(
+		"remove_colour_square",
+		{
+			title: "Remove a colour square",
+			description:
+				"Removes a colour square from a garment's row. A row keeps at least one square. Saved looks keep their colours.",
+			annotations: DELETE,
+			inputSchema: z.object({ garment: field.garment, colour: field.colour }),
+		},
+		({ garment, colour }) =>
+			changeOutfit({ kind: "remove", garment, hex: colour }),
+	);
+
+	tool(
+		"set_jacket",
+		{
+			title: "Open or close a jacket",
+			description: `Opens or closes the ${JACKET_IDS.join(" or ")} jacket.`,
+			annotations: WRITE,
+			inputSchema: z.object({
+				jacket: field.jacket,
+				open: z.boolean().describe("true opens the jacket, false closes it."),
+			}),
+		},
+		({ jacket, open }) => changeOutfit({ kind: "jacket", jacket, open }),
+	);
+
+	tool(
+		"set_mannequin_colour",
+		{
+			title: "Set skin or hair colour",
+			description: "Sets the mannequin's skin or hair colour.",
+			annotations: WRITE,
+			inputSchema: z.object({ part: field.part, colour: field.colour }),
+		},
+		({ part, colour }) =>
+			changeOutfit({ kind: "mannequin", part, hex: colour }),
 	);
 }

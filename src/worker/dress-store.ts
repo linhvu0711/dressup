@@ -8,6 +8,8 @@ import {
 } from "@/dress/garments";
 import { DEFAULT_MODE_ID, type ModeId } from "@/dress/modes";
 import {
+	applyChange,
+	type DressChange,
 	type DressState,
 	MANNEQUIN_PARTS,
 	STARTER_MANNEQUIN,
@@ -210,4 +212,26 @@ export async function saveDress(
 	}
 	const [first, ...rest] = writes;
 	if (first) await db.batch([first, ...rest]);
+}
+
+// One change as the Dress page makes it: read, apply the page's rules, and
+// write the difference. A refusal carries the state it was refused on.
+export async function changeDress(
+	db: Db,
+	userId: string,
+	change: DressChange,
+): Promise<
+	| { ok: true; state: DressState }
+	| {
+			ok: false;
+			error: "not_in_row" | "last_square";
+			field: "hex";
+			state: DressState;
+	  }
+> {
+	const stored = await loadDress(db, userId);
+	const result = applyChange(stored.state, change);
+	if (!result.ok) return { ...result, state: stored.state };
+	await saveDress(db, userId, stored, result.state);
+	return result;
 }
