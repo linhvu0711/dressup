@@ -501,6 +501,42 @@ describe("look changes", () => {
 		});
 	});
 
+	test("keeps a colour the page saved while a look change ran", async () => {
+		// Given: the page saves a new chore colour after change_look read the
+		// look and before it writes. change_look's first batch is its read of
+		// the looks, its second its write.
+		const { h, ai } = await withNavy();
+		const db = h.settings.db;
+		const batch = db.batch.bind(db);
+		let batches = 0;
+		const writeAfterPage: typeof batch = async (items) => {
+			if (++batches === 1) return batch(items);
+			db.batch = batch;
+			const put = await sendJson(h, ai, "PUT", `/api/looks/${NAVY.id}`, {
+				...NAVY,
+				colours: { ...NAVY.colours, chore: "#1F3A5F" },
+			});
+			expect(put.status).toBe(200);
+			return batch(items);
+		};
+		db.batch = writeAfterPage;
+		// When
+		const { isError } = await ai.call("change_look", {
+			id: NAVY.id,
+			colours: { sweater: "#7A2E2E" },
+		});
+		// Then
+		expect({ isError, colours: (await looks(h, ai))[0]?.colours }).toEqual({
+			isError: false,
+			colours: {
+				chino_p: "#C9B38C",
+				polo_l: "#F3F1EC",
+				sweater: "#7A2E2E",
+				chore: "#1F3A5F",
+			},
+		});
+	});
+
 	test("changes only a look's tags", async () => {
 		// Given
 		const { h, ai } = await withNavy();

@@ -358,7 +358,17 @@ export function registerAiActions(server: McpServer, account: Account) {
 				id,
 				{
 					name: patch.name === undefined ? undefined : name,
-					colours: patch.colours === undefined ? undefined : colours,
+					// Only the garments sent, so a colour the page saved since the
+					// read stays.
+					colours:
+						patch.colours === undefined
+							? undefined
+							: (Object.fromEntries(
+									Object.keys(patch.colours).map((g) => [
+										g,
+										colours[g as GarmentId],
+									]),
+								) as typeof colours),
 					open: patch.open === undefined ? undefined : open,
 					tags: patch.tags === undefined ? undefined : tags,
 				},
