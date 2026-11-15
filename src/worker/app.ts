@@ -38,7 +38,8 @@ async function readBody<T extends z.ZodType>(
 }
 
 export function createApp(getDb: (env: Env) => Db) {
-	const app = new Hono<AppEnv>().basePath("/api");
+	const root = new Hono<AppEnv>();
+	const app = root.basePath("/api");
 	// One per isolate: the plugin keeps its document cache and fetch limits in
 	// this object, and the auth instance is new on every request.
 	const clientDiscovery = createClientDiscovery();
@@ -60,6 +61,10 @@ export function createApp(getDb: (env: Env) => Db) {
 		);
 		await next();
 	});
+
+	// AI apps look for metadata at the site root (RFC 8414, RFC 9728); better-auth
+	// answers those paths (P5).
+	root.get("/.well-known/*", withAuth, (c) => c.var.auth.handler(c.req.raw));
 
 	const requireUser = createMiddleware<AppEnv>(async (c, next) => {
 		const { headers, response: session } = await c.var.auth.api.getSession({
@@ -196,7 +201,8 @@ export function createApp(getDb: (env: Env) => Db) {
 		return c.body(null, 204);
 	});
 
-	app.notFound((c) => c.json({ error: "not_found" }, 404));
+	// Hono runs the not-found handler of the instance that got the request.
+	root.notFound((c) => c.json({ error: "not_found" }, 404));
 
-	return app;
+	return root;
 }
