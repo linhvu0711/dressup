@@ -2,7 +2,7 @@ import { betterAuth } from "better-auth";
 import { testUtils } from "better-auth/plugins";
 import { drizzle } from "drizzle-orm/d1";
 import { getPlatformProxy } from "wrangler";
-import { authOptions } from "../src/worker/auth";
+import { authOptions, createClientDiscovery } from "../src/worker/auth";
 import { schema } from "../src/worker/db";
 
 export const E2E_USER = {
@@ -34,6 +34,7 @@ function testAuth(
 			baseURL: "http://localhost:5173",
 			google: { clientId: "", clientSecret: "" },
 			signupsClosed: false,
+			clientDiscovery: createClientDiscovery(),
 		}),
 		plugins: [testUtils()],
 	});

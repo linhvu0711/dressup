@@ -5,7 +5,7 @@ import type { z } from "zod";
 import { applyChange, dressChangeSchema } from "@/dress/state";
 import { lookInputSchema } from "@/looks/look";
 import { newTagSchema, tagSchema } from "@/tags/tag";
-import { createAuth } from "./auth";
+import { createAuth, createClientDiscovery } from "./auth";
 import type { Db } from "./db";
 import { user } from "./db/auth-schema";
 import { loadDress, saveDress } from "./dress-store";
@@ -38,6 +38,9 @@ async function readBody<T extends z.ZodType>(
 
 export function createApp(getDb: (env: Env) => Db) {
 	const app = new Hono<AppEnv>().basePath("/api");
+	// One per isolate: the plugin keeps its document cache and fetch limits in
+	// this object, and the auth instance is new on every request.
+	const clientDiscovery = createClientDiscovery();
 
 	const withAuth = createMiddleware<AppEnv>(async (c, next) => {
 		c.set(
@@ -51,6 +54,7 @@ export function createApp(getDb: (env: Env) => Db) {
 					clientSecret: c.env.GOOGLE_CLIENT_SECRET,
 				},
 				signupsClosed: c.env.SIGNUPS_CLOSED === "true",
+				clientDiscovery,
 			}),
 		);
 		await next();

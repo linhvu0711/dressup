@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { BetterAuthOptions } from "better-auth";
 import { authOptions } from "./auth";
-import { makeHarness, stubGoogle } from "./test/harness";
+import {
+	cookie,
+	finishGoogleSignIn,
+	makeHarness,
+	startGoogleSignIn,
+	stubOutside,
+} from "./test/harness";
 
 async function withUser(id: string, email: string, name: string) {
 	const h = await makeHarness();
@@ -92,9 +98,17 @@ describe("migrations", () => {
 			"__drizzle_migrations",
 			"account",
 			"colour_square",
+			"jwks",
 			"look",
 			"look_tag",
 			"mannequin",
+			"oauth_access_token",
+			"oauth_client",
+			"oauth_client_assertion",
+			"oauth_client_resource",
+			"oauth_consent",
+			"oauth_refresh_token",
+			"oauth_resource",
 			"outfit",
 			"outfit_garment",
 			"session",
@@ -107,47 +121,8 @@ describe("migrations", () => {
 
 type Harness = Awaited<ReturnType<typeof makeHarness>>;
 
-const cookieHeader = (res: Response) =>
-	res.headers
-		.getSetCookie()
-		.map((c) => c.split(";")[0])
-		.join("; ");
-
-async function startGoogleSignIn({ app, env }: Harness) {
-	const res = await app.request(
-		"/api/auth/sign-in/social",
-		{
-			method: "POST",
-			headers: {
-				"content-type": "application/json",
-				origin: "http://localhost:5173",
-			},
-			body: JSON.stringify({
-				provider: "google",
-				callbackURL: "/",
-				errorCallbackURL: "/",
-			}),
-		},
-		env,
-	);
-	const { url } = (await res.json()) as { url: string };
-	const google = new URL(url);
-	return {
-		res,
-		google,
-		state: google.searchParams.get("state") ?? "",
-		cookie: cookieHeader(res),
-	};
-}
-
-async function finishGoogleSignIn(h: Harness) {
-	const start = await startGoogleSignIn(h);
-	return h.app.request(
-		`/api/auth/callback/google?code=abc&state=${start.state}`,
-		{ headers: { cookie: start.cookie }, redirect: "manual" },
-		h.env,
-	);
-}
+const signIn = async (h: Harness) =>
+	finishGoogleSignIn(h, await startGoogleSignIn(h));
 
 describe("Google sign-in", () => {
 	let restore = () => {};
@@ -176,11 +151,11 @@ describe("Google sign-in", () => {
 	test("sends a cancelled Google sign-in back with the error", async () => {
 		// Given: a started sign-in, its state and its state cookie
 		const h = await makeHarness();
-		const { state, cookie } = await startGoogleSignIn(h);
+		const { state, jar } = await startGoogleSignIn(h);
 		// When
 		const res = await h.app.request(
 			`/api/auth/callback/google?error=access_denied&state=${state}`,
-			{ headers: { cookie }, redirect: "manual" },
+			{ headers: { cookie: cookie(jar) }, redirect: "manual" },
 			h.env,
 		);
 		// Then
@@ -191,20 +166,22 @@ describe("Google sign-in", () => {
 	test("makes one user on the first Google sign-in and reuses it", async () => {
 		// Given
 		const h = await makeHarness();
-		restore = stubGoogle(
-			"g-123",
-			"carol@example.com",
-			"Carol",
-			"https://example.com/c.png",
-		);
+		restore = stubOutside({
+			google: {
+				sub: "g-123",
+				email: "carol@example.com",
+				name: "Carol",
+				picture: "https://example.com/c.png",
+			},
+		}).restore;
 		// When
-		const first = await finishGoogleSignIn(h);
+		const { res: first, jar } = await signIn(h);
 		const me = await h.app.request(
 			"/api/me",
-			{ headers: { cookie: cookieHeader(first) } },
+			{ headers: { cookie: cookie(jar) } },
 			h.env,
 		);
-		const second = await finishGoogleSignIn(h);
+		const { res: second, jar: secondJar } = await signIn(h);
 		// Then
 		const ids = h.sqlite.query<{ id: string }, []>("select id from user").all();
 		const accounts = h.sqlite
@@ -221,9 +198,7 @@ describe("Google sign-in", () => {
 		expect({
 			first: [first.status, first.headers.get("location")],
 			second: [second.status, second.headers.get("location")],
-			sessionCookie: cookieHeader(second).includes(
-				"better-auth.session_token=",
-			),
+			sessionCookie: secondJar.has("better-auth.session_token"),
 			me: meBody,
 			users: ids.length,
 			sameUser: ids[0]?.id === meBody.id,
@@ -244,7 +219,7 @@ describe("Google sign-in", () => {
 		});
 	});
 
-	test("turns on Google sign-in only", async () => {
+	test("turns on Google sign-in and the AI app sign-in server only", async () => {
 		// Given
 		const { settings } = await makeHarness();
 		// When
@@ -252,11 +227,11 @@ describe("Google sign-in", () => {
 		// Then
 		expect({
 			providers: Object.keys(options.socialProviders ?? {}),
-			plugins: options.plugins,
+			plugins: options.plugins?.map((plugin) => plugin.id),
 			emailAndPassword: options.emailAndPassword,
 		}).toEqual({
 			providers: ["google"],
-			plugins: undefined,
+			plugins: ["jwt", "oauth-provider", "cimd"],
 			emailAndPassword: undefined,
 		});
 	});
@@ -277,14 +252,16 @@ describe("sign-up switch", () => {
 	test("refuses a new Google account while sign-ups are closed", async () => {
 		// Given: no user; sign-ups closed
 		const h = await makeHarness();
-		restore = stubGoogle(
-			"g-new",
-			"new@example.com",
-			"New",
-			"https://example.com/n.png",
-		);
+		restore = stubOutside({
+			google: {
+				sub: "g-new",
+				email: "new@example.com",
+				name: "New",
+				picture: "https://example.com/n.png",
+			},
+		}).restore;
 		// When
-		const res = await finishGoogleSignIn(withSignups(h, "true"));
+		const { res } = await signIn(withSignups(h, "true"));
 		// Then
 		expect({
 			status: res.status,
@@ -300,19 +277,21 @@ describe("sign-up switch", () => {
 	test("signs in an existing account while sign-ups are closed", async () => {
 		// Given: the account made by a sign-in while sign-up was open
 		const h = await makeHarness();
-		restore = stubGoogle(
-			"g-old",
-			"old@example.com",
-			"Old",
-			"https://example.com/o.png",
-		);
-		expect((await finishGoogleSignIn(h)).headers.get("location")).toBe("/");
+		restore = stubOutside({
+			google: {
+				sub: "g-old",
+				email: "old@example.com",
+				name: "Old",
+				picture: "https://example.com/o.png",
+			},
+		}).restore;
+		expect((await signIn(h)).res.headers.get("location")).toBe("/");
 		// When
-		const res = await finishGoogleSignIn(withSignups(h, "true"));
+		const { res, jar } = await signIn(withSignups(h, "true"));
 		// Then
 		const me = await h.app.request(
 			"/api/me",
-			{ headers: { cookie: cookieHeader(res) } },
+			{ headers: { cookie: cookie(jar) } },
 			h.env,
 		);
 		expect({
@@ -331,14 +310,16 @@ describe("sign-up switch", () => {
 		const results = [];
 		for (const value of [undefined, "false", "yes", "TRUE"]) {
 			const h = await makeHarness();
-			restore = stubGoogle(
-				"g-new",
-				"new@example.com",
-				"New",
-				"https://example.com/n.png",
-			);
+			restore = stubOutside({
+				google: {
+					sub: "g-new",
+					email: "new@example.com",
+					name: "New",
+					picture: "https://example.com/n.png",
+				},
+			}).restore;
 			// When
-			const res = await finishGoogleSignIn(withSignups(h, value));
+			const { res } = await signIn(withSignups(h, value));
 			restore();
 			results.push({
 				value: value ?? "not set",

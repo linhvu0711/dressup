@@ -31,7 +31,7 @@ Copy `.dev.vars.example` to `.dev.vars` and fill in each value. Wrangler reads `
 
 - `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`: the Google OAuth client. Its redirect address is `<BETTER_AUTH_URL>/api/auth/callback/google`.
 - `BETTER_AUTH_SECRET`: signs the session cookies. Use at least 32 random characters, for example from `openssl rand -base64 32`.
-- `BETTER_AUTH_URL`: the app's address. In dev it is `http://localhost:5173`.
+- `BETTER_AUTH_URL`: the app's address. In dev it is `http://localhost:5173`. AI apps connect at `<BETTER_AUTH_URL>/api/mcp`.
 
 ## Stop new sign-ups
 

@@ -1,57 +1,21 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { makeHarness, stubGoogle } from "./test/harness";
+import {
+	connectAiApp,
+	cookie,
+	finishGoogleSignIn,
+	type Jar,
+	makeHarness,
+	startGoogleSignIn,
+	store,
+	stubOutside,
+	TEST_APP_ID,
+	testAppDocument,
+} from "./test/harness";
 
 type Harness = Awaited<ReturnType<typeof makeHarness>>;
 
-// The browser's cookies: each Set-Cookie line writes its name, and an empty
-// value or Max-Age=0 takes it out.
-type Jar = Map<string, string>;
-
-function store(jar: Jar, res: Response): Jar {
-	const next = new Map(jar);
-	for (const line of res.headers.getSetCookie()) {
-		const [pair] = line.split(";");
-		const at = pair.indexOf("=");
-		const name = pair.slice(0, at);
-		const value = pair.slice(at + 1);
-		if (!value || /max-age=0/i.test(line)) next.delete(name);
-		else next.set(name, value);
-	}
-	return next;
-}
-
-const cookie = (jar: Jar) =>
-	[...jar].map(([name, value]) => `${name}=${value}`).join("; ");
-
-async function googleSignIn(h: Harness): Promise<Jar> {
-	const start = await h.app.request(
-		"/api/auth/sign-in/social",
-		{
-			method: "POST",
-			headers: {
-				"content-type": "application/json",
-				origin: "http://localhost:5173",
-			},
-			body: JSON.stringify({
-				provider: "google",
-				callbackURL: "/",
-				errorCallbackURL: "/",
-			}),
-		},
-		h.env,
-	);
-	const { url } = (await start.json()) as { url: string };
-	const state = new URL(url).searchParams.get("state") ?? "";
-	const callback = await h.app.request(
-		`/api/auth/callback/google?code=abc&state=${state}`,
-		{
-			headers: { cookie: cookie(store(new Map(), start)) },
-			redirect: "manual",
-		},
-		h.env,
-	);
-	return store(new Map(), callback);
-}
+const googleSignIn = async (h: Harness): Promise<Jar> =>
+	(await finishGoogleSignIn(h, await startGoogleSignIn(h))).jar;
 
 const send = (h: Harness, jar: Jar, path: string, init: RequestInit = {}) =>
 	h.app.request(
@@ -154,12 +118,14 @@ describe("DELETE /api/account", () => {
 
 	async function aliceWithRows() {
 		const h = await makeHarness();
-		restore = stubGoogle(
-			"g-alice",
-			"alice@example.com",
-			"Alice",
-			"https://example.com/a.png",
-		);
+		restore = stubOutside({
+			google: {
+				sub: "g-alice",
+				email: "alice@example.com",
+				name: "Alice",
+				picture: "https://example.com/a.png",
+			},
+		}).restore;
 		const jar = await googleSignIn(h);
 		const { body } = await me(h, jar);
 		const aliceId = (body as { id: string }).id;
@@ -196,12 +162,14 @@ describe("DELETE /api/account", () => {
 		// Given: alice and bob signed in through Google, each with rows
 		const { h, jar: alice } = await aliceWithRows();
 		restore();
-		restore = stubGoogle(
-			"g-bob",
-			"bob@example.com",
-			"Bob",
-			"https://example.com/b.png",
-		);
+		restore = stubOutside({
+			google: {
+				sub: "g-bob",
+				email: "bob@example.com",
+				name: "Bob",
+				picture: "https://example.com/b.png",
+			},
+		}).restore;
 		const bob = await googleSignIn(h);
 		const bobId = ((await me(h, bob)).body as { id: string }).id;
 		await fillAccount(h, bob, "22222222-2222-4222-8222-222222222222");
@@ -266,12 +234,14 @@ describe("DELETE /api/account", () => {
 		// Given: alice's first sign-in with its starter dress, then rows, then
 		// the delete
 		const h = await makeHarness();
-		restore = stubGoogle(
-			"g-alice",
-			"alice@example.com",
-			"Alice",
-			"https://example.com/a.png",
-		);
+		restore = stubOutside({
+			google: {
+				sub: "g-alice",
+				email: "alice@example.com",
+				name: "Alice",
+				picture: "https://example.com/a.png",
+			},
+		}).restore;
 		const first = await googleSignIn(h);
 		const firstId = ((await me(h, first)).body as { id: string }).id;
 		const starter = await (await send(h, first, "/api/dress")).json();
@@ -308,6 +278,46 @@ describe("DELETE /api/account", () => {
 			status: 401,
 			body: { error: "unauthorized" },
 			users: { n: 1 },
+		});
+	});
+
+	test("deletes the account's AI app records with the account", async () => {
+		// Given: alice through connectAiApp, so she has 1 oauth_consent and 1
+		// oauth_refresh_token row
+		const h = await makeHarness();
+		restore = stubOutside({
+			google: {
+				sub: "g-alice",
+				email: "alice@example.com",
+				name: "Alice",
+				picture: "https://example.com/a.png",
+			},
+			documents: { [TEST_APP_ID]: testAppDocument },
+		}).restore;
+		const { jar } = await connectAiApp(h, { accept: true });
+		const aliceId = ((await me(h, jar)).body as { id: string }).id;
+		const count = (table: string) =>
+			(
+				h.sqlite
+					.query(`select count(*) as n from ${table} where user_id = ?`)
+					.get(aliceId) as { n: number }
+			).n;
+		expect([count("oauth_consent"), count("oauth_refresh_token")]).toEqual([
+			1, 1,
+		]);
+		// When
+		const res = await deleteAccount(h, jar);
+		// Then
+		expect({
+			status: res.status,
+			rows: {
+				oauth_consent: count("oauth_consent"),
+				oauth_refresh_token: count("oauth_refresh_token"),
+				oauth_access_token: count("oauth_access_token"),
+			},
+		}).toEqual({
+			status: 204,
+			rows: { oauth_consent: 0, oauth_refresh_token: 0, oauth_access_token: 0 },
 		});
 	});
 });
