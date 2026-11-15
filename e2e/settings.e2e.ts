@@ -246,26 +246,69 @@ test("shows the AI app address, the steps, and No AI apps connected yet", async 
 	await page.goto("/settings");
 	// Then
 	const empty = page.getByText(NO_AI_APPS, { exact: true });
-	const steps = page.locator('[data-slot="ai-app-steps"]');
+	const guide = page.locator('[data-slot="ai-app-guide"]');
 	await expect(empty).toBeVisible();
-	const [emptyBox, stepsBox] = [
+	const [emptyBox, guideBox] = [
 		await empty.boundingBox(),
-		await steps.boundingBox(),
+		await guide.boundingBox(),
 	];
+	const opened = guide.locator('[data-slot="ai-app-guide-steps"]');
+	const closed = {
+		cards: await guide.getByRole("button").allTextContents(),
+		open: await opened.count(),
+	};
+	// Each card opens in turn, and the one before it closes.
+	const steps: Record<string, { steps: string[]; code: string[] }> = {};
+	for (const name of ["Claude", "ChatGPT", "Claude Code"]) {
+		await guide.getByRole("button", { name, exact: true }).click();
+		await expect(opened).toHaveCount(1);
+		steps[name] = {
+			steps: await opened
+				.locator('[data-slot="ai-app-guide-step"]')
+				.allTextContents(),
+			code: await opened.locator("code").allTextContents(),
+		};
+	}
 	expect({
 		address: await page.locator('[data-slot="ai-app-address"]').textContent(),
 		empty: await empty.textContent(),
-		steps: await steps.locator("li").allTextContents(),
-		emptyAboveSteps: (emptyBox?.y ?? 0) < (stepsBox?.y ?? 0),
+		emptyAboveGuide: (emptyBox?.y ?? 0) < (guideBox?.y ?? 0),
+		closed,
+		steps,
 	}).toEqual({
 		address: AI_ADDRESS,
 		empty: NO_AI_APPS,
-		steps: [
-			"Claude: Customize, Connectors, Add, Add custom connector, then paste the address.",
-			"ChatGPT: Plugins, +, Add custom MCP server, then paste the address.",
-			`Claude Code: run claude mcp add --transport http dressup ${AI_ADDRESS}, then /mcp to sign in.`,
-		],
-		emptyAboveSteps: true,
+		emptyAboveGuide: true,
+		closed: {
+			cards: [
+				"ClaudeDesktop or web",
+				"ChatGPTDesktop or web",
+				"Claude CodeTerminal",
+			],
+			open: 0,
+		},
+		steps: {
+			Claude: {
+				steps: [
+					"Open Customize › Connectors",
+					"Click Add › Add custom connector",
+					"Paste this address",
+				],
+				code: [AI_ADDRESS],
+			},
+			ChatGPT: {
+				steps: [
+					"Open Plugins and click +",
+					"Click Add custom MCP server",
+					"Paste this address",
+				],
+				code: [AI_ADDRESS],
+			},
+			"Claude Code": {
+				steps: ["Run this in a terminal", "Type /mcp and sign in"],
+				code: [`claude mcp add --transport http dressup ${AI_ADDRESS}`, "/mcp"],
+			},
+		},
 	});
 });
 
@@ -283,6 +326,25 @@ test.describe("AI app address on the clipboard", () => {
 			toast: await page.locator('[data-slot="toast"]').textContent(),
 			clipboard: await page.evaluate(() => navigator.clipboard.readText()),
 		}).toEqual({ toast: "Copied", clipboard: AI_ADDRESS });
+	});
+
+	test("copies the Claude Code command", async ({ page }) => {
+		// Given: both projects, a fresh account, /settings, the Claude Code card open
+		await page.goto("/settings");
+		await page
+			.getByRole("button", { name: "Claude Code", exact: true })
+			.click();
+		// When
+		await page.getByRole("button", { name: "Copy command" }).click();
+		// Then
+		await expect(page.locator('[data-slot="toast"]')).toHaveText("Copied");
+		expect({
+			toast: await page.locator('[data-slot="toast"]').textContent(),
+			clipboard: await page.evaluate(() => navigator.clipboard.readText()),
+		}).toEqual({
+			toast: "Copied",
+			clipboard: `claude mcp add --transport http dressup ${AI_ADDRESS}`,
+		});
 	});
 });
 

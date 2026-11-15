@@ -3,6 +3,7 @@ import type { AiApp } from "@/ai-apps/ai-app";
 import { useAiApps, useDisconnectAiApp } from "@/ai-apps/api";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
+import { AiAppGuide, useCopy } from "./AiAppGuide";
 
 // The page and /api/mcp come from the same Worker, so the page's origin is
 // the address an AI app connects to.
@@ -12,14 +13,8 @@ const address = () => `${window.location.origin}/api/mcp`;
 // such part, so it copies the Account rows of SettingsPage.tsx.
 export function AiAppsSection() {
 	const apps = useAiApps();
-	const toast = useToast();
+	const copy = useCopy();
 	const mcp = address();
-
-	const copy = () =>
-		navigator.clipboard.writeText(mcp).then(
-			() => toast("Copied"),
-			() => toast("Not copied. Try again."),
-		);
 
 	return (
 		<>
@@ -44,28 +39,9 @@ export function AiAppsSection() {
 					</small>
 				</div>
 				<span className="flex-1" />
-				<Button onClick={copy}>Copy</Button>
+				<Button onClick={() => copy(mcp)}>Copy</Button>
 			</div>
-			<ol
-				data-slot="ai-app-steps"
-				className="mt-2 flex flex-col gap-1.5 text-[13px] text-muted-foreground"
-			>
-				<li>
-					<b className="font-medium text-foreground">Claude</b>: Customize,
-					Connectors, Add, Add custom connector, then paste the address.
-				</li>
-				<li>
-					<b className="font-medium text-foreground">ChatGPT</b>: Plugins, +,
-					Add custom MCP server, then paste the address.
-				</li>
-				<li>
-					<b className="font-medium text-foreground">Claude Code</b>: run{" "}
-					<code className="font-mono">
-						claude mcp add --transport http dressup {mcp}
-					</code>
-					, then <code className="font-mono">/mcp</code> to sign in.
-				</li>
-			</ol>
+			<AiAppGuide address={mcp} />
 			{apps.isError ? (
 				<>
 					<p role="alert" className="mt-3 text-[13px] text-destructive">
