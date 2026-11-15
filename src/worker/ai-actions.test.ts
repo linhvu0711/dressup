@@ -800,6 +800,20 @@ describe("AI action limit", () => {
 		});
 	});
 
+	test("counts a late call from the minute before in the new minute", async () => {
+		// Given: 60 actions in this minute, then a call that read the clock in
+		// the minute before lands late
+		const { ai, start } = await sixtyActions();
+		setSystemTime(start - 60_000);
+		// When
+		const { isError, text } = await ai.call("list_tags");
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "Too many actions. Wait a minute and try again.",
+		});
+	});
+
 	test("leaves the app's own routes without a new limit", async () => {
 		// Given
 		const { h, ai } = await sixtyActions();
