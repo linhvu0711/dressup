@@ -44,7 +44,9 @@ export function authOptions(s: AuthSettings) {
 		},
 		disabledPaths: ["/token"],
 		plugins: [
-			jwt(),
+			// No code reads the session JWT, and signing it cost CPU on every
+			// getSession (#48).
+			jwt({ disableSettingJwtHeader: true }),
 			mcp({
 				resource: mcpResource(s.baseURL),
 				loginPage: "/allow",

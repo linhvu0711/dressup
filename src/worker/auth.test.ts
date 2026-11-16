@@ -446,3 +446,22 @@ describe("Better Auth per isolate", () => {
 		});
 	});
 });
+
+describe("GET /api/auth/get-session", () => {
+	test("sends the session with no set-auth-jwt header", async () => {
+		// Given: alice, signed in
+		const { app, env, helpers } = await withUser(
+			"alice-id",
+			"alice@example.com",
+			"Alice",
+		);
+		const headers = await helpers.getAuthHeaders({ userId: "alice-id" });
+		// When
+		const res = await app.request("/api/auth/get-session", { headers }, env);
+		// Then
+		expect({
+			status: res.status,
+			jwt: res.headers.get("set-auth-jwt"),
+		}).toEqual({ status: 200, jwt: null });
+	});
+});
