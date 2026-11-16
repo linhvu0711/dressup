@@ -32,15 +32,15 @@ type Tag = { id: string; name: string };
 
 const NAVY = {
 	id: "11111111-1111-4111-8111-111111111111",
-	modeId: "polo-sweater-chore",
+	modeId: "polo-sweater-harrington",
 	name: "Navy day",
 	colours: {
 		chino_p: "#C9B38C",
 		polo_l: "#F3F1EC",
 		sweater: "#1F3A5F",
-		chore: "#55633F",
+		harrington: "#55633F",
 	},
-	open: ["chore"],
+	open: ["harrington"],
 };
 
 const send = (

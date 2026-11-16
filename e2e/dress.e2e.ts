@@ -110,7 +110,7 @@ test("picks one mode in each tab", async ({ page }) => {
 	for (const [tab, card] of [
 		["Hot", "Tee + casual shorts"],
 		["Cool", "Long polo + chino pants"],
-		["Cold", "Shirt + sweater + padded"],
+		["Cold", "Shirt + sweater + wool"],
 		["Training", "Long training tee + pants"],
 	]) {
 		// When

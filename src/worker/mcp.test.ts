@@ -125,7 +125,7 @@ describe("/api/mcp", () => {
 			garments: 17,
 			modes: 23,
 			firstGarment: { id: "tee_s", name: "Short tee", jacket: false },
-			jackets: ["chore", "padded"],
+			jackets: ["harrington", "wool"],
 			firstMode: {
 				id: "tee-casual-shorts",
 				name: "Tee + casual shorts",

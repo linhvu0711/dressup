@@ -45,13 +45,13 @@ export default async function globalSetup() {
 		const looks = Array.from({ length: LOOK_LIMIT }, (_, n) => ({
 			id: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
 			userId: LIMIT_USER.id,
-			modeId: "polo-sweater-chore",
+			modeId: "polo-sweater-harrington",
 			name: "",
 			colours: {
 				chino_p: "#C9B38C",
 				polo_l: "#F3F1EC",
 				sweater: "#1F3A5F",
-				chore: "#55633F",
+				harrington: "#55633F",
 			} as const,
 			open: [],
 		}));

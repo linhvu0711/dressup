@@ -105,23 +105,23 @@ const lookCount = (h: Harness) =>
 
 const NAVY = {
 	id: "11111111-1111-4111-8111-111111111111",
-	modeId: "polo-sweater-chore",
+	modeId: "polo-sweater-harrington",
 	name: "Navy day",
 	colours: {
 		chino_p: "#C9B38C",
 		polo_l: "#F3F1EC",
 		sweater: "#1F3A5F",
-		chore: "#55633F",
+		harrington: "#55633F",
 	},
-	open: ["chore"],
+	open: ["harrington"],
 	tags: [] as string[],
 };
 
 const NAVY_SAVE = {
-	modeId: "polo-sweater-chore",
+	modeId: "polo-sweater-harrington",
 	name: "Navy day",
 	colours: NAVY.colours,
-	open: ["chore"],
+	open: ["harrington"],
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -169,14 +169,18 @@ describe("outfit changes", () => {
 		const { h, ai } = await connected();
 		// When
 		const { isError, data } = await ai.call("set_mode", {
-			modeId: "tee-chore",
+			modeId: "tee-harrington",
 		});
 		// Then
 		expect({
 			isError,
 			answered: (data as Outfit).modeId,
 			stored: (await dress(h, ai)).modeId,
-		}).toEqual({ isError: false, answered: "tee-chore", stored: "tee-chore" });
+		}).toEqual({
+			isError: false,
+			answered: "tee-harrington",
+			stored: "tee-harrington",
+		});
 	});
 
 	test("picks a colour", async () => {
@@ -235,13 +239,29 @@ describe("outfit changes", () => {
 		const { h, ai } = await connected();
 		// When
 		const { isError } = await ai.call("set_jacket", {
-			jacket: "chore",
+			jacket: "harrington",
 			open: true,
 		});
 		// Then
 		expect({ isError, open: (await dress(h, ai)).open }).toEqual({
 			isError: false,
-			open: ["chore"],
+			open: ["harrington"],
+		});
+	});
+
+	test("refuses the old chore jacket", async () => {
+		// Given
+		const { h, ai } = await connected();
+		// When
+		const { isError, text } = await ai.call("set_jacket", {
+			jacket: "chore",
+			open: true,
+		});
+		// Then
+		expect({ isError, text, open: (await dress(h, ai)).open }).toEqual({
+			isError: true,
+			text: "chore is not a jacket. Jackets: harrington, wool.",
+			open: [],
 		});
 	});
 
@@ -268,7 +288,7 @@ describe("outfit changes", () => {
 		// Then
 		expect({ isError, text, stored: (await dress(h, ai)).modeId }).toEqual({
 			isError: true,
-			text: "banana is not a mode. Modes: tee-casual-shorts, tee-casual-pants, polo-chino-shorts, polo-chino-pants, shirt-chino-shorts, shirt-chino-pants, training-tee-shorts, long-tee-casual-pants, long-polo-chino-pants, long-shirt-chino-pants, tee-chore, polo-chore, shirt-chore, long-training-tee-pants, tee-sweater, polo-sweater, shirt-sweater, tee-sweater-chore, polo-sweater-chore, shirt-sweater-chore, tee-sweater-padded, polo-sweater-padded, shirt-sweater-padded.",
+			text: "banana is not a mode. Modes: tee-casual-shorts, tee-casual-pants, polo-chino-shorts, polo-chino-pants, shirt-chino-shorts, shirt-chino-pants, training-tee-shorts, long-tee-casual-pants, long-polo-chino-pants, long-shirt-chino-pants, tee-harrington, polo-harrington, shirt-harrington, long-training-tee-pants, tee-sweater, polo-sweater, shirt-sweater, tee-sweater-harrington, polo-sweater-harrington, shirt-sweater-harrington, tee-sweater-wool, polo-sweater-wool, shirt-sweater-wool.",
 			stored: "polo-sweater",
 		});
 	});
@@ -391,14 +411,14 @@ describe("looks", () => {
 				{
 					id: "11111111-1111-4111-8111-111111111111",
 					name: "Navy day",
-					modeId: "polo-sweater-chore",
+					modeId: "polo-sweater-harrington",
 					colours: {
 						chino_p: "#C9B38C",
 						polo_l: "#F3F1EC",
 						sweater: "#1F3A5F",
-						chore: "#55633F",
+						harrington: "#55633F",
 					},
-					open: ["chore"],
+					open: ["harrington"],
 					tags: [{ id: work, name: "Work" }],
 				},
 			],
@@ -493,16 +513,16 @@ describe("look changes", () => {
 					chino_p: "#C9B38C",
 					polo_l: "#F3F1EC",
 					sweater: "#7A2E2E",
-					chore: "#55633F",
+					harrington: "#55633F",
 				},
-				open: ["chore"],
+				open: ["harrington"],
 				tags: [work],
 			},
 		});
 	});
 
 	test("keeps a colour the page saved while a look change ran", async () => {
-		// Given: the page saves a new chore colour after change_look read the
+		// Given: the page saves a new harrington colour after change_look read the
 		// look and before it writes. change_look's first batch is its read of
 		// the looks, its second its write.
 		const { h, ai } = await withNavy();
@@ -514,7 +534,7 @@ describe("look changes", () => {
 			db.batch = batch;
 			const put = await sendJson(h, ai, "PUT", `/api/looks/${NAVY.id}`, {
 				...NAVY,
-				colours: { ...NAVY.colours, chore: "#1F3A5F" },
+				colours: { ...NAVY.colours, harrington: "#1F3A5F" },
 			});
 			expect(put.status).toBe(200);
 			return batch(items);
@@ -532,7 +552,7 @@ describe("look changes", () => {
 				chino_p: "#C9B38C",
 				polo_l: "#F3F1EC",
 				sweater: "#7A2E2E",
-				chore: "#1F3A5F",
+				harrington: "#1F3A5F",
 			},
 		});
 	});
