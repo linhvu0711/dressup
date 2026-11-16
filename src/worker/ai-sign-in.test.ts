@@ -245,7 +245,7 @@ describe("AI app sign-in", () => {
 	test("reads an app's client metadata document once for its next calls", async () => {
 		// Given
 		const h = await given();
-		// When: two requests, so two auth instances
+		// When: two requests
 		await authorize(h);
 		await authorize(h);
 		// Then

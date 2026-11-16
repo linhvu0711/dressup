@@ -6,7 +6,13 @@ import { dressChangeSchema } from "@/dress/state";
 import { lookInputSchema } from "@/looks/look";
 import { newTagSchema, tagSchema } from "@/tags/tag";
 import { disconnectAiApp, listAiApps } from "./ai-app-store";
-import { createAuth, createClientDiscovery } from "./auth";
+import {
+	type Auth,
+	type AuthEnvSettings,
+	createAuth,
+	createAuthCache,
+	createClientDiscovery,
+} from "./auth";
 import type { Db } from "./db";
 import { user } from "./db/auth-schema";
 import { changeDress, loadDress } from "./dress-store";
@@ -14,7 +20,6 @@ import { deleteLook, listLooks, saveLook, updateLook } from "./look-store";
 import { mcpRoute } from "./mcp";
 import { addTag, deleteTag, listTags, renameTag } from "./tag-store";
 
-type Auth = ReturnType<typeof createAuth>;
 type User = Auth["$Infer"]["Session"]["user"];
 type AppEnv = { Bindings: Env; Variables: { auth: Auth; user: User } };
 
@@ -42,23 +47,25 @@ export function createApp(getDb: (env: Env) => Db) {
 	const root = new Hono<AppEnv>();
 	const app = root.basePath("/api");
 	// One per isolate: the plugin keeps its document cache and fetch limits in
-	// this object, and the auth instance is new on every request.
+	// this object.
 	const clientDiscovery = createClientDiscovery();
+	const authFor = createAuthCache();
 
 	const withAuth = createMiddleware<AppEnv>(async (c, next) => {
+		const settings: AuthEnvSettings = {
+			secret: c.env.BETTER_AUTH_SECRET,
+			baseURL: c.env.BETTER_AUTH_URL,
+			google: {
+				clientId: c.env.GOOGLE_CLIENT_ID,
+				clientSecret: c.env.GOOGLE_CLIENT_SECRET,
+			},
+			signupsClosed: c.env.SIGNUPS_CLOSED === "true",
+		};
 		c.set(
 			"auth",
-			createAuth({
-				db: getDb(c.env),
-				secret: c.env.BETTER_AUTH_SECRET,
-				baseURL: c.env.BETTER_AUTH_URL,
-				google: {
-					clientId: c.env.GOOGLE_CLIENT_ID,
-					clientSecret: c.env.GOOGLE_CLIENT_SECRET,
-				},
-				signupsClosed: c.env.SIGNUPS_CLOSED === "true",
-				clientDiscovery,
-			}),
+			await authFor(settings, () =>
+				createAuth({ ...settings, db: getDb(c.env), clientDiscovery }),
+			),
 		);
 		await next();
 	});

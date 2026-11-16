@@ -4,10 +4,8 @@ import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import { APIError } from "better-auth/api";
 import { registerAiActions } from "./ai-actions";
 import { isAiAppAllowed } from "./ai-app-store";
-import { type createAuth, mcpResource } from "./auth";
+import { type Auth, mcpResource } from "./auth";
 import type { Db } from "./db";
-
-type Auth = ReturnType<typeof createAuth>;
 
 function dressupServer(db: Db, userId: string) {
 	const server = new McpServer({ name: "dressup", version: "1.0.0" });

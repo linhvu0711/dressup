@@ -65,3 +65,21 @@ export function authOptions(s: AuthSettings) {
 export function createAuth(s: AuthSettings) {
 	return betterAuth(authOptions(s));
 }
+
+export type Auth = ReturnType<typeof createAuth>;
+export type AuthEnvSettings = Omit<AuthSettings, "db" | "clientDiscovery">;
+
+// Building Better Auth on every request cost more CPU than the free plan's
+// 10 ms (#48). An instance is kept only after its start resolved: a start
+// left pending by a request Cloudflare stopped never settles on Workers.
+export function createAuthCache() {
+	let kept: { key: string; auth: Auth } | undefined;
+	return async (settings: AuthEnvSettings, build: () => Auth) => {
+		const key = JSON.stringify(settings);
+		if (kept?.key === key) return kept.auth;
+		const auth = build();
+		await auth.$context;
+		kept = { key, auth };
+		return auth;
+	};
+}

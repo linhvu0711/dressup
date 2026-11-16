@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { BetterAuthOptions } from "better-auth";
-import { authOptions } from "./auth";
+import { createApp } from "./app";
+import { type Auth, authOptions, createAuthCache } from "./auth";
 import {
 	cookie,
 	finishGoogleSignIn,
@@ -306,6 +307,32 @@ describe("sign-up switch", () => {
 		});
 	});
 
+	test("refuses a new Google account when sign-ups close after a request with them open", async () => {
+		// Given: no user; one request with sign-ups open, then sign-ups closed
+		const h = await makeHarness();
+		restore = stubOutside({
+			google: {
+				sub: "g-new",
+				email: "new@example.com",
+				name: "New",
+				picture: "https://example.com/n.png",
+			},
+		}).restore;
+		await h.app.request("/api/auth/get-session", {}, h.env);
+		// When
+		const { res } = await signIn(withSignups(h, "true"));
+		// Then
+		expect({
+			status: res.status,
+			location: res.headers.get("location"),
+			users: users(h),
+		}).toEqual({
+			status: 302,
+			location: "/?error=signup_disabled",
+			users: { n: 0 },
+		});
+	});
+
 	test("keeps sign-up open unless SIGNUPS_CLOSED is true", async () => {
 		// Given: for each value, a harness with no user
 		const results = [];
@@ -369,5 +396,53 @@ describe("session cookie cache", () => {
 			second: second.status,
 			id: ((await second.json()) as { id?: string }).id,
 		}).toEqual({ first: 200, setsCache: true, second: 200, id: "alice-id" });
+	});
+});
+
+describe("Better Auth per isolate", () => {
+	test("builds Better Auth once for two requests with the same env", async () => {
+		// Given: an app that counts each database it hands out
+		const h = await makeHarness();
+		let builds = 0;
+		const app = createApp(() => {
+			builds += 1;
+			return h.settings.db;
+		});
+		// When
+		await app.request("/api/auth/get-session", {}, h.env);
+		await app.request("/api/auth/get-session", {}, h.env);
+		// Then
+		expect({ builds }).toEqual({ builds: 1 });
+	});
+
+	test("builds Better Auth again after a start that failed", async () => {
+		// Given: a build whose first start fails
+		let builds = 0;
+		const build = () => {
+			builds += 1;
+			return (builds === 1
+				? { $context: Promise.reject(new Error("start failed")) }
+				: { $context: Promise.resolve({}) }) as unknown as Auth;
+		};
+		const authFor = createAuthCache();
+		const settings = {
+			secret: "test-secret-at-least-32-characters-long",
+			baseURL: "http://localhost:5173",
+			google: { clientId: "test-client", clientSecret: "test-secret" },
+			signupsClosed: false,
+		};
+		// When
+		const first = await authFor(settings, build).then(
+			() => "kept",
+			(error: Error) => error.message,
+		);
+		const second = await authFor(settings, build);
+		const third = await authFor(settings, build);
+		// Then
+		expect({ first, builds, same: second === third }).toEqual({
+			first: "start failed",
+			builds: 2,
+			same: true,
+		});
 	});
 });
