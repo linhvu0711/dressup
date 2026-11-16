@@ -169,7 +169,17 @@ export function Cyl({
 	);
 }
 
-export function Btn({ x, y, r = 3 }: { x: number; y: number; r?: number }) {
+export function Btn({
+	x,
+	y,
+	r = 3,
+	fill = "#EDEAE4",
+}: {
+	x: number;
+	y: number;
+	r?: number;
+	fill?: string;
+}) {
 	return (
 		<>
 			<circle cx={x} cy={y + 0.8} r={r} fill="#000" opacity=".25" />
@@ -177,7 +187,7 @@ export function Btn({ x, y, r = 3 }: { x: number; y: number; r?: number }) {
 				cx={x}
 				cy={y}
 				r={r}
-				fill="#EDEAE4"
+				fill={fill}
 				stroke="rgba(0,0,0,.45)"
 				strokeWidth=".7"
 			/>
@@ -241,22 +251,6 @@ export function Arm({ children }: { children: ReactNode }) {
 export function Layer({ children }: { children: ReactNode }) {
 	const url = useUrl();
 	return <g filter={url("lay")}>{children}</g>;
-}
-
-export function scallop(
-	pts: readonly (readonly [number, number])[],
-	b: number,
-) {
-	let s = "";
-	for (let i = 1; i < pts.length; i++) {
-		const [x0, y0] = pts[i - 1];
-		const [x1, y1] = pts[i];
-		const dx = x1 - x0;
-		const dy = y1 - y0;
-		const L = Math.hypot(dx, dy);
-		s += ` Q ${((x0 + x1) / 2 + (dy / L) * b).toFixed(1)} ${((y0 + y1) / 2 - (dx / L) * b).toFixed(1)} ${x1} ${y1}`;
-	}
-	return s;
 }
 
 const BOX = {
@@ -398,8 +392,8 @@ export const cyl = (
 	h: number,
 	op?: number,
 ) => <Cyl x={x} y={y} w={w} h={h} op={op} />;
-export const btn = (x: number, y: number, r?: number) => (
-	<Btn x={x} y={y} r={r} />
+export const btn = (x: number, y: number, r?: number, fill?: string) => (
+	<Btn x={x} y={y} r={r} fill={fill} />
 );
 export const piece = (
 	d: string,
