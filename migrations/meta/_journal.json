@@ -50,6 +50,13 @@
       "when": 1794715450046,
       "tag": "0006_legal_magma",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1794829636162,
+      "tag": "0007_swap_jackets",
+      "breakpoints": true
     }
   ]
 }
