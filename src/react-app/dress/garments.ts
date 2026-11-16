@@ -1,6 +1,6 @@
 export type Hex = `#${string}`;
 
-// The garment list `G` of docs/prototype/dressup.html:705-707, in its order.
+// The garment list.
 export const GARMENT_IDS = [
 	"tee_s",
 	"tee_l",
@@ -65,8 +65,7 @@ const BG = "#7A2E2E";
 const ST = "#9C9A98";
 const FO = "#2F5D50";
 
-// `START` of docs/prototype/dressup.html:740-743. A garment starts in the
-// first colour of its set.
+// A garment starts in the first colour of its set.
 export const STARTER_COLOURS: Record<GarmentId, readonly Hex[]> = {
 	tee_s: [W, BK, GY, NV],
 	tee_l: [W, BK, GY, NV],

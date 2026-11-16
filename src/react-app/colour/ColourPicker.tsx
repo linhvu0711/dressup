@@ -8,8 +8,7 @@ import type { Hex } from "@/dress/garments";
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 
 // Calls `onPoint` with the pointer's place in the element, 0 to 1 on each
-// axis. Pointer capture keeps a drag going past the element's edge
-// (docs/prototype/dressup.html:1001-1011).
+// axis. Pointer capture keeps a drag going past the element's edge.
 function dragHandlers(onPoint: (x: number, y: number) => void) {
 	const point = (e: PointerEvent<HTMLDivElement>) => {
 		const box = e.currentTarget.getBoundingClientRect();
@@ -35,8 +34,8 @@ const KNOB =
 
 const EDGE = "shadow-[inset_0_0_0_1px_rgba(110,106,98,.35)]";
 
-// The colour picker of docs/prototype/dressup.html:922-928. It knows no
-// garment, so skin and hair (#14) can use it too.
+// The colour picker. It knows no garment, so skin and hair (#14) can use it
+// too.
 export function ColourPicker({
 	title,
 	start,
@@ -88,8 +87,7 @@ export function ColourPicker({
 				<Dialog.Content
 					aria-describedby={undefined}
 					onOpenAutoFocus={(e) => {
-						// The phone keeps its keyboard closed until the box is tapped
-						// (docs/prototype/dressup.html:1012).
+						// The phone keeps its keyboard closed until the box is tapped.
 						e.preventDefault();
 						if (window.matchMedia("(min-width: 56.25rem)").matches) {
 							box.current?.focus();

@@ -13,7 +13,7 @@ type Field = { kind: "add" } | { kind: "rename"; id: TagId } | null;
 const ROW =
 	"flex min-h-[54px] items-center gap-2 border-border border-b py-[9px]";
 
-// The tag list of docs/prototype/dressup.html:940-947: rename in place, delete,
+// The tag list: rename in place, delete,
 // and add. One box is open at a time.
 export function EditTagsDialog({ onClose }: { onClose: () => void }) {
 	const tags = useTags();

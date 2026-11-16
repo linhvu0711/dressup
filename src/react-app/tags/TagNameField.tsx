@@ -7,7 +7,7 @@ import { sameTagName, TAG_NAME_MAX, type TagId } from "./tag";
 
 // One box for a tag name: the add box of the save form and of Edit tags,
 // and the rename box. Return saves; Escape is left to the dialog, which
-// closes (docs/prototype/dressup.html:1103).
+// closes.
 export function TagNameField({
 	label,
 	saveLabel,
@@ -42,7 +42,7 @@ export function TagNameField({
 		// Enter is not held off by the disabled button.
 		if (saving) return;
 		const trimmed = name.trim();
-		// An empty or unchanged name sends nothing (docs/prototype/dressup.html:1073, 1080).
+		// An empty or unchanged name sends nothing.
 		if (!trimmed || trimmed === initial) return onCancel();
 		if (
 			tags.data?.some((t) => t.id !== except && sameTagName(t.name, trimmed))

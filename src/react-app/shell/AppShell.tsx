@@ -3,7 +3,7 @@ import { BottomBar } from "./BottomBar";
 import { TopBar } from "./TopBar";
 
 // `notice` sits under the page and above the bottom bar, where the
-// prototype puts its "Not saved" bar (docs/prototype/dressup.html:971).
+// "Not saved" bar goes.
 export function AppShell({
 	children,
 	notice,

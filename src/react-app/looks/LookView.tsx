@@ -11,7 +11,7 @@ import { Stage } from "@/dress/Stage";
 import { useTags } from "@/tags/api";
 import { type Look, lookName } from "./look";
 
-// The prototype's `detail` (docs/prototype/dressup.html:876-887). Under 900 px
+// The open look. Under 900 px
 // it is the look's own page, its head row on top with Back; from 900 px it is
 // the right part of the Looks page, the head row under the stage.
 export function LookView({
@@ -80,7 +80,6 @@ export function LookView({
 			</Stage>
 			<div className="min-h-0 flex-1 overflow-auto px-4 pb-24 wide:px-6 wide:pb-6">
 				{tags.length ? (
-					// The prototype's .tags and .tag (docs/prototype/dressup.html:174-175, 884).
 					<div data-slot="look-tags" className="flex flex-wrap gap-[7px] pb-3">
 						{tags.map((tag) => (
 							<span
@@ -121,8 +120,7 @@ export function LookView({
 								title="Copy"
 								className="rounded-full border border-border px-[9px] py-1 font-mono text-xs hover:bg-muted"
 								onClick={() =>
-									// The prototype toasts even when the copy fails
-									// (docs/prototype/dressup.html:1068); this says so.
+									// A failed copy toasts too, and says so.
 									navigator.clipboard.writeText(hex).then(
 										() => toast(`${hex} copied`),
 										() => toast("Not copied. Try again."),

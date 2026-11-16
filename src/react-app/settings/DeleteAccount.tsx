@@ -8,8 +8,7 @@ import { SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
 import { meQueryKey } from "../session";
 
-// The "Delete my account" row of the Settings page and its confirm,
-// docs/prototype/dressup.html:908 and :949-950.
+// The "Delete my account" row of the Settings page and its confirm.
 export function DeleteAccount() {
 	const [asking, setAsking] = useState(false);
 	return (

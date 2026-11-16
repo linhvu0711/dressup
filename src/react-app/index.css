@@ -3,7 +3,7 @@
 
 @theme static {
 	--breakpoint-wide: 56.25rem;
-	/* The pulse of the loading placeholders (docs/prototype/dressup.html:85-86). */
+	/* The pulse of the loading placeholders. */
 	--animate-placeholder: placeholder 1.4s ease-in-out infinite;
 
 	@keyframes placeholder {
@@ -18,7 +18,7 @@
 		"Instrument Serif", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
 }
 
-/* Values from the prototype's <style> block (docs/prototype/dressup.html), under shadcn's names.
+/* The app's colours, fonts, and sizes, under shadcn's names.
    The wall is light in both themes, so it takes these light values too. */
 :root,
 [data-surface="wall"] {

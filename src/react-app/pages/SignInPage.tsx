@@ -2,7 +2,7 @@ import { useSearchParams } from "react-router";
 import { Button } from "@/components/ui/button";
 import { authClient } from "../auth-client";
 
-// The prototype's own sign-in mark (docs/prototype/dressup.html:785); Lucide has none.
+// The Google mark, drawn here since Lucide has none.
 function GoogleMark() {
 	return (
 		<svg

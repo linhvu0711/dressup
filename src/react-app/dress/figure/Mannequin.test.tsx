@@ -1,44 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Mannequin } from "@/dress/figure/Mannequin";
-import { GARMENT_IDS, type GarmentId, type JacketId } from "@/dress/garments";
+import { GARMENT_IDS, type JacketId } from "@/dress/garments";
 import { STARTER_MANNEQUIN } from "@/dress/state";
-
-const paths = (markup: string) =>
-	[...markup.matchAll(/ d="([^"]*)"/g)].map((m) => m[1]);
-
-// The prototype's own drawing code, run as plain string functions, so the
-// port can be held to it path by path.
-function prototype() {
-	const html = readFileSync(
-		join(import.meta.dir, "../../../../docs/prototype/dressup.html"),
-		"utf8",
-	);
-	const lines = html.split("\n");
-	const from = lines.findIndex((l) => l.startsWith("let SKIN="));
-	const to = lines.findIndex((l) => l.startsWith("const M=[];"));
-	const code = lines.slice(from, to).join("\n");
-	return new Function(`${code}; return { DRAW, bodySkin, shoes, head };`)() as {
-		DRAW: Record<GarmentId, (c: string, open: boolean) => string>;
-		bodySkin: () => string;
-		shoes: () => string;
-		head: () => string;
-	};
-}
-
-function garmentGroup(markup: string, garment: GarmentId) {
-	const start = markup.indexOf(`<g data-garment="${garment}"`);
-	let depth = 0;
-	const tag = /<(\/?)g[\s>]/g;
-	tag.lastIndex = start;
-	for (let m = tag.exec(markup); m; m = tag.exec(markup)) {
-		depth += m[1] ? -1 : 1;
-		if (depth === 0) return markup.slice(start, m.index);
-	}
-	throw new Error(`no group for ${garment}`);
-}
 
 describe("Mannequin", () => {
 	test("draws the skin, hair, and white shoes", () => {
@@ -142,43 +106,5 @@ describe("Mannequin", () => {
 		expect(
 			[...markup.matchAll(/data-garment="([^"]+)"/g)].map((m) => m[1]),
 		).toEqual(["chino_p", "polo_l", "sweater"]);
-	});
-
-	test("draws the same paths as the prototype", () => {
-		// Given: the prototype's drawing code
-		const proto = prototype();
-		const cases = GARMENT_IDS.flatMap((g): [GarmentId, boolean][] =>
-			g === "chore" || g === "padded"
-				? [
-						[g, true],
-						[g, false],
-					]
-				: [[g, false]],
-		);
-		// When
-		const garments = cases.map(([g, open]) => {
-			const port = renderToStaticMarkup(
-				<Mannequin
-					{...STARTER_MANNEQUIN}
-					layers={[{ garment: g, color: "#12AB34" }]}
-					openJackets={open && (g === "chore" || g === "padded") ? [g] : []}
-				/>,
-			);
-			return {
-				g,
-				open,
-				port: paths(garmentGroup(port, g)),
-				proto: paths(proto.DRAW[g]("#12AB34", open)),
-			};
-		});
-		const bare = renderToStaticMarkup(<Mannequin {...STARTER_MANNEQUIN} />);
-		const body = paths(bare.slice(bare.indexOf("</defs>")));
-		// Then
-		for (const { g, open, port, proto: want } of garments) {
-			expect({ g, open, d: port }).toEqual({ g, open, d: want });
-		}
-		expect(body).toEqual(
-			paths(proto.bodySkin() + proto.shoes() + proto.head()),
-		);
 	});
 });

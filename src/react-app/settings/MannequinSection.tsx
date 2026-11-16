@@ -13,7 +13,6 @@ const NAMES: Record<MannequinPart, string> = {
 	hair: "Hair colour",
 };
 
-// docs/prototype/dressup.html:902
 const PREVIEW_VIEW_BOX = "90 20 220 220";
 
 const SQUARE =
@@ -23,13 +22,13 @@ const PLACEHOLDER = "animate-placeholder bg-muted motion-reduce:animate-none";
 
 type Live = { part: MannequinPart; hex: Hex };
 
-// The Mannequin part of the Settings page, docs/prototype/dressup.html:901-905.
+// The Mannequin part of the Settings page.
 export function MannequinSection() {
 	const dress = useDressState();
 	const toast = useToast();
 	const [open, setOpen] = useState<MannequinPart | null>(null);
 	// The colour the picker shows before "Set". Only the preview shows it; the
-	// rows keep the stored colour (docs/prototype/dressup.html:998-999).
+	// rows keep the stored colour.
 	const [live, setLive] = useState<Live | null>(null);
 	const stored = dress.status === "ready" ? dress.state.mannequin : null;
 	const shown = stored && live ? { ...stored, [live.part]: live.hex } : stored;

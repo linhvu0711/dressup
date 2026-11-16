@@ -5,8 +5,8 @@ import { useToast } from "@/components/ui/toast";
 import { useDeleteTag } from "./api";
 import type { Tag } from "./tag";
 
-// The confirm of docs/prototype/dressup.html:1076. "Delete" waits for the
-// server's answer before the confirm closes.
+// The confirm. "Delete" waits for the server's answer before the confirm
+// closes.
 export function DeleteTagDialog({
 	tag,
 	onClose,

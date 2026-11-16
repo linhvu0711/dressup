@@ -25,10 +25,9 @@ import {
 	lookFromDress,
 } from "./look";
 
-// The save form of docs/prototype/dressup.html:930-939, with the tag chips of
-// :935-937.
+// The save form, with its tag chips.
 // In the edit state it changes the look, or saves a copy with "Save as new".
-// Either ends the edit state and keeps the colours (:1046-1049).
+// Either ends the edit state and keeps the colours.
 export function SaveLookDialog({
 	state,
 	editing,
@@ -69,8 +68,7 @@ export function SaveLookDialog({
 				? "failed"
 				: null;
 	const saveNew = () => {
-		// The prototype's saveDo stops here at the limit
-		// (docs/prototype/dressup.html:1044).
+		// At the limit, saving a new look stops here.
 		if (full) return;
 		save.mutate(lookFromDress(state, id, name, tags), {
 			onSuccess: () => {
@@ -88,8 +86,7 @@ export function SaveLookDialog({
 				<Dialog.Content
 					aria-describedby={undefined}
 					onOpenAutoFocus={(e) => {
-						// The phone keeps its keyboard closed until the box is tapped
-						// (docs/prototype/dressup.html:974).
+						// The phone keeps its keyboard closed until the box is tapped.
 						e.preventDefault();
 						if (window.matchMedia("(min-width: 56.25rem)").matches) {
 							box.current?.focus();

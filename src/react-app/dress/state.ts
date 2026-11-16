@@ -11,8 +11,7 @@ import {
 import { DEFAULT_MODE_ID, MODES, type ModeId } from "@/dress/modes";
 
 // What the Dress page keeps for a person. Colours are keyed by garment, not
-// by mode, so a garment keeps its colour in every mode that has it
-// (docs/prototype/dressup.html:748-749, 1027).
+// by mode, so a garment keeps its colour in every mode that has it.
 export type DressState = {
 	modeId: ModeId;
 	swatches: Record<GarmentId, readonly Hex[]>;
@@ -27,7 +26,6 @@ export type MannequinPart = (typeof MANNEQUIN_PARTS)[number];
 
 export type MannequinColours = Record<MannequinPart, Hex>;
 
-// docs/prototype/dressup.html:761 and tokens.md "Mannequin".
 export const STARTER_MANNEQUIN: MannequinColours = {
 	skin: "#D6A27B",
 	hair: "#141418",
@@ -64,8 +62,7 @@ export const setMannequinColour = (
 	hex: Hex,
 ): DressState => ({ ...s, mannequin: { ...s.mannequin, [part]: hex } });
 
-// A colour the row has already gets no second square: that square goes on
-// (docs/prototype/dressup.html:1035-1036).
+// A colour the row has already gets no second square: that square goes on.
 export function addColour(
 	s: DressState,
 	garment: GarmentId,
@@ -80,7 +77,7 @@ export function addColour(
 }
 
 // A row keeps at least one square. When the picked one goes, the row's new
-// first square goes on (docs/prototype/dressup.html:1025-1026).
+// first square goes on.
 export function removeColour(
 	s: DressState,
 	garment: GarmentId,
@@ -112,8 +109,7 @@ export type Outfit = {
 	open: readonly JacketId[];
 };
 
-// Puts a whole outfit on at once, as the prototype's lookEdit does
-// (docs/prototype/dressup.html:1062-1063). A jacket the outfit does not name
+// Puts a whole outfit on at once. A jacket the outfit does not name
 // keeps its state: the state holds both jackets for every mode, a look only
 // its own mode's.
 export function wearOutfit(s: DressState, outfit: Outfit): DressState {

@@ -89,7 +89,7 @@ test.describe("dark device", () => {
 	});
 });
 
-test("sets the prototype fonts", async ({ page }) => {
+test("sets the app fonts", async ({ page }) => {
 	// Given: both projects
 	// When
 	await page.goto("/");
@@ -204,7 +204,7 @@ test("shows the top bar from 900 px", async ({ page, viewport }) => {
 	await expect(page.getByRole("navigation", { name: "Main" })).toHaveCount(1);
 });
 
-test("draws the pill button with the prototype size", async ({ page }) => {
+test("draws the pill button 38 px high with round ends", async ({ page }) => {
 	// Given: both projects
 	// When
 	await page.goto("/nope");
@@ -218,9 +218,7 @@ test("draws the pill button with the prototype size", async ({ page }) => {
 	expect(pill).toEqual({ radius: "999px", height: "38px" });
 });
 
-test("draws the round icon button with the prototype size", async ({
-	page,
-}) => {
+test("draws the round icon button 36 px wide", async ({ page }) => {
 	// Given: both projects
 	// When
 	await page.goto("/");

@@ -18,7 +18,7 @@ type Row = readonly [
 	garments: readonly GarmentId[],
 ];
 
-// The mode list `M` of docs/prototype/dressup.html:714-738, garments bottom
+// The mode list, garments bottom
 // layer first. Ids are names, not list positions, since later tickets store
 // them and a list change must not move a stored look.
 const ROWS = [
@@ -205,7 +205,7 @@ export const MODES: readonly Mode[] = ROWS.map(
 	}),
 );
 
-// The prototype's fresh page starts on mode 15 (dressup.html:747-750).
+// A fresh Dress page starts on this mode.
 export const DEFAULT_MODE_ID: ModeId = "polo-sweater";
 
 export function modeById(id: ModeId): Mode {

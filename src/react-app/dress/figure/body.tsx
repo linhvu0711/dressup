@@ -10,8 +10,6 @@ import {
 	useFigure,
 } from "@/dress/figure/parts";
 
-// Ported from docs/prototype/dressup.html:486-530.
-
 const ARM =
 	"M 124 174 C 110 178, 103 196, 103 222 C 103 252, 100 280, 97 308 C 93 332, 91 360, 92 390 L 93 420 L 113 422 C 116 396, 121 368, 124 340 C 126 322, 127 312, 130 296 C 134 272, 137 248, 138 222 C 134 210, 129 192, 124 174 Z";
 const HAND =

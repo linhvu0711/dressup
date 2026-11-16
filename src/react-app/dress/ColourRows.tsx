@@ -16,7 +16,7 @@ import { modeById } from "@/dress/modes";
 
 export type LiveColour = { garment: GarmentId; hex: Hex };
 
-// The colour rows of docs/prototype/dressup.html:834-842: one row per garment
+// The colour rows: one row per garment
 // of the mode, top layer first.
 export function ColourRows({
 	live,
@@ -37,7 +37,7 @@ export function ColourRows({
 	const mode = modeById(state.modeId);
 	const garments = [...mode.garments].reverse();
 
-	// One pencil above all rows, as docs/prototype/dressup.html:843.
+	// One pencil above all rows.
 	const editButton = editing ? (
 		<Button
 			variant="primary"
@@ -184,9 +184,8 @@ export function ColourRows({
 
 const PLACEHOLDER = "animate-placeholder bg-muted motion-reduce:animate-none";
 
-// The prototype keeps its rows while it loads, since its data is local; here
-// the rows wait for the server, so they show as grey bars and squares, in the
-// look of the prototype's text placeholder (docs/prototype/dressup.html:863).
+// The rows wait for the server, so while they load they show as grey bars
+// and squares, in the look of the other loading placeholders.
 function LoadingRows({ titleClassName }: { titleClassName: string }) {
 	return (
 		<>

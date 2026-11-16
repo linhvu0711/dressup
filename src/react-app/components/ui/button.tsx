@@ -3,7 +3,7 @@ import { cn } from "cn";
 import { Slot } from "radix-ui";
 import type * as React from "react";
 
-// Shapes and sizes of the prototype's .btn and .ib (docs/prototype/dressup.html:36-52).
+// Shapes and sizes of the pill button and the round icon button.
 const buttonVariants = cva(
 	"inline-flex shrink-0 items-center justify-center gap-[7px] whitespace-nowrap border font-medium transition-[background-color,opacity] duration-150 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
 	{
