@@ -8,10 +8,10 @@ const VIEW_BOX = "10 14 380 590";
 
 const CARD = "flex min-w-0 flex-col gap-[7px]";
 
-// The card of docs/prototype/dressup.html:869: a link that opens the look.
-// From 900 px the picked card's picture has the outline of :116; under
-// 900 px the look is its own page, so no card is marked (:868). In the pick
-// state it is a button that picks the look to compare.
+// The look card: a link that opens the look. From 900 px the picked card's
+// picture has an outline; under 900 px the look is its own page, so no card
+// is marked. In the pick state it is a button that picks the look to
+// compare.
 export function LookCard({
 	look,
 	picked = false,
@@ -49,7 +49,6 @@ export function LookCard({
 				{body}
 			</Link>
 		);
-	// The tick of docs/prototype/dressup.html:152-153.
 	return (
 		<button
 			type="button"

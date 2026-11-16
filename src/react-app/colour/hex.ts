@@ -1,7 +1,6 @@
 import type { Hex } from "@/dress/garments";
 
-// Colour codes and the picker's hue, strength, and light, ported from
-// docs/prototype/dressup.html:788-790.
+// Colour codes and the picker's hue, strength, and light.
 
 export function parseHex(text: string): Hex | null {
 	let code = text.trim().replace(/^#/, "");
@@ -45,8 +44,7 @@ export function hsvToHex(h: number, s: number, v: number): Hex {
 }
 
 // The red hint shows at once for a letter no code has or a code too long;
-// a short code shows it only after the person tried to add it
-// (docs/prototype/dressup.html:987).
+// a short code shows it only after the person tried to add it.
 export function readHexInput(
 	text: string,
 	tried: boolean,

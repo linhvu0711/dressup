@@ -19,9 +19,6 @@ import {
 } from "@/dress/figure/parts";
 import type { GarmentId, Hex } from "@/dress/garments";
 
-// Ported from docs/prototype/dressup.html:533-713, path by path. The test
-// "draws the same paths as the prototype" holds each garment to it.
-
 const SL_SHORT =
 	"M 126 172 C 110 177, 100 196, 99 222 C 98 238, 98 252, 96 266 L 138 275 C 139 258, 140 240, 139 222 C 134 208, 129 190, 126 172 Z";
 const SL_LONG =
@@ -778,8 +775,7 @@ function trainShorts(c: Hex) {
 	);
 }
 
-// `DRAW` of the prototype. Its jackets take "closed", so `open` is turned
-// around here, as the prototype does.
+// The jacket drawings take "closed", so `open` is turned around here.
 export const GARMENT_DRAWINGS: Record<
 	GarmentId,
 	(c: Hex, open: boolean) => ReactNode

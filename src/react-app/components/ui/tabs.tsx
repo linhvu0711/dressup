@@ -2,7 +2,7 @@ import { cn } from "cn";
 import { Tabs as TabsPrimitive } from "radix-ui";
 import type * as React from "react";
 
-// The prototype's segmented tabs, .seg (docs/prototype/dressup.html:93-96).
+// Segmented tabs.
 function Tabs({
 	className,
 	...props

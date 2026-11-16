@@ -6,7 +6,7 @@ import { WEATHER_GROUPS } from "@/dress/modes";
 import type { Tag } from "@/tags/tag";
 import { filterLabel, type LookFilter } from "./filter";
 
-// The chips of docs/prototype/dressup.html:139-146 and :866. One is on at a
+// The filter chips. One is on at a
 // time, so they are radios, not pressed buttons.
 export function LookFilterChips({
 	filter,

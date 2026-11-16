@@ -112,7 +112,7 @@ test("opens a look as a page under 900 px and beside the wall from 900 px", asyn
 			"true",
 		);
 		await expect(heading).toBeVisible();
-		// Beside the wall the head row sits under the stage (prototype :880).
+		// Beside the wall the head row sits under the stage.
 		const [h, s] = [await heading.boundingBox(), await stage.boundingBox()];
 		expect(h && s && s.y + s.height <= h.y).toBe(true);
 	}

@@ -5,7 +5,6 @@ import { LookFigure } from "@/looks/LookFigure";
 import { type Look, lookName } from "@/looks/look";
 import { BackLink, PageHeader } from "../shell/PageHeader";
 
-// The compare view of docs/prototype/dressup.html:894-898 and 185-191.
 export function ComparePage() {
 	const location = useLocation();
 	const looks = useLooks();
@@ -20,7 +19,7 @@ export function ComparePage() {
 			})
 		: [];
 	// A typed address, a reload after the picks were lost, or a look gone
-	// since: the prototype has no compare view without picks.
+	// since: the compare view needs picks.
 	if (!state.success || (loaded ? shown.length < COMPARE_MIN : looks.isError))
 		return <Navigate to="/looks" replace />;
 	return (

@@ -9,8 +9,8 @@ import { AiAppGuide, useCopy } from "./AiAppGuide";
 // the address an AI app connects to.
 const address = () => `${window.location.origin}/api/mcp`;
 
-// The "Connected AI apps" part of the Settings page. The prototype has no
-// such part, so it copies the Account rows of SettingsPage.tsx.
+// The "Connected AI apps" part of the Settings page. It copies the Account
+// rows of SettingsPage.tsx.
 export function AiAppsSection() {
 	const apps = useAiApps();
 	const copy = useCopy();

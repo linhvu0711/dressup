@@ -1,5 +1,4 @@
-// The grey figure the stage shows while the account's colours load, from
-// docs/prototype/dressup.html:816.
+// The grey figure the stage shows while the account's colours load.
 export function MannequinPlaceholder({
 	viewBox = "0 10 400 800",
 }: {

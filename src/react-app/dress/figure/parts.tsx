@@ -8,9 +8,6 @@ import {
 } from "react";
 import type { Hex } from "@/dress/garments";
 
-// Ported from docs/prototype/dressup.html:440-484. Path data and numbers stay
-// as in the prototype, so the drawing matches it line for line.
-
 type Figure = {
 	prefix: string;
 	lite: boolean;
@@ -376,8 +373,7 @@ export function Defs() {
 	);
 }
 
-// Short factories with the prototype's names, so the garment drawings read
-// line for line like docs/prototype/dressup.html:533-702.
+// Short factory names keep the garment drawings compact.
 export const f = (...nodes: ReactNode[]) =>
 	createElement(Fragment, null, ...nodes);
 export const sh = (d: string, op?: number, b?: number) => (

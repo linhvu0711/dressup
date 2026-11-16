@@ -9,7 +9,6 @@ import {
 	type JacketId,
 } from "@/dress/garments";
 
-// Ported from `figure` in docs/prototype/dressup.html:799-811.
 export function Mannequin({
 	layers = [],
 	openJackets = [],

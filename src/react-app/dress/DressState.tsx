@@ -239,7 +239,6 @@ export function DressStateProvider({
 		[],
 	);
 
-	// The prototype's retry, docs/prototype/dressup.html:1087.
 	const retry = () => {
 		void flush().then((result) => {
 			if (result === "failed") toast("Still no connection.");
@@ -289,8 +288,7 @@ export function DressStateProvider({
 				editLook: (look) => {
 					const now = latest.current;
 					if (!now) return;
-					// A second look keeps the outfit from before the first
-					// (docs/prototype/dressup.html:1061).
+					// A second look keeps the outfit from before the first.
 					const before = edit?.before ?? {
 						modeId: now.modeId,
 						colours: now.picked,

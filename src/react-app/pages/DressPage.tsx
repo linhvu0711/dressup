@@ -16,7 +16,7 @@ import { SettingsLink } from "@/shell/SettingsLink";
 const BOUNDED = "flex min-h-0 flex-1 flex-col gap-2.5 wide:gap-3.5";
 
 // Both panels stay mounted, so from 900 px each sits in its own column and
-// under 900 px the tabs show one (docs/prototype/dressup.html:844-851).
+// under 900 px the tabs show one.
 const PANEL = `${BOUNDED} data-[state=inactive]:hidden wide:row-start-1 wide:px-6 wide:pt-5 wide:data-[state=inactive]:flex`;
 
 const COLUMN_TITLE =
@@ -28,7 +28,7 @@ type Panel = "mode" | "colours";
 // Laptop: modes on the left, the stage in the middle, colours on the right.
 export function DressPage() {
 	const dress = useDressState();
-	// The pencil on a look opens the colours (docs/prototype/dressup.html:1064).
+	// The pencil on a look opens the colours.
 	const [panel, setPanel] = useState<Panel>(() =>
 		dress.status === "ready" && dress.editing ? "colours" : "mode",
 	);
@@ -65,7 +65,6 @@ export function DressPage() {
 					<>
 						<SettingsLink className="wide:hidden border-transparent bg-card shadow-lift" />
 						{editing && dress.status === "ready" ? (
-							// The edit bar of docs/prototype/dressup.html:81-83, 822.
 							<div className="flex h-9 min-w-0 items-center gap-1.5 rounded-full bg-card pr-1 pl-3.5 font-medium text-[12.5px] shadow-lift">
 								<span className="truncate">Editing: {lookName(editing)}</span>
 								<Button
@@ -83,8 +82,7 @@ export function DressPage() {
 					</>
 				}
 				action={
-					// The prototype's bookmark button, off while the dress loads
-					// (docs/prototype/dressup.html:823).
+					// The bookmark button, off while the dress loads.
 					<Button
 						variant="primary"
 						size="icon-lg"

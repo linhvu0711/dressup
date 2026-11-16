@@ -37,10 +37,10 @@ function Notice({ title, children }: { title: string; children: ReactNode }) {
 	);
 }
 
-// The page of docs/prototype/dressup.html:888-893. From 900 px the right part
-// shows the opened look, or the newest before one opens (:891). With no look to
-// open it is left out, so a notice sits in the middle of the screen; it stays
-// while the looks load, so a wall with looks does not move when they come.
+// From 900 px the right part shows the opened look, or the newest before one
+// opens. With no look to open it is left out, so a notice sits in the middle
+// of the screen; it stays while the looks load, so a wall with looks does not
+// move when they come.
 // Under 900 px an opened look is a page of its own. A look the URL names but
 // the list does not have shows the page as /looks does.
 export function LooksPage() {
@@ -66,7 +66,7 @@ export function LooksPage() {
 	const filter = lookFilter(chosen, tags.data ?? []);
 	const visible = loaded ? filterLooks(looks.data, filter) : [];
 	// A chip that hides the open look closes it, so the right part shows the
-	// chip's newest look, as docs/prototype/dressup.html:892 does.
+	// chip's newest look.
 	function choose(next: LookFilter) {
 		setChosen(next);
 		if (!lookId || !looks.data || !tags.data) return;
@@ -93,7 +93,6 @@ export function LooksPage() {
 	const open = shown !== undefined && shown.id === lookId;
 	let wall: ReactNode;
 	if (loading) {
-		// docs/prototype/dressup.html:863
 		wall = (
 			<div className={WALL}>
 				{Array.from({ length: 6 }, (_, i) => (
@@ -129,7 +128,6 @@ export function LooksPage() {
 			</Notice>
 		);
 	} else if (looks.data.length === 0) {
-		// docs/prototype/dressup.html:864
 		wall = (
 			<Notice title="No looks yet">
 				<p className="max-w-[30ch] text-muted-foreground">
@@ -142,7 +140,6 @@ export function LooksPage() {
 			</Notice>
 		);
 	} else if (visible.length === 0) {
-		// docs/prototype/dressup.html:866
 		wall = (
 			<Notice title="No looks here">
 				<p className="max-w-[30ch] text-muted-foreground">
@@ -232,7 +229,6 @@ export function LooksPage() {
 				) : null}
 				{wall}
 				{picked ? (
-					// The floating button of docs/prototype/dressup.html:889.
 					<Button
 						variant="primary"
 						size="lg"

@@ -1,6 +1,6 @@
 import { useDressState } from "@/dress/DressState";
 
-// The bar of docs/prototype/dressup.html:253-255, 968. It stays until the
+// The "Not saved" bar. It stays until the
 // waiting changes are stored, unlike a toast, which fades.
 export function UnsavedBar() {
 	const { unsaved, retry } = useDressState();

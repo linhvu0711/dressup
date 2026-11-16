@@ -10,7 +10,7 @@ const TABS: readonly PickerTab[] = ["Hot", "Cool", "Cold", "Training"];
 
 const BOUNDED = "flex min-h-0 flex-1 flex-col gap-2.5 wide:gap-3.5";
 
-// The mode picker of docs/prototype/dressup.html:825-832.
+// The mode picker.
 export function ModePicker({
 	tab,
 	onTab,
@@ -52,8 +52,7 @@ export function ModePicker({
 					className="-mx-1.5 min-h-0 flex-1 overflow-auto px-1.5"
 				>
 					<div className="grid grid-cols-3 gap-x-2.5 gap-y-3 pt-[5px] pb-[18px] wide:grid-cols-2 wide:gap-x-3.5 wide:gap-y-4">
-						{/* While the colours load: 6 grey cards, as
-						docs/prototype/dressup.html:828-829. */}
+						{/* While the colours load: 6 grey cards. */}
 						{!state
 							? Array.from({ length: 6 }, (_, i) => (
 									<span

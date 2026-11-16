@@ -1,5 +1,5 @@
-// The prototype's .scrim and .sheet (docs/prototype/dressup.html:218-221): a
-// sheet from the bottom under 900 px, a box in the middle from 900 px.
+// The scrim and the sheet: a sheet from the bottom under 900 px, a box in
+// the middle from 900 px.
 export const SHEET_OVERLAY = "fixed inset-0 z-20 bg-[rgba(20,18,14,.42)]";
 
 export const SHEET =

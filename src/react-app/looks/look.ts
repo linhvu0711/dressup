@@ -79,6 +79,6 @@ export function lookFromDress(
 	};
 }
 
-// A look with no name shows its mode's name (docs/prototype/dressup.html:791).
+// A look with no name shows its mode's name.
 export const lookName = (look: Look): string =>
 	look.name || modeById(look.modeId).name;

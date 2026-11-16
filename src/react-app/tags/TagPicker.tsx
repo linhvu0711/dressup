@@ -6,7 +6,7 @@ import { TagNameTaken, useAddTag, useTags } from "./api";
 import { TagNameField } from "./TagNameField";
 import type { TagId } from "./tag";
 
-// The tag chips of the save form (docs/prototype/dressup.html:935-937):
+// The tag chips of the save form:
 // several can be on, and "+ New tag" makes a tag and turns it on.
 export function TagPicker({
 	picked,

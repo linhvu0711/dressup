@@ -8,8 +8,8 @@ import { LookGone, useDeleteLook } from "./api";
 import { useLeaveGoneLook } from "./gone";
 import { type Look, lookName } from "./look";
 
-// The confirm of docs/prototype/dressup.html:950, 1065. "Delete" waits for
-// the server's answer before the confirm closes.
+// The confirm. "Delete" waits for the server's answer before the confirm
+// closes.
 export function DeleteLookDialog({
 	look,
 	onClose,

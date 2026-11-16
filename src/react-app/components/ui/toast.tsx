@@ -7,8 +7,8 @@ import {
 	useState,
 } from "react";
 
-// The prototype's toast shows one message for 2.4 s, and a new message
-// replaces the old one (docs/prototype/dressup.html:251-252, 794).
+// The toast shows one message for 2.4 s, and a new message replaces the
+// old one.
 const DURATION_MS = 2400;
 
 const ToastContext = createContext<((message: string) => void) | null>(null);
@@ -35,7 +35,7 @@ function Toaster({ children }: { children: ReactNode }) {
 						{shown.message}
 					</ToastPrimitive.Description>
 				</ToastPrimitive.Root>
-				{/* Taps go through the toast, as in the prototype (dressup.html:251):
+				{/* Taps go through the toast:
 				    on a phone it sits over "Compare 6" of the Looks page. */}
 				<ToastPrimitive.Viewport className="-translate-x-1/2 pointer-events-none fixed bottom-[82px] left-1/2 z-40 flex outline-none" />
 			</ToastPrimitive.Provider>
