@@ -1,5 +1,5 @@
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 9c8afcb80b08ed51b7ffa25fe56118c2bf7a1772..0bc3593141ebde85f9b182214e1d214f936fbea6 100644
+index 9c8afcb80b08ed51b7ffa25fe56118c2bf7a1772..2025b781ae648849e197fa5901c0eb7da3a8df0c 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -248,6 +248,8 @@ function validateCimdMetadata(clientIdUrl, raw, options = {}) {
@@ -20,7 +20,7 @@ index 9c8afcb80b08ed51b7ffa25fe56118c2bf7a1772..0bc3593141ebde85f9b182214e1d214f
  		if (!isCimdClientIdUrlCandidate(clientId)) return null;
  		const provider = ctx.context.getPlugin("oauth-provider");
  		if (!provider) throw new BetterAuthError("cimd discovery invoked without the oauth-provider plugin installed");
-@@ -678,8 +680,26 @@ function createCimdResolver(cimdOptions) {
+@@ -678,8 +680,28 @@ function createCimdResolver(cimdOptions) {
  			if (existingClient) return existingClient;
  			return persistMetadataDocumentClient(ctx, clientId, cachedEntry.metadata, cimdOptions, oauthOptions);
  		}
@@ -42,6 +42,8 @@ index 9c8afcb80b08ed51b7ffa25fe56118c2bf7a1772..0bc3593141ebde85f9b182214e1d214f
 +			if (outcome !== STUCK) return outcome;
 +			if (inFlightResolutionByClientId.get(clientId) === inFlight) {
 +				inFlightResolutionByClientId.delete(clientId);
++				// Safe to call twice: if the stuck request ever ends, its finally
++				// calls this same release, which then does nothing.
 +				inFlight.release();
 +			}
 +			return resolveClient(ctx, clientId, existingClient);
@@ -49,7 +51,7 @@ index 9c8afcb80b08ed51b7ffa25fe56118c2bf7a1772..0bc3593141ebde85f9b182214e1d214f
  		const releaseMetadataFetchPermit = acquireMetadataFetchPermit(clientId);
  		const resolution = (async () => {
  			const fetched = await fetchClientMetadataDocument(ctx, clientId, cimdOptions, cachedEntry ? {
-@@ -695,7 +715,12 @@ function createCimdResolver(cimdOptions) {
+@@ -695,7 +717,12 @@ function createCimdResolver(cimdOptions) {
  			lastFetchStartAtMsByClientId.delete(clientId);
  			return storedClient;
  		})();
@@ -63,7 +65,7 @@ index 9c8afcb80b08ed51b7ffa25fe56118c2bf7a1772..0bc3593141ebde85f9b182214e1d214f
  		try {
  			return await resolution;
  		} catch (error) {
-@@ -703,10 +728,11 @@ function createCimdResolver(cimdOptions) {
+@@ -703,10 +730,11 @@ function createCimdResolver(cimdOptions) {
  			lastFetchStartAtMsByClientId.set(clientId, Date.now());
  			throw error;
  		} finally {
