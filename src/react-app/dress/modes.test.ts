@@ -3,7 +3,7 @@ import { GARMENT_IDS, STARTER_COLOURS } from "@/dress/garments";
 import { MODES, modeById, outfitOf } from "@/dress/modes";
 
 describe("modes", () => {
-	test("lists the 23 modes of the prototype", () => {
+	test("lists the 23 modes", () => {
 		// Given: the mode list
 		// When
 		const rows = MODES.map(({ id, name, group, training, garments }) => [
