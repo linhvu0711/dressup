@@ -18,6 +18,9 @@ export function mcpResource(baseURL: string) {
 	return `${baseURL}/api/mcp`;
 }
 
+// @better-auth/cimd is patched (patches/), so a download a stopped request
+// left behind no longer blocks the app's next connects:
+// better-auth/better-auth#11675.
 export function createClientDiscovery() {
 	return cimd({
 		// workerd throws on redirect "error" (P3); "manual" hands the 302 back,

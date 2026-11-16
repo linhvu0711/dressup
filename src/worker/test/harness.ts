@@ -73,7 +73,7 @@ type Harness = Awaited<ReturnType<typeof makeHarness>>;
 
 type Outside = {
 	google: { sub: string; email: string; name: string; picture: string };
-	documents?: Record<string, () => Response>;
+	documents?: Record<string, () => Response | Promise<Response>>;
 };
 
 // Two outside borders: Google's token endpoint, and the websites that host AI

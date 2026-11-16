@@ -51,5 +51,8 @@
 		"typescript": "5.9.3",
 		"vite": "^7.0.0",
 		"wrangler": "^4.161.0"
+	},
+	"patchedDependencies": {
+		"@better-auth/cimd@1.7.25": "patches/@better-auth%2Fcimd@1.7.25.patch"
 	}
 }

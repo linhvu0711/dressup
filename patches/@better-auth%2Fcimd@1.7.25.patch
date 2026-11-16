@@ -1,0 +1,78 @@
+diff --git a/dist/index.mjs b/dist/index.mjs
+index 9c8afcb80b08ed51b7ffa25fe56118c2bf7a1772..0bc3593141ebde85f9b182214e1d214f936fbea6 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -248,6 +248,8 @@ function validateCimdMetadata(clientIdUrl, raw, options = {}) {
+ }
+ // src/client-store.ts
+ const FETCH_TIMEOUT_MS = 5e3;
++const STUCK_RESOLUTION_MS = FETCH_TIMEOUT_MS + 1e3;
++const STUCK = Symbol("stuck");
+ const MAX_RESPONSE_BYTES = 5120;
+ const JSON_CONTENT_TYPE_RE = /^application\/(?:[-\w.]+\+)?json\s*(?:;|$)/i;
+ const FETCH_FAILURE_DESCRIPTION = "Failed to fetch metadata document (network error or redirect blocked)";
+@@ -667,7 +669,7 @@ function createCimdResolver(cimdOptions) {
+ 			originState.activeFetchCount -= 1;
+ 		};
+ 	};
+-	return async (ctx, clientId, existingClient) => {
++	const resolveClient = async (ctx, clientId, existingClient) => {
+ 		if (!isCimdClientIdUrlCandidate(clientId)) return null;
+ 		const provider = ctx.context.getPlugin("oauth-provider");
+ 		if (!provider) throw new BetterAuthError("cimd discovery invoked without the oauth-provider plugin installed");
+@@ -678,8 +680,26 @@ function createCimdResolver(cimdOptions) {
+ 			if (existingClient) return existingClient;
+ 			return persistMetadataDocumentClient(ctx, clientId, cachedEntry.metadata, cimdOptions, oauthOptions);
+ 		}
+-		const inFlightResolution = inFlightResolutionByClientId.get(clientId);
+-		if (inFlightResolution !== void 0) return inFlightResolution;
++		// Patched with bun patch, see https://github.com/better-auth/better-auth/issues/11675.
++		// On Cloudflare Workers a request stopped halfway never runs the finally
++		// below, so its download stayed in this map and kept its slot for good.
++		// A caller waits at most STUCK_RESOLUTION_MS from the download's start,
++		// then drops it, gives back its slot, and looks again: another caller
++		// may have cached a document or started a new download meanwhile.
++		const inFlight = inFlightResolutionByClientId.get(clientId);
++		if (inFlight !== void 0) {
++			const waitMs = inFlight.startedAtMs + STUCK_RESOLUTION_MS - Date.now();
++			let timer;
++			const outcome = waitMs > 0 ? await Promise.race([inFlight.resolution, new Promise((resolve) => {
++				timer = setTimeout(() => resolve(STUCK), waitMs);
++			})]).finally(() => clearTimeout(timer)) : STUCK;
++			if (outcome !== STUCK) return outcome;
++			if (inFlightResolutionByClientId.get(clientId) === inFlight) {
++				inFlightResolutionByClientId.delete(clientId);
++				inFlight.release();
++			}
++			return resolveClient(ctx, clientId, existingClient);
++		}
+ 		const releaseMetadataFetchPermit = acquireMetadataFetchPermit(clientId);
+ 		const resolution = (async () => {
+ 			const fetched = await fetchClientMetadataDocument(ctx, clientId, cimdOptions, cachedEntry ? {
+@@ -695,7 +715,12 @@ function createCimdResolver(cimdOptions) {
+ 			lastFetchStartAtMsByClientId.delete(clientId);
+ 			return storedClient;
+ 		})();
+-		inFlightResolutionByClientId.set(clientId, resolution);
++		const inFlightEntry = {
++			resolution,
++			startedAtMs: Date.now(),
++			release: releaseMetadataFetchPermit
++		};
++		inFlightResolutionByClientId.set(clientId, inFlightEntry);
+ 		try {
+ 			return await resolution;
+ 		} catch (error) {
+@@ -703,10 +728,11 @@ function createCimdResolver(cimdOptions) {
+ 			lastFetchStartAtMsByClientId.set(clientId, Date.now());
+ 			throw error;
+ 		} finally {
+-			if (inFlightResolutionByClientId.get(clientId) === resolution) inFlightResolutionByClientId.delete(clientId);
++			if (inFlightResolutionByClientId.get(clientId) === inFlightEntry) inFlightResolutionByClientId.delete(clientId);
+ 			releaseMetadataFetchPermit();
+ 		}
+ 	};
++	return resolveClient;
+ }
+ // src/version.ts
+ const PACKAGE_VERSION = "1.7.25";
