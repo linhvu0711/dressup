@@ -18,6 +18,9 @@ export function mcpResource(baseURL: string) {
 	return `${baseURL}/api/mcp`;
 }
 
+// @better-auth/cimd is patched (patches/), so a download a stopped request
+// left behind no longer blocks the app's next connects:
+// better-auth/better-auth#11675.
 export function createClientDiscovery() {
 	return cimd({
 		// workerd throws on redirect "error" (P3); "manual" hands the 302 back,
@@ -44,7 +47,9 @@ export function authOptions(s: AuthSettings) {
 		},
 		disabledPaths: ["/token"],
 		plugins: [
-			jwt(),
+			// No code reads the session JWT, and signing it cost CPU on every
+			// getSession (#48).
+			jwt({ disableSettingJwtHeader: true }),
 			mcp({
 				resource: mcpResource(s.baseURL),
 				loginPage: "/allow",
@@ -64,4 +69,22 @@ export function authOptions(s: AuthSettings) {
 
 export function createAuth(s: AuthSettings) {
 	return betterAuth(authOptions(s));
+}
+
+export type Auth = ReturnType<typeof createAuth>;
+export type AuthEnvSettings = Omit<AuthSettings, "db" | "clientDiscovery">;
+
+// Building Better Auth on every request cost more CPU than the free plan's
+// 10 ms (#48). An instance is kept only after its start resolved: a start
+// left pending by a request Cloudflare stopped never settles on Workers.
+export function createAuthCache() {
+	let kept: { key: string; auth: Auth } | undefined;
+	return async (settings: AuthEnvSettings, build: () => Auth) => {
+		const key = JSON.stringify(settings);
+		if (kept?.key === key) return kept.auth;
+		const auth = build();
+		await auth.$context;
+		kept = { key, auth };
+		return auth;
+	};
 }
