@@ -86,25 +86,25 @@ describe("modes", () => {
 				"chino_p shirt_l",
 			],
 			[
-				"tee-chore",
-				"Tee + chore jacket",
+				"tee-harrington",
+				"Tee + Harrington jacket",
 				"Cool",
 				false,
-				"casual_p tee_l chore",
+				"casual_p tee_l harrington",
 			],
 			[
-				"polo-chore",
-				"Polo + chore jacket",
+				"polo-harrington",
+				"Polo + Harrington jacket",
 				"Cool",
 				false,
-				"chino_p polo_l chore",
+				"chino_p polo_l harrington",
 			],
 			[
-				"shirt-chore",
-				"Shirt + chore jacket",
+				"shirt-harrington",
+				"Shirt + Harrington jacket",
 				"Cool",
 				false,
-				"chino_p shirt_l chore",
+				"chino_p shirt_l harrington",
 			],
 			[
 				"long-training-tee-pants",
@@ -129,46 +129,46 @@ describe("modes", () => {
 				"chino_p shirt_l sweater",
 			],
 			[
-				"tee-sweater-chore",
-				"Tee + sweater + chore",
+				"tee-sweater-harrington",
+				"Tee + sweater + Harrington",
 				"Cold",
 				false,
-				"casual_p tee_l sweater chore",
+				"casual_p tee_l sweater harrington",
 			],
 			[
-				"polo-sweater-chore",
-				"Polo + sweater + chore",
+				"polo-sweater-harrington",
+				"Polo + sweater + Harrington",
 				"Cold",
 				false,
-				"chino_p polo_l sweater chore",
+				"chino_p polo_l sweater harrington",
 			],
 			[
-				"shirt-sweater-chore",
-				"Shirt + sweater + chore",
+				"shirt-sweater-harrington",
+				"Shirt + sweater + Harrington",
 				"Cold",
 				false,
-				"chino_p shirt_l sweater chore",
+				"chino_p shirt_l sweater harrington",
 			],
 			[
-				"tee-sweater-padded",
-				"Tee + sweater + padded",
+				"tee-sweater-wool",
+				"Tee + sweater + wool",
 				"Cold",
 				false,
-				"casual_p tee_l sweater padded",
+				"casual_p tee_l sweater wool",
 			],
 			[
-				"polo-sweater-padded",
-				"Polo + sweater + padded",
+				"polo-sweater-wool",
+				"Polo + sweater + wool",
 				"Cold",
 				false,
-				"chino_p polo_l sweater padded",
+				"chino_p polo_l sweater wool",
 			],
 			[
-				"shirt-sweater-padded",
-				"Shirt + sweater + padded",
+				"shirt-sweater-wool",
+				"Shirt + sweater + wool",
 				"Cold",
 				false,
-				"chino_p shirt_l sweater padded",
+				"chino_p shirt_l sweater wool",
 			],
 		]);
 	});
@@ -207,7 +207,7 @@ describe("modes", () => {
 	test("dresses layered modes in the long top", () => {
 		// Given: the mode list
 		// When
-		const layered = ["sweater", "chore", "padded"];
+		const layered = ["sweater", "harrington", "wool"];
 		const short = ["tee_s", "polo_s", "shirt_s", "ttee_s"];
 		const wrong = MODES.filter(
 			(m) =>
@@ -224,7 +224,7 @@ describe("modes", () => {
 		const first = Object.fromEntries(
 			GARMENT_IDS.map((g) => [g, STARTER_COLOURS[g][0]]),
 		);
-		const outfit = outfitOf(modeById("tee-sweater-padded"));
+		const outfit = outfitOf(modeById("tee-sweater-wool"));
 		// Then
 		expect([first, outfit]).toEqual([
 			{
@@ -235,8 +235,8 @@ describe("modes", () => {
 				shirt_s: "#F3F1EC",
 				shirt_l: "#BFD3EA",
 				sweater: "#1F3A5F",
-				chore: "#55633F",
-				padded: "#1B1B1F",
+				harrington: "#C9B38C",
+				wool: "#A8865C",
 				ttee_s: "#1B1B1F",
 				ttee_l: "#1B1B1F",
 				chino_sh: "#C9B38C",
@@ -250,7 +250,7 @@ describe("modes", () => {
 				{ garment: "casual_p", color: "#8C8A84" },
 				{ garment: "tee_l", color: "#F3F1EC" },
 				{ garment: "sweater", color: "#1F3A5F" },
-				{ garment: "padded", color: "#1B1B1F" },
+				{ garment: "wool", color: "#A8865C" },
 			],
 		]);
 	});

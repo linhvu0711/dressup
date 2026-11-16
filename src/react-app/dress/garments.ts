@@ -9,8 +9,8 @@ export const GARMENT_IDS = [
 	"shirt_s",
 	"shirt_l",
 	"sweater",
-	"chore",
-	"padded",
+	"harrington",
+	"wool",
 	"ttee_s",
 	"ttee_l",
 	"chino_sh",
@@ -31,8 +31,8 @@ export const GARMENT_NAMES: Record<GarmentId, string> = {
 	shirt_s: "Short button-up",
 	shirt_l: "Long button-up",
 	sweater: "Sweater",
-	chore: "Chore jacket",
-	padded: "Padded jacket",
+	harrington: "Harrington jacket",
+	wool: "Wool jacket",
 	ttee_s: "Short training tee",
 	ttee_l: "Long training tee",
 	chino_sh: "Chino shorts",
@@ -43,7 +43,7 @@ export const GARMENT_NAMES: Record<GarmentId, string> = {
 	train_p: "Training pants",
 };
 
-export const JACKET_IDS = ["chore", "padded"] as const;
+export const JACKET_IDS = ["harrington", "wool"] as const;
 
 export type JacketId = (typeof JACKET_IDS)[number];
 
@@ -57,13 +57,14 @@ const BK = "#1B1B1F";
 const NV = "#1F3A5F";
 const GY = "#8C8A84";
 const KH = "#C9B38C";
-const OL = "#55633F";
 const CH = "#39424F";
 const LB = "#BFD3EA";
 const CR = "#E6DFD0";
 const BG = "#7A2E2E";
 const ST = "#9C9A98";
 const FO = "#2F5D50";
+const GR = "#2F4A3A";
+const CA = "#A8865C";
 
 // A garment starts in the first colour of its set.
 export const STARTER_COLOURS: Record<GarmentId, readonly Hex[]> = {
@@ -74,8 +75,8 @@ export const STARTER_COLOURS: Record<GarmentId, readonly Hex[]> = {
 	shirt_s: [W, LB, NV],
 	shirt_l: [LB, W, NV],
 	sweater: [NV, GY, CR, BG],
-	chore: [OL, NV, KH],
-	padded: [BK, NV, OL],
+	harrington: [KH, NV, GR],
+	wool: [CA, CH, NV],
 	ttee_s: [BK, GY, W],
 	ttee_l: [BK, GY, W],
 	chino_sh: [KH, CH, ST],

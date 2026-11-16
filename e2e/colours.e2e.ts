@@ -377,21 +377,21 @@ test("keeps the last square and says so", async ({ page }) => {
 	expect(await labels(page, "Sweater")).toEqual(["Sweater #1F3A5F, remove"]);
 });
 
-test("opens and closes the chore jacket", async ({ page }) => {
-	// Given: both projects, a fresh page, Polo + sweater + chore picked, the
+test("opens and closes the Harrington jacket", async ({ page }) => {
+	// Given: both projects, a fresh page, Polo + sweater + Harrington picked, the
 	// Colours tab on the phone
 	await page.goto("/");
 	await page
-		.getByRole("button", { name: "Polo + sweater + chore", exact: true })
+		.getByRole("button", { name: "Polo + sweater + Harrington", exact: true })
 		.click();
 	if (isPhone(page)) {
 		await page.getByRole("tab", { name: "Colours", exact: true }).click();
 	}
 	const front = page.getByRole("radiogroup", {
-		name: "Chore jacket front",
+		name: "Harrington jacket front",
 		exact: true,
 	});
-	const jacket = garmentIn(page, "Polo + sweater + chore", "chore");
+	const jacket = garmentIn(page, "Polo + sweater + Harrington", "harrington");
 	// When
 	await front.getByRole("radio", { name: "Open", exact: true }).click();
 	const opened = await jacket.getAttribute("data-front");

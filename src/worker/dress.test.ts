@@ -32,7 +32,8 @@ describe("GET /api/dress", () => {
 			status: res.status,
 			modeId: s.modeId,
 			sweater: s.swatches.sweater,
-			padded: s.swatches.padded,
+			wool: s.swatches.wool,
+			harrington: s.swatches.harrington,
 			shirt_l: s.swatches.shirt_l,
 			pickedSweater: s.picked.sweater,
 			pickedShirt: s.picked.shirt_l,
@@ -41,7 +42,8 @@ describe("GET /api/dress", () => {
 			status: 200,
 			modeId: "polo-sweater",
 			sweater: ["#1F3A5F", "#8C8A84", "#E6DFD0", "#7A2E2E"],
-			padded: ["#1B1B1F", "#1F3A5F", "#55633F"],
+			wool: ["#A8865C", "#39424F", "#1F3A5F"],
+			harrington: ["#C9B38C", "#1F3A5F", "#2F4A3A"],
 			shirt_l: ["#BFD3EA", "#F3F1EC", "#1F3A5F"],
 			pickedSweater: "#1F3A5F",
 			pickedShirt: "#BFD3EA",
@@ -149,14 +151,14 @@ describe("POST /api/dress/changes", () => {
 		const { h, headers } = await aliceAfterGet();
 		const wear = {
 			kind: "wear",
-			modeId: "polo-sweater-chore",
+			modeId: "polo-sweater-harrington",
 			colours: {
 				chino_p: "#C9B38C",
 				polo_l: "#F3F1EC",
 				sweater: "#C0392B",
-				chore: "#55633F",
+				harrington: "#55633F",
 			},
-			open: ["chore"],
+			open: ["harrington"],
 		};
 		// When
 		const first = await post(h, headers, wear);
@@ -171,10 +173,10 @@ describe("POST /api/dress/changes", () => {
 			open: s.open,
 		}).toEqual({
 			statuses: [204, 204],
-			modeId: "polo-sweater-chore",
+			modeId: "polo-sweater-harrington",
 			sweater: ["#C0392B", "#1F3A5F", "#8C8A84", "#E6DFD0", "#7A2E2E"],
 			pickedSweater: "#C0392B",
-			open: ["chore"],
+			open: ["harrington"],
 		});
 	});
 
@@ -188,7 +190,7 @@ describe("POST /api/dress/changes", () => {
 			{ kind: "add", garment: "sweater", hex: "#C0392B" },
 			{ kind: "pick", garment: "sweater", hex: "#8C8A84" },
 			{ kind: "remove", garment: "sweater", hex: "#7A2E2E" },
-			{ kind: "jacket", jacket: "chore", open: true },
+			{ kind: "jacket", jacket: "harrington", open: true },
 		])
 			statuses.push((await post(h, headers, change)).status);
 		const s = await get(h, headers);
@@ -204,7 +206,7 @@ describe("POST /api/dress/changes", () => {
 			modeId: "tee-sweater",
 			sweater: ["#C0392B", "#1F3A5F", "#8C8A84", "#E6DFD0"],
 			pickedSweater: "#8C8A84",
-			open: ["chore"],
+			open: ["harrington"],
 		});
 	});
 
@@ -421,14 +423,14 @@ describe("POST /api/dress/changes", () => {
 		// When
 		await post(h, alice, { kind: "pick", garment: "sweater", hex: "#7A2E2E" });
 		await post(h, alice, { kind: "mode", modeId: "tee-sweater" });
-		await post(h, bob, { kind: "add", garment: "padded", hex: "#C0392B" });
+		await post(h, bob, { kind: "add", garment: "wool", hex: "#C0392B" });
 		const seen = await Promise.all(
 			[alice, bob].map(async (headers) => {
 				const s = await get(h, headers);
 				return {
 					modeId: s.modeId,
 					pickedSweater: s.picked.sweater,
-					padded: s.swatches.padded,
+					wool: s.swatches.wool,
 				};
 			}),
 		);
@@ -437,12 +439,12 @@ describe("POST /api/dress/changes", () => {
 			{
 				modeId: "tee-sweater",
 				pickedSweater: "#7A2E2E",
-				padded: ["#1B1B1F", "#1F3A5F", "#55633F"],
+				wool: ["#A8865C", "#39424F", "#1F3A5F"],
 			},
 			{
 				modeId: "polo-sweater",
 				pickedSweater: "#1F3A5F",
-				padded: ["#C0392B", "#1B1B1F", "#1F3A5F", "#55633F"],
+				wool: ["#C0392B", "#A8865C", "#39424F", "#1F3A5F"],
 			},
 		]);
 	});
@@ -538,24 +540,24 @@ describe("two devices at the same moment", () => {
 	});
 
 	test("keeps a jacket toggle and the new pick together", async () => {
-		// Given: alice with the padded row cut to #1B1B1F and #1F3A5F, and
-		// #1B1B1F picked
+		// Given: alice with the wool row cut to #A8865C and #1F3A5F, and
+		// #A8865C picked
 		const { h, headers } = await aliceAfterGet();
 		await post(h, headers, {
 			kind: "remove",
-			garment: "padded",
-			hex: "#55633F",
+			garment: "wool",
+			hex: "#39424F",
 		});
-		// When: one device removes #1B1B1F while the other opens the jacket
+		// When: one device removes #A8865C while the other opens the jacket
 		const s = await atOnce(h, [
-			{ kind: "remove", garment: "padded", hex: "#1B1B1F" },
-			{ kind: "jacket", jacket: "padded", open: true },
+			{ kind: "remove", garment: "wool", hex: "#A8865C" },
+			{ kind: "jacket", jacket: "wool", open: true },
 		]);
 		// Then
 		expect({
-			row: s.swatches.padded,
-			picked: s.picked.padded,
+			row: s.swatches.wool,
+			picked: s.picked.wool,
 			open: s.open,
-		}).toEqual({ row: ["#1F3A5F"], picked: "#1F3A5F", open: ["padded"] });
+		}).toEqual({ row: ["#1F3A5F"], picked: "#1F3A5F", open: ["wool"] });
 	});
 });

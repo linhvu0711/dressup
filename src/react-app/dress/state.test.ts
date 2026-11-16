@@ -20,7 +20,7 @@ describe("dress state", () => {
 		expect({
 			modeId: s.modeId,
 			sweater: s.swatches.sweater,
-			padded: s.swatches.padded,
+			wool: s.swatches.wool,
 			shirt_l: s.swatches.shirt_l,
 			pickedSweater: s.picked.sweater,
 			pickedShirt: s.picked.shirt_l,
@@ -28,7 +28,7 @@ describe("dress state", () => {
 		}).toEqual({
 			modeId: "polo-sweater",
 			sweater: ["#1F3A5F", "#8C8A84", "#E6DFD0", "#7A2E2E"],
-			padded: ["#1B1B1F", "#1F3A5F", "#55633F"],
+			wool: ["#A8865C", "#39424F", "#1F3A5F"],
 			shirt_l: ["#BFD3EA", "#F3F1EC", "#1F3A5F"],
 			pickedSweater: "#1F3A5F",
 			pickedShirt: "#BFD3EA",
@@ -119,13 +119,13 @@ describe("dress state", () => {
 		// Given: a fresh state
 		const start = startDressState();
 		// When
-		const open = setJacket(start, "chore", true);
-		const again = setJacket(open, "chore", true);
-		const closed = setJacket(again, "chore", false);
+		const open = setJacket(start, "harrington", true);
+		const again = setJacket(open, "harrington", true);
+		const closed = setJacket(again, "harrington", false);
 		// Then
 		expect([open.open, again.open, closed.open]).toEqual([
-			["chore"],
-			["chore"],
+			["harrington"],
+			["harrington"],
 			[],
 		]);
 	});
@@ -138,7 +138,7 @@ describe("dress state", () => {
 			{ kind: "add", garment: "sweater", hex: "#C0392B" },
 			{ kind: "pick", garment: "sweater", hex: "#8C8A84" },
 			{ kind: "remove", garment: "sweater", hex: "#7A2E2E" },
-			{ kind: "jacket", jacket: "chore", open: true },
+			{ kind: "jacket", jacket: "harrington", open: true },
 		];
 		// When
 		const oks = changes.map((change) => {
@@ -158,20 +158,20 @@ describe("dress state", () => {
 			modeId: "tee-sweater",
 			sweater: ["#C0392B", "#1F3A5F", "#8C8A84", "#E6DFD0"],
 			pickedSweater: "#8C8A84",
-			open: ["chore"],
+			open: ["harrington"],
 		});
 	});
 
 	const WEAR: DressChange = {
 		kind: "wear",
-		modeId: "polo-sweater-chore",
+		modeId: "polo-sweater-harrington",
 		colours: {
 			chino_p: "#C9B38C",
 			polo_l: "#F3F1EC",
 			sweater: "#C0392B",
-			chore: "#55633F",
+			harrington: "#55633F",
 		},
-		open: ["chore"],
+		open: ["harrington"],
 	};
 
 	test("wears a look: its mode, colours, and jackets, with a new colour first in its row", () => {
@@ -188,25 +188,25 @@ describe("dress state", () => {
 			picked: {
 				sweater: s.picked.sweater,
 				chino_p: s.picked.chino_p,
-				chore: s.picked.chore,
+				harrington: s.picked.harrington,
 			},
 			open: s.open,
 		}).toEqual({
 			ok: true,
-			modeId: "polo-sweater-chore",
+			modeId: "polo-sweater-harrington",
 			sweaterRow: ["#C0392B", "#1F3A5F", "#8C8A84", "#E6DFD0", "#7A2E2E"],
-			picked: { sweater: "#C0392B", chino_p: "#C9B38C", chore: "#55633F" },
-			open: ["chore"],
+			picked: { sweater: "#C0392B", chino_p: "#C9B38C", harrington: "#55633F" },
+			open: ["harrington"],
 		});
 	});
 
 	test("keeps the jacket a worn look does not have", () => {
-		// Given: a fresh state with the padded jacket open
-		const s = setJacket(startDressState(), "padded", true);
+		// Given: a fresh state with the wool jacket open
+		const s = setJacket(startDressState(), "wool", true);
 		// When
 		const result = applyChange(s, WEAR);
 		// Then
-		expect(result.ok && result.state.open).toEqual(["padded", "chore"]);
+		expect(result.ok && result.state.open).toEqual(["wool", "harrington"]);
 	});
 
 	test("refuses to pick a colour the row does not hold", () => {

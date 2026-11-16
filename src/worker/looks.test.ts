@@ -32,15 +32,15 @@ async function withBob(h: Harness) {
 
 const NAVY = {
 	id: "11111111-1111-4111-8111-111111111111",
-	modeId: "polo-sweater-chore",
+	modeId: "polo-sweater-harrington",
 	name: "Navy day",
 	colours: {
 		chino_p: "#C9B38C",
 		polo_l: "#F3F1EC",
 		sweater: "#1F3A5F",
-		chore: "#55633F",
+		harrington: "#55633F",
 	},
-	open: ["chore"],
+	open: ["harrington"],
 	tags: [],
 };
 
@@ -258,10 +258,10 @@ describe("POST /api/looks against the mode", () => {
 	});
 
 	test("refuses an open jacket that is not in the mode", async () => {
-		// Given: NAVY with the padded jacket open, and the mode has no padded jacket
+		// Given: NAVY with the wool jacket open, and the mode has no wool jacket
 		const { h, headers } = await aliceSignedIn();
 		// When
-		const res = await post(h, headers, { ...NAVY, open: ["padded"] });
+		const res = await post(h, headers, { ...NAVY, open: ["wool"] });
 		// Then
 		expect({ status: res.status, body: await res.json() }).toEqual({
 			status: 400,

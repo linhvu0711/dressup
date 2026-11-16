@@ -60,7 +60,7 @@ describe("Mannequin", () => {
 	);
 
 	test("draws a jacket closed unless it is named open", () => {
-		// Given: a chore jacket and a padded jacket, each closed and open
+		// Given: a harrington jacket and a wool jacket, each closed and open
 		// When
 		const draw = (garment: JacketId, color: `#${string}`, open: boolean) =>
 			renderToStaticMarkup(
@@ -70,23 +70,23 @@ describe("Mannequin", () => {
 					openJackets={open ? [garment] : []}
 				/>,
 			);
-		const chore = [
-			draw("chore", "#55633F", false),
-			draw("chore", "#55633F", true),
+		const harrington = [
+			draw("harrington", "#55633F", false),
+			draw("harrington", "#55633F", true),
 		];
-		const padded = [
-			draw("padded", "#1B1B1F", false),
-			draw("padded", "#1B1B1F", true),
+		const wool = [
+			draw("wool", "#1B1B1F", false),
+			draw("wool", "#1B1B1F", true),
 		];
 		// Then
-		expect(chore[0]).toContain('data-front="closed"');
-		expect(chore[0]).toContain("M 184.5 234 L 200 250 L 215.5 234");
-		expect(chore[1]).toContain('data-front="open"');
-		expect(chore[1]).not.toContain("M 184.5 234 L 200 250 L 215.5 234");
-		expect(padded[0]).toContain('data-front="closed"');
-		expect(padded[0]).toContain("M 187.5 137 L 212.5 137");
-		expect(padded[1]).toContain('data-front="open"');
-		expect(padded[1]).not.toContain("M 187.5 137 L 212.5 137");
+		expect(harrington[0]).toContain('data-front="closed"');
+		expect(harrington[0]).toContain("M 184.5 234 L 200 250 L 215.5 234");
+		expect(harrington[1]).toContain('data-front="open"');
+		expect(harrington[1]).not.toContain("M 184.5 234 L 200 250 L 215.5 234");
+		expect(wool[0]).toContain('data-front="closed"');
+		expect(wool[0]).toContain("M 187.5 137 L 212.5 137");
+		expect(wool[1]).toContain('data-front="open"');
+		expect(wool[1]).not.toContain("M 187.5 137 L 212.5 137");
 	});
 
 	test("paints the layers in the given order", () => {

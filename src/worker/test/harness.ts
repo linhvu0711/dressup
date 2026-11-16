@@ -407,8 +407,8 @@ export function seedLooks(h: Harness, userId: string, n: number) {
 	h.sqlite.run(
 		`INSERT INTO look (id, user_id, mode_id, name, colours, open)
 		WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?)
-		SELECT printf('00000000-0000-4000-8000-%012d', i), ?, 'polo-sweater-chore', '',
-			'{"chino_p":"#C9B38C","polo_l":"#F3F1EC","sweater":"#1F3A5F","chore":"#55633F"}', '[]'
+		SELECT printf('00000000-0000-4000-8000-%012d', i), ?, 'polo-sweater-harrington', '',
+			'{"chino_p":"#C9B38C","polo_l":"#F3F1EC","sweater":"#1F3A5F","harrington":"#55633F"}', '[]'
 		FROM n`,
 		[n, userId],
 	);
