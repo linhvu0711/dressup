@@ -4,18 +4,13 @@ import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
+import { RequestError } from "@/data/client";
 import { modeById } from "@/dress/modes";
 import type { DressState } from "@/dress/state";
 import { addTagKey } from "@/tags/api";
 import { TagPicker } from "@/tags/TagPicker";
 import type { TagId } from "@/tags/tag";
-import {
-	LookGone,
-	SaveError,
-	useLooks,
-	useSaveLook,
-	useUpdateLook,
-} from "./api";
+import { LookGone, useLooks, useSaveLook, useUpdateLook } from "./api";
 import { useLeaveGoneLook } from "./gone";
 import {
 	LOOK_LIMIT,
@@ -56,7 +51,7 @@ export function SaveLookDialog({
 	// not counted. A 409 look_limit means another tab filled the account.
 	const full =
 		(looks.data?.length ?? 0) >= LOOK_LIMIT ||
-		(save.error instanceof SaveError && save.error.code === "look_limit");
+		(save.error instanceof RequestError && save.error.code === "look_limit");
 	// "Save changes" adds no look, so the limit cannot explain its failure:
 	// that one says "Not saved" even at 300 looks.
 	const updateFailed = update.isError && !(update.error instanceof LookGone);

@@ -1,13 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { z } from "zod";
-import { keys, request } from "../data/client";
-import { looksAnswer } from "../data/contract";
-import { useSignOutOn401, useUserId } from "../session";
-import { type Look, type LookId, type LookInput, lookSchema } from "./look";
+import { keys, RequestError, request } from "../data/client";
+import { lookAnswer, looksAnswer } from "../data/contract";
+import { useUserId } from "../session";
+import type { Look, LookId, LookInput } from "./look";
 
 export const looksQueryKey = keys.looks;
-
-const savedAnswer = z.object({ look: lookSchema });
 
 export function useLooks() {
 	const userId = useUserId();
@@ -33,26 +30,17 @@ export class SaveError extends Error {
 	}
 }
 
-const errorAnswer = z.object({ error: z.string() });
-
 export function useSaveLook() {
 	const userId = useUserId();
 	const queryClient = useQueryClient();
-	const on401 = useSignOutOn401();
 	return useMutation({
-		mutationFn: async (look: LookInput) => {
-			const res = await fetch("/api/looks", {
-				method: "POST",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify(look),
-			});
-			await on401(res, "POST /api/looks");
-			if (!res.ok) {
-				const body = errorAnswer.safeParse(await res.json().catch(() => null));
-				throw new SaveError(res.status, body.success ? body.data.error : null);
-			}
-			return savedAnswer.parse(await res.json()).look;
-		},
+		mutationFn: async (look: LookInput) =>
+			(
+				await request("POST", "/api/looks", {
+					body: look,
+					answer: lookAnswer,
+				})
+			).look,
 		onSuccess: (look) => {
 			// The wall shows a cached list at once while it asks the server
 			// again, so the saved look goes into that list now, or a first
@@ -76,10 +64,15 @@ export function useSaveLook() {
 // The look is not there: deleted on another device, or another account's.
 export class LookGone extends Error {}
 
+const goneAsLookGone = (error: unknown): never => {
+	if (error instanceof RequestError && error.code === "not_found")
+		throw new LookGone();
+	throw error;
+};
+
 export function useDeleteLook() {
 	const userId = useUserId();
 	const queryClient = useQueryClient();
-	const on401 = useSignOutOn401();
 	const forget = (id: LookId) => {
 		queryClient.setQueryData<Look[]>(looksQueryKey(userId), (old) =>
 			old?.filter((l) => l.id !== id),
@@ -89,13 +82,8 @@ export function useDeleteLook() {
 		void queryClient.invalidateQueries({ queryKey: looksQueryKey(userId) });
 	};
 	return useMutation({
-		mutationFn: async (id: LookId) => {
-			const res = await fetch(`/api/looks/${id}`, { method: "DELETE" });
-			await on401(res, "DELETE /api/looks/:id");
-			if (res.status === 404) throw new LookGone();
-			if (!res.ok)
-				throw new Error(`DELETE /api/looks/:id answered ${res.status}`);
-		},
+		mutationFn: (id: LookId) =>
+			request("DELETE", `/api/looks/${id}`).catch(goneAsLookGone),
 		onSuccess: (_, id) => forget(id),
 		onError: (error, id) => {
 			if (error instanceof LookGone) forget(id);
@@ -106,19 +94,14 @@ export function useDeleteLook() {
 export function useUpdateLook() {
 	const userId = useUserId();
 	const queryClient = useQueryClient();
-	const on401 = useSignOutOn401();
 	return useMutation({
-		mutationFn: async (look: LookInput) => {
-			const res = await fetch(`/api/looks/${look.id}`, {
-				method: "PUT",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify(look),
-			});
-			await on401(res, "PUT /api/looks/:id");
-			if (res.status === 404) throw new LookGone();
-			if (!res.ok) throw new Error(`PUT /api/looks/:id answered ${res.status}`);
-			return savedAnswer.parse(await res.json()).look;
-		},
+		mutationFn: async (look: LookInput) =>
+			(
+				await request("PUT", `/api/looks/${look.id}`, {
+					body: look,
+					answer: lookAnswer,
+				}).catch(goneAsLookGone)
+			).look,
 		onSuccess: (look) => {
 			// The changed look keeps its place, as the server keeps its time.
 			queryClient.setQueryData<Look[]>(looksQueryKey(userId), (old) =>

@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { z } from "zod";
-import { type ErrorCode, errorAnswer } from "./contract";
+import { type ErrorCode, errorAnswer, meAnswer } from "./contract";
 
 // Every request the web app sends to the worker goes through request(), so
 // the 401 rule, the error codes, and the contract check live here once.
@@ -74,4 +74,15 @@ export async function request(
 	if (!answer.success)
 		throw new Error(`${what}: the answer does not match the contract`);
 	return answer.data;
+}
+
+export type Me = z.output<typeof meAnswer>;
+
+// The session check. Its 401 means "no session", so it answers null and
+// never runs the 401 rule, which would make this same check run again.
+export async function fetchMe(): Promise<Me | null> {
+	const res = await fetch("/api/me");
+	if (res.status === 401) return null;
+	if (!res.ok) throw new Error(`GET /api/me answered ${res.status}`);
+	return meAnswer.parse(await res.json());
 }

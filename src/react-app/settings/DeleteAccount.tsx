@@ -6,6 +6,7 @@ import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
+import { request } from "../data/client";
 import { meQueryKey } from "../session";
 
 // The "Delete my account" row of the Settings page and its confirm.
@@ -42,14 +43,7 @@ function DeleteConfirm({ onClose }: { onClose: () => void }) {
 	const navigate = useNavigate();
 	const toast = useToast();
 	const del = useMutation({
-		mutationFn: async () => {
-			const res = await fetch("/api/account", { method: "DELETE" });
-			// No session: the session check finds none and shows sign-in.
-			if (res.status === 401)
-				void queryClient.invalidateQueries({ queryKey: meQueryKey });
-			if (res.status !== 204)
-				throw new Error(`DELETE /api/account answered ${res.status}`);
-		},
+		mutationFn: () => request("DELETE", "/api/account"),
 		onSuccess: async () => {
 			toast("Account deleted");
 			// As sign-out: a check sent before the delete still carries the old
