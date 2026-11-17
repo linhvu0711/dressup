@@ -917,6 +917,25 @@ describe("tags", () => {
 		});
 	});
 
+	test("refuses a tag name of 25 characters", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		// When
+		const { isError, text } = await ai.call("add_tag", {
+			name: "a".repeat(25),
+		});
+		// Then
+		expect({
+			isError,
+			text,
+			names: (await tags(h, ai)).map((t) => t.name),
+		}).toEqual({
+			isError: true,
+			text: "A tag name has 1 to 24 characters.",
+			names: [],
+		});
+	});
+
 	test("renames a tag", async () => {
 		// Given
 		const { h, ai } = await withAiSession();
@@ -930,6 +949,49 @@ describe("tags", () => {
 		expect({ isError, tags: await tags(h, ai) }).toEqual({
 			isError: false,
 			tags: [{ id: work, name: "Office" }],
+		});
+	});
+
+	test("refuses to rename a tag to a name already used", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		await addTag(h, ai, "Work");
+		const trip = await addTag(h, ai, "Trip");
+		// When
+		const { isError, text } = await ai.call("rename_tag", {
+			id: trip,
+			name: "work",
+		});
+		// Then
+		expect({
+			isError,
+			text,
+			names: (await tags(h, ai)).map((t) => t.name),
+		}).toEqual({
+			isError: true,
+			text: "You already have a tag called work.",
+			names: ["Work", "Trip"],
+		});
+	});
+
+	test("refuses to rename a tag to an empty name", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		const work = await addTag(h, ai, "Work");
+		// When
+		const { isError, text } = await ai.call("rename_tag", {
+			id: work,
+			name: "  ",
+		});
+		// Then
+		expect({
+			isError,
+			text,
+			names: (await tags(h, ai)).map((t) => t.name),
+		}).toEqual({
+			isError: true,
+			text: "A tag name has 1 to 24 characters.",
+			names: ["Work"],
 		});
 	});
 

@@ -4,7 +4,7 @@ import { createMiddleware } from "hono/factory";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
 import { type DressError, dressChangeSchema } from "@/dress/state";
-import { newTagSchema, tagSchema } from "@/tags/tag";
+import { tagIdSchema } from "@/tags/tag";
 import { disconnectAiApp, listAiApps } from "./ai-app-store";
 import {
 	type Auth,
@@ -24,7 +24,13 @@ import {
 	saveLook,
 } from "./look-store";
 import { mcpRoute } from "./mcp";
-import { addTag, deleteTag, listTags, renameTag } from "./tag-store";
+import {
+	addTag,
+	deleteTag,
+	listTags,
+	renameTag,
+	type TagError,
+} from "./tag-store";
 
 type User = Auth["$Infer"]["Session"]["user"];
 type AppEnv = { Bindings: Env; Variables: { auth: Auth; user: User } };
@@ -51,6 +57,11 @@ async function readBody<T extends z.ZodType>(
 const issueField = (path: readonly PropertyKey[]) =>
 	path.length === 0 ? "body" : path.map(String).join(".");
 
+type Refusal = {
+	status: ContentfulStatusCode;
+	body: { error: string; field?: string };
+};
+
 // Only the JSON shape: the Looks module runs the look rules.
 const lookBodySchema = z.object({
 	id: z.string(),
@@ -61,10 +72,7 @@ const lookBodySchema = z.object({
 	tags: z.array(z.string()).default([]),
 });
 
-function lookRefusal(error: LookError): {
-	status: ContentfulStatusCode;
-	body: Record<string, string>;
-} {
+function lookRefusal(error: LookError): Refusal {
 	switch (error.code) {
 		case "not_in_mode":
 		case "no_colour":
@@ -86,12 +94,17 @@ function lookRefusal(error: LookError): {
 	}
 }
 
-const dressRefusals: Record<
-	DressError["code"],
-	{ status: ContentfulStatusCode; field: string }
-> = {
-	not_in_row: { status: 400, field: "hex" },
-	last_square: { status: 400, field: "hex" },
+const dressRefusals: Record<DressError["code"], Refusal> = {
+	not_in_row: { status: 400, body: { error: "not_in_row", field: "hex" } },
+	last_square: { status: 400, body: { error: "last_square", field: "hex" } },
+};
+
+// The website answers every bad field with "invalid"; #60 owns the codes the
+// website and the page share.
+const tagRefusals: Record<TagError["code"], Refusal> = {
+	name_length: { status: 400, body: { error: "invalid", field: "name" } },
+	duplicate: { status: 400, body: { error: "duplicate", field: "name" } },
+	not_found: { status: 404, body: { error: "not_found" } },
 };
 
 export function createApp(getDb: (env: Env) => Db) {
@@ -179,8 +192,8 @@ export function createApp(getDb: (env: Env) => Db) {
 		if ("refused" in body) return body.refused;
 		const result = await changeDress(getDb(c.env), c.var.user.id, body.data);
 		if (!result.ok) {
-			const { status, field } = dressRefusals[result.error.code];
-			return c.json({ error: result.error.code, field }, status);
+			const { status, body } = dressRefusals[result.error.code];
+			return c.json(body, status);
 		}
 		return c.body(null, 204);
 	});
@@ -245,25 +258,36 @@ export function createApp(getDb: (env: Env) => Db) {
 	);
 
 	app.post("/tags", withAuth, requireUser, async (c) => {
-		const body = await readBody(c, newTagSchema);
+		const body = await readBody(c, z.object({ name: z.string() }));
 		if ("refused" in body) return body.refused;
 		const added = await addTag(getDb(c.env), c.var.user.id, body.data.name);
-		if (!added.ok) return c.json({ error: "duplicate", field: "name" }, 400);
-		return c.json({ tag: added.tag }, 201);
+		if (!added.ok) {
+			const { status, body } = tagRefusals[added.error.code];
+			return c.json(body, status);
+		}
+		return c.json({ tag: added.value }, 201);
 	});
 
 	// A gone tag and another account's tag answer the same 404, as looks do.
 	app.put("/tags/:id", withAuth, requireUser, async (c) => {
-		const body = await readBody(c, tagSchema);
+		const body = await readBody(
+			c,
+			z.object({ id: tagIdSchema, name: z.string() }),
+		);
 		if ("refused" in body) return body.refused;
 		if (body.data.id !== c.req.param("id"))
 			return c.json({ error: "invalid", field: "id" }, 400);
-		const renamed = await renameTag(getDb(c.env), c.var.user.id, body.data);
-		if (!renamed.ok)
-			return renamed.error === "duplicate"
-				? c.json({ error: "duplicate", field: "name" }, 400)
-				: c.json({ error: "not_found" }, 404);
-		return c.json({ tag: renamed.tag }, 200);
+		const renamed = await renameTag(
+			getDb(c.env),
+			c.var.user.id,
+			body.data.id,
+			body.data.name,
+		);
+		if (!renamed.ok) {
+			const { status, body } = tagRefusals[renamed.error.code];
+			return c.json(body, status);
+		}
+		return c.json({ tag: renamed.value }, 200);
 	});
 
 	app.delete("/tags/:id", withAuth, requireUser, async (c) => {
@@ -272,7 +296,10 @@ export function createApp(getDb: (env: Env) => Db) {
 			c.var.user.id,
 			c.req.param("id"),
 		);
-		if (!deleted) return c.json({ error: "not_found" }, 404);
+		if (!deleted.ok) {
+			const { status, body } = tagRefusals[deleted.error.code];
+			return c.json(body, status);
+		}
 		return c.body(null, 204);
 	});
 
