@@ -4,6 +4,7 @@ import { MODES, type ModeId, modeById } from "@/dress/modes";
 import { type DressError, MANNEQUIN_PARTS } from "@/dress/state";
 import { LOOK_LIMIT, LOOK_NAME_MAX, LOOK_TAGS_MAX } from "@/looks/look";
 import { TAG_NAME_MAX } from "@/tags/tag";
+import type { LookError } from "./look-store";
 
 // Every refusal an AI app gets names the value it sent and what is allowed,
 // so the AI app can fix its call and try again.
@@ -106,3 +107,28 @@ export function lookIssueText(
 			: noTag;
 	return issueText(issue, input);
 }
+
+export function lookRefusalText(error: LookError): string {
+	switch (error.code) {
+		case "not_in_mode":
+			return notInMode(error.garment, error.modeId);
+		case "no_colour":
+			return `${error.garment} needs a colour. Mode ${error.modeId} has: ${modeGarments(error.modeId)}.`;
+		case "name_too_long":
+			return `A look name has at most ${LOOK_NAME_MAX} characters.`;
+		case "too_many_tags":
+			return `A look has at most ${LOOK_TAGS_MAX} tags.`;
+		case "invalid":
+			return issueText(error.issue, error.input);
+		case "look_limit":
+			return lookLimit();
+		case "not_found":
+			return noLook;
+		case "conflict":
+		case "moved":
+			return serverError;
+	}
+}
+
+export const tagsLeftOffText = (ids: readonly string[]): string =>
+	ids.map((id) => `Left off tag ${id}: no tag with this id.`).join(" ");

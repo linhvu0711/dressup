@@ -29,7 +29,7 @@ import {
 	dressRefusalText,
 	issueText,
 	lookIssueText,
-	lookLimit,
+	lookRefusalText,
 	noLook,
 	noLooks,
 	noTag,
@@ -37,6 +37,7 @@ import {
 	serverError,
 	tagNameLength,
 	tagNameTaken,
+	tagsLeftOffText,
 	tooManyActions,
 } from "./ai-messages";
 import type { Db } from "./db";
@@ -119,6 +120,22 @@ const field = {
 
 export function registerAiActions(server: McpServer, account: Account) {
 	const { db, userId } = account;
+
+	// The look with its tags named, and a sentence first for each tag left off.
+	async function lookAnswer(changed: { look: Look; tagsLeftOff: string[] }) {
+		const { tagsLeftOff } = changed;
+		const data = {
+			look: lookView(changed.look, await listTags(db, userId)),
+			tagsLeftOff,
+		};
+		const json = JSON.stringify(data);
+		return answer(
+			data,
+			tagsLeftOff.length === 0
+				? json
+				: `${tagsLeftOffText(tagsLeftOff)}\n${json}`,
+		);
+	}
 
 	function tool<S extends z.ZodObject>(
 		name: string,
@@ -279,7 +296,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		"save_look",
 		{
 			title: "Save a look",
-			description: `Saves a new look with a mode, a colour for each garment of the mode, open jackets, a name, and tags. The outfit on the mannequin does not change. An account keeps at most ${LOOK_LIMIT} looks.`,
+			description: `Saves a new look with a mode, a colour for each garment of the mode, open jackets, a name, and tags. The outfit on the mannequin does not change. An account keeps at most ${LOOK_LIMIT} looks. A tag id that is not one of your tags is left off, and the answer names it.`,
 			annotations: WRITE,
 			inputSchema: z.object({
 				modeId: field.modeId,
@@ -299,16 +316,9 @@ export function registerAiActions(server: McpServer, account: Account) {
 				open,
 				tags,
 			};
-			const parsed = lookInputSchema.safeParse(input);
-			if (!parsed.success)
-				return refusal(lookIssueText(parsed.error.issues[0], input));
-			const accountTags = await listTags(db, userId);
-			if (!tags.every((id) => accountTags.some((t) => t.id === id)))
-				return refusal(noTag);
-			const saved = await saveLook(db, userId, parsed.data);
-			if (saved.ok) return answer({ look: lookView(saved.look, accountTags) });
-			if (saved.error === "look_limit") return refusal(lookLimit());
-			throw new Error("a new look id is taken");
+			const saved = await saveLook(db, userId, input);
+			if (!saved.ok) return refusal(lookRefusalText(saved.error));
+			return lookAnswer(saved.value);
 		},
 	);
 

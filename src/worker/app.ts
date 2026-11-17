@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { type Context, Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import type { z } from "zod";
+import { z } from "zod";
 import { type DressError, dressChangeSchema } from "@/dress/state";
 import { lookInputSchema } from "@/looks/look";
 import { newTagSchema, tagSchema } from "@/tags/tag";
@@ -17,7 +17,13 @@ import {
 import type { Db } from "./db";
 import { user } from "./db/auth-schema";
 import { changeDress, loadDress } from "./dress-store";
-import { deleteLook, listLooks, saveLook, updateLook } from "./look-store";
+import {
+	deleteLook,
+	type LookError,
+	listLooks,
+	saveLook,
+	updateLook,
+} from "./look-store";
 import { mcpRoute } from "./mcp";
 import { addTag, deleteTag, listTags, renameTag } from "./tag-store";
 
@@ -39,9 +45,46 @@ async function readBody<T extends z.ZodType>(
 	}
 	const parsed = schema.safeParse(body);
 	if (parsed.success) return { data: parsed.data };
-	const path = parsed.error.issues[0]?.path ?? [];
-	const field = path.length === 0 ? "body" : path.map(String).join(".");
+	const field = issueField(parsed.error.issues[0]?.path ?? []);
 	return { refused: c.json({ error: "invalid", field }, 400) };
+}
+
+const issueField = (path: readonly PropertyKey[]) =>
+	path.length === 0 ? "body" : path.map(String).join(".");
+
+// Only the JSON shape: the Looks module runs the look rules.
+const lookBodySchema = z.object({
+	id: z.string(),
+	modeId: z.string(),
+	name: z.string(),
+	colours: z.record(z.string(), z.string()),
+	open: z.array(z.string()),
+	tags: z.array(z.string()).default([]),
+});
+
+function lookRefusal(error: LookError): {
+	status: ContentfulStatusCode;
+	body: Record<string, string>;
+} {
+	switch (error.code) {
+		case "not_in_mode":
+		case "no_colour":
+		case "name_too_long":
+		case "too_many_tags":
+		case "invalid":
+			return {
+				status: 400,
+				body: { error: "invalid", field: issueField(error.path) },
+			};
+		case "conflict":
+			return { status: 409, body: { error: "conflict", field: "id" } };
+		case "look_limit":
+			return { status: 409, body: { error: "look_limit" } };
+		case "not_found":
+			return { status: 404, body: { error: "not_found" } };
+		case "moved":
+			return { status: 409, body: { error: "conflict" } };
+	}
 }
 
 const dressRefusals: Record<
@@ -148,14 +191,15 @@ export function createApp(getDb: (env: Env) => Db) {
 	);
 
 	app.post("/looks", withAuth, requireUser, async (c) => {
-		const body = await readBody(c, lookInputSchema);
+		const body = await readBody(c, lookBodySchema);
 		if ("refused" in body) return body.refused;
 		const saved = await saveLook(getDb(c.env), c.var.user.id, body.data);
-		if (!saved.ok)
-			return saved.error === "conflict"
-				? c.json({ error: "conflict", field: "id" }, 409)
-				: c.json({ error: "look_limit" }, 409);
-		return c.json({ look: saved.look }, saved.created ? 201 : 200);
+		if (!saved.ok) {
+			const { status, body: refused } = lookRefusal(saved.error);
+			return c.json(refused, status);
+		}
+		const { look, created, tagsLeftOff } = saved.value;
+		return c.json({ look, tagsLeftOff }, created ? 201 : 200);
 	});
 
 	// A gone look and another account's look answer the same 404, so ids of

@@ -72,7 +72,12 @@ describe("POST /api/looks", () => {
 			second: second.status,
 			body: await second.json(),
 			count: (await list(h, headers)).looks.length,
-		}).toEqual({ first: 201, second: 200, body: { look: NAVY }, count: 1 });
+		}).toEqual({
+			first: 201,
+			second: 200,
+			body: { look: NAVY, tagsLeftOff: [] },
+			count: 1,
+		});
 	});
 
 	test("stores the new name when the same save comes again with another name", async () => {
@@ -635,6 +640,30 @@ describe("tags on looks", () => {
 			tags: await tagsOfLook(res),
 			bobLinks: await links(h, "bob-id"),
 		}).toEqual({ status: 201, tags: [work], bobLinks: 0 });
+	});
+
+	test("saves a look without a gone tag and another account's tag and lists them", async () => {
+		// Given: alice has tag "Work" and deleted tag "Old"; bob posted tag "Trip"
+		const { h, headers } = await withAccount();
+		const work = await addTag(h, headers, "Work");
+		const old = await addTag(h, headers, "Old");
+		await h.app.request(
+			`/api/tags/${old}`,
+			{ method: "DELETE", headers },
+			h.env,
+		);
+		const bob = await h.addAccount(BOB);
+		const bobTrip = await addTag(h, bob, "Trip");
+		// When
+		const res = await post(h, headers, {
+			...NAVY,
+			tags: [work, old, bobTrip],
+		});
+		// Then
+		expect({ status: res.status, body: await res.json() }).toEqual({
+			status: 201,
+			body: { look: { ...NAVY, tags: [work] }, tagsLeftOff: [old, bobTrip] },
+		});
 	});
 
 	test("replaces a look's tags on a change", async () => {

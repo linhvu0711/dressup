@@ -540,6 +540,37 @@ describe("looks", () => {
 		});
 	});
 
+	test("saves a look without a gone tag and another account's tag and names them", async () => {
+		// Given: alice has tag "Work" and deleted tag "Old"; bob posted tag "Trip"
+		const { h, ai } = await withAiSession();
+		const work = await addTag(h, ai, "Work");
+		const old = await addTag(h, ai, "Old");
+		await send(h, ai.jar, `/api/tags/${old}`, { method: "DELETE" });
+		const bob = await asBob(h);
+		const bobTrip = (
+			(await (await bob("POST", "/api/tags", { name: "Trip" })).json()) as {
+				tag: { id: string };
+			}
+		).tag.id;
+		// When
+		const { isError, text, data } = await ai.call("save_look", {
+			...NAVY_SAVE,
+			tags: [work, old, bobTrip],
+		});
+		// Then
+		expect({
+			isError,
+			said: text.split("\n")[0],
+			leftOff: (data as { tagsLeftOff: string[] }).tagsLeftOff,
+			tags: (await looks(h, ai))[0]?.tags,
+		}).toEqual({
+			isError: false,
+			said: `Left off tag ${old}: no tag with this id. Left off tag ${bobTrip}: no tag with this id.`,
+			leftOff: [old, bobTrip],
+			tags: [work],
+		});
+	});
+
 	test("refuses a save at 300 looks", async () => {
 		// Given: alice has 300 looks
 		const { h, ai, userId } = await withAiSession();

@@ -12,16 +12,38 @@ import {
 import type { GarmentId, Hex, JacketId } from "@/dress/garments";
 import type { ModeId } from "@/dress/modes";
 import {
+	checkLook,
 	LOOK_LIMIT,
 	type Look,
 	type LookId,
 	type LookInput,
+	type LookProblem,
 } from "@/looks/look";
 import type { TagId } from "@/tags/tag";
 import type { Db } from "./db";
 import { user } from "./db/auth-schema";
 import { look } from "./db/look-schema";
 import { lookTag, tag } from "./db/tag-schema";
+import type { Result } from "./result";
+
+// A look as a website or an AI app sends it, before the look rules ran.
+export type LookDraft = {
+	id: string;
+	modeId: string;
+	name: string;
+	colours: Record<string, string>;
+	open: string[];
+	tags: string[];
+};
+
+export type LookError =
+	| LookProblem
+	| { code: "conflict" }
+	| { code: "look_limit" }
+	| { code: "not_found" }
+	| { code: "moved" };
+
+export type SavedLook = { look: Look; created: boolean; tagsLeftOff: string[] };
 
 type Link = { lookId: string; tagId: string };
 
@@ -49,8 +71,8 @@ const tagLinks = (db: Db, userId: string, lookId?: string) =>
 		.orderBy(asc(tag.createdAt), asc(sql`${tag}.rowid`));
 
 // Only the account's own tags go on the look, and only when the look is the
-// account's: an id from another account writes no row. With a mode, only
-// while the look still has that mode, so a refused change writes no tag.
+// account's; the action lists every other id in tagsLeftOff. With a mode,
+// only while the look still has that mode, so a refused change writes no tag.
 const tagWrites = (
 	db: Db,
 	userId: string,
@@ -91,6 +113,10 @@ const tagWrites = (
 	return [clear, insert];
 };
 
+// The ids sent, once each and in the order sent, that did not go on the look.
+const leftOff = (sent: string[], kept: TagId[]): string[] =>
+	[...new Set(sent)].filter((id) => !(kept as string[]).includes(id));
+
 export async function listLooks(db: Db, userId: string): Promise<Look[]> {
 	const [rows, links] = await db.batch([
 		db
@@ -112,11 +138,11 @@ export async function listLooks(db: Db, userId: string): Promise<Look[]> {
 export async function saveLook(
 	db: Db,
 	userId: string,
-	input: LookInput,
-): Promise<
-	| { ok: true; look: Look; created: boolean }
-	| { ok: false; error: "conflict" | "look_limit" }
-> {
+	draft: LookDraft,
+): Promise<Result<SavedLook, LookError>> {
+	const checked = checkLook(draft);
+	if (!checked.ok) return { ok: false, error: checked.problem };
+	const input = checked.look;
 	const [before] = await db
 		.select({ id: look.id })
 		.from(look)
@@ -175,13 +201,17 @@ export async function saveLook(
 		tagLinks(db, userId, input.id),
 	]);
 	const [row] = rows;
-	if (row)
-		return {
-			ok: true,
-			look: toLook(row, rest.at(-1) as Link[]),
+	if (!row)
+		return { ok: false, error: { code: before ? "conflict" : "look_limit" } };
+	const saved = toLook(row, rest.at(-1) as Link[]);
+	return {
+		ok: true,
+		value: {
+			look: saved,
 			created: !before,
-		};
-	return { ok: false, error: before ? "conflict" : "look_limit" };
+			tagsLeftOff: leftOff(draft.tags, saved.tags),
+		},
+	};
 }
 
 // Changes only a look the account has; a gone id is not made again, as
