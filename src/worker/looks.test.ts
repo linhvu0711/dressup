@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { lookInputSchema } from "@/looks/look";
+import { schema } from "./db";
 import { changeLook, listLooks, saveLook } from "./look-store";
-import { BOB, type Harness, seedLooks, withAccount } from "./test/harness";
+import { BOB, type Harness, withAccount } from "./test/harness";
 
 const NAVY = {
 	id: "11111111-1111-4111-8111-111111111111",
@@ -38,8 +39,7 @@ const list = async ({ app, env }: Harness, headers: Headers) =>
 		looks: { name: string }[];
 	};
 
-const lookCount = (h: Harness) =>
-	h.sqlite.query("select count(*) as n from look").get();
+const lookCount = async (h: Harness) => (await h.rows(schema.look)).length;
 
 describe("POST /api/looks", () => {
 	test("saves a look and lists it", async () => {
@@ -116,11 +116,11 @@ describe("POST /api/looks", () => {
 		expect({
 			status: res.status,
 			body: await res.json(),
-			rows: h.sqlite.query("select count(*) as n from look").get(),
+			rows: await lookCount(h),
 		}).toEqual({
 			status: 401,
 			body: { error: "unauthorized" },
-			rows: { n: 0 },
+			rows: 0,
 		});
 	});
 
@@ -247,31 +247,31 @@ describe("POST /api/looks at the look limit", () => {
 	test("refuses look number 301", async () => {
 		// Given: alice signed in with 300 looks
 		const { h, headers } = await withAccount();
-		seedLooks(h, "alice-id", 300);
+		await h.seedLooks("alice-id", 300);
 		// When
 		const res = await post(h, headers, NAVY);
 		// Then
 		expect({
 			status: res.status,
 			body: await res.json(),
-			count: lookCount(h),
+			count: await lookCount(h),
 		}).toEqual({
 			status: 409,
 			body: { error: "look_limit" },
-			count: { n: 300 },
+			count: 300,
 		});
 	});
 
 	test("saves look number 300", async () => {
 		// Given: alice signed in with 299 looks
 		const { h, headers } = await withAccount();
-		seedLooks(h, "alice-id", 299);
+		await h.seedLooks("alice-id", 299);
 		// When
 		const res = await post(h, headers, NAVY);
 		// Then
-		expect({ status: res.status, count: lookCount(h) }).toEqual({
+		expect({ status: res.status, count: await lookCount(h) }).toEqual({
 			status: 201,
-			count: { n: 300 },
+			count: 300,
 		});
 	});
 
@@ -279,15 +279,15 @@ describe("POST /api/looks at the look limit", () => {
 		// Given: alice saved NAVY and has 300 looks
 		const { h, headers } = await withAccount();
 		await post(h, headers, NAVY);
-		seedLooks(h, "alice-id", 299);
+		await h.seedLooks("alice-id", 299);
 		// When
 		const res = await post(h, headers, { ...NAVY, name: "Navy night" });
 		// Then
 		expect({
 			status: res.status,
 			name: ((await res.json()) as { look: { name: string } }).look.name,
-			count: lookCount(h),
-		}).toEqual({ status: 200, name: "Navy night", count: { n: 300 } });
+			count: await lookCount(h),
+		}).toEqual({ status: 200, name: "Navy night", count: 300 });
 	});
 });
 
@@ -401,11 +401,11 @@ describe("DELETE /api/looks/:id", () => {
 		expect({
 			status: res.status,
 			body: await res.json(),
-			rows: h.sqlite.query("select count(*) as n from look").get(),
+			rows: await lookCount(h),
 		}).toEqual({
 			status: 401,
 			body: { error: "unauthorized" },
-			rows: { n: 1 },
+			rows: 1,
 		});
 	});
 });
@@ -471,11 +471,11 @@ describe("PUT /api/looks/:id", () => {
 		expect({
 			statuses: [first.status, second.status],
 			names: await names(h, headers),
-			rows: h.sqlite.query("select count(*) as n from look").get(),
+			rows: await lookCount(h),
 		}).toEqual({
 			statuses: [200, 200],
 			names: ["Navy night"],
-			rows: { n: 1 },
+			rows: 1,
 		});
 	});
 
@@ -576,11 +576,9 @@ describe("look rows", () => {
 		await post(h, headers, NAVY);
 		await post(h, headers, { ...NAVY, id: SECOND_ID });
 		// When
-		h.sqlite.run("delete from user where id = 'alice-id'");
+		await h.helpers.deleteUser("alice-id");
 		// Then
-		expect(h.sqlite.query("select count(*) as n from look").get()).toEqual({
-			n: 0,
-		});
+		expect(await lookCount(h)).toBe(0);
 	});
 });
 
@@ -605,12 +603,8 @@ const addTag = async ({ app, env }: Harness, headers: Headers, name: string) =>
 const tagsOfLook = async (res: Response) =>
 	((await res.json()) as { look: { tags: string[] } }).look.tags;
 
-const links = (h: Harness, userId: string) =>
-	(
-		h.sqlite
-			.query("select count(*) as n from look_tag where user_id = ?")
-			.get(userId) as { n: number }
-	).n;
+const links = async (h: Harness, userId: string) =>
+	(await h.rows(schema.lookTag, userId)).length;
 
 describe("tags on looks", () => {
 	test("saves a look with two tags and lists them in the order they were made", async () => {
@@ -639,7 +633,7 @@ describe("tags on looks", () => {
 		expect({
 			status: res.status,
 			tags: await tagsOfLook(res),
-			bobLinks: links(h, "bob-id"),
+			bobLinks: await links(h, "bob-id"),
 		}).toEqual({ status: 201, tags: [work], bobLinks: 0 });
 	});
 
@@ -669,7 +663,7 @@ describe("tags on looks", () => {
 		expect({
 			second: second.status,
 			tags: await tagsOfLook(second),
-			links: links(h, "alice-id"),
+			links: await links(h, "alice-id"),
 		}).toEqual({ second: 200, tags: [work], links: 1 });
 	});
 
@@ -696,7 +690,7 @@ describe("two look changes made from one read", () => {
 		// writes. Two calls through the harness do not overlap, so the test
 		// sets the order itself.
 		const { h } = await withAccount();
-		const { db } = h.settings;
+		const { db } = h;
 		await saveLook(db, "alice-id", lookInputSchema.parse(NAVY));
 		const [read] = await listLooks(db, "alice-id");
 		// When
@@ -728,7 +722,7 @@ describe("two look saves at once", () => {
 	test("saves one of two looks sent at once at look 299", async () => {
 		// Given
 		const { h } = await withAccount();
-		await seedLooks(h, "alice-id", 299);
+		await h.seedLooks("alice-id", 299);
 		const first = lookInputSchema.parse({ ...NAVY, id: SECOND_ID });
 		const second = lookInputSchema.parse({
 			...NAVY,
@@ -736,13 +730,13 @@ describe("two look saves at once", () => {
 		});
 		// When
 		const results = await Promise.all([
-			saveLook(h.settings.db, "alice-id", first),
-			saveLook(h.settings.db, "alice-id", second),
+			saveLook(h.db, "alice-id", first),
+			saveLook(h.db, "alice-id", second),
 		]);
 		// Then
 		expect({
-			count: h.sqlite.query("select count(*) as n from look").get(),
+			count: await lookCount(h),
 			oks: results.map((r) => r.ok).sort(),
-		}).toEqual({ count: { n: 300 }, oks: [false, true] });
+		}).toEqual({ count: 300, oks: [false, true] });
 	});
 });

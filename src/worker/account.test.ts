@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { schema } from "./db";
 import {
 	finishGoogleSignIn,
 	googleUser,
@@ -56,31 +57,32 @@ async function fillAccount(h: Harness, jar: Jar, lookId = NAVY.id) {
 	expect((await sendJson(h, jar, "/api/looks", look)).status).toBe(201);
 }
 
-const TABLES = [
-	["user", "id"],
-	["session", "user_id"],
-	["account", "user_id"],
-	["colour_square", "user_id"],
-	["outfit", "user_id"],
-	["outfit_garment", "user_id"],
-	["mannequin", "user_id"],
-	["look", "user_id"],
-	["tag", "user_id"],
-	["look_tag", "user_id"],
-] as const;
+const TABLES = {
+	session: schema.session,
+	account: schema.account,
+	colour_square: schema.colourSquare,
+	outfit: schema.outfit,
+	outfit_garment: schema.outfitGarment,
+	mannequin: schema.mannequin,
+	look: schema.look,
+	tag: schema.tag,
+	look_tag: schema.lookTag,
+};
 
-function rowsOf(h: Harness, userId: string) {
-	return Object.fromEntries(
-		TABLES.map(([table, column]) => [
-			table,
-			(
-				h.sqlite
-					.query(`select count(*) as n from ${table} where ${column} = ?`)
-					.get(userId) as { n: number }
-			).n,
-		]),
-	);
+async function rowsOf(h: Harness, userId: string) {
+	const counts: Record<string, number> = {
+		user: (await h.rows(schema.user)).filter((row) => row.id === userId).length,
+	};
+	for (const [name, table] of Object.entries(TABLES))
+		counts[name] = (await h.rows(table, userId)).length;
+	return counts;
 }
+
+const AI_TABLES = {
+	oauth_consent: schema.oauthConsent,
+	oauth_refresh_token: schema.oauthRefreshToken,
+	oauth_access_token: schema.oauthAccessToken,
+};
 
 const NONE = {
 	user: 0,
@@ -95,8 +97,7 @@ const NONE = {
 	look_tag: 0,
 };
 
-const userCount = (h: Harness) =>
-	h.sqlite.query("select count(*) as n from user").get();
+const userCount = async (h: Harness) => (await h.rows(schema.user)).length;
 
 describe("DELETE /api/account", () => {
 	async function aliceWithRows() {
@@ -116,7 +117,7 @@ describe("DELETE /api/account", () => {
 		// When
 		const res = await deleteAccount(h, jar);
 		// Then
-		expect({ status: res.status, rows: rowsOf(h, aliceId) }).toEqual({
+		expect({ status: res.status, rows: await rowsOf(h, aliceId) }).toEqual({
 			status: 204,
 			rows: NONE,
 		});
@@ -141,13 +142,13 @@ describe("DELETE /api/account", () => {
 		const bob = await googleSignIn(h);
 		const bobId = ((await me(h, bob)).body as { id: string }).id;
 		await fillAccount(h, bob, "22222222-2222-4222-8222-222222222222");
-		const bobBefore = rowsOf(h, bobId);
+		const bobBefore = await rowsOf(h, bobId);
 		// When
 		await deleteAccount(h, alice);
 		// Then
 		const bobMe = await me(h, bob);
 		expect({
-			rows: rowsOf(h, bobId),
+			rows: await rowsOf(h, bobId),
 			filled: Object.values(bobBefore).every((n) => n >= 1),
 			me: {
 				status: bobMe.status,
@@ -163,8 +164,8 @@ describe("DELETE /api/account", () => {
 	test("keeps the account and the session when the delete fails", async () => {
 		// Given: alice with rows; the user row cannot be deleted
 		const { h, jar, aliceId } = await aliceWithRows();
-		const before = rowsOf(h, aliceId);
-		h.sqlite.run(
+		const before = await rowsOf(h, aliceId);
+		h.addTrigger(
 			"CREATE TRIGGER no_delete BEFORE DELETE ON user BEGIN SELECT RAISE(ABORT, 'no delete'); END",
 		);
 		// When
@@ -173,7 +174,7 @@ describe("DELETE /api/account", () => {
 		const after = await me(h, jar);
 		expect({
 			status: res.status,
-			rows: rowsOf(h, aliceId),
+			rows: await rowsOf(h, aliceId),
 			me: {
 				status: after.status,
 				email: (after.body as { email: string }).email,
@@ -192,7 +193,7 @@ describe("DELETE /api/account", () => {
 		// When: the same old cookies, whose cache cookie still lets them in
 		const res = await deleteAccount(h, jar);
 		// Then
-		expect({ status: res.status, rows: rowsOf(h, aliceId) }).toEqual({
+		expect({ status: res.status, rows: await rowsOf(h, aliceId) }).toEqual({
 			status: 204,
 			rows: NONE,
 		});
@@ -234,11 +235,11 @@ describe("DELETE /api/account", () => {
 		expect({
 			status: res.status,
 			body: await res.json(),
-			users: userCount(h),
+			users: await userCount(h),
 		}).toEqual({
 			status: 401,
 			body: { error: "unauthorized" },
-			users: { n: 1 },
+			users: 1,
 		});
 	});
 
@@ -246,24 +247,21 @@ describe("DELETE /api/account", () => {
 		// Given: alice through connectAiApp, so she has 1 oauth_consent and 1
 		// oauth_refresh_token row
 		const { h, jar, userId: aliceId } = await withAiApp();
-		const count = (table: string) =>
-			(
-				h.sqlite
-					.query(`select count(*) as n from ${table} where user_id = ?`)
-					.get(aliceId) as { n: number }
-			).n;
-		expect([count("oauth_consent"), count("oauth_refresh_token")]).toEqual([
-			1, 1,
-		]);
+		const count = async (table: keyof typeof AI_TABLES) =>
+			(await h.rows(AI_TABLES[table], aliceId)).length;
+		expect([
+			await count("oauth_consent"),
+			await count("oauth_refresh_token"),
+		]).toEqual([1, 1]);
 		// When
 		const res = await deleteAccount(h, jar);
 		// Then
 		expect({
 			status: res.status,
 			rows: {
-				oauth_consent: count("oauth_consent"),
-				oauth_refresh_token: count("oauth_refresh_token"),
-				oauth_access_token: count("oauth_access_token"),
+				oauth_consent: await count("oauth_consent"),
+				oauth_refresh_token: await count("oauth_refresh_token"),
+				oauth_access_token: await count("oauth_access_token"),
 			},
 		}).toEqual({
 			status: 204,
@@ -275,17 +273,12 @@ describe("DELETE /api/account", () => {
 		// Given: alice took one AI action
 		const { h, ai } = await withAiSession();
 		await ai.call("list_tags");
-		const count = () =>
-			(
-				h.sqlite.query("select count(*) as n from ai_action_count").get() as {
-					n: number;
-				}
-			).n;
-		expect(count()).toBe(1);
+		const count = async () => (await h.rows(schema.aiActionCount)).length;
+		expect(await count()).toBe(1);
 		// When
 		const res = await deleteAccount(h, ai.jar);
 		// Then
-		expect({ status: res.status, rows: count() }).toEqual({
+		expect({ status: res.status, rows: await count() }).toEqual({
 			status: 204,
 			rows: 0,
 		});

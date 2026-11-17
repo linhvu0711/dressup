@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { BetterAuthOptions } from "better-auth";
 import { createApp } from "./app";
 import { type Auth, authOptions, createAuthCache } from "./auth";
+import { schema } from "./db";
 import {
 	BOB,
 	cookie,
@@ -66,15 +67,11 @@ describe("GET /api/me", () => {
 describe("migrations", () => {
 	test("makes the auth, dress, look, and tag tables from the migrations", async () => {
 		// Given
-		const { sqlite } = await makeHarness();
+		const h = await makeHarness();
 		// When
-		const rows = sqlite
-			.query<{ name: string }, []>(
-				"select name from sqlite_master where type = 'table' order by name",
-			)
-			.all();
+		const names = h.tables();
 		// Then
-		expect(rows.map((r) => r.name)).toEqual([
+		expect(names).toEqual([
 			"__drizzle_migrations",
 			"account",
 			"ai_action_count",
@@ -152,12 +149,13 @@ describe("Google sign-in", () => {
 		);
 		const { res: second, jar: secondJar } = await signIn(h);
 		// Then
-		const ids = h.sqlite.query<{ id: string }, []>("select id from user").all();
-		const accounts = h.sqlite
-			.query<{ provider_id: string; account_id: string }, []>(
-				"select provider_id, account_id from account",
-			)
-			.all();
+		const ids = await h.rows(schema.user);
+		const accounts = (await h.rows(schema.account)).map(
+			({ providerId, accountId }) => ({
+				provider_id: providerId,
+				account_id: accountId,
+			}),
+		);
 		const meBody = (await me.json()) as {
 			id: string;
 			name: string;
@@ -212,8 +210,7 @@ describe("sign-up switch", () => {
 		env: { ...h.env, SIGNUPS_CLOSED: value } as unknown as Env,
 	});
 
-	const users = (h: Harness) =>
-		h.sqlite.query("select count(*) as n from user").get();
+	const users = async (h: Harness) => (await h.rows(schema.user)).length;
 
 	test("refuses a new Google account while sign-ups are closed", async () => {
 		// Given: no user; sign-ups closed
@@ -225,11 +222,11 @@ describe("sign-up switch", () => {
 		expect({
 			status: res.status,
 			location: res.headers.get("location"),
-			users: users(h),
+			users: await users(h),
 		}).toEqual({
 			status: 302,
 			location: "/?error=signup_disabled",
-			users: { n: 0 },
+			users: 0,
 		});
 	});
 
@@ -268,11 +265,11 @@ describe("sign-up switch", () => {
 		expect({
 			status: res.status,
 			location: res.headers.get("location"),
-			users: users(h),
+			users: await users(h),
 		}).toEqual({
 			status: 302,
 			location: "/?error=signup_disabled",
-			users: { n: 0 },
+			users: 0,
 		});
 	});
 
@@ -288,7 +285,7 @@ describe("sign-up switch", () => {
 				value: value ?? "not set",
 				status: res.status,
 				location: res.headers.get("location"),
-				users: users(h),
+				users: await users(h),
 			});
 		}
 		// Then
@@ -297,7 +294,7 @@ describe("sign-up switch", () => {
 				value,
 				status: 302,
 				location: "/",
-				users: { n: 1 },
+				users: 1,
 			})),
 		);
 	});
@@ -307,10 +304,10 @@ describe("session cookie cache", () => {
 	test("reads a cached session without the database", async () => {
 		// Given: alice signed in, with only her session token cookie
 		const { h, headers } = await withAccount();
-		const { app, env, sqlite } = h;
+		const { app, env } = h;
 		// When
 		const first = await app.request("/api/me", { headers }, env);
-		sqlite.run("delete from session");
+		await h.db.delete(schema.session);
 		const cache = first.headers
 			.getSetCookie()
 			.map((c) => c.split(";")[0])
@@ -337,7 +334,7 @@ describe("Better Auth per isolate", () => {
 		let builds = 0;
 		const app = createApp(() => {
 			builds += 1;
-			return h.settings.db;
+			return h.db;
 		});
 		// When
 		await app.request("/api/auth/get-session", {}, h.env);

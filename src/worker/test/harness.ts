@@ -1,8 +1,11 @@
 import { Database } from "bun:sqlite";
+import { readFileSync } from "node:fs";
 import { betterAuth } from "better-auth";
 import { testUtils } from "better-auth/plugins";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
+import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 import { createApp } from "../app";
 import { type AuthSettings, authOptions, createClientDiscovery } from "../auth";
 import { type Db, schema } from "../db";
@@ -68,7 +71,75 @@ export async function makeHarness() {
 		await helpers.saveUser(helpers.createUser(person));
 		return helpers.getAuthHeaders({ userId: person.id });
 	};
-	return { app, env, helpers, settings, sqlite, addAccount };
+	// Every row of a table, or the rows of one account; in no set order.
+	async function rows<T extends SQLiteTable>(
+		table: T,
+	): Promise<T["$inferSelect"][]>;
+	async function rows<T extends SQLiteTable & { userId: SQLiteColumn }>(
+		table: T,
+		userId: string,
+	): Promise<T["$inferSelect"][]>;
+	async function rows(
+		table: SQLiteTable & { userId?: SQLiteColumn },
+		userId?: string,
+	) {
+		const query = db.select().from(table);
+		if (userId === undefined || !table.userId) return query;
+		return query.where(eq(table.userId, userId));
+	}
+	const tables = () =>
+		sqlite
+			.query<{ name: string }, []>(
+				"select name from sqlite_master where type = 'table' order by name",
+			)
+			.all()
+			.map((row) => row.name);
+	// Writes n valid looks for the account in one insert, so a test can reach
+	// the look limit without 300 requests.
+	const seedLooks = async (userId: string, n: number) => {
+		await db.insert(schema.look).values(
+			Array.from({ length: n }, (_, i) => ({
+				id: `00000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`,
+				userId,
+				modeId: "polo-sweater-harrington",
+				name: "",
+				colours: {
+					chino_p: "#C9B38C",
+					polo_l: "#F3F1EC",
+					sweater: "#1F3A5F",
+					harrington: "#55633F",
+				} as const,
+				open: [],
+			})),
+		);
+	};
+	// The one door for raw SQL: a trigger that makes a write fail, or races it.
+	const addTrigger = (sql: string) => {
+		if (!/^\s*CREATE TRIGGER\b/.test(sql))
+			throw new Error("addTrigger takes only CREATE TRIGGER");
+		sqlite.run(sql);
+	};
+	// Runs a migration again, as a Worker deploy would on a live database.
+	const runMigration = (tag: string) => {
+		const statements = readFileSync(`migrations/${tag}.sql`, "utf8")
+			.split("--> statement-breakpoint")
+			.map((statement) => statement.trim())
+			.filter((statement) => statement !== "");
+		for (const statement of statements) sqlite.run(statement);
+	};
+	return {
+		app,
+		env,
+		helpers,
+		settings,
+		db,
+		addAccount,
+		rows,
+		tables,
+		seedLooks,
+		addTrigger,
+		runMigration,
+	};
 }
 
 export type Harness = Awaited<ReturnType<typeof makeHarness>>;
@@ -441,19 +512,6 @@ export async function aiSession(h: Harness) {
 		return result.tools;
 	};
 	return { jar, call, list };
-}
-
-// Writes n valid looks for the user straight into the table, so a test can
-// reach the look limit without 300 requests.
-export function seedLooks(h: Harness, userId: string, n: number) {
-	h.sqlite.run(
-		`INSERT INTO look (id, user_id, mode_id, name, colours, open)
-		WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?)
-		SELECT printf('00000000-0000-4000-8000-%012d', i), ?, 'polo-sweater-harrington', '',
-			'{"chino_p":"#C9B38C","polo_l":"#F3F1EC","sweater":"#1F3A5F","harrington":"#55633F"}', '[]'
-		FROM n`,
-		[n, userId],
-	);
 }
 
 const accountId = async (h: Harness, jar: Jar) =>

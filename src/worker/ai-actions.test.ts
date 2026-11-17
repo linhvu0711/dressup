@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
+import { schema } from "./db";
 import {
 	type aiSession,
 	BOB,
 	type Harness,
-	seedLooks,
 	send,
 	withAiSession,
 } from "./test/harness";
@@ -71,8 +71,7 @@ const looks = async (h: Harness, ai: Session) =>
 		}
 	).looks;
 
-const lookCount = (h: Harness) =>
-	h.sqlite.query("select count(*) as n from look").get();
+const lookCount = async (h: Harness) => (await h.rows(schema.look)).length;
 
 const NAVY = {
 	id: "11111111-1111-4111-8111-111111111111",
@@ -420,14 +419,14 @@ describe("looks", () => {
 	test("refuses a save at 300 looks", async () => {
 		// Given: alice has 300 looks
 		const { h, ai, userId } = await withAiSession();
-		seedLooks(h, userId, 300);
+		await h.seedLooks(userId, 300);
 		// When
 		const { isError, text } = await ai.call("save_look", NAVY_SAVE);
 		// Then
-		expect({ isError, text, count: lookCount(h) }).toEqual({
+		expect({ isError, text, count: await lookCount(h) }).toEqual({
 			isError: true,
 			text: "You have 300 looks, the limit. Delete one first.",
-			count: { n: 300 },
+			count: 300,
 		});
 	});
 
@@ -435,7 +434,7 @@ describe("looks", () => {
 		// Given: the look row goes in, then the batch fails at its tag row
 		const { h, ai } = await withAiSession();
 		const work = await addTag(h, ai, "Work");
-		h.sqlite.run(
+		h.addTrigger(
 			"CREATE TRIGGER fail_tag BEFORE INSERT ON look_tag BEGIN SELECT RAISE(ABORT, 'disk full'); END",
 		);
 		// When
@@ -444,10 +443,10 @@ describe("looks", () => {
 			tags: [work],
 		});
 		// Then
-		expect({ isError, text, count: lookCount(h) }).toEqual({
+		expect({ isError, text, count: await lookCount(h) }).toEqual({
 			isError: true,
 			text: "dressup could not do this. Try again.",
-			count: { n: 0 },
+			count: 0,
 		});
 	});
 });
@@ -494,7 +493,7 @@ describe("look changes", () => {
 		// look and before it writes. change_look's first batch is its read of
 		// the looks, its second its write.
 		const { h, ai } = await withNavy();
-		const db = h.settings.db;
+		const { db } = h;
 		const batch = db.batch.bind(db);
 		let batches = 0;
 		const writeAfterPage: typeof batch = async (items) => {

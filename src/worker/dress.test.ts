@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { applyChange, type DressChange } from "@/dress/state";
+import { schema } from "./db";
 import { loadDress, saveDress } from "./dress-store";
 import { BOB, type Harness, withAccount } from "./test/harness";
 
@@ -60,18 +61,16 @@ describe("GET /api/dress", () => {
 	test("writes the starter set once when asked twice", async () => {
 		// Given: alice, signed in, with no dress rows
 		const { h, headers } = await withAccount();
-		const { app, env, sqlite } = h;
+		const { app, env } = h;
 		// When
 		await app.request("/api/dress", { headers }, env);
 		await app.request("/api/dress", { headers }, env);
 		// Then
-		const count = (table: string) =>
-			sqlite
-				.query<{ n: number }, []>(
-					`select count(*) as n from ${table} where user_id = 'alice-id'`,
-				)
-				.get()?.n;
-		expect([count("colour_square"), count("outfit_garment")]).toEqual([58, 17]);
+		const counts = [
+			(await h.rows(schema.colourSquare, "alice-id")).length,
+			(await h.rows(schema.outfitGarment, "alice-id")).length,
+		];
+		expect(counts).toEqual([58, 17]);
 	});
 
 	test("removes the colours and outfit with the user", async () => {
@@ -79,23 +78,15 @@ describe("GET /api/dress", () => {
 		const { h, headers } = await withAccount();
 		await h.app.request("/api/dress", { headers }, h.env);
 		await post(h, headers, { kind: "mannequin", part: "skin", hex: "#8D5524" });
-		const { sqlite } = h;
 		// When
-		sqlite.run("delete from user where id = 'alice-id'");
+		await h.helpers.deleteUser("alice-id");
 		// Then
 		const counts = [
-			"colour_square",
-			"outfit",
-			"outfit_garment",
-			"mannequin",
-		].map(
-			(table) =>
-				sqlite
-					.query<{ n: number }, []>(
-						`select count(*) as n from ${table} where user_id = 'alice-id'`,
-					)
-					.get()?.n,
-		);
+			(await h.rows(schema.colourSquare, "alice-id")).length,
+			(await h.rows(schema.outfit, "alice-id")).length,
+			(await h.rows(schema.outfitGarment, "alice-id")).length,
+			(await h.rows(schema.mannequin, "alice-id")).length,
+		];
 		expect(counts).toEqual([0, 0, 0, 0]);
 	});
 
@@ -255,11 +246,7 @@ describe("POST /api/dress/changes", () => {
 		const second = await post(h, headers, skin);
 		const s = await get(h, headers);
 		// Then
-		const rows = h.sqlite
-			.query<{ n: number }, []>(
-				"select count(*) as n from mannequin where user_id = 'alice-id'",
-			)
-			.get()?.n;
+		const rows = (await h.rows(schema.mannequin, "alice-id")).length;
 		expect({
 			statuses: [first.status, second.status],
 			mannequin: s.mannequin,
@@ -432,7 +419,7 @@ describe("POST /api/dress/changes", () => {
 
 // Two requests that each read the stored state before either writes.
 async function atOnce(h: Harness, changes: DressChange[]) {
-	const db = h.settings.db;
+	const { db } = h;
 	const reads = await Promise.all(changes.map(() => loadDress(db, "alice-id")));
 	for (const [i, stored] of reads.entries()) {
 		const result = applyChange(stored.state, changes[i]);

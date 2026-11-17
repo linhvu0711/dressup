@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import type { SQLiteTable } from "drizzle-orm/sqlite-core";
+import { schema } from "./db";
 import {
 	BOB,
 	cookie,
@@ -16,18 +18,17 @@ const send = (
 	headers: HeadersInit = {},
 ) => h.app.request(path, { method, headers }, h.env);
 
-const count = (h: Harness, table: string) =>
-	(h.sqlite.query(`select count(*) as n from ${table}`).get() as { n: number })
-		.n;
+const count = async (h: Harness, table: SQLiteTable) =>
+	(await h.rows(table)).length;
 
 describe("/api/ai-apps", () => {
 	// Alice connected the test app on 2026-11-14 at 12:00 UTC; its allow row
 	// has the fixed id "allow-1".
 	async function aliceConnected() {
 		const { h, jar, bearer, userId } = await withAiApp();
-		h.sqlite.run(
-			"update oauth_consent set id = 'allow-1', created_at = 1794657600000",
-		);
+		await h.db
+			.update(schema.oauthConsent)
+			.set({ id: "allow-1", createdAt: new Date(1794657600000) });
 		return {
 			h,
 			alice: { cookie: cookie(jar) },
@@ -60,7 +61,7 @@ describe("/api/ai-apps", () => {
 	test("names an AI app with no name by its client id", async () => {
 		// Given: the app's document gave no name and no logo
 		const { h, alice } = await aliceConnected();
-		h.sqlite.run("update oauth_client set name = null, icon = null");
+		await h.db.update(schema.oauthClient).set({ name: null, icon: null });
 		// When
 		const res = await send(h, "GET", "/api/ai-apps", alice);
 		// Then
@@ -99,8 +100,8 @@ describe("/api/ai-apps", () => {
 		const mcp = await post(h, INITIALIZE, bearer);
 		expect({
 			status: res.status,
-			allows: count(h, "oauth_consent"),
-			refreshTokens: count(h, "oauth_refresh_token"),
+			allows: await count(h, schema.oauthConsent),
+			refreshTokens: await count(h, schema.oauthRefreshToken),
 			apps: ((await list.json()) as { apps: unknown[] }).apps,
 			mcp: mcp.status,
 		}).toEqual({
@@ -122,8 +123,8 @@ describe("/api/ai-apps", () => {
 		expect({
 			status: res.status,
 			body: await res.json(),
-			allows: count(h, "oauth_consent"),
-			refreshTokens: count(h, "oauth_refresh_token"),
+			allows: await count(h, schema.oauthConsent),
+			refreshTokens: await count(h, schema.oauthRefreshToken),
 		}).toEqual({
 			status: 404,
 			body: { error: "not_found" },
@@ -142,45 +143,43 @@ describe("/api/ai-apps", () => {
 		expect({
 			first: first.status,
 			second: second.status,
-			allows: count(h, "oauth_consent"),
-			refreshTokens: count(h, "oauth_refresh_token"),
+			allows: await count(h, schema.oauthConsent),
+			refreshTokens: await count(h, schema.oauthRefreshToken),
 		}).toEqual({ first: 204, second: 404, allows: 0, refreshTokens: 0 });
 	});
 
 	test("keeps the tokens of other AI apps and other accounts", async () => {
 		// Given: alice also holds a token of another app; bob holds one of the
 		// test app. The Google sign-in gives alice a random id.
-		const { h, alice } = await aliceConnected();
+		const { h, alice, userId: aliceId } = await aliceConnected();
 		await h.addAccount(BOB);
-		const { id: aliceId } = h.sqlite
-			.query("select id from user where email = 'alice@example.com'")
-			.get() as { id: string };
-		h.sqlite.run(
-			`insert into oauth_client (id, client_id, redirect_uris)
-			 values ('other', 'https://other.example/meta.json', '["http://127.0.0.1/callback"]')`,
-		);
-		const insertToken = h.sqlite.prepare(
-			`insert into oauth_refresh_token
-			 (id, token, client_id, user_id, expires_at, created_at, scopes)
-			 values (?, ?, ?, ?, 1894657600000, 1794657600000, '["openid"]')`,
-		);
-		insertToken.run(
-			"rt-alice-other",
-			"token-alice-other",
-			"https://other.example/meta.json",
-			aliceId,
-		);
-		insertToken.run("rt-bob-test", "token-bob-test", TEST_APP_ID, "bob-id");
+		await h.db.insert(schema.oauthClient).values({
+			id: "other",
+			clientId: "https://other.example/meta.json",
+			redirectUris: ["http://127.0.0.1/callback"],
+		});
+		const token = (id: string, clientId: string, userId: string) => ({
+			id,
+			token: `token-${id}`,
+			clientId,
+			userId,
+			expiresAt: new Date(1894657600000),
+			createdAt: new Date(1794657600000),
+			scopes: ["openid"],
+		});
+		await h.db
+			.insert(schema.oauthRefreshToken)
+			.values([
+				token("rt-alice-other", "https://other.example/meta.json", aliceId),
+				token("rt-bob-test", TEST_APP_ID, "bob-id"),
+			]);
 		// When
 		await send(h, "DELETE", "/api/ai-apps/allow-1", alice);
 		// Then
-		const left = h.sqlite
-			.query("select id from oauth_refresh_token order by id")
-			.all() as { id: string }[];
-		expect(left.map((row) => row.id)).toEqual([
-			"rt-alice-other",
-			"rt-bob-test",
-		]);
+		const left = (await h.rows(schema.oauthRefreshToken))
+			.map((row) => row.id)
+			.sort();
+		expect(left).toEqual(["rt-alice-other", "rt-bob-test"]);
 	});
 
 	test("refuses DELETE /api/ai-apps/:id without a session", async () => {
@@ -192,7 +191,7 @@ describe("/api/ai-apps", () => {
 		expect({
 			status: res.status,
 			body: await res.json(),
-			allows: count(h, "oauth_consent"),
+			allows: await count(h, schema.oauthConsent),
 		}).toEqual({ status: 401, body: { error: "unauthorized" }, allows: 1 });
 	});
 

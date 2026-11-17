@@ -393,7 +393,7 @@ describe("tags and looks", () => {
 // Another tab's save of the same name, written by a trigger just before this
 // request's own write, after its duplicate check has passed.
 const otherTabWrites = (h: Harness, when: "INSERT" | "UPDATE", name: string) =>
-	h.sqlite.run(
+	h.addTrigger(
 		`CREATE TRIGGER other_tab BEFORE ${when} ON tag WHEN NEW.name = '${name}'
 		BEGIN
 			INSERT INTO tag (id, user_id, name, created_at)

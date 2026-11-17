@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { eq } from "drizzle-orm";
+import { schema } from "./db";
 import {
 	INITIALIZE,
 	makeHarness,
@@ -118,9 +120,9 @@ describe("/api/mcp", () => {
 		// Given: a connected app whose allow row is gone; its token has 3600 s
 		// left
 		const { h, bearer } = await withAiApp();
-		h.sqlite.run("delete from oauth_consent where client_id = ?", [
-			TEST_APP_ID,
-		]);
+		await h.db
+			.delete(schema.oauthConsent)
+			.where(eq(schema.oauthConsent.clientId, TEST_APP_ID));
 		// When
 		const res = await post(h, INITIALIZE, bearer);
 		// Then

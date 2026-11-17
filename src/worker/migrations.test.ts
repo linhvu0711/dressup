@@ -1,76 +1,102 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { schema } from "./db";
 import { BOB, type Harness, withAccount } from "./test/harness";
 
-const SWAP_JACKETS = readFileSync("migrations/0007_swap_jackets.sql", "utf8")
-	.split("--> statement-breakpoint")
-	.map((statement) => statement.trim())
-	.filter((statement) => statement !== "");
+type Look = typeof schema.look.$inferInsert;
 
-const swapJackets = (h: Harness) => {
-	for (const statement of SWAP_JACKETS) h.sqlite.run(statement);
-};
+const swapJackets = (h: Harness) => h.runMigration("0007_swap_jackets");
 
-function oldRows(h: Harness, userId: string) {
-	h.sqlite.run("INSERT INTO outfit (user_id, mode_id) VALUES (?, ?)", [
+const squares = (userId: string, garment: string) =>
+	["#55633F", "#1F3A5F", "#C9B38C"].map((hex, position) => ({
 		userId,
-		"polo-sweater-chore",
+		garment,
+		hex,
+		position,
+	}));
+
+// The chore and padded jackets come before migration 0007, so today's look
+// types do not hold them.
+async function oldRows(h: Harness, userId: string) {
+	await h.db
+		.insert(schema.outfit)
+		.values({ userId, modeId: "polo-sweater-chore" });
+	await h.db.insert(schema.outfitGarment).values([
+		{ userId, garment: "chore", hex: "#55633F", open: true },
+		{ userId, garment: "padded", hex: "#1B1B1F", open: false },
 	]);
-	h.sqlite.run(
-		`INSERT INTO outfit_garment (user_id, garment, hex, open) VALUES
-		(?1, 'chore', '#55633F', 1), (?1, 'padded', '#1B1B1F', 0)`,
-		[userId],
-	);
-	h.sqlite.run(
-		`INSERT INTO colour_square (user_id, garment, hex, position) VALUES
-		(?1, 'chore', '#55633F', 0), (?1, 'chore', '#1F3A5F', 1), (?1, 'chore', '#C9B38C', 2),
-		(?1, 'padded', '#1B1B1F', 0), (?1, 'padded', '#1F3A5F', 1), (?1, 'padded', '#55633F', 2)`,
-		[userId],
-	);
-	h.sqlite.run(
-		`INSERT INTO look (id, user_id, mode_id, name, colours, open) VALUES
-		('00000000-0000-4000-8000-000000000001', ?, 'tee-sweater-padded', '', ?, '["padded"]')`,
-		[
-			userId,
-			'{"casual_p":"#8C8A84","tee_l":"#F3F1EC","sweater":"#1F3A5F","padded":"#1B1B1F"}',
-		],
-	);
+	await h.db
+		.insert(schema.colourSquare)
+		.values([
+			...squares(userId, "chore"),
+			{ userId, garment: "padded", hex: "#1B1B1F", position: 0 },
+			{ userId, garment: "padded", hex: "#1F3A5F", position: 1 },
+			{ userId, garment: "padded", hex: "#55633F", position: 2 },
+		]);
+	await h.db.insert(schema.look).values({
+		id: "00000000-0000-4000-8000-000000000001",
+		userId,
+		modeId: "tee-sweater-padded",
+		name: "",
+		colours: {
+			casual_p: "#8C8A84",
+			tee_l: "#F3F1EC",
+			sweater: "#1F3A5F",
+			padded: "#1B1B1F",
+		} as unknown as Look["colours"],
+		open: ["padded"] as unknown as Look["open"],
+	});
 }
 
-// Rows of any account that still name the old jackets.
-const OLD_IDS = `SELECT
-	(SELECT count(*) FROM colour_square WHERE garment IN ('chore', 'padded'))
-	+ (SELECT count(*) FROM outfit_garment WHERE garment IN ('chore', 'padded'))
-	+ (SELECT count(*) FROM outfit WHERE mode_id LIKE '%chore%' OR mode_id LIKE '%padded%')
-	+ (SELECT count(*) FROM look
-		WHERE mode_id || colours || open LIKE '%chore%'
-		OR mode_id || colours || open LIKE '%padded%') AS n`;
+const OLD = /chore|padded/;
 
-function rowsOf(h: Harness, userId: string) {
-	const all = <T>(sql: string) => h.sqlite.query(sql).all(userId) as T[];
+// Rows of any account that still name the old jackets.
+async function oldIds(h: Harness) {
+	const named = [
+		...(await h.rows(schema.colourSquare)).map((row) => row.garment),
+		...(await h.rows(schema.outfitGarment)).map((row) => row.garment),
+		...(await h.rows(schema.outfit)).map((row) => row.modeId),
+		...(await h.rows(schema.look)).map(
+			(row) =>
+				row.modeId + JSON.stringify(row.colours) + JSON.stringify(row.open),
+		),
+	];
+	return named.filter((text) => OLD.test(text)).length;
+}
+
+async function rowsOf(h: Harness, userId: string) {
+	const bySquare = (await h.rows(schema.colourSquare, userId)).sort(
+		(a, b) => a.garment.localeCompare(b.garment) || a.position - b.position,
+	);
 	const squares: Record<string, string[]> = {};
-	for (const { garment, hex } of all<{ garment: string; hex: string }>(
-		"SELECT garment, hex FROM colour_square WHERE user_id = ? ORDER BY garment, position",
-	)) {
+	for (const { garment, hex } of bySquare) {
 		squares[garment] ??= [];
 		squares[garment].push(hex);
 	}
 	return {
-		outfit: all("SELECT mode_id FROM outfit WHERE user_id = ?"),
-		garments: all(
-			"SELECT garment, hex, open FROM outfit_garment WHERE user_id = ? ORDER BY garment",
-		),
+		outfit: (await h.rows(schema.outfit, userId)).map(({ modeId }) => ({
+			modeId,
+		})),
+		garments: (await h.rows(schema.outfitGarment, userId))
+			.sort((a, b) => a.garment.localeCompare(b.garment))
+			.map(({ garment, hex, open }) => ({ garment, hex, open })),
 		squares,
-		looks: all("SELECT mode_id, colours, open FROM look WHERE user_id = ?"),
-		oldIds: (h.sqlite.query(OLD_IDS).get() as { n: number }).n,
+		// Read as plain strings: before the migration they name old jackets.
+		looks: (await h.rows(schema.look, userId)).map(
+			({ modeId, colours, open }) => ({
+				modeId,
+				colours: colours as Record<string, string>,
+				open: open as string[],
+			}),
+		),
+		oldIds: await oldIds(h),
 	};
 }
 
 const MOVED = {
-	outfit: [{ mode_id: "polo-sweater-harrington" }],
+	outfit: [{ modeId: "polo-sweater-harrington" }],
 	garments: [
-		{ garment: "harrington", hex: "#55633F", open: 1 },
-		{ garment: "wool", hex: "#1B1B1F", open: 0 },
+		{ garment: "harrington", hex: "#55633F", open: true },
+		{ garment: "wool", hex: "#1B1B1F", open: false },
 	],
 	squares: {
 		harrington: ["#55633F", "#1F3A5F", "#C9B38C", "#2F4A3A"],
@@ -78,10 +104,14 @@ const MOVED = {
 	},
 	looks: [
 		{
-			mode_id: "tee-sweater-wool",
-			colours:
-				'{"casual_p":"#8C8A84","tee_l":"#F3F1EC","sweater":"#1F3A5F","wool":"#1B1B1F"}',
-			open: '["wool"]',
+			modeId: "tee-sweater-wool",
+			colours: {
+				casual_p: "#8C8A84",
+				tee_l: "#F3F1EC",
+				sweater: "#1F3A5F",
+				wool: "#1B1B1F",
+			},
+			open: ["wool"],
 		},
 	],
 	oldIds: 0,
@@ -91,22 +121,22 @@ describe("migration 0007, swap jackets", () => {
 	test("moves the chore and padded jacket rows to the Harrington and wool jackets", async () => {
 		// Given: alice with chore and padded rows in every dress table
 		const { h } = await withAccount();
-		oldRows(h, "alice-id");
+		await oldRows(h, "alice-id");
 		// When
 		swapJackets(h);
 		// Then
-		expect(rowsOf(h, "alice-id")).toEqual(MOVED);
+		expect(await rowsOf(h, "alice-id")).toEqual(MOVED);
 	});
 
 	test("ends in the same rows when run twice", async () => {
 		// Given: alice with chore and padded rows in every dress table
 		const { h } = await withAccount();
-		oldRows(h, "alice-id");
+		await oldRows(h, "alice-id");
 		// When
 		swapJackets(h);
 		swapJackets(h);
 		// Then
-		expect(rowsOf(h, "alice-id")).toEqual(MOVED);
+		expect(await rowsOf(h, "alice-id")).toEqual(MOVED);
 	});
 
 	test("moves chore rows written after the first run", async () => {
@@ -114,29 +144,26 @@ describe("migration 0007, swap jackets", () => {
 		// seeds bob's chore jacket
 		const { h } = await withAccount(BOB);
 		swapJackets(h);
-		h.sqlite.run("INSERT INTO outfit (user_id, mode_id) VALUES (?, ?)", [
-			"bob-id",
-			"polo-sweater",
-		]);
-		h.sqlite.run(
-			"INSERT INTO outfit_garment (user_id, garment, hex, open) VALUES (?, 'chore', '#55633F', 0)",
-			["bob-id"],
-		);
-		h.sqlite.run(
-			`INSERT INTO colour_square (user_id, garment, hex, position) VALUES
-			(?1, 'chore', '#55633F', 0), (?1, 'chore', '#1F3A5F', 1), (?1, 'chore', '#C9B38C', 2)`,
-			["bob-id"],
-		);
+		await h.db
+			.insert(schema.outfit)
+			.values({ userId: "bob-id", modeId: "polo-sweater" });
+		await h.db.insert(schema.outfitGarment).values({
+			userId: "bob-id",
+			garment: "chore",
+			hex: "#55633F",
+			open: false,
+		});
+		await h.db.insert(schema.colourSquare).values(squares("bob-id", "chore"));
 		// When
 		swapJackets(h);
 		// Then
-		const rows = rowsOf(h, "bob-id");
+		const rows = await rowsOf(h, "bob-id");
 		expect({
 			garments: rows.garments,
 			squares: rows.squares,
 			oldIds: rows.oldIds,
 		}).toEqual({
-			garments: [{ garment: "harrington", hex: "#55633F", open: 0 }],
+			garments: [{ garment: "harrington", hex: "#55633F", open: false }],
 			squares: {
 				harrington: ["#55633F", "#1F3A5F", "#C9B38C", "#2F4A3A"],
 			},
