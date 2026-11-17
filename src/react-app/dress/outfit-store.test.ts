@@ -1,0 +1,55 @@
+import { describe, expect, test } from "bun:test";
+import { createMemoryOutfitServer } from "@/dress/memory-outfit-server";
+import { createOutfitStore, type OutfitReport } from "@/dress/outfit-store";
+
+async function until(check: () => boolean) {
+	while (!check()) await Bun.sleep(5);
+	// One more turn, so the store has handled the answer the check saw.
+	await Bun.sleep(0);
+}
+
+function setup(memory = createMemoryOutfitServer()) {
+	const reports: OutfitReport[] = [];
+	const store = createOutfitStore(memory.server, {
+		report: (report) => reports.push(report),
+		retryDelays: [0, 0],
+	});
+	return { memory, store, reports };
+}
+
+async function ready() {
+	const s = setup();
+	s.store.account("u1");
+	await until(() => s.store.view().status === "ready");
+	return s;
+}
+
+describe("outfit store", () => {
+	test("sends changes in the order they were made", async () => {
+		// Given: a store loaded from the memory server for "u1"
+		const { memory, store } = await ready();
+		// When
+		store.pickColour("sweater", "#7A2E2E");
+		store.pickMode("tee-sweater");
+		store.addColour("sweater", "#C0392B");
+		await until(() => memory.stored.length === 3);
+		// Then
+		expect(memory.stored).toEqual([
+			{ kind: "pick", garment: "sweater", hex: "#7A2E2E" },
+			{ kind: "mode", modeId: "tee-sweater" },
+			{ kind: "add", garment: "sweater", hex: "#C0392B" },
+		]);
+	});
+
+	test("says added only for a colour the row lacks", async () => {
+		// Given: a ready store
+		const { store } = await ready();
+		// When
+		const answers = [
+			store.addColour("sweater", "#C0392B"),
+			store.addColour("sweater", "#8C8A84"),
+		];
+		// Then
+		expect(answers).toEqual([{ added: true }, { added: false }]);
+	});
+});
