@@ -16,7 +16,7 @@ import { httpOutfitServer } from "@/dress/outfit-server";
 import { createOutfitStore } from "@/dress/outfit-store";
 import type { DressState, MannequinPart } from "@/dress/state";
 import type { Look } from "@/looks/look";
-import { meQueryKey } from "@/session";
+import { type Me, meQueryKey } from "@/session";
 
 type DressCommands = {
 	pickMode: (id: ModeId) => void;
@@ -73,6 +73,15 @@ export function DressStateProvider({
 					latestToast.current(
 						report === "saved" ? "Saved" : "Still no connection.",
 					);
+			},
+			signedIn: async () => {
+				// The session check of the same focus says who holds the cookie.
+				if (queryClient.isFetching({ queryKey: meQueryKey }) > 0)
+					await queryClient.refetchQueries(
+						{ queryKey: meQueryKey },
+						{ cancelRefetch: false },
+					);
+				return queryClient.getQueryData<Me | null>(meQueryKey)?.id ?? null;
 			},
 		}),
 	);

@@ -30,9 +30,14 @@ export function createOutfitStore(
 	server: OutfitServer,
 	{
 		report,
+		signedIn,
 		retryDelays = [1000, 2000],
 	}: {
 		report: (report: OutfitReport) => void;
+		// Who holds the session now. A second tab can sign in another account,
+		// and a load answers for whoever holds the cookie, before the account
+		// event of that switch arrives.
+		signedIn: () => Promise<string | null>;
 		// The waits between tries of the first load.
 		retryDelays?: readonly number[];
 	},
@@ -84,6 +89,8 @@ export function createOutfitStore(
 		if (gen !== generation) return;
 		if (loaded.kind === "signed-out") report("signed-out");
 		if (loaded.kind !== "loaded") return;
+		const owner = await signedIn();
+		if (gen !== generation || owner !== account) return;
 		if (changes !== at || queue.length > 0 || sending) return;
 		state = confirmed = loaded.state;
 		emit();

@@ -16,11 +16,14 @@ async function until(check: () => boolean) {
 
 function setup(memory = createMemoryOutfitServer()) {
 	const reports: OutfitReport[] = [];
+	// The account the session check names.
+	const session: { id: string | null } = { id: "u1" };
 	const store = createOutfitStore(memory.server, {
 		report: (report) => reports.push(report),
+		signedIn: async () => session.id,
 		retryDelays: [0, 0],
 	});
-	return { memory, store, reports };
+	return { memory, store, reports, session };
 }
 
 async function ready() {
@@ -299,6 +302,22 @@ describe("outfit store", () => {
 		await until(() => memory.loads === 2);
 		// Then
 		expect(shown(store)?.picked.sweater).toBe("#7A2E2E");
+	});
+
+	test("drops a load on focus when the session names another account", async () => {
+		// Given: the Given above; another account signed in from a second tab
+		const { memory, store, session } = await ready();
+		memory.changeElsewhere({
+			kind: "pick",
+			garment: "sweater",
+			hex: "#7A2E2E",
+		});
+		session.id = "u2";
+		// When
+		store.focus();
+		await until(() => memory.loads === 2);
+		// Then
+		expect(shown(store)?.picked.sweater).toBe("#1F3A5F");
 	});
 
 	test("skips a load on focus while a change is out", async () => {
