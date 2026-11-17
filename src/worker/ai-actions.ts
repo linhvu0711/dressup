@@ -23,7 +23,6 @@ import {
 	dressRefusalText,
 	issueText,
 	lookRefusalText,
-	noLook,
 	noLooks,
 	noTag,
 	noTags,
@@ -345,10 +344,12 @@ export function registerAiActions(server: McpServer, account: Account) {
 			annotations: DELETE,
 			inputSchema: z.object({ id: z.string().describe("The look's id.") }),
 		},
-		async ({ id }) =>
-			(await deleteLook(db, userId, id))
+		async ({ id }) => {
+			const deleted = await deleteLook(db, userId, id);
+			return deleted.ok
 				? answer({ deleted: id })
-				: refusal(noLook),
+				: refusal(lookRefusalText(deleted.error));
+		},
 	);
 
 	tool(

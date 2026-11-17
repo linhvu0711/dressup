@@ -312,15 +312,17 @@ export async function changeLook(
 	return { ok: false, error: { code: still ? "moved" : "not_found" } };
 }
 
-// Only the account's own look goes; false when there is none to delete.
+// Only the account's own look goes; not_found when there is none to delete.
 export async function deleteLook(
 	db: Db,
 	userId: string,
 	id: string,
-): Promise<boolean> {
-	const rows = await db
+): Promise<Result<LookId, LookError>> {
+	const [row] = await db
 		.delete(look)
 		.where(and(eq(look.id, id), eq(look.userId, userId)))
 		.returning({ id: look.id });
-	return rows.length > 0;
+	return row
+		? { ok: true, value: row.id as LookId }
+		: { ok: false, error: { code: "not_found" } };
 }

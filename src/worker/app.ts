@@ -229,7 +229,10 @@ export function createApp(getDb: (env: Env) => Db) {
 			c.var.user.id,
 			c.req.param("id"),
 		);
-		if (!deleted) return c.json({ error: "not_found" }, 404);
+		if (!deleted.ok) {
+			const { status, body: refused } = lookRefusal(deleted.error);
+			return c.json(refused, status);
+		}
 		return c.body(null, 204);
 	});
 
