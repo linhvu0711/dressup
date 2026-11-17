@@ -40,6 +40,8 @@ type DressCommands = {
 // `unsaved`: a change could not be stored and waits on the queue.
 type DressStore = { unsaved: boolean; retry: () => void } & (
 	| { status: "loading" }
+	// The first load gave up; `loadAgain` tries it again.
+	| { status: "failed"; loadAgain: () => void }
 	| ({ status: "ready"; state: DressState } & DressCommands)
 );
 
@@ -88,25 +90,32 @@ export function DressStateProvider({
 	// The page is rebuilt for each account; until the store has switched too,
 	// it gets nothing of the account before, such as its Edit state.
 	const value: DressStore =
-		view.account !== userId || view.status !== "ready"
+		view.account !== userId || view.status === "loading"
 			? { unsaved: false, retry: store.retry, status: "loading" }
-			: {
-					unsaved: view.unsaved,
-					retry: store.retry,
-					status: "ready",
-					state: view.state,
-					editing: view.editing,
-					pickMode: store.pickMode,
-					pickColour: store.pickColour,
-					addColour: store.addColour,
-					removeColour: store.removeColour,
-					setJacket: store.setJacket,
-					setMannequinColour: store.setMannequinColour,
-					editLook: store.editLook,
-					cancelEdit: store.cancelEdit,
-					finishEdit: store.finishEdit,
-					holdLoads: store.hold,
-				};
+			: view.status === "failed"
+				? {
+						unsaved: false,
+						retry: store.retry,
+						status: "failed",
+						loadAgain: store.loadAgain,
+					}
+				: {
+						unsaved: view.unsaved,
+						retry: store.retry,
+						status: "ready",
+						state: view.state,
+						editing: view.editing,
+						pickMode: store.pickMode,
+						pickColour: store.pickColour,
+						addColour: store.addColour,
+						removeColour: store.removeColour,
+						setJacket: store.setJacket,
+						setMannequinColour: store.setMannequinColour,
+						editLook: store.editLook,
+						cancelEdit: store.cancelEdit,
+						finishEdit: store.finishEdit,
+						holdLoads: store.hold,
+					};
 	return (
 		<DressStoreContext.Provider value={value}>
 			{children}

@@ -103,6 +103,42 @@ test("shows the grey mannequin while the colours load", async ({ page }) => {
 	await expect(page.locator('svg[aria-label="Loading"]')).toHaveCount(0);
 });
 
+// The page tries the first load 3 times, 1 s and 2 s apart, before it says so.
+const AFTER_TRIES = { timeout: 10_000 };
+
+test("shows Could not load your outfit when the first load fails", async ({
+	page,
+}) => {
+	// Given: GET /api/dress answers 500 every time
+	await page.route("/api/dress", (route) => route.fulfill({ status: 500 }));
+	// When
+	await page.goto("/");
+	// Then
+	await expect(page.getByRole("alert")).toHaveText(
+		"Could not load your outfit.",
+		AFTER_TRIES,
+	);
+	await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+});
+
+test("loads the outfit on Try again", async ({ page }) => {
+	// Given: the first load failed, and the server answers again
+	await page.route("/api/dress", (route) => route.fulfill({ status: 500 }));
+	await page.goto("/");
+	await expect(page.getByRole("alert")).toHaveText(
+		"Could not load your outfit.",
+		AFTER_TRIES,
+	);
+	await page.unroute("/api/dress");
+	// When
+	await page.getByRole("button", { name: "Try again" }).click();
+	// Then
+	await expect(
+		page.locator('svg[aria-label="Mannequin in Polo + sweater"]'),
+	).toBeVisible();
+	await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
 test("keeps a failed change on screen and stores it on Retry", async ({
 	page,
 }) => {

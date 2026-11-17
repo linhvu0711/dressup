@@ -108,6 +108,15 @@ export function DressPage() {
 						hair={state.mannequin.hair}
 						label={`Mannequin in ${mode.name}`}
 					/>
+				) : dress.status === "failed" ? (
+					<div className="flex h-full flex-col items-center justify-center px-6 text-center">
+						<p role="alert" className="text-[15px] text-destructive">
+							Could not load your outfit.
+						</p>
+						<Button size="lg" className="mt-4" onClick={dress.loadAgain}>
+							Try again
+						</Button>
+					</div>
 				) : (
 					<MannequinPlaceholder />
 				)}
