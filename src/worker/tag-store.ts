@@ -92,16 +92,18 @@ export async function renameTag(
 	}
 }
 
-// Only the account's own tag goes, and with it the tag on each look; false
-// when there is none to delete.
+// Only the account's own tag goes, and with it the tag on each look; not
+// found when the account has no tag with this id.
 export async function deleteTag(
 	db: Db,
 	userId: string,
 	id: string,
-): Promise<boolean> {
-	const rows = await db
+): Promise<Result<Tag, TagError>> {
+	const [row] = await db
 		.delete(tag)
 		.where(and(eq(tag.id, id), eq(tag.userId, userId)))
-		.returning({ id: tag.id });
-	return rows.length > 0;
+		.returning({ id: tag.id, name: tag.name });
+	return row
+		? { ok: true, value: toTag(row) }
+		: { ok: false, error: { code: "not_found" } };
 }

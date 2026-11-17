@@ -296,7 +296,10 @@ export function createApp(getDb: (env: Env) => Db) {
 			c.var.user.id,
 			c.req.param("id"),
 		);
-		if (!deleted) return c.json({ error: "not_found" }, 404);
+		if (!deleted.ok) {
+			const { status, body } = tagRefusals[deleted.error.code];
+			return c.json(body, status);
+		}
 		return c.body(null, 204);
 	});
 

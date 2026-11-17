@@ -24,7 +24,6 @@ import {
 	issueText,
 	lookRefusalText,
 	noLooks,
-	noTag,
 	noTags,
 	serverError,
 	tagRefusalText,
@@ -408,9 +407,11 @@ export function registerAiActions(server: McpServer, account: Account) {
 			annotations: DELETE,
 			inputSchema: z.object({ id: z.string().describe("The tag's id.") }),
 		},
-		async ({ id }) =>
-			(await deleteTag(db, userId, id))
-				? answer({ deleted: id })
-				: refusal(noTag),
+		async ({ id }) => {
+			const deleted = await deleteTag(db, userId, id);
+			return deleted.ok
+				? answer({ deleted: deleted.value.id })
+				: refusal(tagRefusalText(deleted.error));
+		},
 	);
 }
