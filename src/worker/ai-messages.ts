@@ -4,6 +4,7 @@ import { MODES, type ModeId, modeById } from "@/dress/modes";
 import { type DressError, MANNEQUIN_PARTS } from "@/dress/state";
 import { LOOK_LIMIT, LOOK_NAME_MAX, LOOK_TAGS_MAX } from "@/looks/look";
 import { TAG_NAME_MAX } from "@/tags/tag";
+import type { LookError } from "./look-store";
 
 // Every refusal an AI app gets names the value it sent and what is allowed,
 // so the AI app can fix its call and try again.
@@ -78,31 +79,27 @@ export const lookLimit = (): string =>
 const notInMode = (garment: unknown, modeId: ModeId) =>
 	`${garment} is not in mode ${modeId}. This mode has: ${modeGarments(modeId)}.`;
 
-// A look's issues, as lookInputSchema gives them; the mode is known to be
-// valid when an issue names it.
-export function lookIssueText(
-	issue: z.core.$ZodIssue,
-	input: { modeId: string; open: readonly string[] },
-): string {
-	const [field, key] = issue.path;
-	const modeId = input.modeId as ModeId;
-	if (issue.code === "custom" && issue.message === "not in the mode")
-		return field === "open"
-			? notInMode(
-					input.open.find(
-						(id) =>
-							!(modeById(modeId).garments as readonly string[]).includes(id),
-					),
-					modeId,
-				)
-			: notInMode(key, modeId);
-	if (issue.code === "custom" && issue.message === "no colour")
-		return `${String(key)} needs a colour. Mode ${modeId} has: ${modeGarments(modeId)}.`;
-	if (field === "name")
-		return `A look name has at most ${LOOK_NAME_MAX} characters.`;
-	if (field === "tags")
-		return key === undefined
-			? `A look has at most ${LOOK_TAGS_MAX} tags.`
-			: noTag;
-	return issueText(issue, input);
+export function lookRefusalText(error: LookError): string {
+	switch (error.code) {
+		case "not_in_mode":
+			return notInMode(error.garment, error.modeId);
+		case "no_colour":
+			return `${error.garment} needs a colour. Mode ${error.modeId} has: ${modeGarments(error.modeId)}.`;
+		case "name_too_long":
+			return `A look name has at most ${LOOK_NAME_MAX} characters.`;
+		case "too_many_tags":
+			return `A look has at most ${LOOK_TAGS_MAX} tags.`;
+		case "invalid":
+			return issueText(error.issue, error.input);
+		case "look_limit":
+			return lookLimit();
+		case "not_found":
+			return noLook;
+		case "conflict":
+		case "moved":
+			return serverError;
+	}
 }
+
+export const tagsLeftOffText = (ids: readonly string[]): string =>
+	ids.map((id) => `Left off tag ${id}: no tag with this id.`).join(" ");

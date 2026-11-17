@@ -471,6 +471,106 @@ describe("looks", () => {
 		});
 	});
 
+	test("refuses a mode garment with no colour", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		// When
+		const { isError, text } = await ai.call("save_look", {
+			modeId: "polo-sweater",
+			colours: { chino_p: "#C9B38C", polo_l: "#F3F1EC" },
+		});
+		// Then
+		expect({ isError, text, looks: (await looks(h, ai)).length }).toEqual({
+			isError: true,
+			text: "sweater needs a colour. Mode polo-sweater has: chino pants, long polo, sweater.",
+			looks: 0,
+		});
+	});
+
+	test("refuses an open jacket that is not in the mode", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		// When
+		const { isError, text } = await ai.call("save_look", {
+			modeId: "polo-sweater",
+			colours: { chino_p: "#C9B38C", polo_l: "#F3F1EC", sweater: "#1F3A5F" },
+			open: ["wool"],
+		});
+		// Then
+		expect({ isError, text, looks: (await looks(h, ai)).length }).toEqual({
+			isError: true,
+			text: "wool is not in mode polo-sweater. This mode has: chino pants, long polo, sweater.",
+			looks: 0,
+		});
+	});
+
+	test("refuses a look name of 61 characters", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		// When
+		const { isError, text } = await ai.call("save_look", {
+			...NAVY_SAVE,
+			name: "a".repeat(61),
+		});
+		// Then
+		expect({ isError, text, looks: (await looks(h, ai)).length }).toEqual({
+			isError: true,
+			text: "A look name has at most 60 characters.",
+			looks: 0,
+		});
+	});
+
+	test("refuses a look with 51 tags", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		const tags = Array.from(
+			{ length: 51 },
+			(_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
+		);
+		// When
+		const { isError, text } = await ai.call("save_look", {
+			...NAVY_SAVE,
+			tags,
+		});
+		// Then
+		expect({ isError, text, looks: (await looks(h, ai)).length }).toEqual({
+			isError: true,
+			text: "A look has at most 50 tags.",
+			looks: 0,
+		});
+	});
+
+	test("saves a look without a gone tag and another account's tag and names them", async () => {
+		// Given: alice has tag "Work" and deleted tag "Old"; bob posted tag "Trip"
+		const { h, ai } = await withAiSession();
+		const work = await addTag(h, ai, "Work");
+		const old = await addTag(h, ai, "Old");
+		await send(h, ai.jar, `/api/tags/${old}`, { method: "DELETE" });
+		const bob = await asBob(h);
+		const bobTrip = (
+			(await (await bob("POST", "/api/tags", { name: "Trip" })).json()) as {
+				tag: { id: string };
+			}
+		).tag.id;
+		// When
+		const { isError, text, data } = await ai.call("save_look", {
+			...NAVY_SAVE,
+			tags: [work, old, bobTrip],
+		});
+		// Then
+		expect({
+			isError,
+			said: text.split("\n")[0],
+			leftOff: (data as { tagsLeftOff: string[] }).tagsLeftOff,
+			tags: (await looks(h, ai))[0]?.tags,
+		}).toEqual({
+			isError: false,
+			said: `Left off tag ${old}: no tag with this id. Left off tag ${bobTrip}: no tag with this id.`,
+			leftOff: [old, bobTrip],
+			tags: [work],
+		});
+	});
+
 	test("refuses a save at 300 looks", async () => {
 		// Given: alice has 300 looks
 		const { h, ai, userId } = await withAiSession();
@@ -579,6 +679,45 @@ describe("look changes", () => {
 		});
 	});
 
+	test("refuses a colour change when the page moved the look to another mode", async () => {
+		// Given: the page moves NAVY to polo-sweater-wool after change_look read
+		// the look and before it writes.
+		const { h, ai } = await withNavy();
+		const { db } = h;
+		const batch = db.batch.bind(db);
+		let batches = 0;
+		const WOOL = {
+			...NAVY,
+			modeId: "polo-sweater-wool",
+			colours: {
+				chino_p: "#C9B38C",
+				polo_l: "#F3F1EC",
+				sweater: "#1F3A5F",
+				wool: "#55633F",
+			},
+			open: [],
+		};
+		const writeAfterPage: typeof batch = async (items) => {
+			if (++batches === 1) return batch(items);
+			db.batch = batch;
+			const put = await sendJson(h, ai, "PUT", `/api/looks/${NAVY.id}`, WOOL);
+			expect(put.status).toBe(200);
+			return batch(items);
+		};
+		db.batch = writeAfterPage;
+		// When
+		const { isError, text } = await ai.call("change_look", {
+			id: NAVY.id,
+			colours: { sweater: "#7A2E2E" },
+		});
+		// Then
+		expect({ isError, text, stored: (await looks(h, ai))[0] }).toEqual({
+			isError: true,
+			text: "dressup could not do this. Try again.",
+			stored: WOOL,
+		});
+	});
+
 	test("changes only a look's tags", async () => {
 		// Given
 		const { h, ai } = await withNavy();
@@ -592,6 +731,51 @@ describe("look changes", () => {
 		expect({ isError, stored: (await looks(h, ai))[0] }).toEqual({
 			isError: false,
 			stored: { ...NAVY, tags: [work] },
+		});
+	});
+
+	test("changes a look without a gone tag and names it", async () => {
+		// Given: tag "Work", and tag "Old" added and deleted
+		const { h, ai } = await withNavy();
+		const work = await addTag(h, ai, "Work");
+		const old = await addTag(h, ai, "Old");
+		await send(h, ai.jar, `/api/tags/${old}`, { method: "DELETE" });
+		// When
+		const { isError, text, data } = await ai.call("change_look", {
+			id: NAVY.id,
+			tags: [work, old],
+		});
+		// Then
+		expect({
+			isError,
+			said: text.split("\n")[0],
+			leftOff: (data as { tagsLeftOff: string[] }).tagsLeftOff,
+			stored: (await looks(h, ai))[0],
+		}).toEqual({
+			isError: false,
+			said: `Left off tag ${old}: no tag with this id.`,
+			leftOff: [old],
+			stored: { ...NAVY, tags: [work] },
+		});
+	});
+
+	test("refuses a change with a garment not in the look's mode", async () => {
+		// Given
+		const { h, ai } = await withNavy();
+		// When
+		const { isError, text } = await ai.call("change_look", {
+			id: NAVY.id,
+			colours: { train_p: "#1B1B1F" },
+		});
+		// Then
+		expect({
+			isError,
+			text,
+			colours: (await looks(h, ai))[0]?.colours,
+		}).toEqual({
+			isError: true,
+			text: "train_p is not in mode polo-sweater-harrington. This mode has: chino pants, long polo, sweater, harrington jacket.",
+			colours: NAVY.colours,
 		});
 	});
 

@@ -72,7 +72,12 @@ describe("POST /api/looks", () => {
 			second: second.status,
 			body: await second.json(),
 			count: (await list(h, headers)).looks.length,
-		}).toEqual({ first: 201, second: 200, body: { look: NAVY }, count: 1 });
+		}).toEqual({
+			first: 201,
+			second: 200,
+			body: { look: NAVY, tagsLeftOff: [] },
+			count: 1,
+		});
 	});
 
 	test("stores the new name when the same save comes again with another name", async () => {
@@ -455,7 +460,7 @@ describe("PUT /api/looks/:id", () => {
 			names: await names(h, headers),
 		}).toEqual({
 			status: 200,
-			body: { look: NAVY_NIGHT },
+			body: { look: NAVY_NIGHT, tagsLeftOff: [] },
 			names: ["Second", "Navy night"],
 		});
 	});
@@ -637,6 +642,30 @@ describe("tags on looks", () => {
 		}).toEqual({ status: 201, tags: [work], bobLinks: 0 });
 	});
 
+	test("saves a look without a gone tag and another account's tag and lists them", async () => {
+		// Given: alice has tag "Work" and deleted tag "Old"; bob posted tag "Trip"
+		const { h, headers } = await withAccount();
+		const work = await addTag(h, headers, "Work");
+		const old = await addTag(h, headers, "Old");
+		await h.app.request(
+			`/api/tags/${old}`,
+			{ method: "DELETE", headers },
+			h.env,
+		);
+		const bob = await h.addAccount(BOB);
+		const bobTrip = await addTag(h, bob, "Trip");
+		// When
+		const res = await post(h, headers, {
+			...NAVY,
+			tags: [work, old, bobTrip],
+		});
+		// Then
+		expect({ status: res.status, body: await res.json() }).toEqual({
+			status: 201,
+			body: { look: { ...NAVY, tags: [work] }, tagsLeftOff: [old, bobTrip] },
+		});
+	});
+
 	test("replaces a look's tags on a change", async () => {
 		// Given: alice saved NAVY with "Work"; tag "Trip" posted
 		const { h, headers } = await withAccount();
@@ -649,6 +678,25 @@ describe("tags on looks", () => {
 		expect({ status: res.status, tags: await tagsOfLook(res) }).toEqual({
 			status: 200,
 			tags: [trip],
+		});
+	});
+
+	test("changes a look without a gone tag and lists it", async () => {
+		// Given: alice saved NAVY, then added and deleted tag "Old"
+		const { h, headers } = await withAccount();
+		await post(h, headers, NAVY);
+		const old = await addTag(h, headers, "Old");
+		await h.app.request(
+			`/api/tags/${old}`,
+			{ method: "DELETE", headers },
+			h.env,
+		);
+		// When
+		const res = await put(h, headers, { ...NAVY, tags: [old] });
+		// Then
+		expect({ status: res.status, body: await res.json() }).toEqual({
+			status: 200,
+			body: { look: { ...NAVY, tags: [] }, tagsLeftOff: [old] },
 		});
 	});
 
@@ -686,28 +734,24 @@ describe("tags on looks", () => {
 
 describe("two look changes made from one read", () => {
 	test("keeps both of two look changes made from one read", async () => {
-		// Given: NAVY saved, and the one read both changes make before either
-		// writes. Two calls through the harness do not overlap, so the test
-		// sets the order itself.
+		// Given: NAVY saved. Two calls through the harness do not overlap, so
+		// change A's write waits until change B, run after A's read, is done.
 		const { h } = await withAccount();
 		const { db } = h;
-		await saveLook(db, "alice-id", lookInputSchema.parse(NAVY));
-		const [read] = await listLooks(db, "alice-id");
+		await saveLook(db, "alice-id", NAVY);
+		const batch = db.batch.bind(db);
+		let batches = 0;
+		const otherChangeFirst: typeof batch = async (items) => {
+			if (++batches === 1) return batch(items);
+			db.batch = batch;
+			await changeLook(db, "alice-id", NAVY.id, {
+				colours: { sweater: "#7A2E2E" },
+			});
+			return batch(items);
+		};
+		db.batch = otherChangeFirst;
 		// When
-		await changeLook(
-			db,
-			"alice-id",
-			NAVY.id,
-			{ name: "Navy night" },
-			read.modeId,
-		);
-		await changeLook(
-			db,
-			"alice-id",
-			NAVY.id,
-			{ colours: { sweater: "#7A2E2E" } },
-			read.modeId,
-		);
+		await changeLook(db, "alice-id", NAVY.id, { name: "Navy night" });
 		// Then
 		const [look] = await listLooks(db, "alice-id");
 		expect({

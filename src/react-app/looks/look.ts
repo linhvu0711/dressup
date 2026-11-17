@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { GARMENT_IDS, type GarmentId, JACKET_IDS } from "@/dress/garments";
-import { MODES, modeById } from "@/dress/modes";
+import { MODES, type ModeId, modeById } from "@/dress/modes";
 import { type DressState, hexSchema, modeIdSchema } from "@/dress/state";
 import { type TagId, tagIdSchema } from "@/tags/tag";
 
@@ -39,6 +39,7 @@ export const lookInputSchema = z
 					code: "custom",
 					path: ["colours", id],
 					message: "not in the mode",
+					params: { code: "not_in_mode", garment: id } satisfies RuleParams,
 				});
 		for (const id of mode.garments)
 			if (!look.colours[id])
@@ -46,16 +47,59 @@ export const lookInputSchema = z
 					code: "custom",
 					path: ["colours", id],
 					message: "no colour",
+					params: { code: "no_colour", garment: id } satisfies RuleParams,
 				});
-		if (look.open.some((id) => !inMode(id)))
+		const outside = look.open.find((id) => !inMode(id));
+		if (outside)
 			ctx.addIssue({
 				code: "custom",
 				path: ["open"],
 				message: "not in the mode",
+				params: { code: "not_in_mode", garment: outside } satisfies RuleParams,
 			});
 	});
 
 export type LookInput = z.infer<typeof lookInputSchema>;
+
+// What a look's own rules refuse, so the website and the AI apps each turn
+// one code into their answer. path is the zod path of the refused value.
+export type LookProblem =
+	| {
+			code: "not_in_mode" | "no_colour";
+			path: PropertyKey[];
+			garment: GarmentId;
+			modeId: ModeId;
+	  }
+	| { code: "name_too_long" | "too_many_tags"; path: PropertyKey[] }
+	| {
+			code: "invalid";
+			path: PropertyKey[];
+			issue: z.core.$ZodIssue;
+			input: unknown;
+	  };
+
+// zod types params as Record<string, any>, so each rule above writes its
+// params to this shape and checkLook reads them back.
+type RuleParams = { code: "not_in_mode" | "no_colour"; garment: GarmentId };
+
+export function checkLook(
+	input: unknown,
+): { ok: true; look: LookInput } | { ok: false; problem: LookProblem } {
+	const parsed = lookInputSchema.safeParse(input);
+	if (parsed.success) return { ok: true, look: parsed.data };
+	const issue = parsed.error.issues[0];
+	const path = [...issue.path];
+	if (issue.code === "custom") {
+		const { code, garment } = issue.params as RuleParams;
+		const { modeId } = input as { modeId: ModeId };
+		return { ok: false, problem: { code, path, garment, modeId } };
+	}
+	if (issue.code === "too_big" && path.length === 1 && path[0] === "name")
+		return { ok: false, problem: { code: "name_too_long", path } };
+	if (issue.code === "too_big" && path.length === 1 && path[0] === "tags")
+		return { ok: false, problem: { code: "too_many_tags", path } };
+	return { ok: false, problem: { code: "invalid", path, issue, input } };
+}
 
 export const lookSchema = lookInputSchema;
 

@@ -7,7 +7,6 @@ import { z } from "zod";
 import {
 	GARMENT_IDS,
 	GARMENT_NAMES,
-	type GarmentId,
 	isJacket,
 	JACKET_IDS,
 } from "@/dress/garments";
@@ -17,26 +16,20 @@ import {
 	dressChangeSchema,
 	MANNEQUIN_PARTS,
 } from "@/dress/state";
-import {
-	LOOK_LIMIT,
-	LOOK_NAME_MAX,
-	type Look,
-	lookInputSchema,
-} from "@/looks/look";
+import { LOOK_LIMIT, LOOK_NAME_MAX, type Look } from "@/looks/look";
 import { newTagSchema, TAG_NAME_MAX, type Tag, tagSchema } from "@/tags/tag";
 import { countAiAction } from "./ai-action-store";
 import {
 	dressRefusalText,
 	issueText,
-	lookIssueText,
-	lookLimit,
-	noLook,
+	lookRefusalText,
 	noLooks,
 	noTag,
 	noTags,
 	serverError,
 	tagNameLength,
 	tagNameTaken,
+	tagsLeftOffText,
 	tooManyActions,
 } from "./ai-messages";
 import type { Db } from "./db";
@@ -119,6 +112,22 @@ const field = {
 
 export function registerAiActions(server: McpServer, account: Account) {
 	const { db, userId } = account;
+
+	// The look with its tags named, and a sentence first for each tag left off.
+	async function lookAnswer(changed: { look: Look; tagsLeftOff: string[] }) {
+		const { tagsLeftOff } = changed;
+		const data = {
+			look: lookView(changed.look, await listTags(db, userId)),
+			tagsLeftOff,
+		};
+		const json = JSON.stringify(data);
+		return answer(
+			data,
+			tagsLeftOff.length === 0
+				? json
+				: `${tagsLeftOffText(tagsLeftOff)}\n${json}`,
+		);
+	}
 
 	function tool<S extends z.ZodObject>(
 		name: string,
@@ -279,7 +288,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		"save_look",
 		{
 			title: "Save a look",
-			description: `Saves a new look with a mode, a colour for each garment of the mode, open jackets, a name, and tags. The outfit on the mannequin does not change. An account keeps at most ${LOOK_LIMIT} looks.`,
+			description: `Saves a new look with a mode, a colour for each garment of the mode, open jackets, a name, and tags. The outfit on the mannequin does not change. An account keeps at most ${LOOK_LIMIT} looks. A tag id that is not one of your tags is left off, and the answer names it.`,
 			annotations: WRITE,
 			inputSchema: z.object({
 				modeId: field.modeId,
@@ -299,16 +308,9 @@ export function registerAiActions(server: McpServer, account: Account) {
 				open,
 				tags,
 			};
-			const parsed = lookInputSchema.safeParse(input);
-			if (!parsed.success)
-				return refusal(lookIssueText(parsed.error.issues[0], input));
-			const accountTags = await listTags(db, userId);
-			if (!tags.every((id) => accountTags.some((t) => t.id === id)))
-				return refusal(noTag);
-			const saved = await saveLook(db, userId, parsed.data);
-			if (saved.ok) return answer({ look: lookView(saved.look, accountTags) });
-			if (saved.error === "look_limit") return refusal(lookLimit());
-			throw new Error("a new look id is taken");
+			const saved = await saveLook(db, userId, input);
+			if (!saved.ok) return refusal(lookRefusalText(saved.error));
+			return lookAnswer(saved.value);
 		},
 	);
 
@@ -317,7 +319,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		{
 			title: "Change a look",
 			description:
-				"Changes a saved look's name, colours, open jackets, or tags. Colours given replace those garments' colours and the others stay. Open jackets and tags given replace the look's.",
+				"Changes a saved look's name, colours, open jackets, or tags. Colours given replace those garments' colours and the others stay. Open jackets and tags given replace the look's. A tag id that is not one of your tags is left off, and the answer names it.",
 			annotations: WRITE,
 			inputSchema: z.object({
 				id: z.string().describe("The look's id."),
@@ -328,51 +330,9 @@ export function registerAiActions(server: McpServer, account: Account) {
 			}),
 		},
 		async ({ id, ...patch }) => {
-			const [all, accountTags] = await Promise.all([
-				listLooks(db, userId),
-				listTags(db, userId),
-			]);
-			const stored = all.find((look) => look.id === id);
-			if (!stored) return refusal(noLook);
-			// The whole look is checked; only the given fields are written.
-			const merged = {
-				...stored,
-				name: patch.name ?? stored.name,
-				colours: { ...stored.colours, ...patch.colours },
-				open: patch.open ?? stored.open,
-				tags: patch.tags ?? stored.tags,
-			};
-			const parsed = lookInputSchema.safeParse(merged);
-			if (!parsed.success)
-				return refusal(lookIssueText(parsed.error.issues[0], merged));
-			if (!parsed.data.tags.every((t) => accountTags.some((a) => a.id === t)))
-				return refusal(noTag);
-			const { name, colours, open, tags } = parsed.data;
-			const changed = await changeLook(
-				db,
-				userId,
-				id,
-				{
-					name: patch.name === undefined ? undefined : name,
-					// Only the garments sent, so a colour the page saved since the
-					// read stays.
-					colours:
-						patch.colours === undefined
-							? undefined
-							: (Object.fromEntries(
-									Object.keys(patch.colours).map((g) => [
-										g,
-										colours[g as GarmentId],
-									]),
-								) as typeof colours),
-					open: patch.open === undefined ? undefined : open,
-					tags: patch.tags === undefined ? undefined : tags,
-				},
-				stored.modeId,
-			);
-			if (changed === null) return refusal(noLook);
-			if (changed === "moved") return refusal(serverError);
-			return answer({ look: lookView(changed, accountTags) });
+			const changed = await changeLook(db, userId, id, patch);
+			if (!changed.ok) return refusal(lookRefusalText(changed.error));
+			return lookAnswer(changed.value);
 		},
 	);
 
@@ -384,10 +344,12 @@ export function registerAiActions(server: McpServer, account: Account) {
 			annotations: DELETE,
 			inputSchema: z.object({ id: z.string().describe("The look's id.") }),
 		},
-		async ({ id }) =>
-			(await deleteLook(db, userId, id))
+		async ({ id }) => {
+			const deleted = await deleteLook(db, userId, id);
+			return deleted.ok
 				? answer({ deleted: id })
-				: refusal(noLook),
+				: refusal(lookRefusalText(deleted.error));
+		},
 	);
 
 	tool(
