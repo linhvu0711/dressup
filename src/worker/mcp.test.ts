@@ -1,35 +1,16 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
+import { eq } from "drizzle-orm";
+import { schema } from "./db";
 import {
-	connectAiApp,
 	INITIALIZE,
 	makeHarness,
 	message,
 	post,
-	stubOutside,
 	TEST_APP_ID,
-	testAppDocument,
+	withAiApp,
 } from "./test/harness";
 
 describe("/api/mcp", () => {
-	let outside: ReturnType<typeof stubOutside> | undefined;
-	afterEach(() => outside?.restore());
-
-	async function connected() {
-		const h = await makeHarness();
-		outside = stubOutside({
-			google: {
-				sub: "g-alice",
-				email: "alice@example.com",
-				name: "Alice",
-				picture: "https://example.com/a.png",
-			},
-			documents: { [TEST_APP_ID]: testAppDocument },
-		});
-		const { token } = await connectAiApp(h, { accept: true });
-		const bearer = { authorization: `Bearer ${token?.body.access_token}` };
-		return { h, bearer };
-	}
-
 	test("answers 401 without a pass and points to the resource metadata", async () => {
 		// Given: no Authorization header
 		const h = await makeHarness();
@@ -48,7 +29,7 @@ describe("/api/mcp", () => {
 
 	test("answers an AI app that starts with initialize", async () => {
 		// Given: a connected app's access token
-		const { h, bearer } = await connected();
+		const { h, bearer } = await withAiApp();
 		// When
 		const res = await post(h, INITIALIZE, bearer);
 		// Then
@@ -68,7 +49,7 @@ describe("/api/mcp", () => {
 
 	test("lists the garments and modes to a connected AI app", async () => {
 		// Given: initialize and notifications/initialized sent
-		const { h, bearer } = await connected();
+		const { h, bearer } = await withAiApp();
 		await post(h, INITIALIZE, bearer);
 		const session = { ...bearer, "mcp-protocol-version": "2025-11-25" };
 		await post(
@@ -138,10 +119,10 @@ describe("/api/mcp", () => {
 	test("refuses a pass whose allow was removed", async () => {
 		// Given: a connected app whose allow row is gone; its token has 3600 s
 		// left
-		const { h, bearer } = await connected();
-		h.sqlite.run("delete from oauth_consent where client_id = ?", [
-			TEST_APP_ID,
-		]);
+		const { h, bearer } = await withAiApp();
+		await h.db
+			.delete(schema.oauthConsent)
+			.where(eq(schema.oauthConsent.clientId, TEST_APP_ID));
 		// When
 		const res = await post(h, INITIALIZE, bearer);
 		// Then

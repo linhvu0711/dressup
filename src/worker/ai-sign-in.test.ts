@@ -1,24 +1,18 @@
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
+import type { SQLiteTable } from "drizzle-orm/sqlite-core";
+import { schema } from "./db";
 import {
 	AUTHORIZE,
 	connectAiApp,
 	cookie,
 	finishGoogleSignIn,
+	type Harness,
 	makeHarness,
 	startGoogleSignIn,
 	stubOutside,
 	TEST_APP_ID,
 	testAppDocument,
 } from "./test/harness";
-
-type Harness = Awaited<ReturnType<typeof makeHarness>>;
-
-const ALICE = {
-	sub: "g-alice",
-	email: "alice@example.com",
-	name: "Alice",
-	picture: "https://example.com/a.png",
-};
 
 const authorize = (h: Harness, path = AUTHORIZE) =>
 	h.app.request(path, { redirect: "manual" }, h.env);
@@ -29,9 +23,8 @@ const withClient = (clientId: string) =>
 		`client_id=${encodeURIComponent(clientId)}`,
 	);
 
-const count = (h: Harness, table: string) =>
-	(h.sqlite.query(`select count(*) as n from ${table}`).get() as { n: number })
-		.n;
+const count = async (h: Harness, table: SQLiteTable) =>
+	(await h.rows(table)).length;
 
 const payload = (jwt: string) =>
 	JSON.parse(Buffer.from(jwt.split(".")[1] ?? "", "base64url").toString()) as {
@@ -86,7 +79,6 @@ async function until(check: () => boolean) {
 describe("AI app sign-in", () => {
 	let outside: ReturnType<typeof stubOutside> | undefined;
 	afterEach(() => {
-		outside?.restore();
 		setSystemTime();
 	});
 
@@ -94,10 +86,7 @@ describe("AI app sign-in", () => {
 		documents: Record<string, () => Response | Promise<Response>> = {},
 	) => {
 		const h = await makeHarness();
-		outside = stubOutside({
-			google: ALICE,
-			documents: { [TEST_APP_ID]: testAppDocument, ...documents },
-		});
+		outside = stubOutside({ documents });
 		return h;
 	};
 
@@ -174,7 +163,10 @@ describe("AI app sign-in", () => {
 		// When
 		const { consent } = await connectAiApp(h, { accept: false });
 		// Then
-		expect({ url: consent.url, allows: count(h, "oauth_consent") }).toEqual({
+		expect({
+			url: consent.url,
+			allows: await count(h, schema.oauthConsent),
+		}).toEqual({
 			url: "http://127.0.0.1:33418/callback?error=access_denied&error_description=User+denied+access&state=xyz&iss=http%3A%2F%2Flocalhost%3A5173%2Fapi%2Fauth",
 			allows: 0,
 		});
@@ -189,7 +181,7 @@ describe("AI app sign-in", () => {
 		expect({
 			status: res.status,
 			location: res.headers.get("location"),
-			apps: count(h, "oauth_client"),
+			apps: await count(h, schema.oauthClient),
 		}).toEqual({
 			status: 302,
 			location: "/?error=invalid_client&error_description=client+not+found",
@@ -323,8 +315,8 @@ describe("AI app sign-in", () => {
 		expect({
 			status: res.status,
 			location: res.headers.get("location"),
-			users: count(h, "user"),
-			allows: count(h, "oauth_consent"),
+			users: await count(h, schema.user),
+			allows: await count(h, schema.oauthConsent),
 		}).toEqual({
 			status: 302,
 			location: "/?error=signup_disabled",

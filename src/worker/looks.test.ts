@@ -1,34 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { lookInputSchema } from "@/looks/look";
+import { schema } from "./db";
 import { changeLook, listLooks, saveLook } from "./look-store";
-import { makeHarness, seedLooks } from "./test/harness";
-
-type Harness = Awaited<ReturnType<typeof makeHarness>>;
-
-async function withUser(id: string, email: string, name: string) {
-	const h = await makeHarness();
-	await h.helpers.saveUser(h.helpers.createUser({ id, email, name }));
-	return h;
-}
-
-const withAlice = () => withUser("alice-id", "alice@example.com", "Alice");
-
-async function aliceSignedIn() {
-	const h = await withAlice();
-	const headers = await h.helpers.getAuthHeaders({ userId: "alice-id" });
-	return { h, headers };
-}
-
-async function withBob(h: Harness) {
-	await h.helpers.saveUser(
-		h.helpers.createUser({
-			id: "bob-id",
-			email: "bob@example.com",
-			name: "Bob",
-		}),
-	);
-	return h.helpers.getAuthHeaders({ userId: "bob-id" });
-}
+import { BOB, type Harness, withAccount } from "./test/harness";
 
 const NAVY = {
 	id: "11111111-1111-4111-8111-111111111111",
@@ -65,13 +39,12 @@ const list = async ({ app, env }: Harness, headers: Headers) =>
 		looks: { name: string }[];
 	};
 
-const lookCount = (h: Harness) =>
-	h.sqlite.query("select count(*) as n from look").get();
+const lookCount = async (h: Harness) => (await h.rows(schema.look)).length;
 
 describe("POST /api/looks", () => {
 	test("saves a look and lists it", async () => {
 		// Given: alice signed in
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		// When
 		const saved = await post(h, headers, NAVY);
 		const res = await h.app.request("/api/looks", { headers }, h.env);
@@ -89,7 +62,7 @@ describe("POST /api/looks", () => {
 
 	test("saves a look once when the same save comes twice", async () => {
 		// Given: alice signed in
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		// When
 		const first = await post(h, headers, NAVY);
 		const second = await post(h, headers, NAVY);
@@ -104,7 +77,7 @@ describe("POST /api/looks", () => {
 
 	test("stores the new name when the same save comes again with another name", async () => {
 		// Given: alice saved NAVY
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		await post(h, headers, NAVY);
 		// When
 		const res = await post(h, headers, { ...NAVY, name: "Navy night" });
@@ -117,9 +90,9 @@ describe("POST /api/looks", () => {
 
 	test("refuses an id that another account saved", async () => {
 		// Given: alice saved NAVY; bob signed in
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		await post(h, headers, NAVY);
-		const bob = await withBob(h);
+		const bob = await h.addAccount(BOB);
 		// When
 		const res = await post(h, bob, { ...NAVY, name: "Bob day" });
 		// Then
@@ -136,24 +109,24 @@ describe("POST /api/looks", () => {
 
 	test("refuses POST /api/looks without a session", async () => {
 		// Given: alice, no session headers
-		const h = await withAlice();
+		const { h } = await withAccount();
 		// When
 		const res = await post(h, new Headers(), NAVY);
 		// Then
 		expect({
 			status: res.status,
 			body: await res.json(),
-			rows: h.sqlite.query("select count(*) as n from look").get(),
+			rows: await lookCount(h),
 		}).toEqual({
 			status: 401,
 			body: { error: "unauthorized" },
-			rows: { n: 0 },
+			rows: 0,
 		});
 	});
 
 	test("refuses a body that is not JSON", async () => {
 		// Given: alice signed in; the body text `nope` in place of NAVY
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		// When
 		const res = await post(h, headers, "nope");
 		// Then
@@ -165,7 +138,7 @@ describe("POST /api/looks", () => {
 
 	test("refuses an id that is not a UUID", async () => {
 		// Given: NAVY with another id
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		// When
 		const res = await post(h, headers, { ...NAVY, id: "look-1" });
 		// Then
@@ -177,7 +150,7 @@ describe("POST /api/looks", () => {
 
 	test("refuses an unknown mode", async () => {
 		// Given: NAVY with an unknown mode
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		// When
 		const res = await post(h, headers, { ...NAVY, modeId: "polo-jumper" });
 		// Then
@@ -189,7 +162,7 @@ describe("POST /api/looks", () => {
 
 	test("refuses a code that is not a hex colour", async () => {
 		// Given: NAVY with a sweater colour that is not a hex code
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		// When
 		const res = await post(h, headers, {
 			...NAVY,
@@ -204,7 +177,7 @@ describe("POST /api/looks", () => {
 
 	test("takes a name of 60 characters", async () => {
 		// Given: NAVY with a name of 60 characters
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		// When
 		const res = await post(h, headers, { ...NAVY, name: "x".repeat(60) });
 		// Then
@@ -217,7 +190,7 @@ describe("POST /api/looks", () => {
 
 	test("refuses a name of 61 characters", async () => {
 		// Given: NAVY with a name of 61 characters
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		// When
 		const res = await post(h, headers, { ...NAVY, name: "x".repeat(61) });
 		// Then
@@ -231,7 +204,7 @@ describe("POST /api/looks", () => {
 describe("POST /api/looks against the mode", () => {
 	test("refuses a garment that is not in the mode", async () => {
 		// Given: NAVY with a tee colour, and the mode has no tee
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		// When
 		const res = await post(h, headers, {
 			...NAVY,
@@ -246,7 +219,7 @@ describe("POST /api/looks against the mode", () => {
 
 	test("refuses a mode garment with no colour", async () => {
 		// Given: NAVY with the long polo's colour taken out
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		const { polo_l: _, ...colours } = NAVY.colours;
 		// When
 		const res = await post(h, headers, { ...NAVY, colours });
@@ -259,7 +232,7 @@ describe("POST /api/looks against the mode", () => {
 
 	test("refuses an open jacket that is not in the mode", async () => {
 		// Given: NAVY with the wool jacket open, and the mode has no wool jacket
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		// When
 		const res = await post(h, headers, { ...NAVY, open: ["wool"] });
 		// Then
@@ -273,55 +246,55 @@ describe("POST /api/looks against the mode", () => {
 describe("POST /api/looks at the look limit", () => {
 	test("refuses look number 301", async () => {
 		// Given: alice signed in with 300 looks
-		const { h, headers } = await aliceSignedIn();
-		seedLooks(h, "alice-id", 300);
+		const { h, headers } = await withAccount();
+		await h.seedLooks("alice-id", 300);
 		// When
 		const res = await post(h, headers, NAVY);
 		// Then
 		expect({
 			status: res.status,
 			body: await res.json(),
-			count: lookCount(h),
+			count: await lookCount(h),
 		}).toEqual({
 			status: 409,
 			body: { error: "look_limit" },
-			count: { n: 300 },
+			count: 300,
 		});
 	});
 
 	test("saves look number 300", async () => {
 		// Given: alice signed in with 299 looks
-		const { h, headers } = await aliceSignedIn();
-		seedLooks(h, "alice-id", 299);
+		const { h, headers } = await withAccount();
+		await h.seedLooks("alice-id", 299);
 		// When
 		const res = await post(h, headers, NAVY);
 		// Then
-		expect({ status: res.status, count: lookCount(h) }).toEqual({
+		expect({ status: res.status, count: await lookCount(h) }).toEqual({
 			status: 201,
-			count: { n: 300 },
+			count: 300,
 		});
 	});
 
 	test("changes a look at the limit", async () => {
 		// Given: alice saved NAVY and has 300 looks
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		await post(h, headers, NAVY);
-		seedLooks(h, "alice-id", 299);
+		await h.seedLooks("alice-id", 299);
 		// When
 		const res = await post(h, headers, { ...NAVY, name: "Navy night" });
 		// Then
 		expect({
 			status: res.status,
 			name: ((await res.json()) as { look: { name: string } }).look.name,
-			count: lookCount(h),
-		}).toEqual({ status: 200, name: "Navy night", count: { n: 300 } });
+			count: await lookCount(h),
+		}).toEqual({ status: 200, name: "Navy night", count: 300 });
 	});
 });
 
 describe("GET /api/looks", () => {
 	test("lists the newest look first", async () => {
 		// Given: alice saved "First", then "Second", one right after the other
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		await post(h, headers, { ...NAVY, name: "First" });
 		await post(h, headers, { ...NAVY, id: SECOND_ID, name: "Second" });
 		// When
@@ -332,7 +305,7 @@ describe("GET /api/looks", () => {
 
 	test("refuses GET /api/looks without a session", async () => {
 		// Given: alice saved NAVY; no session headers
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		await post(h, headers, NAVY);
 		// When
 		const res = await h.app.request("/api/looks", {}, h.env);
@@ -345,9 +318,9 @@ describe("GET /api/looks", () => {
 
 	test("lists only the account's own looks", async () => {
 		// Given: alice saved NAVY; bob signed in
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		await post(h, headers, NAVY);
-		const bob = await withBob(h);
+		const bob = await h.addAccount(BOB);
 		// When
 		const res = await h.app.request("/api/looks", { headers: bob }, h.env);
 		// Then
@@ -369,7 +342,7 @@ const names = async (h: Harness, headers: Headers) =>
 describe("DELETE /api/looks/:id", () => {
 	test("deletes a look", async () => {
 		// Given: alice saved NAVY
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		await post(h, headers, NAVY);
 		// When
 		const res = await remove(h, headers);
@@ -382,7 +355,7 @@ describe("DELETE /api/looks/:id", () => {
 
 	test("answers 404 when the same delete comes twice", async () => {
 		// Given: alice saved NAVY
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		await post(h, headers, NAVY);
 		// When
 		const first = await remove(h, headers);
@@ -401,9 +374,9 @@ describe("DELETE /api/looks/:id", () => {
 
 	test("answers 404 for a delete of another account's look", async () => {
 		// Given: alice saved NAVY; bob is signed in too
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		await post(h, headers, NAVY);
-		const bob = await withBob(h);
+		const bob = await h.addAccount(BOB);
 		// When
 		const res = await remove(h, bob);
 		// Then
@@ -420,7 +393,7 @@ describe("DELETE /api/looks/:id", () => {
 
 	test("refuses DELETE /api/looks/:id without a session", async () => {
 		// Given: alice saved NAVY; no session headers
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		await post(h, headers, NAVY);
 		// When
 		const res = await remove(h, new Headers());
@@ -428,11 +401,11 @@ describe("DELETE /api/looks/:id", () => {
 		expect({
 			status: res.status,
 			body: await res.json(),
-			rows: h.sqlite.query("select count(*) as n from look").get(),
+			rows: await lookCount(h),
 		}).toEqual({
 			status: 401,
 			body: { error: "unauthorized" },
-			rows: { n: 1 },
+			rows: 1,
 		});
 	});
 });
@@ -463,7 +436,7 @@ const NAVY_NIGHT = {
 };
 
 async function aliceWithTwoLooks() {
-	const { h, headers } = await aliceSignedIn();
+	const { h, headers } = await withAccount();
 	await post(h, headers, NAVY);
 	await post(h, headers, { ...NAVY, id: SECOND_ID, name: "Second" });
 	return { h, headers };
@@ -489,7 +462,7 @@ describe("PUT /api/looks/:id", () => {
 
 	test("changes a look once when the same change comes twice", async () => {
 		// Given: alice saved NAVY
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		await post(h, headers, NAVY);
 		// When
 		const first = await put(h, headers, NAVY_NIGHT);
@@ -498,11 +471,11 @@ describe("PUT /api/looks/:id", () => {
 		expect({
 			statuses: [first.status, second.status],
 			names: await names(h, headers),
-			rows: h.sqlite.query("select count(*) as n from look").get(),
+			rows: await lookCount(h),
 		}).toEqual({
 			statuses: [200, 200],
 			names: ["Navy night"],
-			rows: { n: 1 },
+			rows: 1,
 		});
 	});
 
@@ -545,7 +518,7 @@ describe("PUT /api/looks/:id", () => {
 
 	test("answers 404 for a look that is gone", async () => {
 		// Given: alice saved NAVY, then deleted it
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		await post(h, headers, NAVY);
 		await remove(h, headers);
 		// When
@@ -560,9 +533,9 @@ describe("PUT /api/looks/:id", () => {
 
 	test("answers 404 for a change to another account's look", async () => {
 		// Given: alice saved NAVY; bob is signed in too
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		await post(h, headers, NAVY);
-		const bob = await withBob(h);
+		const bob = await h.addAccount(BOB);
 		// When
 		const res = await put(h, bob, NAVY_NIGHT);
 		// Then
@@ -579,7 +552,7 @@ describe("PUT /api/looks/:id", () => {
 
 	test("refuses PUT /api/looks/:id without a session", async () => {
 		// Given: alice saved NAVY; no session headers
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		await post(h, headers, NAVY);
 		// When
 		const res = await put(h, new Headers(), NAVY_NIGHT);
@@ -599,15 +572,13 @@ describe("PUT /api/looks/:id", () => {
 describe("look rows", () => {
 	test("deletes the looks with their user", async () => {
 		// Given: alice saved two looks
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		await post(h, headers, NAVY);
 		await post(h, headers, { ...NAVY, id: SECOND_ID });
 		// When
-		h.sqlite.run("delete from user where id = 'alice-id'");
+		await h.helpers.deleteUser("alice-id");
 		// Then
-		expect(h.sqlite.query("select count(*) as n from look").get()).toEqual({
-			n: 0,
-		});
+		expect(await lookCount(h)).toBe(0);
 	});
 });
 
@@ -632,17 +603,13 @@ const addTag = async ({ app, env }: Harness, headers: Headers, name: string) =>
 const tagsOfLook = async (res: Response) =>
 	((await res.json()) as { look: { tags: string[] } }).look.tags;
 
-const links = (h: Harness, userId: string) =>
-	(
-		h.sqlite
-			.query("select count(*) as n from look_tag where user_id = ?")
-			.get(userId) as { n: number }
-	).n;
+const links = async (h: Harness, userId: string) =>
+	(await h.rows(schema.lookTag, userId)).length;
 
 describe("tags on looks", () => {
 	test("saves a look with two tags and lists them in the order they were made", async () => {
 		// Given: alice signed in; tags "Work" then "Trip" posted
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		const work = await addTag(h, headers, "Work");
 		const trip = await addTag(h, headers, "Trip");
 		// When
@@ -656,8 +623,8 @@ describe("tags on looks", () => {
 
 	test("drops a tag of another account from a look", async () => {
 		// Given: bob posted tag "Trip"; alice signed in with tag "Work"
-		const { h, headers } = await aliceSignedIn();
-		const bob = await withBob(h);
+		const { h, headers } = await withAccount();
+		const bob = await h.addAccount(BOB);
 		const bobTrip = await addTag(h, bob, "Trip");
 		const work = await addTag(h, headers, "Work");
 		// When
@@ -666,13 +633,13 @@ describe("tags on looks", () => {
 		expect({
 			status: res.status,
 			tags: await tagsOfLook(res),
-			bobLinks: links(h, "bob-id"),
+			bobLinks: await links(h, "bob-id"),
 		}).toEqual({ status: 201, tags: [work], bobLinks: 0 });
 	});
 
 	test("replaces a look's tags on a change", async () => {
 		// Given: alice saved NAVY with "Work"; tag "Trip" posted
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		const work = await addTag(h, headers, "Work");
 		await post(h, headers, { ...NAVY, tags: [work] });
 		const trip = await addTag(h, headers, "Trip");
@@ -687,7 +654,7 @@ describe("tags on looks", () => {
 
 	test("saves a look's tags once when the same save comes twice", async () => {
 		// Given: alice signed in with tag "Work"
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		const work = await addTag(h, headers, "Work");
 		// When
 		await post(h, headers, { ...NAVY, tags: [work] });
@@ -696,13 +663,13 @@ describe("tags on looks", () => {
 		expect({
 			second: second.status,
 			tags: await tagsOfLook(second),
-			links: links(h, "alice-id"),
+			links: await links(h, "alice-id"),
 		}).toEqual({ second: 200, tags: [work], links: 1 });
 	});
 
 	test("refuses a look with 51 tags", async () => {
 		// Given: alice signed in
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		const tags = Array.from(
 			{ length: 51 },
 			(_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
@@ -722,8 +689,8 @@ describe("two look changes made from one read", () => {
 		// Given: NAVY saved, and the one read both changes make before either
 		// writes. Two calls through the harness do not overlap, so the test
 		// sets the order itself.
-		const h = await withAlice();
-		const { db } = h.settings;
+		const { h } = await withAccount();
+		const { db } = h;
 		await saveLook(db, "alice-id", lookInputSchema.parse(NAVY));
 		const [read] = await listLooks(db, "alice-id");
 		// When
@@ -754,8 +721,8 @@ describe("two look changes made from one read", () => {
 describe("two look saves at once", () => {
 	test("saves one of two looks sent at once at look 299", async () => {
 		// Given
-		const h = await withAlice();
-		await seedLooks(h, "alice-id", 299);
+		const { h } = await withAccount();
+		await h.seedLooks("alice-id", 299);
 		const first = lookInputSchema.parse({ ...NAVY, id: SECOND_ID });
 		const second = lookInputSchema.parse({
 			...NAVY,
@@ -763,13 +730,13 @@ describe("two look saves at once", () => {
 		});
 		// When
 		const results = await Promise.all([
-			saveLook(h.settings.db, "alice-id", first),
-			saveLook(h.settings.db, "alice-id", second),
+			saveLook(h.db, "alice-id", first),
+			saveLook(h.db, "alice-id", second),
 		]);
 		// Then
 		expect({
-			count: h.sqlite.query("select count(*) as n from look").get(),
+			count: await lookCount(h),
 			oks: results.map((r) => r.ok).sort(),
-		}).toEqual({ count: { n: 300 }, oks: [false, true] });
+		}).toEqual({ count: 300, oks: [false, true] });
 	});
 });

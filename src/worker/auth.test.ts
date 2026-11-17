@@ -1,30 +1,25 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import type { BetterAuthOptions } from "better-auth";
 import { createApp } from "./app";
 import { type Auth, authOptions, createAuthCache } from "./auth";
+import { schema } from "./db";
 import {
+	BOB,
 	cookie,
 	finishGoogleSignIn,
+	googleUser,
+	type Harness,
 	makeHarness,
 	startGoogleSignIn,
 	stubOutside,
+	withAccount,
 } from "./test/harness";
-
-async function withUser(id: string, email: string, name: string) {
-	const h = await makeHarness();
-	await h.helpers.saveUser(h.helpers.createUser({ id, email, name }));
-	return h;
-}
 
 describe("GET /api/me", () => {
 	test("returns the signed-in user on GET /api/me", async () => {
 		// Given: alice, signed in
-		const { app, env, helpers } = await withUser(
-			"alice-id",
-			"alice@example.com",
-			"Alice",
-		);
-		const headers = await helpers.getAuthHeaders({ userId: "alice-id" });
+		const { h, headers } = await withAccount();
+		const { app, env } = h;
 		// When
 		const res = await app.request("/api/me", { headers }, env);
 		// Then
@@ -39,11 +34,7 @@ describe("GET /api/me", () => {
 
 	test("refuses GET /api/me without a session", async () => {
 		// Given: alice saved, but no session headers
-		const { app, env } = await withUser(
-			"alice-id",
-			"alice@example.com",
-			"Alice",
-		);
+		const { app, env } = (await withAccount()).h;
 		// When
 		const res = await app.request("/api/me", {}, env);
 		// Then
@@ -53,20 +44,9 @@ describe("GET /api/me", () => {
 
 	test("gives each session only its own user", async () => {
 		// Given: alice and bob, each signed in
-		const { app, env, helpers } = await withUser(
-			"alice-id",
-			"alice@example.com",
-			"Alice",
-		);
-		await helpers.saveUser(
-			helpers.createUser({
-				id: "bob-id",
-				email: "bob@example.com",
-				name: "Bob",
-			}),
-		);
-		const aliceHeaders = await helpers.getAuthHeaders({ userId: "alice-id" });
-		const bobHeaders = await helpers.getAuthHeaders({ userId: "bob-id" });
+		const { h, headers: aliceHeaders } = await withAccount();
+		const { app, env } = h;
+		const bobHeaders = await h.addAccount(BOB);
 		// When
 		const alice = await app.request("/api/me", { headers: aliceHeaders }, env);
 		const bob = await app.request("/api/me", { headers: bobHeaders }, env);
@@ -87,15 +67,11 @@ describe("GET /api/me", () => {
 describe("migrations", () => {
 	test("makes the auth, dress, look, and tag tables from the migrations", async () => {
 		// Given
-		const { sqlite } = await makeHarness();
+		const h = await makeHarness();
 		// When
-		const rows = sqlite
-			.query<{ name: string }, []>(
-				"select name from sqlite_master where type = 'table' order by name",
-			)
-			.all();
+		const names = h.tables();
 		// Then
-		expect(rows.map((r) => r.name)).toEqual([
+		expect(names).toEqual([
 			"__drizzle_migrations",
 			"account",
 			"ai_action_count",
@@ -121,15 +97,10 @@ describe("migrations", () => {
 	});
 });
 
-type Harness = Awaited<ReturnType<typeof makeHarness>>;
-
 const signIn = async (h: Harness) =>
 	finishGoogleSignIn(h, await startGoogleSignIn(h));
 
 describe("Google sign-in", () => {
-	let restore = () => {};
-	afterEach(() => restore());
-
 	test("sends sign-in to Google with our callback address", async () => {
 		// Given
 		const h = await makeHarness();
@@ -168,14 +139,7 @@ describe("Google sign-in", () => {
 	test("makes one user on the first Google sign-in and reuses it", async () => {
 		// Given
 		const h = await makeHarness();
-		restore = stubOutside({
-			google: {
-				sub: "g-123",
-				email: "carol@example.com",
-				name: "Carol",
-				picture: "https://example.com/c.png",
-			},
-		}).restore;
+		stubOutside({ google: googleUser("carol") });
 		// When
 		const { res: first, jar } = await signIn(h);
 		const me = await h.app.request(
@@ -185,12 +149,13 @@ describe("Google sign-in", () => {
 		);
 		const { res: second, jar: secondJar } = await signIn(h);
 		// Then
-		const ids = h.sqlite.query<{ id: string }, []>("select id from user").all();
-		const accounts = h.sqlite
-			.query<{ provider_id: string; account_id: string }, []>(
-				"select provider_id, account_id from account",
-			)
-			.all();
+		const ids = await h.rows(schema.user);
+		const accounts = (await h.rows(schema.account)).map(
+			({ providerId, accountId }) => ({
+				provider_id: providerId,
+				account_id: accountId,
+			}),
+		);
 		const meBody = (await me.json()) as {
 			id: string;
 			name: string;
@@ -217,7 +182,7 @@ describe("Google sign-in", () => {
 			},
 			users: 1,
 			sameUser: true,
-			accounts: [{ provider_id: "google", account_id: "g-123" }],
+			accounts: [{ provider_id: "google", account_id: "g-carol" }],
 		});
 	});
 
@@ -240,53 +205,35 @@ describe("Google sign-in", () => {
 });
 
 describe("sign-up switch", () => {
-	let restore = () => {};
-	afterEach(() => restore());
-
 	const withSignups = (h: Harness, value: string | undefined): Harness => ({
 		...h,
 		env: { ...h.env, SIGNUPS_CLOSED: value } as unknown as Env,
 	});
 
-	const users = (h: Harness) =>
-		h.sqlite.query("select count(*) as n from user").get();
+	const users = async (h: Harness) => (await h.rows(schema.user)).length;
 
 	test("refuses a new Google account while sign-ups are closed", async () => {
 		// Given: no user; sign-ups closed
 		const h = await makeHarness();
-		restore = stubOutside({
-			google: {
-				sub: "g-new",
-				email: "new@example.com",
-				name: "New",
-				picture: "https://example.com/n.png",
-			},
-		}).restore;
+		stubOutside({ google: googleUser("new") });
 		// When
 		const { res } = await signIn(withSignups(h, "true"));
 		// Then
 		expect({
 			status: res.status,
 			location: res.headers.get("location"),
-			users: users(h),
+			users: await users(h),
 		}).toEqual({
 			status: 302,
 			location: "/?error=signup_disabled",
-			users: { n: 0 },
+			users: 0,
 		});
 	});
 
 	test("signs in an existing account while sign-ups are closed", async () => {
 		// Given: the account made by a sign-in while sign-up was open
 		const h = await makeHarness();
-		restore = stubOutside({
-			google: {
-				sub: "g-old",
-				email: "old@example.com",
-				name: "Old",
-				picture: "https://example.com/o.png",
-			},
-		}).restore;
+		stubOutside({ google: googleUser("old") });
 		expect((await signIn(h)).res.headers.get("location")).toBe("/");
 		// When
 		const { res, jar } = await signIn(withSignups(h, "true"));
@@ -310,14 +257,7 @@ describe("sign-up switch", () => {
 	test("refuses a new Google account when sign-ups close after a request with them open", async () => {
 		// Given: no user; one request with sign-ups open, then sign-ups closed
 		const h = await makeHarness();
-		restore = stubOutside({
-			google: {
-				sub: "g-new",
-				email: "new@example.com",
-				name: "New",
-				picture: "https://example.com/n.png",
-			},
-		}).restore;
+		stubOutside({ google: googleUser("new") });
 		await h.app.request("/api/auth/get-session", {}, h.env);
 		// When
 		const { res } = await signIn(withSignups(h, "true"));
@@ -325,11 +265,11 @@ describe("sign-up switch", () => {
 		expect({
 			status: res.status,
 			location: res.headers.get("location"),
-			users: users(h),
+			users: await users(h),
 		}).toEqual({
 			status: 302,
 			location: "/?error=signup_disabled",
-			users: { n: 0 },
+			users: 0,
 		});
 	});
 
@@ -338,22 +278,14 @@ describe("sign-up switch", () => {
 		const results = [];
 		for (const value of [undefined, "false", "yes", "TRUE"]) {
 			const h = await makeHarness();
-			restore = stubOutside({
-				google: {
-					sub: "g-new",
-					email: "new@example.com",
-					name: "New",
-					picture: "https://example.com/n.png",
-				},
-			}).restore;
+			stubOutside({ google: googleUser("new") });
 			// When
 			const { res } = await signIn(withSignups(h, value));
-			restore();
 			results.push({
 				value: value ?? "not set",
 				status: res.status,
 				location: res.headers.get("location"),
-				users: users(h),
+				users: await users(h),
 			});
 		}
 		// Then
@@ -362,7 +294,7 @@ describe("sign-up switch", () => {
 				value,
 				status: 302,
 				location: "/",
-				users: { n: 1 },
+				users: 1,
 			})),
 		);
 	});
@@ -371,15 +303,11 @@ describe("sign-up switch", () => {
 describe("session cookie cache", () => {
 	test("reads a cached session without the database", async () => {
 		// Given: alice signed in, with only her session token cookie
-		const { app, env, helpers, sqlite } = await withUser(
-			"alice-id",
-			"alice@example.com",
-			"Alice",
-		);
-		const headers = await helpers.getAuthHeaders({ userId: "alice-id" });
+		const { h, headers } = await withAccount();
+		const { app, env } = h;
 		// When
 		const first = await app.request("/api/me", { headers }, env);
-		sqlite.run("delete from session");
+		await h.db.delete(schema.session);
 		const cache = first.headers
 			.getSetCookie()
 			.map((c) => c.split(";")[0])
@@ -406,7 +334,7 @@ describe("Better Auth per isolate", () => {
 		let builds = 0;
 		const app = createApp(() => {
 			builds += 1;
-			return h.settings.db;
+			return h.db;
 		});
 		// When
 		await app.request("/api/auth/get-session", {}, h.env);
@@ -450,12 +378,8 @@ describe("Better Auth per isolate", () => {
 describe("GET /api/auth/get-session", () => {
 	test("sends the session with no set-auth-jwt header", async () => {
 		// Given: alice, signed in
-		const { app, env, helpers } = await withUser(
-			"alice-id",
-			"alice@example.com",
-			"Alice",
-		);
-		const headers = await helpers.getAuthHeaders({ userId: "alice-id" });
+		const { h, headers } = await withAccount();
+		const { app, env } = h;
 		// When
 		const res = await app.request("/api/auth/get-session", { headers }, env);
 		// Then

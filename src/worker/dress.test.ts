@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { applyChange, type DressChange } from "@/dress/state";
+import { schema } from "./db";
 import { loadDress, saveDress } from "./dress-store";
-import { makeHarness } from "./test/harness";
+import { BOB, type Harness, withAccount } from "./test/harness";
 
 type Dress = {
 	modeId: string;
@@ -11,19 +12,11 @@ type Dress = {
 	mannequin: { skin: string; hair: string };
 };
 
-async function withUser(id: string, email: string, name: string) {
-	const h = await makeHarness();
-	await h.helpers.saveUser(h.helpers.createUser({ id, email, name }));
-	return h;
-}
-
-const withAlice = () => withUser("alice-id", "alice@example.com", "Alice");
-
 describe("GET /api/dress", () => {
 	test("gives a new account the starter set", async () => {
 		// Given: alice, signed in, with no dress rows
-		const { app, env, helpers } = await withAlice();
-		const headers = await helpers.getAuthHeaders({ userId: "alice-id" });
+		const { h, headers } = await withAccount();
+		const { app, env } = h;
 		// When
 		const res = await app.request("/api/dress", { headers }, env);
 		// Then
@@ -53,8 +46,8 @@ describe("GET /api/dress", () => {
 
 	test("gives a new account the starter skin and hair", async () => {
 		// Given: alice, signed in, with no dress rows
-		const { app, env, helpers } = await withAlice();
-		const headers = await helpers.getAuthHeaders({ userId: "alice-id" });
+		const { h, headers } = await withAccount();
+		const { app, env } = h;
 		// When
 		const res = await app.request("/api/dress", { headers }, env);
 		// Then
@@ -67,50 +60,39 @@ describe("GET /api/dress", () => {
 
 	test("writes the starter set once when asked twice", async () => {
 		// Given: alice, signed in, with no dress rows
-		const { app, env, helpers, sqlite } = await withAlice();
-		const headers = await helpers.getAuthHeaders({ userId: "alice-id" });
+		const { h, headers } = await withAccount();
+		const { app, env } = h;
 		// When
 		await app.request("/api/dress", { headers }, env);
 		await app.request("/api/dress", { headers }, env);
 		// Then
-		const count = (table: string) =>
-			sqlite
-				.query<{ n: number }, []>(
-					`select count(*) as n from ${table} where user_id = 'alice-id'`,
-				)
-				.get()?.n;
-		expect([count("colour_square"), count("outfit_garment")]).toEqual([58, 17]);
+		const counts = [
+			(await h.rows(schema.colourSquare, "alice-id")).length,
+			(await h.rows(schema.outfitGarment, "alice-id")).length,
+		];
+		expect(counts).toEqual([58, 17]);
 	});
 
 	test("removes the colours and outfit with the user", async () => {
 		// Given: alice after one GET /api/dress and one skin change
-		const h = await withAlice();
-		const headers = await h.helpers.getAuthHeaders({ userId: "alice-id" });
+		const { h, headers } = await withAccount();
 		await h.app.request("/api/dress", { headers }, h.env);
 		await post(h, headers, { kind: "mannequin", part: "skin", hex: "#8D5524" });
-		const { sqlite } = h;
 		// When
-		sqlite.run("delete from user where id = 'alice-id'");
+		await h.helpers.deleteUser("alice-id");
 		// Then
 		const counts = [
-			"colour_square",
-			"outfit",
-			"outfit_garment",
-			"mannequin",
-		].map(
-			(table) =>
-				sqlite
-					.query<{ n: number }, []>(
-						`select count(*) as n from ${table} where user_id = 'alice-id'`,
-					)
-					.get()?.n,
-		);
+			(await h.rows(schema.colourSquare, "alice-id")).length,
+			(await h.rows(schema.outfit, "alice-id")).length,
+			(await h.rows(schema.outfitGarment, "alice-id")).length,
+			(await h.rows(schema.mannequin, "alice-id")).length,
+		];
 		expect(counts).toEqual([0, 0, 0, 0]);
 	});
 
 	test("refuses GET /api/dress without a session", async () => {
 		// Given: alice saved, but no session headers
-		const { app, env } = await withAlice();
+		const { app, env } = (await withAccount()).h;
 		// When
 		const res = await app.request("/api/dress", {}, env);
 		// Then
@@ -118,8 +100,6 @@ describe("GET /api/dress", () => {
 		expect(await res.json()).toEqual({ error: "unauthorized" });
 	});
 });
-
-type Harness = Awaited<ReturnType<typeof makeHarness>>;
 
 const post = ({ app, env }: Harness, headers: Headers, body: unknown) =>
 	app.request(
@@ -139,8 +119,7 @@ const get = async ({ app, env }: Harness, headers: Headers) =>
 	(await (await app.request("/api/dress", { headers }, env)).json()) as Dress;
 
 async function aliceAfterGet() {
-	const h = await withAlice();
-	const headers = await h.helpers.getAuthHeaders({ userId: "alice-id" });
+	const { h, headers } = await withAccount();
 	await get(h, headers);
 	return { h, headers };
 }
@@ -267,11 +246,7 @@ describe("POST /api/dress/changes", () => {
 		const second = await post(h, headers, skin);
 		const s = await get(h, headers);
 		// Then
-		const rows = h.sqlite
-			.query<{ n: number }, []>(
-				"select count(*) as n from mannequin where user_id = 'alice-id'",
-			)
-			.get()?.n;
+		const rows = (await h.rows(schema.mannequin, "alice-id")).length;
 		expect({
 			statuses: [first.status, second.status],
 			mannequin: s.mannequin,
@@ -394,7 +369,7 @@ describe("POST /api/dress/changes", () => {
 
 	test("refuses POST /api/dress/changes without a session", async () => {
 		// Given: alice saved, but no session headers
-		const h = await withAlice();
+		const { h } = await withAccount();
 		// When
 		const res = await post(h, new Headers(), {
 			kind: "pick",
@@ -410,16 +385,8 @@ describe("POST /api/dress/changes", () => {
 
 	test("keeps each account's colours apart", async () => {
 		// Given: alice and bob, each signed in
-		const h = await withAlice();
-		await h.helpers.saveUser(
-			h.helpers.createUser({
-				id: "bob-id",
-				email: "bob@example.com",
-				name: "Bob",
-			}),
-		);
-		const alice = await h.helpers.getAuthHeaders({ userId: "alice-id" });
-		const bob = await h.helpers.getAuthHeaders({ userId: "bob-id" });
+		const { h, headers: alice } = await withAccount();
+		const bob = await h.addAccount(BOB);
 		// When
 		await post(h, alice, { kind: "pick", garment: "sweater", hex: "#7A2E2E" });
 		await post(h, alice, { kind: "mode", modeId: "tee-sweater" });
@@ -452,7 +419,7 @@ describe("POST /api/dress/changes", () => {
 
 // Two requests that each read the stored state before either writes.
 async function atOnce(h: Harness, changes: DressChange[]) {
-	const db = h.settings.db;
+	const { db } = h;
 	const reads = await Promise.all(changes.map(() => loadDress(db, "alice-id")));
 	for (const [i, stored] of reads.entries()) {
 		const result = applyChange(stored.state, changes[i]);
