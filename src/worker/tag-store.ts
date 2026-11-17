@@ -65,24 +65,29 @@ export async function addTag(
 export async function renameTag(
 	db: Db,
 	userId: string,
-	input: Tag,
-): Promise<
-	{ ok: true; tag: Tag } | { ok: false; error: "not_found" | "duplicate" }
-> {
+	id: string,
+	name: string,
+): Promise<Result<Tag, TagError>> {
+	const checked = tagSchema.shape.name.safeParse(name);
+	if (!checked.success) return { ok: false, error: { code: "name_length" } };
+	const duplicate = {
+		ok: false,
+		error: { code: "duplicate", name: checked.data },
+	} as const;
 	const tags = await listTags(db, userId);
-	if (tags.some((t) => t.id !== input.id && sameTagName(t.name, input.name)))
-		return { ok: false, error: "duplicate" };
+	if (tags.some((t) => t.id !== id && sameTagName(t.name, checked.data)))
+		return duplicate;
 	try {
 		const [row] = await db
 			.update(tag)
-			.set({ name: input.name })
-			.where(and(eq(tag.id, input.id), eq(tag.userId, userId)))
+			.set({ name: checked.data })
+			.where(and(eq(tag.id, id), eq(tag.userId, userId)))
 			.returning({ id: tag.id, name: tag.name });
 		return row
-			? { ok: true, tag: toTag(row) }
-			: { ok: false, error: "not_found" };
+			? { ok: true, value: toTag(row) }
+			: { ok: false, error: { code: "not_found" } };
 	} catch (error) {
-		if (isNameTaken(error)) return { ok: false, error: "duplicate" };
+		if (isNameTaken(error)) return duplicate;
 		throw error;
 	}
 }

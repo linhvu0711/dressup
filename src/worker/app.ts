@@ -4,7 +4,7 @@ import { createMiddleware } from "hono/factory";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
 import { type DressError, dressChangeSchema } from "@/dress/state";
-import { tagSchema } from "@/tags/tag";
+import { tagIdSchema } from "@/tags/tag";
 import { disconnectAiApp, listAiApps } from "./ai-app-store";
 import {
 	type Auth,
@@ -270,16 +270,24 @@ export function createApp(getDb: (env: Env) => Db) {
 
 	// A gone tag and another account's tag answer the same 404, as looks do.
 	app.put("/tags/:id", withAuth, requireUser, async (c) => {
-		const body = await readBody(c, tagSchema);
+		const body = await readBody(
+			c,
+			z.object({ id: tagIdSchema, name: z.string() }),
+		);
 		if ("refused" in body) return body.refused;
 		if (body.data.id !== c.req.param("id"))
 			return c.json({ error: "invalid", field: "id" }, 400);
-		const renamed = await renameTag(getDb(c.env), c.var.user.id, body.data);
-		if (!renamed.ok)
-			return renamed.error === "duplicate"
-				? c.json({ error: "duplicate", field: "name" }, 400)
-				: c.json({ error: "not_found" }, 404);
-		return c.json({ tag: renamed.tag }, 200);
+		const renamed = await renameTag(
+			getDb(c.env),
+			c.var.user.id,
+			body.data.id,
+			body.data.name,
+		);
+		if (!renamed.ok) {
+			const { status, body } = tagRefusals[renamed.error.code];
+			return c.json(body, status);
+		}
+		return c.json({ tag: renamed.value }, 200);
 	});
 
 	app.delete("/tags/:id", withAuth, requireUser, async (c) => {

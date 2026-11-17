@@ -17,7 +17,7 @@ import {
 	MANNEQUIN_PARTS,
 } from "@/dress/state";
 import { LOOK_LIMIT, LOOK_NAME_MAX, type Look } from "@/looks/look";
-import { TAG_NAME_MAX, type Tag, tagSchema } from "@/tags/tag";
+import { TAG_NAME_MAX, type Tag } from "@/tags/tag";
 import { countAiAction } from "./ai-action-store";
 import {
 	dressRefusalText,
@@ -27,8 +27,6 @@ import {
 	noTag,
 	noTags,
 	serverError,
-	tagNameLength,
-	tagNameTaken,
 	tagRefusalText,
 	tagsLeftOffText,
 	tooManyActions,
@@ -394,19 +392,11 @@ export function registerAiActions(server: McpServer, account: Account) {
 				name: z.string().describe("The tag's new name."),
 			}),
 		},
-		async (args) => {
-			const parsed = tagSchema.safeParse(args);
-			if (!parsed.success)
-				return refusal(
-					parsed.error.issues.some((issue) => issue.path[0] === "id")
-						? noTag
-						: tagNameLength(),
-				);
-			const renamed = await renameTag(db, userId, parsed.data);
-			if (renamed.ok) return answer({ tag: renamed.tag });
-			return refusal(
-				renamed.error === "not_found" ? noTag : tagNameTaken(parsed.data.name),
-			);
+		async ({ id, name }) => {
+			const renamed = await renameTag(db, userId, id, name);
+			return renamed.ok
+				? answer({ tag: renamed.value })
+				: refusal(tagRefusalText(renamed.error));
 		},
 	);
 
