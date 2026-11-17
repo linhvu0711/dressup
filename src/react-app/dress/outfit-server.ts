@@ -1,8 +1,6 @@
-import {
-	type DressChange,
-	type DressState,
-	dressStateSchema,
-} from "@/dress/state";
+import { RequestError, request, SignedOut } from "@/data/client";
+import { dressAnswer } from "@/data/contract";
+import type { DressChange, DressState } from "@/dress/state";
 
 export type Loaded =
 	| { kind: "loaded"; state: DressState }
@@ -20,35 +18,29 @@ export type OutfitServer = {
 	send: (change: DressChange) => Promise<Sent>;
 };
 
-// The server the page talks to. It calls fetch directly for now; #60 routes
-// it through the shared request helper.
+// The server the page talks to, through the data module's request helper.
 export function httpOutfitServer(): OutfitServer {
 	return {
 		load: async () => {
 			try {
-				const res = await fetch("/api/dress");
-				if (res.status === 401) return { kind: "signed-out" };
-				if (!res.ok) return { kind: "failed" };
 				return {
 					kind: "loaded",
-					state: dressStateSchema.parse(await res.json()),
+					state: await request("GET", "/api/dress", { answer: dressAnswer }),
 				};
-			} catch {
-				return { kind: "failed" };
+			} catch (error) {
+				return error instanceof SignedOut
+					? { kind: "signed-out" }
+					: { kind: "failed" };
 			}
 		},
 		send: async (change) => {
 			try {
-				const res = await fetch("/api/dress/changes", {
-					method: "POST",
-					headers: { "content-type": "application/json" },
-					body: JSON.stringify(change),
-				});
-				if (res.status === 204) return "stored";
-				if (res.status === 401) return "signed-out";
-				if (res.status === 400) return "refused";
-				return "failed";
-			} catch {
+				await request("POST", "/api/dress/changes", { body: change });
+				return "stored";
+			} catch (error) {
+				if (error instanceof SignedOut) return "signed-out";
+				if (error instanceof RequestError && error.status === 400)
+					return "refused";
 				return "failed";
 			}
 		},

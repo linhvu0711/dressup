@@ -71,6 +71,44 @@ test("saves a look and shows the toast", async ({ page }) => {
 	]);
 });
 
+test("closes the save form while the looks list loads again", async ({
+	page,
+}) => {
+	// Given: both projects, the Dress page shown; the form's first GET
+	// /api/looks passes, every later one is held until the test ends
+	await openDress(page);
+	let release = () => {};
+	const held = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	let gets = 0;
+	let heldGets = 0;
+	await page.route("**/api/looks", async (route) => {
+		if (route.request().method() !== "GET") return route.continue();
+		gets += 1;
+		if (gets > 1) {
+			heldGets += 1;
+			await held;
+		}
+		await route.continue();
+	});
+	try {
+		// When
+		await page.getByRole("button", { name: "Save look" }).click();
+		await dialog(page)
+			.getByRole("button", { name: "Save", exact: true })
+			.click();
+		// Then
+		await expect(dialog(page)).toHaveCount(0, { timeout: 2000 });
+		await expect(page.locator('[data-slot="toast"]')).toHaveText(
+			"Saved to Looks",
+		);
+		expect(heldGets).toBe(1);
+	} finally {
+		release();
+	}
+});
+
 test("keeps the form open when saving fails", async ({ page }) => {
 	// Given: both projects, the Dress page shown, each save answered 500
 	await openDress(page);
@@ -329,6 +367,27 @@ test("shows Retry when the wall cannot load", async ({ page }) => {
 	await expect(
 		page.getByRole("heading", { name: "No looks yet" }),
 	).toBeVisible();
+});
+
+test("shows Could not load your looks when the looks answer does not match", async ({
+	page,
+}) => {
+	// Given: a GET /api/looks answers a look with no mode, colours, or tags
+	const pageErrors: Error[] = [];
+	page.on("pageerror", (error) => pageErrors.push(error));
+	await page.route("**/api/looks", (route) =>
+		route.request().method() === "GET"
+			? route.fulfill({ status: 200, json: { looks: [{ id: "x" }] } })
+			: route.continue(),
+	);
+	// When
+	await page.goto("/looks");
+	// Then
+	await expect(
+		page.getByRole("heading", { name: "Could not load your looks" }),
+	).toBeVisible();
+	await expect(page.getByRole("button", { name: "Retry" })).toBeVisible();
+	expect(pageErrors).toEqual([]);
 });
 
 test("leaves out the right part when there is no look to pick", async ({

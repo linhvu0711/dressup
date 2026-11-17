@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router";
 import { AppLogo } from "@/ai-apps/AppLogo";
 import { Button } from "@/components/ui/button";
 import { authClient } from "../auth-client";
+import { keys } from "../data/client";
 import { useMe } from "../session";
 import { SignInPage } from "./SignInPage";
 
@@ -25,7 +26,7 @@ function AllowScreen() {
 	const [params] = useSearchParams();
 	const clientId = params.get("client_id") ?? "";
 	const app = useQuery({
-		queryKey: ["allow-app", clientId],
+		queryKey: keys.allowApp(clientId),
 		queryFn: async () => {
 			const { data, error } = await authClient.$fetch<AiApp>(
 				"/oauth2/public-client",

@@ -1,27 +1,20 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { z } from "zod";
-import { looksQueryKey } from "../looks/api";
-import { useSignOutOn401, useUserId } from "../session";
-import { type Tag, type TagId, tagSchema } from "./tag";
-
-export const tagsQueryKey = (userId: string | null) =>
-	["tags", userId] as const;
-
-const tagsAnswer = z.object({ tags: z.array(tagSchema) });
-const tagAnswer = z.object({ tag: tagSchema });
-const errorAnswer = z.object({ error: z.string() });
+import { useMutation, useQuery } from "@tanstack/react-query";
+import {
+	after,
+	cachedUserId,
+	keys,
+	RequestError,
+	request,
+} from "../data/client";
+import { tagAnswer, tagsAnswer } from "../data/contract";
+import type { Tag, TagId } from "./tag";
 
 export function useTags() {
-	const userId = useUserId();
-	const on401 = useSignOutOn401();
+	const userId = cachedUserId();
 	return useQuery({
-		queryKey: tagsQueryKey(userId),
-		queryFn: async () => {
-			const res = await fetch("/api/tags");
-			await on401(res, "GET /api/tags");
-			if (!res.ok) throw new Error(`GET /api/tags answered ${res.status}`);
-			return tagsAnswer.parse(await res.json()).tags;
-		},
+		queryKey: keys.tags(userId),
+		queryFn: async () =>
+			(await request("GET", "/api/tags", { answer: tagsAnswer })).tags,
 		enabled: userId !== null,
 		// "Retry" on the page is the person's way to try again, as for looks.
 		retry: false,
@@ -31,93 +24,58 @@ export function useTags() {
 // The account has a tag of this name already, in some letter case.
 export class TagNameTaken extends Error {}
 
-async function refused(res: Response, what: string): Promise<never> {
-	const body = errorAnswer.safeParse(await res.json().catch(() => null));
-	if (res.status === 400 && body.success && body.data.error === "duplicate")
+const takenAsTagNameTaken = (error: unknown): never => {
+	if (error instanceof RequestError && error.code === "duplicate")
 		throw new TagNameTaken();
-	throw new Error(`${what} answered ${res.status}`);
-}
+	throw error;
+};
 
-export const addTagKey = ["tags", "add"] as const;
+// Not found: deleted on another device already, which is what was asked.
+const goneAsDone = (error: unknown) => {
+	if (!(error instanceof RequestError && error.code === "not_found"))
+		throw error;
+};
 
 export function useAddTag() {
-	const userId = useUserId();
-	const queryClient = useQueryClient();
-	const on401 = useSignOutOn401();
+	const userId = cachedUserId();
 	return useMutation({
-		mutationKey: addTagKey,
-		mutationFn: async (name: string) => {
-			const res = await fetch("/api/tags", {
-				method: "POST",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ name }),
-			});
-			await on401(res, "POST /api/tags");
-			if (!res.ok) return refused(res, "POST /api/tags");
-			return tagAnswer.parse(await res.json()).tag;
-		},
-		onSuccess: (tag) => {
-			queryClient.setQueryData<Tag[]>(tagsQueryKey(userId), (old) =>
-				old ? [...old, tag] : old,
-			);
-		},
+		mutationKey: keys.addTag,
+		mutationFn: async (name: string) =>
+			(
+				await request("POST", "/api/tags", {
+					body: { name },
+					answer: tagAnswer,
+				}).catch(takenAsTagNameTaken)
+			).tag,
+		onSuccess: (tag) => after.tagAdded(userId, tag),
 		// On an error too: an add whose answer was lost may be stored, and
 		// sending it again finds the name taken.
-		onSettled: () => {
-			void queryClient.invalidateQueries({ queryKey: tagsQueryKey(userId) });
-		},
+		onSettled: () => after.tagsMayDiffer(userId),
 	});
 }
 
 export function useRenameTag() {
-	const userId = useUserId();
-	const queryClient = useQueryClient();
-	const on401 = useSignOutOn401();
+	const userId = cachedUserId();
 	return useMutation({
-		mutationFn: async (input: Tag) => {
-			const res = await fetch(`/api/tags/${input.id}`, {
-				method: "PUT",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify(input),
-			});
-			await on401(res, "PUT /api/tags/:id");
-			if (!res.ok) return refused(res, "PUT /api/tags/:id");
-			return tagAnswer.parse(await res.json()).tag;
-		},
-		// The renamed tag keeps its place, as the server keeps its time.
-		onSuccess: (tag) => {
-			queryClient.setQueryData<Tag[]>(tagsQueryKey(userId), (old) =>
-				old?.map((t) => (t.id === tag.id ? tag : t)),
-			);
-		},
+		mutationFn: async (input: Tag) =>
+			(
+				await request("PUT", `/api/tags/${input.id}`, {
+					body: input,
+					answer: tagAnswer,
+				}).catch(takenAsTagNameTaken)
+			).tag,
+		onSuccess: (tag) => after.tagRenamed(userId, tag),
 		// A tag gone on another device, or a name taken there, shows on the
 		// next load.
-		onError: () => {
-			void queryClient.invalidateQueries({ queryKey: tagsQueryKey(userId) });
-		},
+		onError: () => after.tagsMayDiffer(userId),
 	});
 }
 
 export function useDeleteTag() {
-	const userId = useUserId();
-	const queryClient = useQueryClient();
-	const on401 = useSignOutOn401();
+	const userId = cachedUserId();
 	return useMutation({
-		mutationFn: async (id: TagId) => {
-			const res = await fetch(`/api/tags/${id}`, { method: "DELETE" });
-			await on401(res, "DELETE /api/tags/:id");
-			// 404: deleted on another device already, which is what was asked.
-			if (!res.ok && res.status !== 404)
-				throw new Error(`DELETE /api/tags/:id answered ${res.status}`);
-		},
-		onSuccess: (_, id) => {
-			queryClient.setQueryData<Tag[]>(tagsQueryKey(userId), (old) =>
-				old?.filter((t) => t.id !== id),
-			);
-			void queryClient.invalidateQueries({ queryKey: tagsQueryKey(userId) });
-			// The looks cache has one writer, looks/api.ts; until it loads again
-			// the look view and the chips skip a tag the list no longer holds.
-			void queryClient.invalidateQueries({ queryKey: looksQueryKey(userId) });
-		},
+		mutationFn: (id: TagId) =>
+			request("DELETE", `/api/tags/${id}`).catch(goneAsDone),
+		onSuccess: (_, id) => after.tagDeleted(userId, id),
 	});
 }

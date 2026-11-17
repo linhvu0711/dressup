@@ -35,6 +35,29 @@
 			}
 		}
 	},
+	"overrides": [
+		{
+			"includes": ["src/react-app/**"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedGlobals": {
+							"level": "error",
+							"options": {
+								"deniedGlobals": {
+									"fetch": "Send requests through request() in src/react-app/data/client.ts."
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			"includes": ["src/react-app/data/client.ts"],
+			"linter": { "rules": { "style": { "noRestrictedGlobals": "off" } } }
+		}
+	],
 	"css": {
 		"parser": {
 			"tailwindDirectives": true
