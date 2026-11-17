@@ -77,14 +77,18 @@ export function addColour(
 }
 
 // A row keeps at least one square. When the picked one goes, the row's new
-// first square goes on.
+// first square goes on. A colour the row does not hold is not removed.
 export function removeColour(
 	s: DressState,
 	garment: GarmentId,
 	hex: Hex,
-): { state: DressState; removed: boolean } {
+):
+	| { state: DressState; removed: true }
+	| { state: DressState; removed: false; why: "not_in_row" | "last_square" } {
 	const row = s.swatches[garment];
-	if (row.length <= 1) return { state: s, removed: false };
+	if (!row.includes(hex))
+		return { state: s, removed: false, why: "not_in_row" };
+	if (row.length <= 1) return { state: s, removed: false, why: "last_square" };
 	const rest = row.filter((c) => c !== hex);
 	const swatches = { ...s.swatches, [garment]: rest };
 	const picked =
@@ -182,9 +186,13 @@ export const dressChangeSchema: z.ZodType<DressChange> = z.discriminatedUnion(
 	],
 );
 
+export type DressError =
+	| { code: "not_in_row"; garment: GarmentId; hex: Hex; row: readonly Hex[] }
+	| { code: "last_square"; garment: GarmentId; hex: Hex };
+
 export type ChangeResult =
 	| { ok: true; state: DressState }
-	| { ok: false; error: "not_in_row" | "last_square"; field: "hex" };
+	| { ok: false; error: DressError };
 
 export function applyChange(s: DressState, change: DressChange): ChangeResult {
 	switch (change.kind) {
@@ -192,7 +200,15 @@ export function applyChange(s: DressState, change: DressChange): ChangeResult {
 			return { ok: true, state: pickMode(s, change.modeId) };
 		case "pick":
 			if (!s.swatches[change.garment].includes(change.hex))
-				return { ok: false, error: "not_in_row", field: "hex" };
+				return {
+					ok: false,
+					error: {
+						code: "not_in_row",
+						garment: change.garment,
+						hex: change.hex,
+						row: s.swatches[change.garment],
+					},
+				};
 			return {
 				ok: true,
 				state: pickColour(s, change.garment, change.hex),
@@ -203,10 +219,16 @@ export function applyChange(s: DressState, change: DressChange): ChangeResult {
 				state: addColour(s, change.garment, change.hex).state,
 			};
 		case "remove": {
-			const { state, removed } = removeColour(s, change.garment, change.hex);
-			return removed
-				? { ok: true, state }
-				: { ok: false, error: "last_square", field: "hex" };
+			const { garment, hex } = change;
+			const removal = removeColour(s, garment, hex);
+			if (removal.removed) return { ok: true, state: removal.state };
+			return {
+				ok: false,
+				error:
+					removal.why === "not_in_row"
+						? { code: "not_in_row", garment, hex, row: s.swatches[garment] }
+						: { code: "last_square", garment, hex },
+			};
 		}
 		case "jacket":
 			return {

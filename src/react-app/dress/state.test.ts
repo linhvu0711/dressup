@@ -115,6 +115,24 @@ describe("dress state", () => {
 			picked: state.picked.sweater,
 		}).toEqual({ removed: false, row: ["#1F3A5F"], picked: "#1F3A5F" });
 	});
+
+	test("does not remove a colour the row does not hold", () => {
+		// Given: a fresh state, the sweater row #1F3A5F, #8C8A84, #E6DFD0, #7A2E2E
+		// When
+		const result = removeColour(startDressState(), "sweater", "#2E5E4E");
+		// Then
+		expect({
+			removed: result.removed,
+			why: "why" in result ? result.why : undefined,
+			row: result.state.swatches.sweater,
+			picked: result.state.picked.sweater,
+		}).toEqual({
+			removed: false,
+			why: "not_in_row",
+			row: ["#1F3A5F", "#8C8A84", "#E6DFD0", "#7A2E2E"],
+			picked: "#1F3A5F",
+		});
+	});
 	test("sets a jacket open and closed", () => {
 		// Given: a fresh state
 		const start = startDressState();
@@ -218,7 +236,15 @@ describe("dress state", () => {
 			hex: "#C0392B",
 		});
 		// Then
-		expect(result).toEqual({ ok: false, error: "not_in_row", field: "hex" });
+		expect(result).toEqual({
+			ok: false,
+			error: {
+				code: "not_in_row",
+				garment: "sweater",
+				hex: "#C0392B",
+				row: ["#1F3A5F", "#8C8A84", "#E6DFD0", "#7A2E2E"],
+			},
+		});
 	});
 
 	test("refuses to remove the last square", () => {
@@ -234,6 +260,9 @@ describe("dress state", () => {
 			hex: "#1F3A5F",
 		});
 		// Then
-		expect(result).toEqual({ ok: false, error: "last_square", field: "hex" });
+		expect(result).toEqual({
+			ok: false,
+			error: { code: "last_square", garment: "sweater", hex: "#1F3A5F" },
+		});
 	});
 });

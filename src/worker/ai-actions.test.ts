@@ -250,6 +250,26 @@ describe("outfit changes", () => {
 		});
 	});
 
+	test("refuses an unknown mannequin part", async () => {
+		// Given: the passing skin case with the part changed to eyes
+		const { h, ai } = await withAiSession();
+		// When
+		const { isError, text } = await ai.call("set_mannequin_colour", {
+			part: "eyes",
+			colour: "#141418",
+		});
+		// Then
+		expect({
+			isError,
+			text,
+			skin: (await dress(h, ai)).mannequin.skin,
+		}).toEqual({
+			isError: true,
+			text: "eyes is not a mannequin part. Parts: skin, hair.",
+			skin: "#D6A27B",
+		});
+	});
+
 	test("refuses an unknown mode", async () => {
 		// Given
 		const { h, ai } = await withAiSession();
@@ -283,6 +303,21 @@ describe("outfit changes", () => {
 		});
 	});
 
+	test("refuses an unknown garment", async () => {
+		// Given: the passing pick with the garment changed to hat
+		const { ai } = await withAiSession();
+		// When
+		const { isError, text } = await ai.call("pick_colour", {
+			garment: "hat",
+			colour: "#1F3A5F",
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "hat is not a garment. Garments: tee_s, tee_l, polo_s, polo_l, shirt_s, shirt_l, sweater, harrington, wool, ttee_s, ttee_l, chino_sh, chino_p, casual_sh, casual_p, train_sh, train_p.",
+		});
+	});
+
 	test("refuses to pick a colour that is not in the row", async () => {
 		// Given
 		const { h, ai } = await withAiSession();
@@ -300,6 +335,26 @@ describe("outfit changes", () => {
 			isError: true,
 			text: "#2E5E4E is not in the sweater row. This row has: #1F3A5F, #8C8A84, #E6DFD0, #7A2E2E.",
 			stored: "#1F3A5F",
+		});
+	});
+
+	test("refuses to remove a colour square that is not in the row", async () => {
+		// Given: the starter sweater row
+		const { h, ai } = await withAiSession();
+		// When
+		const { isError, text } = await ai.call("remove_colour_square", {
+			garment: "sweater",
+			colour: "#2E5E4E",
+		});
+		// Then
+		expect({
+			isError,
+			text,
+			row: (await dress(h, ai)).swatches.sweater,
+		}).toEqual({
+			isError: true,
+			text: "#2E5E4E is not in the sweater row. This row has: #1F3A5F, #8C8A84, #E6DFD0, #7A2E2E.",
+			row: ["#1F3A5F", "#8C8A84", "#E6DFD0", "#7A2E2E"],
 		});
 	});
 

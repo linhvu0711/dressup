@@ -8,7 +8,6 @@ import {
 	GARMENT_IDS,
 	GARMENT_NAMES,
 	type GarmentId,
-	type Hex,
 	isJacket,
 	JACKET_IDS,
 } from "@/dress/garments";
@@ -27,15 +26,14 @@ import {
 import { newTagSchema, TAG_NAME_MAX, type Tag, tagSchema } from "@/tags/tag";
 import { countAiAction } from "./ai-action-store";
 import {
+	dressRefusalText,
 	issueText,
-	lastSquare,
 	lookIssueText,
 	lookLimit,
 	noLook,
 	noLooks,
 	noTag,
 	noTags,
-	notInRow,
 	serverError,
 	tagNameLength,
 	tagNameTaken,
@@ -176,11 +174,9 @@ export function registerAiActions(server: McpServer, account: Account) {
 		if (!parsed.success)
 			return refusal(issueText(parsed.error.issues[0], change));
 		const result = await changeDress(db, userId, parsed.data);
-		if (result.ok) return answer(outfitView(result.state));
-		const { garment, hex } = parsed.data as { garment: GarmentId; hex: Hex };
-		return result.error === "not_in_row"
-			? refusal(notInRow(garment, hex, result.state.swatches[garment]))
-			: refusal(lastSquare(garment, hex));
+		return result.ok
+			? answer(outfitView(result.value))
+			: refusal(dressRefusalText(result.error));
 	}
 
 	tool(

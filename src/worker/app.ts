@@ -1,8 +1,9 @@
 import { eq } from "drizzle-orm";
 import { type Context, Hono } from "hono";
 import { createMiddleware } from "hono/factory";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { z } from "zod";
-import { dressChangeSchema } from "@/dress/state";
+import { type DressError, dressChangeSchema } from "@/dress/state";
 import { lookInputSchema } from "@/looks/look";
 import { newTagSchema, tagSchema } from "@/tags/tag";
 import { disconnectAiApp, listAiApps } from "./ai-app-store";
@@ -42,6 +43,14 @@ async function readBody<T extends z.ZodType>(
 	const field = path.length === 0 ? "body" : path.map(String).join(".");
 	return { refused: c.json({ error: "invalid", field }, 400) };
 }
+
+const dressRefusals: Record<
+	DressError["code"],
+	{ status: ContentfulStatusCode; field: string }
+> = {
+	not_in_row: { status: 400, field: "hex" },
+	last_square: { status: 400, field: "hex" },
+};
 
 export function createApp(getDb: (env: Env) => Db) {
 	const root = new Hono<AppEnv>();
@@ -127,8 +136,10 @@ export function createApp(getDb: (env: Env) => Db) {
 		const body = await readBody(c, dressChangeSchema);
 		if ("refused" in body) return body.refused;
 		const result = await changeDress(getDb(c.env), c.var.user.id, body.data);
-		if (!result.ok)
-			return c.json({ error: result.error, field: result.field }, 400);
+		if (!result.ok) {
+			const { status, field } = dressRefusals[result.error.code];
+			return c.json({ error: result.error.code, field }, status);
+		}
 		return c.body(null, 204);
 	});
 
