@@ -5,6 +5,7 @@ import { type DressError, MANNEQUIN_PARTS } from "@/dress/state";
 import { LOOK_LIMIT, LOOK_NAME_MAX, LOOK_TAGS_MAX } from "@/looks/look";
 import { TAG_NAME_MAX } from "@/tags/tag";
 import type { LookError } from "./look-store";
+import type { TagError } from "./tag-store";
 
 // Every refusal an AI app gets names the value it sent and what is allowed,
 // so the AI app can fix its call and try again.
@@ -52,6 +53,17 @@ export function dressRefusalText(error: DressError): string {
 			return `${error.hex} is not in the ${error.garment} row. This row has: ${error.row.join(", ")}.`;
 		case "last_square":
 			return `${error.hex} is the last colour square of ${error.garment}. A row keeps at least one.`;
+	}
+}
+
+export function tagRefusalText(error: TagError): string {
+	switch (error.code) {
+		case "name_length":
+			return `A tag name has 1 to ${TAG_NAME_MAX} characters.`;
+		case "duplicate":
+			return `You already have a tag called ${error.name}.`;
+		case "not_found":
+			return noTag;
 	}
 }
 

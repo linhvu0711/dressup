@@ -17,7 +17,7 @@ import {
 	MANNEQUIN_PARTS,
 } from "@/dress/state";
 import { LOOK_LIMIT, LOOK_NAME_MAX, type Look } from "@/looks/look";
-import { newTagSchema, TAG_NAME_MAX, type Tag, tagSchema } from "@/tags/tag";
+import { TAG_NAME_MAX, type Tag, tagSchema } from "@/tags/tag";
 import { countAiAction } from "./ai-action-store";
 import {
 	dressRefusalText,
@@ -29,6 +29,7 @@ import {
 	serverError,
 	tagNameLength,
 	tagNameTaken,
+	tagRefusalText,
 	tagsLeftOffText,
 	tooManyActions,
 } from "./ai-messages";
@@ -374,13 +375,11 @@ export function registerAiActions(server: McpServer, account: Account) {
 			annotations: WRITE,
 			inputSchema: z.object({ name: z.string().describe("The tag's name.") }),
 		},
-		async (args) => {
-			const parsed = newTagSchema.safeParse(args);
-			if (!parsed.success) return refusal(tagNameLength());
-			const added = await addTag(db, userId, parsed.data.name);
+		async ({ name }) => {
+			const added = await addTag(db, userId, name);
 			return added.ok
-				? answer({ tag: added.tag })
-				: refusal(tagNameTaken(parsed.data.name));
+				? answer({ tag: added.value })
+				: refusal(tagRefusalText(added.error));
 		},
 	);
 

@@ -1,7 +1,13 @@
 import { and, asc, eq, sql } from "drizzle-orm";
-import { sameTagName, type Tag, type TagId } from "@/tags/tag";
+import { sameTagName, type Tag, type TagId, tagSchema } from "@/tags/tag";
 import type { Db } from "./db";
 import { tag } from "./db/tag-schema";
+import type { Result } from "./result";
+
+export type TagError =
+	| { code: "name_length" }
+	| { code: "duplicate"; name: string }
+	| { code: "not_found" };
 
 const toTag = (row: { id: string; name: string }): Tag => ({
 	id: row.id as TagId,
@@ -33,18 +39,23 @@ export async function addTag(
 	db: Db,
 	userId: string,
 	name: string,
-): Promise<{ ok: true; tag: Tag } | { ok: false; error: "duplicate" }> {
+): Promise<Result<Tag, TagError>> {
+	const checked = tagSchema.shape.name.safeParse(name);
+	if (!checked.success) return { ok: false, error: { code: "name_length" } };
+	const duplicate = {
+		ok: false,
+		error: { code: "duplicate", name: checked.data },
+	} as const;
 	const tags = await listTags(db, userId);
-	if (tags.some((t) => sameTagName(t.name, name)))
-		return { ok: false, error: "duplicate" };
+	if (tags.some((t) => sameTagName(t.name, checked.data))) return duplicate;
 	try {
 		const [row] = await db
 			.insert(tag)
-			.values({ id: crypto.randomUUID(), userId, name })
+			.values({ id: crypto.randomUUID(), userId, name: checked.data })
 			.returning({ id: tag.id, name: tag.name });
-		return { ok: true, tag: toTag(row) };
+		return { ok: true, value: toTag(row) };
 	} catch (error) {
-		if (isNameTaken(error)) return { ok: false, error: "duplicate" };
+		if (isNameTaken(error)) return duplicate;
 		throw error;
 	}
 }
