@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import type { BetterAuthOptions } from "better-auth";
 import { createApp } from "./app";
 import { type Auth, authOptions, createAuthCache } from "./auth";
 import {
 	cookie,
 	finishGoogleSignIn,
+	googleUser,
 	makeHarness,
 	startGoogleSignIn,
 	stubOutside,
@@ -127,9 +128,6 @@ const signIn = async (h: Harness) =>
 	finishGoogleSignIn(h, await startGoogleSignIn(h));
 
 describe("Google sign-in", () => {
-	let restore = () => {};
-	afterEach(() => restore());
-
 	test("sends sign-in to Google with our callback address", async () => {
 		// Given
 		const h = await makeHarness();
@@ -168,14 +166,7 @@ describe("Google sign-in", () => {
 	test("makes one user on the first Google sign-in and reuses it", async () => {
 		// Given
 		const h = await makeHarness();
-		restore = stubOutside({
-			google: {
-				sub: "g-123",
-				email: "carol@example.com",
-				name: "Carol",
-				picture: "https://example.com/c.png",
-			},
-		}).restore;
+		stubOutside({ google: googleUser("carol") });
 		// When
 		const { res: first, jar } = await signIn(h);
 		const me = await h.app.request(
@@ -217,7 +208,7 @@ describe("Google sign-in", () => {
 			},
 			users: 1,
 			sameUser: true,
-			accounts: [{ provider_id: "google", account_id: "g-123" }],
+			accounts: [{ provider_id: "google", account_id: "g-carol" }],
 		});
 	});
 
@@ -240,9 +231,6 @@ describe("Google sign-in", () => {
 });
 
 describe("sign-up switch", () => {
-	let restore = () => {};
-	afterEach(() => restore());
-
 	const withSignups = (h: Harness, value: string | undefined): Harness => ({
 		...h,
 		env: { ...h.env, SIGNUPS_CLOSED: value } as unknown as Env,
@@ -254,14 +242,7 @@ describe("sign-up switch", () => {
 	test("refuses a new Google account while sign-ups are closed", async () => {
 		// Given: no user; sign-ups closed
 		const h = await makeHarness();
-		restore = stubOutside({
-			google: {
-				sub: "g-new",
-				email: "new@example.com",
-				name: "New",
-				picture: "https://example.com/n.png",
-			},
-		}).restore;
+		stubOutside({ google: googleUser("new") });
 		// When
 		const { res } = await signIn(withSignups(h, "true"));
 		// Then
@@ -279,14 +260,7 @@ describe("sign-up switch", () => {
 	test("signs in an existing account while sign-ups are closed", async () => {
 		// Given: the account made by a sign-in while sign-up was open
 		const h = await makeHarness();
-		restore = stubOutside({
-			google: {
-				sub: "g-old",
-				email: "old@example.com",
-				name: "Old",
-				picture: "https://example.com/o.png",
-			},
-		}).restore;
+		stubOutside({ google: googleUser("old") });
 		expect((await signIn(h)).res.headers.get("location")).toBe("/");
 		// When
 		const { res, jar } = await signIn(withSignups(h, "true"));
@@ -310,14 +284,7 @@ describe("sign-up switch", () => {
 	test("refuses a new Google account when sign-ups close after a request with them open", async () => {
 		// Given: no user; one request with sign-ups open, then sign-ups closed
 		const h = await makeHarness();
-		restore = stubOutside({
-			google: {
-				sub: "g-new",
-				email: "new@example.com",
-				name: "New",
-				picture: "https://example.com/n.png",
-			},
-		}).restore;
+		stubOutside({ google: googleUser("new") });
 		await h.app.request("/api/auth/get-session", {}, h.env);
 		// When
 		const { res } = await signIn(withSignups(h, "true"));
@@ -338,17 +305,9 @@ describe("sign-up switch", () => {
 		const results = [];
 		for (const value of [undefined, "false", "yes", "TRUE"]) {
 			const h = await makeHarness();
-			restore = stubOutside({
-				google: {
-					sub: "g-new",
-					email: "new@example.com",
-					name: "New",
-					picture: "https://example.com/n.png",
-				},
-			}).restore;
+			stubOutside({ google: googleUser("new") });
 			// When
 			const { res } = await signIn(withSignups(h, value));
-			restore();
 			results.push({
 				value: value ?? "not set",
 				status: res.status,

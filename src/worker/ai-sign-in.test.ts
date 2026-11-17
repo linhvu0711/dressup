@@ -13,13 +13,6 @@ import {
 
 type Harness = Awaited<ReturnType<typeof makeHarness>>;
 
-const ALICE = {
-	sub: "g-alice",
-	email: "alice@example.com",
-	name: "Alice",
-	picture: "https://example.com/a.png",
-};
-
 const authorize = (h: Harness, path = AUTHORIZE) =>
 	h.app.request(path, { redirect: "manual" }, h.env);
 
@@ -86,7 +79,6 @@ async function until(check: () => boolean) {
 describe("AI app sign-in", () => {
 	let outside: ReturnType<typeof stubOutside> | undefined;
 	afterEach(() => {
-		outside?.restore();
 		setSystemTime();
 	});
 
@@ -94,10 +86,7 @@ describe("AI app sign-in", () => {
 		documents: Record<string, () => Response | Promise<Response>> = {},
 	) => {
 		const h = await makeHarness();
-		outside = stubOutside({
-			google: ALICE,
-			documents: { [TEST_APP_ID]: testAppDocument, ...documents },
-		});
+		outside = stubOutside({ documents });
 		return h;
 	};
 

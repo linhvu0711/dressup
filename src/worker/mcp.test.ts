@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import {
 	connectAiApp,
 	INITIALIZE,
@@ -7,24 +7,12 @@ import {
 	post,
 	stubOutside,
 	TEST_APP_ID,
-	testAppDocument,
 } from "./test/harness";
 
 describe("/api/mcp", () => {
-	let outside: ReturnType<typeof stubOutside> | undefined;
-	afterEach(() => outside?.restore());
-
 	async function connected() {
 		const h = await makeHarness();
-		outside = stubOutside({
-			google: {
-				sub: "g-alice",
-				email: "alice@example.com",
-				name: "Alice",
-				picture: "https://example.com/a.png",
-			},
-			documents: { [TEST_APP_ID]: testAppDocument },
-		});
+		stubOutside();
 		const { token } = await connectAiApp(h, { accept: true });
 		const bearer = { authorization: `Bearer ${token?.body.access_token}` };
 		return { h, bearer };

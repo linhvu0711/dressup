@@ -71,16 +71,51 @@ const base64url = (value: unknown) =>
 
 type Harness = Awaited<ReturnType<typeof makeHarness>>;
 
+export const TEST_APP_ID = "https://client.example/meta.json";
+
+export const testAppDocument = () =>
+	Response.json({
+		client_id: TEST_APP_ID,
+		client_name: "Test App",
+		logo_uri: "https://client.example/logo.png",
+		redirect_uris: ["http://127.0.0.1/callback"],
+		token_endpoint_auth_method: "none",
+		grant_types: ["authorization_code", "refresh_token"],
+		response_types: ["code"],
+	});
+
+type GoogleUser = { sub: string; email: string; name: string; picture: string };
+
+// A Google profile from one lower-case name: googleUser("bob") is Bob,
+// bob@example.com, sub g-bob.
+export const googleUser = (name: string): GoogleUser => ({
+	sub: `g-${name}`,
+	email: `${name}@example.com`,
+	name: name.charAt(0).toUpperCase() + name.slice(1),
+	picture: `https://example.com/${name.charAt(0)}.png`,
+});
+
 type Outside = {
-	google: { sub: string; email: string; name: string; picture: string };
+	google?: GoogleUser;
 	documents?: Record<string, () => Response | Promise<Response>>;
 };
+
+// Kept before any stub: src/worker/test/setup.ts puts it back after each test.
+const realFetch = globalThis.fetch;
 
 // Two outside borders: Google's token endpoint, and the websites that host AI
 // apps' client metadata documents. Any other outside host throws, so no test
 // reaches the internet. Better Auth decodes the id_token without checking its
-// signature, so a fake signature is enough.
-export function stubOutside({ google, documents = {} }: Outside) {
+// signature, so a fake signature is enough. With no arguments it is Alice and
+// the test app.
+export function stubOutside({
+	google = googleUser("alice"),
+	documents = {},
+}: Outside = {}) {
+	const answers: Outside["documents"] = {
+		[TEST_APP_ID]: testAppDocument,
+		...documents,
+	};
 	const now = Math.floor(Date.now() / 1000);
 	const idToken = [
 		base64url({ alg: "RS256", typ: "JWT" }),
@@ -98,7 +133,6 @@ export function stubOutside({ google, documents = {} }: Outside) {
 		"sig",
 	].join(".");
 	const calls: { url: string; init?: RequestInit }[] = [];
-	const realFetch = globalThis.fetch;
 	globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 		const url = input instanceof Request ? input.url : String(input);
 		calls.push({ url, init });
@@ -114,17 +148,12 @@ export function stubOutside({ google, documents = {} }: Outside) {
 				expires_in: 3600,
 				token_type: "Bearer",
 			});
-		const document = documents[url];
+		const document = answers[url];
 		if (document) return document();
 		if (new URL(url).hostname === "localhost") return realFetch(input, init);
 		throw new Error(`unexpected fetch ${url}`);
 	}) as typeof fetch;
-	return {
-		restore: () => {
-			globalThis.fetch = realFetch;
-		},
-		calls,
-	};
+	return { calls };
 }
 
 // The browser's cookies: each Set-Cookie line writes its name, and an empty
@@ -202,19 +231,6 @@ export async function finishGoogleSignIn(
 	);
 	return { res, jar: store(new Map(), res) };
 }
-
-export const TEST_APP_ID = "https://client.example/meta.json";
-
-export const testAppDocument = () =>
-	Response.json({
-		client_id: TEST_APP_ID,
-		client_name: "Test App",
-		logo_uri: "https://client.example/logo.png",
-		redirect_uris: ["http://127.0.0.1/callback"],
-		token_endpoint_auth_method: "none",
-		grant_types: ["authorization_code", "refresh_token"],
-		response_types: ["code"],
-	});
 
 // The PKCE pair is RFC 7636's example. The port is one the document does not
 // list: a loopback address may use any port.

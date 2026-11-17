@@ -1,11 +1,10 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import {
 	connectAiApp,
 	cookie,
 	makeHarness,
 	stubOutside,
 	TEST_APP_ID,
-	testAppDocument,
 } from "./test/harness";
 
 type Harness = Awaited<ReturnType<typeof makeHarness>>;
@@ -47,22 +46,11 @@ const initialize = (h: Harness, bearer: string) =>
 	);
 
 describe("/api/ai-apps", () => {
-	let outside: ReturnType<typeof stubOutside> | undefined;
-	afterEach(() => outside?.restore());
-
 	// Alice connected the test app on 2026-11-14 at 12:00 UTC; its allow row
 	// has the fixed id "allow-1".
 	async function aliceConnected() {
 		const h = await makeHarness();
-		outside = stubOutside({
-			google: {
-				sub: "g-alice",
-				email: "alice@example.com",
-				name: "Alice",
-				picture: "https://example.com/a.png",
-			},
-			documents: { [TEST_APP_ID]: testAppDocument },
-		});
+		stubOutside();
 		const { jar, token } = await connectAiApp(h, { accept: true });
 		h.sqlite.run(
 			"update oauth_consent set id = 'allow-1', created_at = 1794657600000",

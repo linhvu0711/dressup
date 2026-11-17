@@ -5,24 +5,11 @@ import {
 	seedLooks,
 	send,
 	stubOutside,
-	TEST_APP_ID,
-	testAppDocument,
 } from "./test/harness";
-
-let outside: ReturnType<typeof stubOutside> | undefined;
-afterEach(() => outside?.restore());
 
 async function connected() {
 	const h = await makeHarness();
-	outside = stubOutside({
-		google: {
-			sub: "g-alice",
-			email: "alice@example.com",
-			name: "Alice",
-			picture: "https://example.com/a.png",
-		},
-		documents: { [TEST_APP_ID]: testAppDocument },
-	});
+	stubOutside();
 	const ai = await aiSession(h);
 	return { h, ai };
 }
