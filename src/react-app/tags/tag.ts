@@ -15,9 +15,6 @@ export const tagSchema = z.object({
 
 export type Tag = z.infer<typeof tagSchema>;
 
-// The body of an add: the server makes the id.
-export const newTagSchema = tagSchema.pick({ name: true });
-
 // An account has each name once, in any letter case.
 export const sameTagName = (a: string, b: string): boolean =>
 	a.trim().toLowerCase() === b.trim().toLowerCase();

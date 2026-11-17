@@ -79,12 +79,6 @@ export const noLooks = "You have no saved looks yet.";
 
 export const noTags = "You have no tags yet.";
 
-export const tagNameLength = (): string =>
-	`A tag name has 1 to ${TAG_NAME_MAX} characters.`;
-
-export const tagNameTaken = (name: string): string =>
-	`You already have a tag called ${name}.`;
-
 export const lookLimit = (): string =>
 	`You have ${LOOK_LIMIT} looks, the limit. Delete one first.`;
 
