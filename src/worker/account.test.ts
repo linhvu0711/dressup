@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { schema } from "./db";
 import {
 	finishGoogleSignIn,
 	googleUser,
@@ -10,7 +9,6 @@ import {
 	startGoogleSignIn,
 	store,
 	stubOutside,
-	withAiApp,
 	withAiSession,
 } from "./test/harness";
 
@@ -57,47 +55,9 @@ async function fillAccount(h: Harness, jar: Jar, lookId = NAVY.id) {
 	expect((await sendJson(h, jar, "/api/looks", look)).status).toBe(201);
 }
 
-const TABLES = {
-	session: schema.session,
-	account: schema.account,
-	colour_square: schema.colourSquare,
-	outfit: schema.outfit,
-	outfit_garment: schema.outfitGarment,
-	mannequin: schema.mannequin,
-	look: schema.look,
-	tag: schema.tag,
-	look_tag: schema.lookTag,
-};
-
-async function rowsOf(h: Harness, userId: string) {
-	const counts: Record<string, number> = {
-		user: (await h.rows(schema.user)).filter((row) => row.id === userId).length,
-	};
-	for (const [name, table] of Object.entries(TABLES))
-		counts[name] = (await h.rows(table, userId)).length;
-	return counts;
-}
-
-const AI_TABLES = {
-	oauth_consent: schema.oauthConsent,
-	oauth_refresh_token: schema.oauthRefreshToken,
-	oauth_access_token: schema.oauthAccessToken,
-};
-
-const NONE = {
-	user: 0,
-	session: 0,
-	account: 0,
-	colour_square: 0,
-	outfit: 0,
-	outfit_garment: 0,
-	mannequin: 0,
-	look: 0,
-	tag: 0,
-	look_tag: 0,
-};
-
-const userCount = async (h: Harness) => (await h.rows(schema.user)).length;
+// The tables that still hold rows of the account, as [table, count].
+const left = (h: Harness, userId: string) =>
+	Object.entries(h.accountRows(userId)).filter(([, n]) => n > 0);
 
 describe("DELETE /api/account", () => {
 	async function aliceWithRows() {
@@ -111,15 +71,22 @@ describe("DELETE /api/account", () => {
 	}
 
 	test("deletes the account and every row of it", async () => {
-		// Given: alice signed in through Google, with colours, an outfit, a
-		// skin colour, and one look
-		const { h, jar, aliceId } = await aliceWithRows();
+		// Given: alice connected an AI app through Google and took one AI action,
+		// then saved colours, an outfit, a skin colour, and one look
+		const { h, ai, userId } = await withAiSession();
+		await ai.call("list_tags");
+		await fillAccount(h, ai.jar);
 		// When
-		const res = await deleteAccount(h, jar);
-		// Then
-		expect({ status: res.status, rows: await rowsOf(h, aliceId) }).toEqual({
+		const res = await deleteAccount(h, ai.jar);
+		// Then: no table that points at user keeps a row of hers, and every such
+		// key deletes with the user, so a new table with no rows is caught too
+		const rules = Object.entries(h.userForeignKeys()).filter(
+			([, rule]) => rule !== "CASCADE",
+		);
+		expect({ status: res.status, left: left(h, userId), rules }).toEqual({
 			status: 204,
-			rows: NONE,
+			left: [],
+			rules: [],
 		});
 	});
 
@@ -142,21 +109,21 @@ describe("DELETE /api/account", () => {
 		const bob = await googleSignIn(h);
 		const bobId = ((await me(h, bob)).body as { id: string }).id;
 		await fillAccount(h, bob, "22222222-2222-4222-8222-222222222222");
-		const bobBefore = await rowsOf(h, bobId);
+		const bobBefore = h.accountRows(bobId);
 		// When
 		await deleteAccount(h, alice);
 		// Then
 		const bobMe = await me(h, bob);
 		expect({
-			rows: await rowsOf(h, bobId),
-			filled: Object.values(bobBefore).every((n) => n >= 1),
+			rows: h.accountRows(bobId),
+			filled: Object.values(bobBefore).filter((n) => n > 0).length,
 			me: {
 				status: bobMe.status,
 				email: (bobMe.body as { email: string }).email,
 			},
 		}).toEqual({
 			rows: bobBefore,
-			filled: true,
+			filled: 10,
 			me: { status: 200, email: "bob@example.com" },
 		});
 	});
@@ -164,7 +131,7 @@ describe("DELETE /api/account", () => {
 	test("keeps the account and the session when the delete fails", async () => {
 		// Given: alice with rows; the user row cannot be deleted
 		const { h, jar, aliceId } = await aliceWithRows();
-		const before = await rowsOf(h, aliceId);
+		const before = h.accountRows(aliceId);
 		h.addTrigger(
 			"CREATE TRIGGER no_delete BEFORE DELETE ON user BEGIN SELECT RAISE(ABORT, 'no delete'); END",
 		);
@@ -174,7 +141,7 @@ describe("DELETE /api/account", () => {
 		const after = await me(h, jar);
 		expect({
 			status: res.status,
-			rows: await rowsOf(h, aliceId),
+			rows: h.accountRows(aliceId),
 			me: {
 				status: after.status,
 				email: (after.body as { email: string }).email,
@@ -193,9 +160,9 @@ describe("DELETE /api/account", () => {
 		// When: the same old cookies, whose cache cookie still lets them in
 		const res = await deleteAccount(h, jar);
 		// Then
-		expect({ status: res.status, rows: await rowsOf(h, aliceId) }).toEqual({
+		expect({ status: res.status, left: left(h, aliceId) }).toEqual({
 			status: 204,
-			rows: NONE,
+			left: [],
 		});
 	});
 
@@ -228,59 +195,18 @@ describe("DELETE /api/account", () => {
 
 	test("refuses DELETE /api/account without a session", async () => {
 		// Given: alice signed in through Google; no cookie on the request
-		const { h } = await aliceWithRows();
+		const { h, aliceId } = await aliceWithRows();
 		// When
 		const res = await deleteAccount(h, new Map());
 		// Then
 		expect({
 			status: res.status,
 			body: await res.json(),
-			users: await userCount(h),
+			users: h.accountRows(aliceId).user,
 		}).toEqual({
 			status: 401,
 			body: { error: "unauthorized" },
 			users: 1,
-		});
-	});
-
-	test("deletes the account's AI app records with the account", async () => {
-		// Given: alice through connectAiApp, so she has 1 oauth_consent and 1
-		// oauth_refresh_token row
-		const { h, jar, userId: aliceId } = await withAiApp();
-		const count = async (table: keyof typeof AI_TABLES) =>
-			(await h.rows(AI_TABLES[table], aliceId)).length;
-		expect([
-			await count("oauth_consent"),
-			await count("oauth_refresh_token"),
-		]).toEqual([1, 1]);
-		// When
-		const res = await deleteAccount(h, jar);
-		// Then
-		expect({
-			status: res.status,
-			rows: {
-				oauth_consent: await count("oauth_consent"),
-				oauth_refresh_token: await count("oauth_refresh_token"),
-				oauth_access_token: await count("oauth_access_token"),
-			},
-		}).toEqual({
-			status: 204,
-			rows: { oauth_consent: 0, oauth_refresh_token: 0, oauth_access_token: 0 },
-		});
-	});
-
-	test("deletes the account's AI action count with the account", async () => {
-		// Given: alice took one AI action
-		const { h, ai } = await withAiSession();
-		await ai.call("list_tags");
-		const count = async () => (await h.rows(schema.aiActionCount)).length;
-		expect(await count()).toBe(1);
-		// When
-		const res = await deleteAccount(h, ai.jar);
-		// Then
-		expect({ status: res.status, rows: await count() }).toEqual({
-			status: 204,
-			rows: 0,
 		});
 	});
 });

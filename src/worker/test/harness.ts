@@ -113,6 +113,41 @@ export async function makeHarness() {
 			})),
 		);
 	};
+	// Each foreign key to user, read from the database itself, so a table a
+	// new migration adds is in the list with no edit.
+	const userKeys = () =>
+		tables().flatMap((table) =>
+			sqlite
+				.query<{ table: string; from: string; on_delete: string }, []>(
+					`select "table", "from", on_delete from pragma_foreign_key_list('${table}')`,
+				)
+				.all()
+				.filter((key) => key.table === "user")
+				.map((key) => ({ table, column: key.from, onDelete: key.on_delete })),
+		);
+	const countWhere = (table: string, column: string, userId: string) =>
+		sqlite
+			.query<{ n: number }, [string]>(
+				`select count(*) as n from "${table}" where "${column}" = ?`,
+			)
+			.get(userId)?.n ?? 0;
+	// The account's row count in user and in each table that points at it.
+	const accountRows = (userId: string) => {
+		const counts: Record<string, number> = {
+			user: countWhere("user", "id", userId),
+		};
+		for (const { table, column } of userKeys())
+			counts[table] = (counts[table] ?? 0) + countWhere(table, column, userId);
+		return counts;
+	};
+	// The on_delete rule of each foreign key to user, keyed table.column.
+	const userForeignKeys = () =>
+		Object.fromEntries(
+			userKeys().map(({ table, column, onDelete }) => [
+				`${table}.${column}`,
+				onDelete,
+			]),
+		);
 	// The one door for raw SQL: a trigger that makes a write fail, or races it.
 	const addTrigger = (sql: string) => {
 		if (!/^\s*CREATE TRIGGER\b/.test(sql))
@@ -136,6 +171,8 @@ export async function makeHarness() {
 		addAccount,
 		rows,
 		tables,
+		accountRows,
+		userForeignKeys,
 		seedLooks,
 		addTrigger,
 		runMigration,
