@@ -124,6 +124,22 @@ export function wearOutfit(s: DressState, outfit: Outfit): DressState {
 	return next;
 }
 
+// Puts the outfit from before an edit back. Unlike wearOutfit it adds no
+// square: a square deleted during the edit stays deleted, so a garment whose
+// colour lost its square wears the first square left in its row.
+export function restoreOutfit(s: DressState, outfit: Outfit): DressState {
+	let next = pickMode(s, outfit.modeId);
+	for (const garment of GARMENT_IDS) {
+		const hex = outfit.colours[garment];
+		if (!hex) continue;
+		const row = next.swatches[garment];
+		next = pickColour(next, garment, row.includes(hex) ? hex : row[0]);
+		if (isJacket(garment))
+			next = setJacket(next, garment, outfit.open.includes(garment));
+	}
+	return next;
+}
+
 // One thing a person does on the Dress page. The page and the server both
 // apply it with applyChange, so they keep one set of rules.
 export type DressChange =
@@ -133,7 +149,8 @@ export type DressChange =
 	| { kind: "remove"; garment: GarmentId; hex: Hex }
 	| { kind: "jacket"; jacket: JacketId; open: boolean }
 	| { kind: "mannequin"; part: MannequinPart; hex: Hex }
-	| ({ kind: "wear" } & Outfit);
+	| ({ kind: "wear" } & Outfit)
+	| ({ kind: "restore" } & Outfit);
 
 export const hexSchema = z
 	.string()
@@ -179,6 +196,12 @@ export const dressChangeSchema: z.ZodType<DressChange> = z.discriminatedUnion(
 			colours: z.partialRecord(garment, hexSchema),
 			open: z.array(z.enum(JACKET_IDS)),
 		}),
+		z.object({
+			kind: z.literal("restore"),
+			modeId: modeIdSchema,
+			colours: z.partialRecord(garment, hexSchema),
+			open: z.array(z.enum(JACKET_IDS)),
+		}),
 	],
 );
 
@@ -220,5 +243,7 @@ export function applyChange(s: DressState, change: DressChange): ChangeResult {
 			};
 		case "wear":
 			return { ok: true, state: wearOutfit(s, change) };
+		case "restore":
+			return { ok: true, state: restoreOutfit(s, change) };
 	}
 }

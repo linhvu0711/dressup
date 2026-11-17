@@ -8,11 +8,13 @@ import {
 	type DressChange,
 	type DressState,
 	type MannequinPart,
+	type Outfit,
 } from "@/dress/state";
+import type { Look } from "@/looks/look";
 
 export type OutfitView = { account: string | null; unsaved: boolean } & (
 	| { status: "loading" }
-	| { status: "ready"; state: DressState }
+	| { status: "ready"; state: DressState; editing: Look | null }
 );
 
 export type OutfitReport = "saved" | "still-unsaved" | "signed-out";
@@ -41,6 +43,10 @@ export function createOutfitStore(
 	let sending = false;
 	// A change could not be stored and waits on the queue.
 	let unsaved = false;
+	// The Edit state: the saved look the page holds to change, and the outfit
+	// from before it. In memory only: a reload ends the edit and keeps the
+	// colours.
+	let edit: { look: Look; before: Outfit } | null = null;
 	// Moves on each account switch, so an answer for the account before is
 	// dropped.
 	let generation = 0;
@@ -52,7 +58,13 @@ export function createOutfitStore(
 
 	const emit = () => {
 		view = state
-			? { account, unsaved, status: "ready", state }
+			? {
+					account,
+					unsaved,
+					status: "ready",
+					state,
+					editing: edit?.look ?? null,
+				}
 			: { account, unsaved, status: "loading" };
 		for (const listener of listeners) listener();
 	};
@@ -92,8 +104,11 @@ export function createOutfitStore(
 				return sent;
 			}
 			if (sent === "refused") {
-				// The server's copy wins: drop the local one and load it.
+				// The server's copy wins: drop the local one and load it. A "wear"
+				// may have gone with the queue, so the look is no longer on, and
+				// "Save changes" would write the wrong outfit.
 				queue = [];
+				edit = null;
 				unsaved = false;
 				state = confirmed;
 				emit();
@@ -165,6 +180,7 @@ export function createOutfitStore(
 			generation++;
 			queue = [];
 			unsaved = false;
+			edit = null;
 			state = confirmed = null;
 			emit();
 			if (next !== null) void firstLoad();
@@ -189,6 +205,35 @@ export function createOutfitStore(
 		},
 		setMannequinColour: (part: MannequinPart, hex: Hex) => {
 			run({ kind: "mannequin", part, hex });
+		},
+		editLook: (look: Look) => {
+			if (!state) return;
+			// A second look keeps the outfit from before the first.
+			const before = edit?.before ?? {
+				modeId: state.modeId,
+				colours: state.picked,
+				open: state.open,
+			};
+			edit = { look, before };
+			run({
+				kind: "wear",
+				modeId: look.modeId,
+				colours: look.colours,
+				open: look.open,
+			});
+		},
+		// Ends the Edit state and puts the outfit from before back, keeping the
+		// squares deleted during the edit deleted.
+		cancelEdit: () => {
+			if (!edit) return;
+			const { before } = edit;
+			edit = null;
+			run({ kind: "restore", ...before });
+		},
+		// Ends the Edit state and keeps the outfit, after a save or a delete.
+		finishEdit: () => {
+			edit = null;
+			emit();
 		},
 		// Sends the queue again after a failed send.
 		retry: () => {

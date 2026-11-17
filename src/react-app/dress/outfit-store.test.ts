@@ -5,6 +5,8 @@ import {
 	type OutfitReport,
 	type OutfitStore,
 } from "@/dress/outfit-store";
+import { pickColour, startDressState } from "@/dress/state";
+import { type LookId, lookFromDress } from "@/looks/look";
 
 async function until(check: () => boolean) {
 	while (!check()) await Bun.sleep(5);
@@ -31,6 +33,21 @@ async function ready() {
 const shown = (store: OutfitStore) => {
 	const view = store.view();
 	return view.status === "ready" ? view.state : null;
+};
+
+const lookIn = (hex: "#7A2E2E" | "#E6DFD0", id: string) =>
+	lookFromDress(
+		pickColour(startDressState(), "sweater", hex),
+		id as LookId,
+		"Red day",
+		[],
+	);
+const redLook = lookIn("#7A2E2E", "8f0d5a52-0b2e-4b8e-9a43-2f1c4a6e7b01");
+const creamLook = lookIn("#E6DFD0", "8f0d5a52-0b2e-4b8e-9a43-2f1c4a6e7b02");
+
+const editing = (store: OutfitStore) => {
+	const view = store.view();
+	return view.status === "ready" ? view.editing : undefined;
 };
 
 describe("outfit store", () => {
@@ -200,5 +217,72 @@ describe("outfit store", () => {
 		await until(() => memory.loads === 1);
 		// Then
 		expect(store.view().status).toBe("loading");
+	});
+
+	test("cancel edit keeps squares deleted during the edit deleted", async () => {
+		// Given: a ready store with the navy sweater on, and a look in red
+		const { memory, store } = await ready();
+		// When
+		store.editLook(redLook);
+		store.removeColour("sweater", "#1F3A5F");
+		store.cancelEdit();
+		await until(() => memory.stored.length === 3);
+		// Then
+		expect({
+			editing: editing(store),
+			row: shown(store)?.swatches.sweater,
+			sweater: shown(store)?.picked.sweater,
+			serverRow: memory.state().swatches.sweater,
+			serverSweater: memory.state().picked.sweater,
+		}).toEqual({
+			editing: null,
+			row: ["#8C8A84", "#E6DFD0", "#7A2E2E"],
+			sweater: "#8C8A84",
+			serverRow: ["#8C8A84", "#E6DFD0", "#7A2E2E"],
+			serverSweater: "#8C8A84",
+		});
+	});
+
+	test("finish edit keeps the outfit", async () => {
+		// Given: a ready store with the navy sweater on, and a look in red
+		const { store } = await ready();
+		// When
+		store.editLook(redLook);
+		store.finishEdit();
+		// Then
+		expect({
+			editing: editing(store),
+			sweater: shown(store)?.picked.sweater,
+		}).toEqual({ editing: null, sweater: "#7A2E2E" });
+	});
+
+	test("a second look keeps the outfit from before the first", async () => {
+		// Given: a ready store with the navy sweater on, a look in red and one
+		// in cream
+		const { store } = await ready();
+		// When
+		store.editLook(redLook);
+		store.editLook(creamLook);
+		store.cancelEdit();
+		// Then
+		expect({
+			editing: editing(store),
+			sweater: shown(store)?.picked.sweater,
+		}).toEqual({ editing: null, sweater: "#1F3A5F" });
+	});
+
+	test("ends the edit state when a change is refused", async () => {
+		// Given: a ready store with the navy sweater on; the next change is
+		// refused
+		const { memory, store } = await ready();
+		memory.answerNextSend("refused");
+		// When
+		store.editLook(redLook);
+		await until(() => memory.loads === 2);
+		// Then
+		expect({
+			editing: editing(store),
+			sweater: shown(store)?.picked.sweater,
+		}).toEqual({ editing: null, sweater: "#1F3A5F" });
 	});
 });
