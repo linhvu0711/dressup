@@ -303,6 +303,26 @@ describe("outfit changes", () => {
 		});
 	});
 
+	test("refuses to remove a colour square that is not in the row", async () => {
+		// Given: the starter sweater row
+		const { h, ai } = await withAiSession();
+		// When
+		const { isError, text } = await ai.call("remove_colour_square", {
+			garment: "sweater",
+			colour: "#2E5E4E",
+		});
+		// Then
+		expect({
+			isError,
+			text,
+			row: (await dress(h, ai)).swatches.sweater,
+		}).toEqual({
+			isError: true,
+			text: "#2E5E4E is not in the sweater row. This row has: #1F3A5F, #8C8A84, #E6DFD0, #7A2E2E.",
+			row: ["#1F3A5F", "#8C8A84", "#E6DFD0", "#7A2E2E"],
+		});
+	});
+
 	test("refuses to remove the last colour square", async () => {
 		// Given: three of the sweater's four squares removed
 		const { h, ai } = await withAiSession();

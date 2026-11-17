@@ -115,6 +115,24 @@ describe("dress state", () => {
 			picked: state.picked.sweater,
 		}).toEqual({ removed: false, row: ["#1F3A5F"], picked: "#1F3A5F" });
 	});
+
+	test("does not remove a colour the row does not hold", () => {
+		// Given: a fresh state, the sweater row #1F3A5F, #8C8A84, #E6DFD0, #7A2E2E
+		// When
+		const result = removeColour(startDressState(), "sweater", "#2E5E4E");
+		// Then
+		expect({
+			removed: result.removed,
+			why: "why" in result ? result.why : undefined,
+			row: result.state.swatches.sweater,
+			picked: result.state.picked.sweater,
+		}).toEqual({
+			removed: false,
+			why: "not_in_row",
+			row: ["#1F3A5F", "#8C8A84", "#E6DFD0", "#7A2E2E"],
+			picked: "#1F3A5F",
+		});
+	});
 	test("sets a jacket open and closed", () => {
 		// Given: a fresh state
 		const start = startDressState();

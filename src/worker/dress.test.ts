@@ -367,6 +367,46 @@ describe("POST /api/dress/changes", () => {
 		});
 	});
 
+	test("refuses to remove a colour that is not in the row", async () => {
+		// Given: alice with the starter sweater row
+		const { h, headers } = await aliceAfterGet();
+		// When
+		const res = await post(h, headers, {
+			kind: "remove",
+			garment: "sweater",
+			hex: "#2E5E4E",
+		});
+		// Then
+		const body = await res.text();
+		const s = await get(h, headers);
+		expect({ status: res.status, body, sweater: s.swatches.sweater }).toEqual({
+			status: 400,
+			body: '{"error":"not_in_row","field":"hex"}',
+			sweater: ["#1F3A5F", "#8C8A84", "#E6DFD0", "#7A2E2E"],
+		});
+	});
+
+	test("refuses to remove an absent colour from a row of one as not in the row", async () => {
+		// Given: alice with the sweater row cut to #1F3A5F
+		const { h, headers } = await aliceAfterGet();
+		for (const hex of ["#8C8A84", "#E6DFD0", "#7A2E2E"])
+			await post(h, headers, { kind: "remove", garment: "sweater", hex });
+		// When
+		const res = await post(h, headers, {
+			kind: "remove",
+			garment: "sweater",
+			hex: "#2E5E4E",
+		});
+		// Then
+		const body = await res.text();
+		const s = await get(h, headers);
+		expect({ status: res.status, body, sweater: s.swatches.sweater }).toEqual({
+			status: 400,
+			body: '{"error":"not_in_row","field":"hex"}',
+			sweater: ["#1F3A5F"],
+		});
+	});
+
 	test("refuses POST /api/dress/changes without a session", async () => {
 		// Given: alice saved, but no session headers
 		const { h } = await withAccount();
