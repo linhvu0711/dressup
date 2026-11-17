@@ -169,4 +169,36 @@ describe("outfit store", () => {
 			loads: memory.loads,
 		}).toEqual({ reports: ["signed-out"], status: "loading", loads: 1 });
 	});
+
+	test("drops the queue when another account signs in", async () => {
+		// Given: a ready store for "u1" with a failed change on its queue
+		const { memory, store } = await ready();
+		memory.answerNextSend("failed");
+		store.pickColour("sweater", "#7A2E2E");
+		await until(() => store.view().unsaved);
+		// When
+		store.account("u2");
+		await until(() => store.view().status === "ready");
+		store.retry();
+		await Bun.sleep(0);
+		// Then
+		expect({
+			stored: memory.stored,
+			unsaved: store.view().unsaved,
+			sweater: shown(store)?.picked.sweater,
+		}).toEqual({ stored: [], unsaved: false, sweater: "#1F3A5F" });
+	});
+
+	test("drops a load that answers after another account signed in", async () => {
+		// Given: a new store whose first load for "u1" is held
+		const { memory, store } = setup();
+		const release = memory.slow();
+		store.account("u1");
+		// When
+		store.account(null);
+		release();
+		await until(() => memory.loads === 1);
+		// Then
+		expect(store.view().status).toBe("loading");
+	});
 });
