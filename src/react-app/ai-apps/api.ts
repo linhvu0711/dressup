@@ -1,16 +1,12 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RequestError, request } from "../data/client";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { after, keys, RequestError, request } from "../data/client";
 import { aiAppsAnswer } from "../data/contract";
 import { useUserId } from "../session";
-import type { AiApp } from "./ai-app";
-
-export const aiAppsQueryKey = (userId: string | null) =>
-	["ai-apps", userId] as const;
 
 export function useAiApps() {
 	const userId = useUserId();
 	return useQuery({
-		queryKey: aiAppsQueryKey(userId),
+		queryKey: keys.aiApps(userId),
 		queryFn: async () =>
 			(await request("GET", "/api/ai-apps", { answer: aiAppsAnswer })).apps,
 		enabled: userId !== null,
@@ -21,7 +17,6 @@ export function useAiApps() {
 
 export function useDisconnectAiApp() {
 	const userId = useUserId();
-	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: (id: string) =>
 			request("DELETE", `/api/ai-apps/${encodeURIComponent(id)}`).catch(
@@ -32,11 +27,6 @@ export function useDisconnectAiApp() {
 						throw error;
 				},
 			),
-		onSuccess: (_, id) => {
-			queryClient.setQueryData<AiApp[]>(aiAppsQueryKey(userId), (old) =>
-				old?.filter((app) => app.id !== id),
-			);
-			void queryClient.invalidateQueries({ queryKey: aiAppsQueryKey(userId) });
-		},
+		onSuccess: (_, id) => after.aiAppGone(userId, id),
 	});
 }

@@ -1,17 +1,13 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RequestError, request } from "../data/client";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { after, keys, RequestError, request } from "../data/client";
 import { tagAnswer, tagsAnswer } from "../data/contract";
-import { looksQueryKey } from "../looks/api";
 import { useUserId } from "../session";
 import type { Tag, TagId } from "./tag";
-
-export const tagsQueryKey = (userId: string | null) =>
-	["tags", userId] as const;
 
 export function useTags() {
 	const userId = useUserId();
 	return useQuery({
-		queryKey: tagsQueryKey(userId),
+		queryKey: keys.tags(userId),
 		queryFn: async () =>
 			(await request("GET", "/api/tags", { answer: tagsAnswer })).tags,
 		enabled: userId !== null,
@@ -35,13 +31,10 @@ const goneAsDone = (error: unknown) => {
 		throw error;
 };
 
-export const addTagKey = ["tags", "add"] as const;
-
 export function useAddTag() {
 	const userId = useUserId();
-	const queryClient = useQueryClient();
 	return useMutation({
-		mutationKey: addTagKey,
+		mutationKey: keys.addTag,
 		mutationFn: async (name: string) =>
 			(
 				await request("POST", "/api/tags", {
@@ -49,22 +42,15 @@ export function useAddTag() {
 					answer: tagAnswer,
 				}).catch(takenAsTagNameTaken)
 			).tag,
-		onSuccess: (tag) => {
-			queryClient.setQueryData<Tag[]>(tagsQueryKey(userId), (old) =>
-				old ? [...old, tag] : old,
-			);
-		},
+		onSuccess: (tag) => after.tagAdded(userId, tag),
 		// On an error too: an add whose answer was lost may be stored, and
 		// sending it again finds the name taken.
-		onSettled: () => {
-			void queryClient.invalidateQueries({ queryKey: tagsQueryKey(userId) });
-		},
+		onSettled: () => after.tagsMayDiffer(userId),
 	});
 }
 
 export function useRenameTag() {
 	const userId = useUserId();
-	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: async (input: Tag) =>
 			(
@@ -73,34 +59,18 @@ export function useRenameTag() {
 					answer: tagAnswer,
 				}).catch(takenAsTagNameTaken)
 			).tag,
-		// The renamed tag keeps its place, as the server keeps its time.
-		onSuccess: (tag) => {
-			queryClient.setQueryData<Tag[]>(tagsQueryKey(userId), (old) =>
-				old?.map((t) => (t.id === tag.id ? tag : t)),
-			);
-		},
+		onSuccess: (tag) => after.tagRenamed(userId, tag),
 		// A tag gone on another device, or a name taken there, shows on the
 		// next load.
-		onError: () => {
-			void queryClient.invalidateQueries({ queryKey: tagsQueryKey(userId) });
-		},
+		onError: () => after.tagsMayDiffer(userId),
 	});
 }
 
 export function useDeleteTag() {
 	const userId = useUserId();
-	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: (id: TagId) =>
 			request("DELETE", `/api/tags/${id}`).catch(goneAsDone),
-		onSuccess: (_, id) => {
-			queryClient.setQueryData<Tag[]>(tagsQueryKey(userId), (old) =>
-				old?.filter((t) => t.id !== id),
-			);
-			void queryClient.invalidateQueries({ queryKey: tagsQueryKey(userId) });
-			// The looks cache has one writer, looks/api.ts; until it loads again
-			// the look view and the chips skip a tag the list no longer holds.
-			void queryClient.invalidateQueries({ queryKey: looksQueryKey(userId) });
-		},
+		onSuccess: (_, id) => after.tagDeleted(userId, id),
 	});
 }

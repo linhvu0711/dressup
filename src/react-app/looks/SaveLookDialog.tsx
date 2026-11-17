@@ -4,10 +4,9 @@ import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
-import { RequestError } from "@/data/client";
+import { keys, RequestError } from "@/data/client";
 import { modeById } from "@/dress/modes";
 import type { DressState } from "@/dress/state";
-import { addTagKey } from "@/tags/api";
 import { TagPicker } from "@/tags/TagPicker";
 import type { TagId } from "@/tags/tag";
 import { LookGone, useLooks, useSaveLook, useUpdateLook } from "./api";
@@ -46,7 +45,7 @@ export function SaveLookDialog({
 	const toast = useToast();
 	const leaveGoneLook = useLeaveGoneLook();
 	// A Save before a new tag is stored would leave that tag off the look.
-	const addingTag = useIsMutating({ mutationKey: addTagKey }) > 0;
+	const addingTag = useIsMutating({ mutationKey: keys.addTag }) > 0;
 	// "Save as new" is off with Save; "Save changes" keeps the same id and is
 	// not counted. A 409 look_limit means another tab filled the account.
 	const full =

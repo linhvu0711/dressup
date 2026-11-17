@@ -1,10 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { keys, RequestError, request } from "../data/client";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { after, keys, RequestError, request } from "../data/client";
 import { lookAnswer, looksAnswer } from "../data/contract";
 import { useUserId } from "../session";
-import type { Look, LookId, LookInput } from "./look";
-
-export const looksQueryKey = keys.looks;
+import type { LookId, LookInput } from "./look";
 
 export function useLooks() {
 	const userId = useUserId();
@@ -32,7 +30,6 @@ export class SaveError extends Error {
 
 export function useSaveLook() {
 	const userId = useUserId();
-	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: async (look: LookInput) =>
 			(
@@ -41,23 +38,7 @@ export function useSaveLook() {
 					answer: lookAnswer,
 				})
 			).look,
-		onSuccess: (look) => {
-			// The wall shows a cached list at once while it asks the server
-			// again, so the saved look goes into that list now, or a first
-			// visit's empty list would show "No looks yet" after a save. A look
-			// saved again keeps its place, as the server keeps its time.
-			queryClient.setQueryData<Look[]>(
-				looksQueryKey(userId),
-				(old) =>
-					old &&
-					(old.some((l) => l.id === look.id)
-						? old.map((l) => (l.id === look.id ? look : l))
-						: [look, ...old]),
-			);
-			return queryClient.invalidateQueries({
-				queryKey: looksQueryKey(userId),
-			});
-		},
+		onSuccess: (look) => after.lookSaved(userId, look),
 	});
 }
 
@@ -72,28 +53,18 @@ const goneAsLookGone = (error: unknown): never => {
 
 export function useDeleteLook() {
 	const userId = useUserId();
-	const queryClient = useQueryClient();
-	const forget = (id: LookId) => {
-		queryClient.setQueryData<Look[]>(looksQueryKey(userId), (old) =>
-			old?.filter((l) => l.id !== id),
-		);
-		// Not returned: a returned promise holds the caller's callbacks until
-		// the list has loaded again.
-		void queryClient.invalidateQueries({ queryKey: looksQueryKey(userId) });
-	};
 	return useMutation({
 		mutationFn: (id: LookId) =>
 			request("DELETE", `/api/looks/${id}`).catch(goneAsLookGone),
-		onSuccess: (_, id) => forget(id),
+		onSuccess: (_, id) => after.lookGone(userId, id),
 		onError: (error, id) => {
-			if (error instanceof LookGone) forget(id);
+			if (error instanceof LookGone) after.lookGone(userId, id);
 		},
 	});
 }
 
 export function useUpdateLook() {
 	const userId = useUserId();
-	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: async (look: LookInput) =>
 			(
@@ -102,19 +73,9 @@ export function useUpdateLook() {
 					answer: lookAnswer,
 				}).catch(goneAsLookGone)
 			).look,
-		onSuccess: (look) => {
-			// The changed look keeps its place, as the server keeps its time.
-			queryClient.setQueryData<Look[]>(looksQueryKey(userId), (old) =>
-				old?.map((l) => (l.id === look.id ? look : l)),
-			);
-			void queryClient.invalidateQueries({ queryKey: looksQueryKey(userId) });
-		},
+		onSuccess: (look) => after.lookChanged(userId, look),
 		onError: (error, look) => {
-			if (!(error instanceof LookGone)) return;
-			queryClient.setQueryData<Look[]>(looksQueryKey(userId), (old) =>
-				old?.filter((l) => l.id !== look.id),
-			);
-			void queryClient.invalidateQueries({ queryKey: looksQueryKey(userId) });
+			if (error instanceof LookGone) after.lookGone(userId, look.id);
 		},
 	});
 }

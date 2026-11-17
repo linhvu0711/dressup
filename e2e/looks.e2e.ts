@@ -71,6 +71,44 @@ test("saves a look and shows the toast", async ({ page }) => {
 	]);
 });
 
+test("closes the save form while the looks list loads again", async ({
+	page,
+}) => {
+	// Given: both projects, the Dress page shown; the form's first GET
+	// /api/looks passes, every later one is held until the test ends
+	await openDress(page);
+	let release = () => {};
+	const held = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	let gets = 0;
+	let heldGets = 0;
+	await page.route("**/api/looks", async (route) => {
+		if (route.request().method() !== "GET") return route.continue();
+		gets += 1;
+		if (gets > 1) {
+			heldGets += 1;
+			await held;
+		}
+		await route.continue();
+	});
+	try {
+		// When
+		await page.getByRole("button", { name: "Save look" }).click();
+		await dialog(page)
+			.getByRole("button", { name: "Save", exact: true })
+			.click();
+		// Then
+		await expect(dialog(page)).toHaveCount(0, { timeout: 2000 });
+		await expect(page.locator('[data-slot="toast"]')).toHaveText(
+			"Saved to Looks",
+		);
+		expect(heldGets).toBe(1);
+	} finally {
+		release();
+	}
+});
+
 test("keeps the form open when saving fails", async ({ page }) => {
 	// Given: both projects, the Dress page shown, each save answered 500
 	await openDress(page);
