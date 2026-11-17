@@ -159,6 +159,36 @@ describe("POST /api/dress/changes", () => {
 		});
 	});
 
+	test("restores an outfit without adding back a removed square", async () => {
+		// Given: alice after one GET /api/dress, the navy sweater square removed
+		const { h, headers } = await aliceAfterGet();
+		await post(h, headers, {
+			kind: "remove",
+			garment: "sweater",
+			hex: "#1F3A5F",
+		});
+		const restore = {
+			kind: "restore",
+			modeId: "polo-sweater",
+			colours: { sweater: "#1F3A5F" },
+			open: [],
+		};
+		// When
+		const first = await post(h, headers, restore);
+		const second = await post(h, headers, restore);
+		const s = await get(h, headers);
+		// Then
+		expect({
+			statuses: [first.status, second.status],
+			sweater: s.swatches.sweater,
+			pickedSweater: s.picked.sweater,
+		}).toEqual({
+			statuses: [204, 204],
+			sweater: ["#8C8A84", "#E6DFD0", "#7A2E2E"],
+			pickedSweater: "#8C8A84",
+		});
+	});
+
 	test("stores a change of each kind", async () => {
 		// Given: alice after one GET /api/dress
 		const { h, headers } = await aliceAfterGet();

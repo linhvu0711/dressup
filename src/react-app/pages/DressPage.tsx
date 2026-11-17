@@ -73,7 +73,7 @@ export function DressPage() {
 									aria-label="Stop editing"
 									title="Stop editing"
 									className="size-[26px] flex-none border-transparent"
-									onClick={dress.stopEditing}
+									onClick={dress.cancelEdit}
 								>
 									<X size={15} strokeWidth={1.9} aria-hidden />
 								</Button>
@@ -108,6 +108,15 @@ export function DressPage() {
 						hair={state.mannequin.hair}
 						label={`Mannequin in ${mode.name}`}
 					/>
+				) : dress.status === "failed" ? (
+					<div className="flex h-full flex-col items-center justify-center px-6 text-center">
+						<p role="alert" className="text-[15px] text-destructive">
+							Could not load your outfit.
+						</p>
+						<Button size="lg" className="mt-4" onClick={dress.loadAgain}>
+							Try again
+						</Button>
+					</div>
 				) : (
 					<MannequinPlaceholder />
 				)}
@@ -117,7 +126,7 @@ export function DressPage() {
 					state={state}
 					editing={editing}
 					onSaved={() => {
-						if (dress.status === "ready") dress.endEditing();
+						if (dress.status === "ready") dress.finishEdit();
 					}}
 					onClose={() => setSaving(false)}
 				/>
