@@ -1,20 +1,12 @@
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import {
-	aiSession,
+	type aiSession,
 	BOB,
 	type Harness,
-	makeHarness,
 	seedLooks,
 	send,
-	stubOutside,
+	withAiSession,
 } from "./test/harness";
-
-async function connected() {
-	const h = await makeHarness();
-	stubOutside();
-	const ai = await aiSession(h);
-	return { h, ai };
-}
 
 type Session = Awaited<ReturnType<typeof aiSession>>;
 
@@ -117,7 +109,7 @@ type Outfit = {
 describe("get_outfit", () => {
 	test("shows the outfit on the mannequin", async () => {
 		// Given: a connected AI app on a new account
-		const { ai } = await connected();
+		const { ai } = await withAiSession();
 		// When
 		const { isError, data } = await ai.call("get_outfit");
 		// Then
@@ -145,7 +137,7 @@ describe("get_outfit", () => {
 describe("outfit changes", () => {
 	test("changes the mode", async () => {
 		// Given
-		const { h, ai } = await connected();
+		const { h, ai } = await withAiSession();
 		// When
 		const { isError, data } = await ai.call("set_mode", {
 			modeId: "tee-harrington",
@@ -164,7 +156,7 @@ describe("outfit changes", () => {
 
 	test("picks a colour", async () => {
 		// Given
-		const { h, ai } = await connected();
+		const { h, ai } = await withAiSession();
 		// When
 		const { isError } = await ai.call("pick_colour", {
 			garment: "sweater",
@@ -179,7 +171,7 @@ describe("outfit changes", () => {
 
 	test("adds a colour square and picks it", async () => {
 		// Given
-		const { h, ai } = await connected();
+		const { h, ai } = await withAiSession();
 		// When
 		const { isError } = await ai.call("add_colour_square", {
 			garment: "sweater",
@@ -200,7 +192,7 @@ describe("outfit changes", () => {
 
 	test("removes a colour square", async () => {
 		// Given
-		const { h, ai } = await connected();
+		const { h, ai } = await withAiSession();
 		// When
 		const { isError } = await ai.call("remove_colour_square", {
 			garment: "sweater",
@@ -215,7 +207,7 @@ describe("outfit changes", () => {
 
 	test("opens a jacket", async () => {
 		// Given
-		const { h, ai } = await connected();
+		const { h, ai } = await withAiSession();
 		// When
 		const { isError } = await ai.call("set_jacket", {
 			jacket: "harrington",
@@ -230,7 +222,7 @@ describe("outfit changes", () => {
 
 	test("refuses the old chore jacket", async () => {
 		// Given
-		const { h, ai } = await connected();
+		const { h, ai } = await withAiSession();
 		// When
 		const { isError, text } = await ai.call("set_jacket", {
 			jacket: "chore",
@@ -246,7 +238,7 @@ describe("outfit changes", () => {
 
 	test("sets the skin colour", async () => {
 		// Given
-		const { h, ai } = await connected();
+		const { h, ai } = await withAiSession();
 		// When
 		const { isError } = await ai.call("set_mannequin_colour", {
 			part: "skin",
@@ -261,7 +253,7 @@ describe("outfit changes", () => {
 
 	test("refuses an unknown mode", async () => {
 		// Given
-		const { h, ai } = await connected();
+		const { h, ai } = await withAiSession();
 		// When
 		const { isError, text } = await ai.call("set_mode", { modeId: "banana" });
 		// Then
@@ -274,7 +266,7 @@ describe("outfit changes", () => {
 
 	test("refuses a colour not written as #RRGGBB", async () => {
 		// Given
-		const { h, ai } = await connected();
+		const { h, ai } = await withAiSession();
 		// When
 		const { isError, text } = await ai.call("pick_colour", {
 			garment: "sweater",
@@ -294,7 +286,7 @@ describe("outfit changes", () => {
 
 	test("refuses to pick a colour that is not in the row", async () => {
 		// Given
-		const { h, ai } = await connected();
+		const { h, ai } = await withAiSession();
 		// When
 		const { isError, text } = await ai.call("pick_colour", {
 			garment: "sweater",
@@ -314,7 +306,7 @@ describe("outfit changes", () => {
 
 	test("refuses to remove the last colour square", async () => {
 		// Given: three of the sweater's four squares removed
-		const { h, ai } = await connected();
+		const { h, ai } = await withAiSession();
 		for (const colour of ["#8C8A84", "#E6DFD0", "#7A2E2E"])
 			expect(
 				(await ai.call("remove_colour_square", { garment: "sweater", colour }))
@@ -341,7 +333,7 @@ describe("outfit changes", () => {
 describe("looks", () => {
 	test("saves a new look and leaves the outfit", async () => {
 		// Given
-		const { h, ai } = await connected();
+		const { h, ai } = await withAiSession();
 		const dressBefore = await dress(h, ai);
 		// When
 		const { isError, data } = await ai.call("save_look", NAVY_SAVE);
@@ -362,7 +354,7 @@ describe("looks", () => {
 
 	test("lists no looks with its own text", async () => {
 		// Given
-		const { ai } = await connected();
+		const { ai } = await withAiSession();
 		// When
 		const { isError, text, data } = await ai.call("list_looks");
 		// Then
@@ -375,7 +367,7 @@ describe("looks", () => {
 
 	test("lists the looks with their tags", async () => {
 		// Given: a look saved on the Looks page with the tag Work
-		const { h, ai } = await connected();
+		const { h, ai } = await withAiSession();
 		const work = await addTag(h, ai, "Work");
 		const saved = await sendJson(h, ai, "POST", "/api/looks", {
 			...NAVY,
@@ -406,7 +398,7 @@ describe("looks", () => {
 
 	test("refuses a look garment that is not in the mode", async () => {
 		// Given
-		const { h, ai } = await connected();
+		const { h, ai } = await withAiSession();
 		// When
 		const { isError, text } = await ai.call("save_look", {
 			modeId: "polo-sweater",
@@ -427,11 +419,8 @@ describe("looks", () => {
 
 	test("refuses a save at 300 looks", async () => {
 		// Given: alice has 300 looks
-		const { h, ai } = await connected();
-		const me = (await (await send(h, ai.jar, "/api/me")).json()) as {
-			id: string;
-		};
-		seedLooks(h, me.id, 300);
+		const { h, ai, userId } = await withAiSession();
+		seedLooks(h, userId, 300);
 		// When
 		const { isError, text } = await ai.call("save_look", NAVY_SAVE);
 		// Then
@@ -444,7 +433,7 @@ describe("looks", () => {
 
 	test("answers a failed save with the server error text and keeps no look", async () => {
 		// Given: the look row goes in, then the batch fails at its tag row
-		const { h, ai } = await connected();
+		const { h, ai } = await withAiSession();
 		const work = await addTag(h, ai, "Work");
 		h.sqlite.run(
 			"CREATE TRIGGER fail_tag BEFORE INSERT ON look_tag BEGIN SELECT RAISE(ABORT, 'disk full'); END",
@@ -465,7 +454,7 @@ describe("looks", () => {
 
 describe("look changes", () => {
 	async function withNavy() {
-		const { h, ai } = await connected();
+		const { h, ai } = await withAiSession();
 		const saved = await sendJson(h, ai, "POST", "/api/looks", NAVY);
 		expect(saved.status).toBe(201);
 		return { h, ai };
@@ -586,7 +575,7 @@ describe("look changes", () => {
 
 	test("refuses to delete another account's look", async () => {
 		// Given: bob saved NAVY
-		const { h, ai } = await connected();
+		const { h, ai } = await withAiSession();
 		const bob = await asBob(h);
 		expect((await bob("POST", "/api/looks", NAVY)).status).toBe(201);
 		// When
@@ -610,7 +599,7 @@ describe("tags", () => {
 
 	test("lists every AI action with its marks", async () => {
 		// Given
-		const { ai } = await connected();
+		const { ai } = await withAiSession();
 		// When
 		const listed = await ai.list();
 		// Then
@@ -637,7 +626,7 @@ describe("tags", () => {
 
 	test("lists no tags with its own text", async () => {
 		// Given
-		const { ai } = await connected();
+		const { ai } = await withAiSession();
 		// When
 		const result = await ai.call("list_tags");
 		// Then
@@ -650,7 +639,7 @@ describe("tags", () => {
 
 	test("lists the tags", async () => {
 		// Given
-		const { h, ai } = await connected();
+		const { h, ai } = await withAiSession();
 		const work = await addTag(h, ai, "Work");
 		// When
 		const { data } = await ai.call("list_tags");
@@ -660,7 +649,7 @@ describe("tags", () => {
 
 	test("adds a tag", async () => {
 		// Given
-		const { h, ai } = await connected();
+		const { h, ai } = await withAiSession();
 		// When
 		const { isError, data } = await ai.call("add_tag", { name: "Work" });
 		// Then
@@ -674,7 +663,7 @@ describe("tags", () => {
 
 	test("refuses a tag name already used", async () => {
 		// Given
-		const { h, ai } = await connected();
+		const { h, ai } = await withAiSession();
 		await addTag(h, ai, "Work");
 		// When
 		const { isError, text } = await ai.call("add_tag", { name: "work" });
@@ -692,7 +681,7 @@ describe("tags", () => {
 
 	test("renames a tag", async () => {
 		// Given
-		const { h, ai } = await connected();
+		const { h, ai } = await withAiSession();
 		const work = await addTag(h, ai, "Work");
 		// When
 		const { isError } = await ai.call("rename_tag", {
@@ -708,7 +697,7 @@ describe("tags", () => {
 
 	test("refuses to rename a tag that is gone", async () => {
 		// Given
-		const { h, ai } = await connected();
+		const { h, ai } = await withAiSession();
 		const work = await addTag(h, ai, "Work");
 		expect(
 			(await send(h, ai.jar, `/api/tags/${work}`, { method: "DELETE" })).status,
@@ -728,7 +717,7 @@ describe("tags", () => {
 
 	test("deletes a tag", async () => {
 		// Given
-		const { h, ai } = await connected();
+		const { h, ai } = await withAiSession();
 		const work = await addTag(h, ai, "Work");
 		// When
 		const { isError } = await ai.call("delete_tag", { id: work });
@@ -741,7 +730,7 @@ describe("tags", () => {
 
 	test("refuses to delete another account's tag", async () => {
 		// Given
-		const { h, ai } = await connected();
+		const { h, ai } = await withAiSession();
 		const bob = await asBob(h);
 		const posted = await bob("POST", "/api/tags", { name: "Work" });
 		expect(posted.status).toBe(201);
@@ -765,7 +754,7 @@ describe("AI action limit", () => {
 
 	// Starts a clock minute so the 61 calls cannot cross into the next one.
 	async function sixtyActions() {
-		const { h, ai } = await connected();
+		const { h, ai } = await withAiSession();
 		const start = Math.ceil(Date.now() / 60_000) * 60_000 + 1000;
 		setSystemTime(start);
 		for (let i = 0; i < 60; i++)

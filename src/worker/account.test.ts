@@ -1,7 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import {
-	aiSession,
-	connectAiApp,
 	finishGoogleSignIn,
 	googleUser,
 	type Harness,
@@ -11,6 +9,8 @@ import {
 	startGoogleSignIn,
 	store,
 	stubOutside,
+	withAiApp,
+	withAiSession,
 } from "./test/harness";
 
 const googleSignIn = async (h: Harness): Promise<Jar> =>
@@ -245,10 +245,7 @@ describe("DELETE /api/account", () => {
 	test("deletes the account's AI app records with the account", async () => {
 		// Given: alice through connectAiApp, so she has 1 oauth_consent and 1
 		// oauth_refresh_token row
-		const h = await makeHarness();
-		stubOutside();
-		const { jar } = await connectAiApp(h, { accept: true });
-		const aliceId = ((await me(h, jar)).body as { id: string }).id;
+		const { h, jar, userId: aliceId } = await withAiApp();
 		const count = (table: string) =>
 			(
 				h.sqlite
@@ -276,9 +273,7 @@ describe("DELETE /api/account", () => {
 
 	test("deletes the account's AI action count with the account", async () => {
 		// Given: alice took one AI action
-		const h = await makeHarness();
-		stubOutside();
-		const ai = await aiSession(h);
+		const { h, ai } = await withAiSession();
 		await ai.call("list_tags");
 		const count = () =>
 			(

@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
 	BOB,
-	connectAiApp,
 	cookie,
 	type Harness,
-	makeHarness,
-	stubOutside,
+	INITIALIZE,
+	post,
 	TEST_APP_ID,
+	withAiApp,
 } from "./test/harness";
 
 const send = (
@@ -20,45 +20,19 @@ const count = (h: Harness, table: string) =>
 	(h.sqlite.query(`select count(*) as n from ${table}`).get() as { n: number })
 		.n;
 
-// An MCP initialize with the app's pass, as src/worker/mcp.test.ts sends it.
-const initialize = (h: Harness, bearer: string) =>
-	h.app.request(
-		"/api/mcp",
-		{
-			method: "POST",
-			headers: {
-				"content-type": "application/json",
-				accept: "application/json, text/event-stream",
-				authorization: `Bearer ${bearer}`,
-			},
-			body: JSON.stringify({
-				jsonrpc: "2.0",
-				id: 1,
-				method: "initialize",
-				params: {
-					protocolVersion: "2025-11-25",
-					capabilities: {},
-					clientInfo: { name: "test", version: "1" },
-				},
-			}),
-		},
-		h.env,
-	);
-
 describe("/api/ai-apps", () => {
 	// Alice connected the test app on 2026-11-14 at 12:00 UTC; its allow row
 	// has the fixed id "allow-1".
 	async function aliceConnected() {
-		const h = await makeHarness();
-		stubOutside();
-		const { jar, token } = await connectAiApp(h, { accept: true });
+		const { h, jar, bearer, userId } = await withAiApp();
 		h.sqlite.run(
 			"update oauth_consent set id = 'allow-1', created_at = 1794657600000",
 		);
 		return {
 			h,
 			alice: { cookie: cookie(jar) },
-			bearer: token?.body.access_token ?? "",
+			bearer,
+			userId,
 		};
 	}
 
@@ -122,7 +96,7 @@ describe("/api/ai-apps", () => {
 		const res = await send(h, "DELETE", "/api/ai-apps/allow-1", alice);
 		// Then
 		const list = await send(h, "GET", "/api/ai-apps", alice);
-		const mcp = await initialize(h, bearer);
+		const mcp = await post(h, INITIALIZE, bearer);
 		expect({
 			status: res.status,
 			allows: count(h, "oauth_consent"),

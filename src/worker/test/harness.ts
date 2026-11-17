@@ -455,3 +455,24 @@ export function seedLooks(h: Harness, userId: string, n: number) {
 		[n, userId],
 	);
 }
+
+const accountId = async (h: Harness, jar: Jar) =>
+	((await (await send(h, jar, "/api/me")).json()) as { id: string }).id;
+
+// Alice, through Google, with the test app connected and allowed: its pass in
+// bearer, her browser in jar.
+export async function withAiApp() {
+	const h = await makeHarness();
+	stubOutside();
+	const { jar, token } = await connectAiApp(h, { accept: true });
+	const bearer = { authorization: `Bearer ${token?.body.access_token}` };
+	return { h, jar, bearer, userId: await accountId(h, jar) };
+}
+
+// Alice's connected test app after its MCP handshake.
+export async function withAiSession() {
+	const h = await makeHarness();
+	stubOutside();
+	const ai = await aiSession(h);
+	return { h, ai, userId: await accountId(h, ai.jar) };
+}
