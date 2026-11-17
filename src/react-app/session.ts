@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
+import { keys } from "./data/client";
 
 const meSchema = z.object({
 	id: z.string(),
@@ -10,7 +11,7 @@ const meSchema = z.object({
 
 export type Me = z.infer<typeof meSchema>;
 
-export const meQueryKey = ["me"] as const;
+export const meQueryKey = keys.me;
 
 async function fetchMe(): Promise<Me | null> {
 	const res = await fetch("/api/me");

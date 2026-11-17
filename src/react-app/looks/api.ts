@@ -1,25 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
+import { keys, request } from "../data/client";
+import { looksAnswer } from "../data/contract";
 import { useSignOutOn401, useUserId } from "../session";
 import { type Look, type LookId, type LookInput, lookSchema } from "./look";
 
-export const looksQueryKey = (userId: string | null) =>
-	["looks", userId] as const;
+export const looksQueryKey = keys.looks;
 
-const looksAnswer = z.object({ looks: z.array(lookSchema) });
 const savedAnswer = z.object({ look: lookSchema });
 
 export function useLooks() {
 	const userId = useUserId();
-	const on401 = useSignOutOn401();
 	return useQuery({
-		queryKey: looksQueryKey(userId),
-		queryFn: async () => {
-			const res = await fetch("/api/looks");
-			await on401(res, "GET /api/looks");
-			if (!res.ok) throw new Error(`GET /api/looks answered ${res.status}`);
-			return looksAnswer.parse(await res.json()).looks;
-		},
+		queryKey: keys.looks(userId),
+		queryFn: async () =>
+			(await request("GET", "/api/looks", { answer: looksAnswer })).looks,
 		enabled: userId !== null,
 		// "Retry" on the page is the person's way to try again; three silent
 		// retries would hold the skeletons for about 7 s first.

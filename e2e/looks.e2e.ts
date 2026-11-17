@@ -331,6 +331,27 @@ test("shows Retry when the wall cannot load", async ({ page }) => {
 	).toBeVisible();
 });
 
+test("shows Could not load your looks when the looks answer does not match", async ({
+	page,
+}) => {
+	// Given: a GET /api/looks answers a look with no mode, colours, or tags
+	const pageErrors: Error[] = [];
+	page.on("pageerror", (error) => pageErrors.push(error));
+	await page.route("**/api/looks", (route) =>
+		route.request().method() === "GET"
+			? route.fulfill({ status: 200, json: { looks: [{ id: "x" }] } })
+			: route.continue(),
+	);
+	// When
+	await page.goto("/looks");
+	// Then
+	await expect(
+		page.getByRole("heading", { name: "Could not load your looks" }),
+	).toBeVisible();
+	await expect(page.getByRole("button", { name: "Retry" })).toBeVisible();
+	expect(pageErrors).toEqual([]);
+});
+
 test("leaves out the right part when there is no look to pick", async ({
 	page,
 }) => {

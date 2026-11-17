@@ -3,6 +3,7 @@ import { type Context, Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
+import type { LooksAnswer } from "@/data/contract";
 import { type DressError, dressChangeSchema } from "@/dress/state";
 import { tagIdSchema } from "@/tags/tag";
 import { disconnectAiApp, listAiApps } from "./ai-app-store";
@@ -199,7 +200,9 @@ export function createApp(getDb: (env: Env) => Db) {
 	});
 
 	app.get("/looks", withAuth, requireUser, async (c) =>
-		c.json({ looks: await listLooks(getDb(c.env), c.var.user.id) }),
+		c.json({
+			looks: await listLooks(getDb(c.env), c.var.user.id),
+		} satisfies LooksAnswer),
 	);
 
 	app.post("/looks", withAuth, requireUser, async (c) => {
