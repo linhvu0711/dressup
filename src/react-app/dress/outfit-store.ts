@@ -44,6 +44,9 @@ export function createOutfitStore(
 	// Moves on each account switch, so an answer for the account before is
 	// dropped.
 	let generation = 0;
+	// Moves on each change and each load, so a load that one of them overtook
+	// is dropped: its answer may be older.
+	let changes = 0;
 	let view: OutfitView = { account, unsaved, status: "loading" };
 	const listeners = new Set<() => void>();
 
@@ -52,6 +55,17 @@ export function createOutfitStore(
 			? { account, unsaved, status: "ready", state }
 			: { account, unsaved, status: "loading" };
 		for (const listener of listeners) listener();
+	};
+
+	// Loads once, and shows the answer only when nothing overtook it.
+	const loadLatest = async () => {
+		const at = ++changes;
+		const gen = generation;
+		const loaded = await server.load();
+		if (gen !== generation || loaded.kind !== "loaded") return;
+		if (changes !== at || queue.length > 0 || sending) return;
+		state = confirmed = loaded.state;
+		emit();
 	};
 
 	const firstLoad = async () => {
@@ -70,6 +84,14 @@ export function createOutfitStore(
 			if (at !== generation) return sent;
 			if (sent === "failed") {
 				unsaved = true;
+				emit();
+				return sent;
+			}
+			if (sent === "refused") {
+				// The server's copy wins: drop the local one and load it.
+				queue = [];
+				unsaved = false;
+				state = confirmed;
 				emit();
 				return sent;
 			}
@@ -98,12 +120,14 @@ export function createOutfitStore(
 		}
 		// The account changed while a change was out: send the new queue.
 		if (at !== generation) return queue.length > 0 ? flush() : sent;
+		if (sent === "refused") void loadLatest();
 		return sent;
 	};
 
 	const push = (change: DressChange, next: DressState) => {
 		state = next;
 		queue.push(change);
+		changes++;
 		emit();
 		void flush();
 	};

@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { createMemoryOutfitServer } from "@/dress/memory-outfit-server";
-import { createOutfitStore, type OutfitReport } from "@/dress/outfit-store";
+import {
+	createOutfitStore,
+	type OutfitReport,
+	type OutfitStore,
+} from "@/dress/outfit-store";
 
 async function until(check: () => boolean) {
 	while (!check()) await Bun.sleep(5);
@@ -23,6 +27,11 @@ async function ready() {
 	await until(() => s.store.view().status === "ready");
 	return s;
 }
+
+const shown = (store: OutfitStore) => {
+	const view = store.view();
+	return view.status === "ready" ? view.state : null;
+};
 
 describe("outfit store", () => {
 	test("sends changes in the order they were made", async () => {
@@ -90,5 +99,37 @@ describe("outfit store", () => {
 			reports,
 			stored: memory.stored,
 		}).toEqual({ unsaved: true, reports: ["still-unsaved"], stored: [] });
+	});
+
+	test("drops the queue and loads the newest outfit when a change is refused", async () => {
+		// Given: a ready store; another device picked a cream sweater; the
+		// server holds its answers, and refuses the next change
+		const { memory, store, reports } = await ready();
+		memory.changeElsewhere({
+			kind: "pick",
+			garment: "sweater",
+			hex: "#E6DFD0",
+		});
+		const release = memory.slow();
+		memory.answerNextSend("refused");
+		// When
+		store.pickColour("sweater", "#7A2E2E");
+		store.pickMode("tee-sweater");
+		release();
+		await until(() => memory.loads === 2);
+		// Then
+		expect({
+			stored: memory.stored,
+			modeId: shown(store)?.modeId,
+			sweater: shown(store)?.picked.sweater,
+			unsaved: store.view().unsaved,
+			reports,
+		}).toEqual({
+			stored: [],
+			modeId: "polo-sweater",
+			sweater: "#E6DFD0",
+			unsaved: false,
+			reports: [],
+		});
 	});
 });
