@@ -25,7 +25,9 @@ export type OutfitStore = ReturnType<typeof createOutfitStore>;
 // person should hear through `report`.
 export function createOutfitStore(
 	server: OutfitServer,
-	_options: {
+	{
+		report,
+	}: {
 		report: (report: OutfitReport) => void;
 		// The waits between tries of the first load.
 		retryDelays?: readonly number[];
@@ -37,6 +39,7 @@ export function createOutfitStore(
 	let confirmed: DressState | null = null;
 	let queue: DressChange[] = [];
 	let sending = false;
+	// A change could not be stored and waits on the queue.
 	let unsaved = false;
 	// Moves on each account switch, so an answer for the account before is
 	// dropped.
@@ -65,10 +68,20 @@ export function createOutfitStore(
 		while (queue.length > 0) {
 			const sent = await server.send(queue[0]);
 			if (at !== generation) return sent;
+			if (sent === "failed") {
+				unsaved = true;
+				emit();
+				return sent;
+			}
 			if (sent !== "stored") return sent;
 			const done = queue.shift() as DressChange;
 			const next = confirmed && applyChange(confirmed, done);
 			if (next?.ok) confirmed = next.state;
+		}
+		if (unsaved) {
+			unsaved = false;
+			emit();
+			report("saved");
 		}
 		return "stored";
 	};
@@ -142,6 +155,12 @@ export function createOutfitStore(
 		},
 		setMannequinColour: (part: MannequinPart, hex: Hex) => {
 			run({ kind: "mannequin", part, hex });
+		},
+		// Sends the queue again after a failed send.
+		retry: () => {
+			void flush().then((sent) => {
+				if (sent === "failed") report("still-unsaved");
+			});
 		},
 	};
 }

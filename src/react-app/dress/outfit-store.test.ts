@@ -52,4 +52,43 @@ describe("outfit store", () => {
 		// Then
 		expect(answers).toEqual([{ added: true }, { added: false }]);
 	});
+
+	test("marks unsaved when a send fails and clears it with Saved on retry", async () => {
+		// Given: a ready store; the next send fails
+		const { memory, store, reports } = await ready();
+		memory.answerNextSend("failed");
+		// When
+		store.pickColour("sweater", "#7A2E2E");
+		await until(() => store.view().unsaved);
+		store.retry();
+		await until(() => memory.stored.length === 1);
+		// Then
+		expect({
+			unsaved: store.view().unsaved,
+			reports,
+			stored: memory.stored,
+		}).toEqual({
+			unsaved: false,
+			reports: ["saved"],
+			stored: [{ kind: "pick", garment: "sweater", hex: "#7A2E2E" }],
+		});
+	});
+
+	test("says still no connection when a retry fails", async () => {
+		// Given: a ready store; the next two sends fail
+		const { memory, store, reports } = await ready();
+		memory.answerNextSend("failed");
+		memory.answerNextSend("failed");
+		// When
+		store.pickColour("sweater", "#7A2E2E");
+		await until(() => store.view().unsaved);
+		store.retry();
+		await until(() => reports.length === 1);
+		// Then
+		expect({
+			unsaved: store.view().unsaved,
+			reports,
+			stored: memory.stored,
+		}).toEqual({ unsaved: true, reports: ["still-unsaved"], stored: [] });
+	});
 });
