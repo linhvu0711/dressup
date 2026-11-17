@@ -236,7 +236,15 @@ describe("dress state", () => {
 			hex: "#C0392B",
 		});
 		// Then
-		expect(result).toEqual({ ok: false, error: "not_in_row", field: "hex" });
+		expect(result).toEqual({
+			ok: false,
+			error: {
+				code: "not_in_row",
+				garment: "sweater",
+				hex: "#C0392B",
+				row: ["#1F3A5F", "#8C8A84", "#E6DFD0", "#7A2E2E"],
+			},
+		});
 	});
 
 	test("refuses to remove the last square", () => {
@@ -252,6 +260,9 @@ describe("dress state", () => {
 			hex: "#1F3A5F",
 		});
 		// Then
-		expect(result).toEqual({ ok: false, error: "last_square", field: "hex" });
+		expect(result).toEqual({
+			ok: false,
+			error: { code: "last_square", garment: "sweater", hex: "#1F3A5F" },
+		});
 	});
 });

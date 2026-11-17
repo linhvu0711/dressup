@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import { GARMENT_IDS, GARMENT_NAMES, JACKET_IDS } from "@/dress/garments";
 import { MODES, type ModeId, modeById } from "@/dress/modes";
-import { MANNEQUIN_PARTS } from "@/dress/state";
+import { type DressError, MANNEQUIN_PARTS } from "@/dress/state";
 import { LOOK_LIMIT, LOOK_NAME_MAX, LOOK_TAGS_MAX } from "@/looks/look";
 import { TAG_NAME_MAX } from "@/tags/tag";
 
@@ -45,15 +45,14 @@ export const modeGarments = (modeId: ModeId): string =>
 		.garments.map((id) => GARMENT_NAMES[id].toLowerCase())
 		.join(", ");
 
-export const notInRow = (
-	garment: string,
-	hex: string,
-	row: readonly string[],
-): string =>
-	`${hex} is not in the ${garment} row. This row has: ${row.join(", ")}.`;
-
-export const lastSquare = (garment: string, hex: string): string =>
-	`${hex} is the last colour square of ${garment}. A row keeps at least one.`;
+export function dressRefusalText(error: DressError): string {
+	switch (error.code) {
+		case "not_in_row":
+			return `${error.hex} is not in the ${error.garment} row. This row has: ${error.row.join(", ")}.`;
+		case "last_square":
+			return `${error.hex} is the last colour square of ${error.garment}. A row keeps at least one.`;
+	}
+}
 
 export const serverError = "dressup could not do this. Try again.";
 

@@ -10,6 +10,7 @@ import { DEFAULT_MODE_ID, type ModeId } from "@/dress/modes";
 import {
 	applyChange,
 	type DressChange,
+	type DressError,
 	type DressState,
 	MANNEQUIN_PARTS,
 	STARTER_MANNEQUIN,
@@ -21,6 +22,7 @@ import {
 	outfit,
 	outfitGarment,
 } from "./db/dress-schema";
+import type { Result } from "./result";
 
 function seed(db: Db, userId: string) {
 	const garmentRows = GARMENT_IDS.map((garment) =>
@@ -215,23 +217,15 @@ export async function saveDress(
 }
 
 // One change as the Dress page makes it: read, apply the page's rules, and
-// write the difference. A refusal carries the state it was refused on.
+// write the difference.
 export async function changeDress(
 	db: Db,
 	userId: string,
 	change: DressChange,
-): Promise<
-	| { ok: true; state: DressState }
-	| {
-			ok: false;
-			error: "not_in_row" | "last_square";
-			field: "hex";
-			state: DressState;
-	  }
-> {
+): Promise<Result<DressState, DressError>> {
 	const stored = await loadDress(db, userId);
 	const result = applyChange(stored.state, change);
-	if (!result.ok) return { ...result, state: stored.state };
+	if (!result.ok) return result;
 	await saveDress(db, userId, stored, result.state);
-	return result;
+	return { ok: true, value: result.state };
 }
