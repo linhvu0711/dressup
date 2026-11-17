@@ -10,7 +10,7 @@ export function useLeaveGoneLook() {
 	const dress = useDressState();
 	return (id: LookId) => {
 		if (dress.status === "ready" && dress.editing?.id === id)
-			dress.endEditing();
+			dress.finishEdit();
 		navigate("/looks", { replace: true });
 		toast("This look is gone");
 	};

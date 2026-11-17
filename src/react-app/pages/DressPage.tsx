@@ -73,7 +73,7 @@ export function DressPage() {
 									aria-label="Stop editing"
 									title="Stop editing"
 									className="size-[26px] flex-none border-transparent"
-									onClick={dress.stopEditing}
+									onClick={dress.cancelEdit}
 								>
 									<X size={15} strokeWidth={1.9} aria-hidden />
 								</Button>
@@ -117,7 +117,7 @@ export function DressPage() {
 					state={state}
 					editing={editing}
 					onSaved={() => {
-						if (dress.status === "ready") dress.endEditing();
+						if (dress.status === "ready") dress.finishEdit();
 					}}
 					onClose={() => setSaving(false)}
 				/>

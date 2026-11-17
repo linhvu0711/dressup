@@ -47,7 +47,7 @@ export function DeleteLookDialog({
 											dress.status === "ready" &&
 											dress.editing?.id === look.id
 										)
-											dress.endEditing();
+											dress.finishEdit();
 										onClose();
 										navigate("/looks", { replace: true });
 										toast("Look deleted");
