@@ -1,10 +1,15 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { after, keys, RequestError, request } from "../data/client";
+import {
+	after,
+	cachedUserId,
+	keys,
+	RequestError,
+	request,
+} from "../data/client";
 import { aiAppsAnswer } from "../data/contract";
-import { useUserId } from "../session";
 
 export function useAiApps() {
-	const userId = useUserId();
+	const userId = cachedUserId();
 	return useQuery({
 		queryKey: keys.aiApps(userId),
 		queryFn: async () =>
@@ -16,7 +21,7 @@ export function useAiApps() {
 }
 
 export function useDisconnectAiApp() {
-	const userId = useUserId();
+	const userId = cachedUserId();
 	return useMutation({
 		mutationFn: (id: string) =>
 			request("DELETE", `/api/ai-apps/${encodeURIComponent(id)}`).catch(

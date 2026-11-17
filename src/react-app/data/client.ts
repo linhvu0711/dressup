@@ -178,3 +178,21 @@ export async function signedOut() {
 	});
 	queryClient.getMutationCache().clear();
 }
+
+// The signed-in account, read from the session check's cache. useMe would
+// check the session again each time a form or page mounts; the session gate
+// rebuilds the page when the account changes, so the cached id holds.
+export function cachedUserId(): string | null {
+	return queryClient.getQueryData<Me | null>(keys.me)?.id ?? null;
+}
+
+// The signed-in account, after the session check of the same focus, which
+// says who holds the cookie.
+export async function sessionUserId(): Promise<string | null> {
+	if (queryClient.isFetching({ queryKey: keys.me }) > 0)
+		await queryClient.refetchQueries(
+			{ queryKey: keys.me },
+			{ cancelRefetch: false },
+		);
+	return cachedUserId();
+}

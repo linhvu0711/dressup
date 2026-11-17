@@ -1,4 +1,4 @@
-import { focusManager, useQueryClient } from "@tanstack/react-query";
+import { focusManager } from "@tanstack/react-query";
 import {
 	createContext,
 	type ReactNode,
@@ -10,13 +10,13 @@ import {
 	useSyncExternalStore,
 } from "react";
 import { useToast } from "@/components/ui/toast";
+import { sessionUserId } from "@/data/client";
 import type { GarmentId, Hex, JacketId } from "@/dress/garments";
 import type { ModeId } from "@/dress/modes";
 import { httpOutfitServer } from "@/dress/outfit-server";
 import { createOutfitStore } from "@/dress/outfit-store";
 import type { DressState, MannequinPart } from "@/dress/state";
 import type { Look } from "@/looks/look";
-import { type Me, meQueryKey } from "@/session";
 
 type DressCommands = {
 	pickMode: (id: ModeId) => void;
@@ -58,31 +58,20 @@ export function DressStateProvider({
 	userId: string | null;
 	children: ReactNode;
 }) {
-	const queryClient = useQueryClient();
 	const toast = useToast();
 	const latestToast = useRef(toast);
 	latestToast.current = toast;
 	const [store] = useState(() =>
 		createOutfitStore(httpOutfitServer(), {
 			report: (report) => {
-				// A lost session makes the session check run again; it finds none,
-				// and the session gate shows the sign-in screen.
-				if (report === "signed-out")
-					void queryClient.invalidateQueries({ queryKey: meQueryKey });
-				else
-					latestToast.current(
-						report === "saved" ? "Saved" : "Still no connection.",
-					);
+				// request() ran the 401 rule already: the session check runs again
+				// and finds none.
+				if (report === "signed-out") return;
+				latestToast.current(
+					report === "saved" ? "Saved" : "Still no connection.",
+				);
 			},
-			signedIn: async () => {
-				// The session check of the same focus says who holds the cookie.
-				if (queryClient.isFetching({ queryKey: meQueryKey }) > 0)
-					await queryClient.refetchQueries(
-						{ queryKey: meQueryKey },
-						{ cancelRefetch: false },
-					);
-				return queryClient.getQueryData<Me | null>(meQueryKey)?.id ?? null;
-			},
+			signedIn: sessionUserId,
 		}),
 	);
 	// Before paint, so the page never draws one account's outfit for another.

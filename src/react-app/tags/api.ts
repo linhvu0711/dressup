@@ -1,11 +1,16 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { after, keys, RequestError, request } from "../data/client";
+import {
+	after,
+	cachedUserId,
+	keys,
+	RequestError,
+	request,
+} from "../data/client";
 import { tagAnswer, tagsAnswer } from "../data/contract";
-import { useUserId } from "../session";
 import type { Tag, TagId } from "./tag";
 
 export function useTags() {
-	const userId = useUserId();
+	const userId = cachedUserId();
 	return useQuery({
 		queryKey: keys.tags(userId),
 		queryFn: async () =>
@@ -32,7 +37,7 @@ const goneAsDone = (error: unknown) => {
 };
 
 export function useAddTag() {
-	const userId = useUserId();
+	const userId = cachedUserId();
 	return useMutation({
 		mutationKey: keys.addTag,
 		mutationFn: async (name: string) =>
@@ -50,7 +55,7 @@ export function useAddTag() {
 }
 
 export function useRenameTag() {
-	const userId = useUserId();
+	const userId = cachedUserId();
 	return useMutation({
 		mutationFn: async (input: Tag) =>
 			(
@@ -67,7 +72,7 @@ export function useRenameTag() {
 }
 
 export function useDeleteTag() {
-	const userId = useUserId();
+	const userId = cachedUserId();
 	return useMutation({
 		mutationFn: (id: TagId) =>
 			request("DELETE", `/api/tags/${id}`).catch(goneAsDone),

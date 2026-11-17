@@ -1,11 +1,16 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { after, keys, RequestError, request } from "../data/client";
+import {
+	after,
+	cachedUserId,
+	keys,
+	RequestError,
+	request,
+} from "../data/client";
 import { lookAnswer, looksAnswer } from "../data/contract";
-import { useUserId } from "../session";
 import type { LookId, LookInput } from "./look";
 
 export function useLooks() {
-	const userId = useUserId();
+	const userId = cachedUserId();
 	return useQuery({
 		queryKey: keys.looks(userId),
 		queryFn: async () =>
@@ -17,19 +22,8 @@ export function useLooks() {
 	});
 }
 
-// A refused save, with the error code of its answer when it names one, so
-// the form can tell the look limit from a save that failed.
-export class SaveError extends Error {
-	constructor(
-		readonly status: number,
-		readonly code: string | null,
-	) {
-		super(`POST /api/looks answered ${status}`);
-	}
-}
-
 export function useSaveLook() {
-	const userId = useUserId();
+	const userId = cachedUserId();
 	return useMutation({
 		mutationFn: async (look: LookInput) =>
 			(
@@ -52,7 +46,7 @@ const goneAsLookGone = (error: unknown): never => {
 };
 
 export function useDeleteLook() {
-	const userId = useUserId();
+	const userId = cachedUserId();
 	return useMutation({
 		mutationFn: (id: LookId) =>
 			request("DELETE", `/api/looks/${id}`).catch(goneAsLookGone),
@@ -64,7 +58,7 @@ export function useDeleteLook() {
 }
 
 export function useUpdateLook() {
-	const userId = useUserId();
+	const userId = cachedUserId();
 	return useMutation({
 		mutationFn: async (look: LookInput) =>
 			(
