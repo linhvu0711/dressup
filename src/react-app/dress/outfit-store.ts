@@ -62,7 +62,9 @@ export function createOutfitStore(
 		const at = ++changes;
 		const gen = generation;
 		const loaded = await server.load();
-		if (gen !== generation || loaded.kind !== "loaded") return;
+		if (gen !== generation) return;
+		if (loaded.kind === "signed-out") report("signed-out");
+		if (loaded.kind !== "loaded") return;
 		if (changes !== at || queue.length > 0 || sending) return;
 		state = confirmed = loaded.state;
 		emit();
@@ -71,7 +73,9 @@ export function createOutfitStore(
 	const firstLoad = async () => {
 		const at = generation;
 		const loaded = await server.load();
-		if (at !== generation || loaded.kind !== "loaded") return;
+		if (at !== generation) return;
+		if (loaded.kind === "signed-out") report("signed-out");
+		if (loaded.kind !== "loaded") return;
 		state = confirmed = loaded.state;
 		emit();
 	};
@@ -95,7 +99,13 @@ export function createOutfitStore(
 				emit();
 				return sent;
 			}
-			if (sent !== "stored") return sent;
+			if (sent === "signed-out") {
+				queue = [];
+				unsaved = false;
+				emit();
+				report("signed-out");
+				return sent;
+			}
 			const done = queue.shift() as DressChange;
 			const next = confirmed && applyChange(confirmed, done);
 			if (next?.ok) confirmed = next.state;

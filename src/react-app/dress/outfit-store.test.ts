@@ -132,4 +132,41 @@ describe("outfit store", () => {
 			reports: [],
 		});
 	});
+
+	test("ends the session when a send finds no session", async () => {
+		// Given: a ready store; the server holds its answers, and finds no
+		// session for the next change
+		const { memory, store, reports } = await ready();
+		const release = memory.slow();
+		memory.answerNextSend("signed-out");
+		// When
+		store.pickColour("sweater", "#7A2E2E");
+		store.pickMode("tee-sweater");
+		release();
+		await until(() => reports.length === 1);
+		store.retry();
+		await Bun.sleep(0);
+		// Then
+		expect({
+			reports,
+			stored: memory.stored,
+			unsaved: store.view().unsaved,
+		}).toEqual({ reports: ["signed-out"], stored: [], unsaved: false });
+	});
+
+	test("ends the session when the first load finds no session", async () => {
+		// Given: the first load finds no session
+		const memory = createMemoryOutfitServer();
+		memory.answerNextLoads("signed-out");
+		const { store, reports } = setup(memory);
+		// When
+		store.account("u1");
+		await until(() => reports.length === 1);
+		// Then
+		expect({
+			reports,
+			status: store.view().status,
+			loads: memory.loads,
+		}).toEqual({ reports: ["signed-out"], status: "loading", loads: 1 });
+	});
 });
