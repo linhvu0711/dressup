@@ -285,4 +285,100 @@ describe("outfit store", () => {
 			sweater: shown(store)?.picked.sweater,
 		}).toEqual({ editing: null, sweater: "#1F3A5F" });
 	});
+
+	test("shows a change from another device on focus", async () => {
+		// Given: a ready store; another device picked a red sweater
+		const { memory, store } = await ready();
+		memory.changeElsewhere({
+			kind: "pick",
+			garment: "sweater",
+			hex: "#7A2E2E",
+		});
+		// When
+		store.focus();
+		await until(() => memory.loads === 2);
+		// Then
+		expect(shown(store)?.picked.sweater).toBe("#7A2E2E");
+	});
+
+	test("skips a load on focus while a change is out", async () => {
+		// Given: the Given above; the server holds its answers, and a change
+		// is out
+		const { memory, store } = await ready();
+		memory.changeElsewhere({
+			kind: "pick",
+			garment: "sweater",
+			hex: "#7A2E2E",
+		});
+		memory.slow();
+		store.pickMode("tee-sweater");
+		// When
+		store.focus();
+		// Then
+		expect(memory.loadCalls).toBe(1);
+	});
+
+	test("skips a load on focus in the Edit state", async () => {
+		// Given: a ready store in the Edit state of a look in red
+		const { memory, store } = await ready();
+		store.editLook(redLook);
+		await until(() => memory.stored.length === 1);
+		// When
+		store.focus();
+		// Then
+		expect(memory.loadCalls).toBe(1);
+	});
+
+	test("skips a load on focus while held", async () => {
+		// Given: the Given of the first focus test; loads held
+		const { memory, store } = await ready();
+		memory.changeElsewhere({
+			kind: "pick",
+			garment: "sweater",
+			hex: "#7A2E2E",
+		});
+		store.hold(true);
+		// When
+		store.focus();
+		// Then
+		expect(memory.loadCalls).toBe(1);
+	});
+
+	test("drops a load that finishes after the hold started", async () => {
+		// Given: the Given of the first focus test; a load on focus is out
+		const { memory, store } = await ready();
+		memory.changeElsewhere({
+			kind: "pick",
+			garment: "sweater",
+			hex: "#7A2E2E",
+		});
+		const release = memory.slow();
+		store.focus();
+		// When
+		store.hold(true);
+		release();
+		await until(() => memory.loads === 2);
+		// Then
+		expect(shown(store)?.picked.sweater).toBe("#1F3A5F");
+	});
+
+	test("goes back to the last load when a change is refused", async () => {
+		// Given: the Given of the first focus test, loaded on focus; the next
+		// change is refused and the load after it fails
+		const { memory, store } = await ready();
+		memory.changeElsewhere({
+			kind: "pick",
+			garment: "sweater",
+			hex: "#7A2E2E",
+		});
+		store.focus();
+		await until(() => memory.loads === 2);
+		memory.answerNextSend("refused");
+		memory.answerNextLoads("failed");
+		// When
+		store.pickColour("sweater", "#E6DFD0");
+		await until(() => memory.loads === 3);
+		// Then
+		expect(shown(store)?.picked.sweater).toBe("#7A2E2E");
+	});
 });

@@ -47,11 +47,14 @@ export function createOutfitStore(
 	// from before it. In memory only: a reload ends the edit and keeps the
 	// colours.
 	let edit: { look: Look; before: Outfit } | null = null;
+	// Holds the load on focus while a form shows the outfit it will save.
+	let held = false;
 	// Moves on each account switch, so an answer for the account before is
 	// dropped.
 	let generation = 0;
-	// Moves on each change and each load, so a load that one of them overtook
-	// is dropped: its answer may be older.
+	// Moves on each change, each load, and each hold, so a load that one of
+	// them overtook is dropped: its answer may be older, or land under the
+	// save form and change the outfit the save writes.
 	let changes = 0;
 	let view: OutfitView = { account, unsaved, status: "loading" };
 	const listeners = new Set<() => void>();
@@ -181,6 +184,7 @@ export function createOutfitStore(
 			queue = [];
 			unsaved = false;
 			edit = null;
+			held = false;
 			state = confirmed = null;
 			emit();
 			if (next !== null) void firstLoad();
@@ -205,6 +209,19 @@ export function createOutfitStore(
 		},
 		setMannequinColour: (part: MannequinPart, hex: Hex) => {
 			run({ kind: "mannequin", part, hex });
+		},
+		// A change made in another session shows when the tab gets focus again.
+		// Changes still out would be shown as lost, and a load mid-edit or
+		// behind the save form would change the outfit the save writes. A
+		// failed change stays first on the queue, so the queue covers a wait
+		// to retry too.
+		focus: () => {
+			if (!state || queue.length > 0 || sending || edit || held) return;
+			void loadLatest();
+		},
+		hold: (on: boolean) => {
+			held = on;
+			if (on) changes++;
 		},
 		editLook: (look: Look) => {
 			if (!state) return;
