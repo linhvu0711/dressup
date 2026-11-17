@@ -3,7 +3,16 @@ import { type Context, Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
-import type { LooksAnswer } from "@/data/contract";
+import type {
+	AiAppsAnswer,
+	DressAnswer,
+	ErrorAnswer,
+	LookAnswer,
+	LooksAnswer,
+	MeAnswer,
+	TagAnswer,
+	TagsAnswer,
+} from "@/data/contract";
 import { type DressError, dressChangeSchema } from "@/dress/state";
 import { tagIdSchema } from "@/tags/tag";
 import { disconnectAiApp, listAiApps } from "./ai-app-store";
@@ -47,12 +56,19 @@ async function readBody<T extends z.ZodType>(
 	try {
 		body = await c.req.json();
 	} catch {
-		return { refused: c.json({ error: "invalid", field: "body" }, 400) };
+		return {
+			refused: c.json(
+				{ error: "invalid", field: "body" } satisfies ErrorAnswer,
+				400,
+			),
+		};
 	}
 	const parsed = schema.safeParse(body);
 	if (parsed.success) return { data: parsed.data };
 	const field = issueField(parsed.error.issues[0]?.path ?? []);
-	return { refused: c.json({ error: "invalid", field }, 400) };
+	return {
+		refused: c.json({ error: "invalid", field } satisfies ErrorAnswer, 400),
+	};
 }
 
 const issueField = (path: readonly PropertyKey[]) =>
@@ -60,7 +76,7 @@ const issueField = (path: readonly PropertyKey[]) =>
 
 type Refusal = {
 	status: ContentfulStatusCode;
-	body: { error: string; field?: string };
+	body: ErrorAnswer;
 };
 
 // Only the JSON shape: the Looks module runs the look rules.
@@ -100,8 +116,8 @@ const dressRefusals: Record<DressError["code"], Refusal> = {
 	last_square: { status: 400, body: { error: "last_square", field: "hex" } },
 };
 
-// The website answers every bad field with "invalid"; #60 owns the codes the
-// website and the page share.
+// The website answers every bad field with "invalid"; the contract
+// (src/react-app/data/contract.ts) names every code it sends.
 const tagRefusals: Record<TagError["code"], Refusal> = {
 	name_length: { status: 400, body: { error: "invalid", field: "name" } },
 	duplicate: { status: 400, body: { error: "duplicate", field: "name" } },
@@ -148,7 +164,8 @@ export function createApp(getDb: (env: Env) => Db) {
 		// would send every request after the first 5 minutes to the database.
 		for (const cookie of headers.getSetCookie())
 			c.header("set-cookie", cookie, { append: true });
-		if (!session) return c.json({ error: "unauthorized" }, 401);
+		if (!session)
+			return c.json({ error: "unauthorized" } satisfies ErrorAnswer, 401);
 		c.set("user", session.user);
 		await next();
 	});
@@ -165,7 +182,12 @@ export function createApp(getDb: (env: Env) => Db) {
 
 	app.get("/me", withAuth, requireUser, (c) => {
 		const { id, name, email, image } = c.var.user;
-		return c.json({ id, name, email, image: image ?? null });
+		return c.json({
+			id,
+			name,
+			email,
+			image: image ?? null,
+		} satisfies MeAnswer);
 	});
 
 	app.delete("/account", withAuth, requireUser, async (c) => {
@@ -185,7 +207,10 @@ export function createApp(getDb: (env: Env) => Db) {
 	});
 
 	app.get("/dress", withAuth, requireUser, async (c) =>
-		c.json((await loadDress(getDb(c.env), c.var.user.id)).state),
+		c.json(
+			(await loadDress(getDb(c.env), c.var.user.id))
+				.state satisfies DressAnswer,
+		),
 	);
 
 	app.post("/dress/changes", withAuth, requireUser, async (c) => {
@@ -214,7 +239,10 @@ export function createApp(getDb: (env: Env) => Db) {
 			return c.json(refused, status);
 		}
 		const { look, created, tagsLeftOff } = saved.value;
-		return c.json({ look, tagsLeftOff }, created ? 201 : 200);
+		return c.json(
+			{ look, tagsLeftOff } satisfies LookAnswer,
+			created ? 201 : 200,
+		);
 	});
 
 	// A gone look and another account's look answer the same 404, so ids of
@@ -224,7 +252,10 @@ export function createApp(getDb: (env: Env) => Db) {
 		if ("refused" in body) return body.refused;
 		const id = c.req.param("id");
 		if (body.data.id !== id)
-			return c.json({ error: "invalid", field: "id" }, 400);
+			return c.json(
+				{ error: "invalid", field: "id" } satisfies ErrorAnswer,
+				400,
+			);
 		const changed = await changeLook(
 			getDb(c.env),
 			c.var.user.id,
@@ -236,7 +267,7 @@ export function createApp(getDb: (env: Env) => Db) {
 			return c.json(refused, status);
 		}
 		const { look, tagsLeftOff } = changed.value;
-		return c.json({ look, tagsLeftOff }, 200);
+		return c.json({ look, tagsLeftOff } satisfies LookAnswer, 200);
 	});
 
 	app.delete("/looks/:id", withAuth, requireUser, async (c) => {
@@ -253,11 +284,15 @@ export function createApp(getDb: (env: Env) => Db) {
 	});
 
 	app.get("/tags", withAuth, requireUser, async (c) =>
-		c.json({ tags: await listTags(getDb(c.env), c.var.user.id) }),
+		c.json({
+			tags: await listTags(getDb(c.env), c.var.user.id),
+		} satisfies TagsAnswer),
 	);
 
 	app.get("/ai-apps", withAuth, requireUser, async (c) =>
-		c.json({ apps: await listAiApps(getDb(c.env), c.var.user.id) }),
+		c.json({
+			apps: await listAiApps(getDb(c.env), c.var.user.id),
+		} satisfies AiAppsAnswer),
 	);
 
 	app.post("/tags", withAuth, requireUser, async (c) => {
@@ -268,7 +303,7 @@ export function createApp(getDb: (env: Env) => Db) {
 			const { status, body } = tagRefusals[added.error.code];
 			return c.json(body, status);
 		}
-		return c.json({ tag: added.value }, 201);
+		return c.json({ tag: added.value } satisfies TagAnswer, 201);
 	});
 
 	// A gone tag and another account's tag answer the same 404, as looks do.
@@ -279,7 +314,10 @@ export function createApp(getDb: (env: Env) => Db) {
 		);
 		if ("refused" in body) return body.refused;
 		if (body.data.id !== c.req.param("id"))
-			return c.json({ error: "invalid", field: "id" }, 400);
+			return c.json(
+				{ error: "invalid", field: "id" } satisfies ErrorAnswer,
+				400,
+			);
 		const renamed = await renameTag(
 			getDb(c.env),
 			c.var.user.id,
@@ -290,7 +328,7 @@ export function createApp(getDb: (env: Env) => Db) {
 			const { status, body } = tagRefusals[renamed.error.code];
 			return c.json(body, status);
 		}
-		return c.json({ tag: renamed.value }, 200);
+		return c.json({ tag: renamed.value } satisfies TagAnswer, 200);
 	});
 
 	app.delete("/tags/:id", withAuth, requireUser, async (c) => {
@@ -313,12 +351,15 @@ export function createApp(getDb: (env: Env) => Db) {
 			c.var.user.id,
 			c.req.param("id"),
 		);
-		if (!disconnected) return c.json({ error: "not_found" }, 404);
+		if (!disconnected)
+			return c.json({ error: "not_found" } satisfies ErrorAnswer, 404);
 		return c.body(null, 204);
 	});
 
 	// Hono runs the not-found handler of the instance that got the request.
-	root.notFound((c) => c.json({ error: "not_found" }, 404));
+	root.notFound((c) =>
+		c.json({ error: "not_found" } satisfies ErrorAnswer, 404),
+	);
 
 	return root;
 }
