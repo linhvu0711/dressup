@@ -79,35 +79,6 @@ export const lookLimit = (): string =>
 const notInMode = (garment: unknown, modeId: ModeId) =>
 	`${garment} is not in mode ${modeId}. This mode has: ${modeGarments(modeId)}.`;
 
-// A look's issues, as lookInputSchema gives them; the mode is known to be
-// valid when an issue names it.
-export function lookIssueText(
-	issue: z.core.$ZodIssue,
-	input: { modeId: string; open: readonly string[] },
-): string {
-	const [field, key] = issue.path;
-	const modeId = input.modeId as ModeId;
-	if (issue.code === "custom" && issue.message === "not in the mode")
-		return field === "open"
-			? notInMode(
-					input.open.find(
-						(id) =>
-							!(modeById(modeId).garments as readonly string[]).includes(id),
-					),
-					modeId,
-				)
-			: notInMode(key, modeId);
-	if (issue.code === "custom" && issue.message === "no colour")
-		return `${String(key)} needs a colour. Mode ${modeId} has: ${modeGarments(modeId)}.`;
-	if (field === "name")
-		return `A look name has at most ${LOOK_NAME_MAX} characters.`;
-	if (field === "tags")
-		return key === undefined
-			? `A look has at most ${LOOK_TAGS_MAX} tags.`
-			: noTag;
-	return issueText(issue, input);
-}
-
 export function lookRefusalText(error: LookError): string {
 	switch (error.code) {
 		case "not_in_mode":

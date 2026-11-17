@@ -9,14 +9,13 @@ import {
 	or,
 	sql,
 } from "drizzle-orm";
-import type { GarmentId, Hex, JacketId } from "@/dress/garments";
+import type { GarmentId } from "@/dress/garments";
 import type { ModeId } from "@/dress/modes";
 import {
 	checkLook,
 	LOOK_LIMIT,
 	type Look,
 	type LookId,
-	type LookInput,
 	type LookProblem,
 } from "@/looks/look";
 import type { TagId } from "@/tags/tag";
@@ -214,82 +213,103 @@ export async function saveLook(
 	};
 }
 
-// Changes only a look the account has; a gone id is not made again, as
-// saveLook would: null. createdAt stays, so the look keeps its place.
-export async function updateLook(
-	db: Db,
-	userId: string,
-	input: LookInput,
-): Promise<Look | null> {
-	const [rows, ...rest] = await db.batch([
-		db
-			.update(look)
-			.set({
-				modeId: input.modeId,
-				name: input.name,
-				colours: input.colours,
-				open: input.open,
-			})
-			.where(and(eq(look.id, input.id), eq(look.userId, userId)))
-			.returning(),
-		...tagWrites(db, userId, input.id, input.tags),
-		tagLinks(db, userId, input.id),
-	]);
-	const [row] = rows;
-	return row ? toLook(row, rest.at(-1) as Link[]) : null;
-}
+export type LookPatch = Partial<Omit<LookDraft, "id">>;
 
-export type LookPatch = {
-	name?: string;
-	colours?: Partial<Record<GarmentId, Hex>>;
-	open?: JacketId[];
-	tags?: TagId[];
-};
+export type ChangedLook = { look: Look; tagsLeftOff: string[] };
 
-// Writes only the fields given, so two changes made from one read keep each
-// other's fields. Colours and open jackets are written only while the look
-// still has the mode they were checked against: "moved" when the page
-// changed it since. null when the look is gone.
+// Finds the look by id, checks the whole look, and writes only the fields
+// given, so two changes made from one read keep each other's fields. A gone
+// id is not made again, as saveLook would; createdAt stays, so the look keeps
+// its place. A patch with a mode replaces the colours whole. Colours and open
+// jackets without a mode are written only while the look still has the mode
+// they were checked against: "moved" when the page changed it since.
 export async function changeLook(
 	db: Db,
 	userId: string,
 	id: string,
 	patch: LookPatch,
-	modeId: ModeId,
-): Promise<Look | null | "moved"> {
-	const guardMode = patch.colours !== undefined || patch.open !== undefined;
-	const [rows, ...rest] = await db.batch([
+): Promise<Result<ChangedLook, LookError>> {
+	const [rows, links] = await db.batch([
+		db
+			.select()
+			.from(look)
+			.where(and(eq(look.id, id), eq(look.userId, userId))),
+		tagLinks(db, userId, id),
+	]);
+	const [storedRow] = rows;
+	if (!storedRow) return { ok: false, error: { code: "not_found" } };
+	const stored = toLook(storedRow, links);
+	const newMode = patch.modeId !== undefined;
+	const checked = checkLook({
+		id: stored.id,
+		modeId: patch.modeId ?? stored.modeId,
+		name: patch.name ?? stored.name,
+		colours: newMode
+			? (patch.colours ?? {})
+			: { ...stored.colours, ...patch.colours },
+		open: patch.open ?? stored.open,
+		tags: patch.tags ?? stored.tags,
+	});
+	if (!checked.ok) return { ok: false, error: checked.problem };
+	const whole = checked.look;
+	const guardMode =
+		!newMode && (patch.colours !== undefined || patch.open !== undefined);
+	// Only the garments sent, so a colour the page saved since the read stays.
+	const sentColours =
+		patch.colours &&
+		Object.fromEntries(
+			Object.keys(patch.colours).map((g) => [g, whole.colours[g as GarmentId]]),
+		);
+	const [written, ...rest] = await db.batch([
 		db
 			.update(look)
 			.set({
 				// Always one column, so a tags-only change still returns the row.
 				id: sql`${look.id}`,
-				...(patch.name !== undefined && { name: patch.name }),
-				...(patch.open !== undefined && { open: patch.open }),
-				...(patch.colours !== undefined && {
-					colours: sql`json_patch(${look.colours}, ${JSON.stringify(patch.colours)})`,
-				}),
+				...(newMode && { modeId: whole.modeId, colours: whole.colours }),
+				...(patch.name !== undefined && { name: whole.name }),
+				...(patch.open !== undefined && { open: whole.open }),
+				...(!newMode &&
+					sentColours && {
+						colours: sql`json_patch(${look.colours}, ${JSON.stringify(sentColours)})`,
+					}),
 			})
 			.where(
 				and(
 					eq(look.id, id),
 					eq(look.userId, userId),
-					guardMode ? eq(look.modeId, modeId) : undefined,
+					guardMode ? eq(look.modeId, stored.modeId) : undefined,
 				),
 			)
 			.returning(),
 		...(patch.tags === undefined
 			? []
-			: tagWrites(db, userId, id, patch.tags, guardMode ? modeId : undefined)),
+			: tagWrites(
+					db,
+					userId,
+					id,
+					whole.tags,
+					guardMode ? stored.modeId : undefined,
+				)),
 		tagLinks(db, userId, id),
 	]);
-	const [row] = rows;
-	if (row) return toLook(row, rest.at(-1) as Link[]);
+	const [row] = written;
+	if (row) {
+		const changed = toLook(row, rest.at(-1) as Link[]);
+		return {
+			ok: true,
+			value: {
+				look: changed,
+				tagsLeftOff:
+					patch.tags === undefined ? [] : leftOff(patch.tags, changed.tags),
+			},
+		};
+	}
 	const [still] = await db
 		.select({ id: look.id })
 		.from(look)
 		.where(and(eq(look.id, id), eq(look.userId, userId)));
-	return still ? "moved" : null;
+	return { ok: false, error: { code: still ? "moved" : "not_found" } };
 }
 
 // Only the account's own look goes; false when there is none to delete.

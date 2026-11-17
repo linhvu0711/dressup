@@ -4,7 +4,6 @@ import { createMiddleware } from "hono/factory";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
 import { type DressError, dressChangeSchema } from "@/dress/state";
-import { lookInputSchema } from "@/looks/look";
 import { newTagSchema, tagSchema } from "@/tags/tag";
 import { disconnectAiApp, listAiApps } from "./ai-app-store";
 import {
@@ -18,11 +17,11 @@ import type { Db } from "./db";
 import { user } from "./db/auth-schema";
 import { changeDress, loadDress } from "./dress-store";
 import {
+	changeLook,
 	deleteLook,
 	type LookError,
 	listLooks,
 	saveLook,
-	updateLook,
 } from "./look-store";
 import { mcpRoute } from "./mcp";
 import { addTag, deleteTag, listTags, renameTag } from "./tag-store";
@@ -205,13 +204,23 @@ export function createApp(getDb: (env: Env) => Db) {
 	// A gone look and another account's look answer the same 404, so ids of
 	// other accounts cannot be told from missing ones.
 	app.put("/looks/:id", withAuth, requireUser, async (c) => {
-		const body = await readBody(c, lookInputSchema);
+		const body = await readBody(c, lookBodySchema);
 		if ("refused" in body) return body.refused;
-		if (body.data.id !== c.req.param("id"))
+		const id = c.req.param("id");
+		if (body.data.id !== id)
 			return c.json({ error: "invalid", field: "id" }, 400);
-		const look = await updateLook(getDb(c.env), c.var.user.id, body.data);
-		if (!look) return c.json({ error: "not_found" }, 404);
-		return c.json({ look }, 200);
+		const changed = await changeLook(
+			getDb(c.env),
+			c.var.user.id,
+			id,
+			body.data,
+		);
+		if (!changed.ok) {
+			const { status, body: refused } = lookRefusal(changed.error);
+			return c.json(refused, status);
+		}
+		const { look, tagsLeftOff } = changed.value;
+		return c.json({ look, tagsLeftOff }, 200);
 	});
 
 	app.delete("/looks/:id", withAuth, requireUser, async (c) => {

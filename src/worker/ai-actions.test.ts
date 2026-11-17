@@ -679,6 +679,45 @@ describe("look changes", () => {
 		});
 	});
 
+	test("refuses a colour change when the page moved the look to another mode", async () => {
+		// Given: the page moves NAVY to polo-sweater-wool after change_look read
+		// the look and before it writes.
+		const { h, ai } = await withNavy();
+		const { db } = h;
+		const batch = db.batch.bind(db);
+		let batches = 0;
+		const WOOL = {
+			...NAVY,
+			modeId: "polo-sweater-wool",
+			colours: {
+				chino_p: "#C9B38C",
+				polo_l: "#F3F1EC",
+				sweater: "#1F3A5F",
+				wool: "#55633F",
+			},
+			open: [],
+		};
+		const writeAfterPage: typeof batch = async (items) => {
+			if (++batches === 1) return batch(items);
+			db.batch = batch;
+			const put = await sendJson(h, ai, "PUT", `/api/looks/${NAVY.id}`, WOOL);
+			expect(put.status).toBe(200);
+			return batch(items);
+		};
+		db.batch = writeAfterPage;
+		// When
+		const { isError, text } = await ai.call("change_look", {
+			id: NAVY.id,
+			colours: { sweater: "#7A2E2E" },
+		});
+		// Then
+		expect({ isError, text, stored: (await looks(h, ai))[0] }).toEqual({
+			isError: true,
+			text: "dressup could not do this. Try again.",
+			stored: WOOL,
+		});
+	});
+
 	test("changes only a look's tags", async () => {
 		// Given
 		const { h, ai } = await withNavy();
@@ -691,6 +730,31 @@ describe("look changes", () => {
 		// Then
 		expect({ isError, stored: (await looks(h, ai))[0] }).toEqual({
 			isError: false,
+			stored: { ...NAVY, tags: [work] },
+		});
+	});
+
+	test("changes a look without a gone tag and names it", async () => {
+		// Given: tag "Work", and tag "Old" added and deleted
+		const { h, ai } = await withNavy();
+		const work = await addTag(h, ai, "Work");
+		const old = await addTag(h, ai, "Old");
+		await send(h, ai.jar, `/api/tags/${old}`, { method: "DELETE" });
+		// When
+		const { isError, text, data } = await ai.call("change_look", {
+			id: NAVY.id,
+			tags: [work, old],
+		});
+		// Then
+		expect({
+			isError,
+			said: text.split("\n")[0],
+			leftOff: (data as { tagsLeftOff: string[] }).tagsLeftOff,
+			stored: (await looks(h, ai))[0],
+		}).toEqual({
+			isError: false,
+			said: `Left off tag ${old}: no tag with this id.`,
+			leftOff: [old],
 			stored: { ...NAVY, tags: [work] },
 		});
 	});
