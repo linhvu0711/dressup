@@ -1,26 +1,22 @@
-import { useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { AiAppsSection } from "@/settings/AiAppsSection";
 import { DeleteAccount } from "@/settings/DeleteAccount";
 import { MannequinSection } from "@/settings/MannequinSection";
 import { authClient } from "../auth-client";
-import { meQueryKey, useMe } from "../session";
+import { signedOut } from "../data/client";
+import { useMe } from "../session";
 import { BackLink, PageHeader } from "../shell/PageHeader";
 import { pageBeforeSettings } from "../shell/SettingsLink";
 
 export function SettingsPage() {
 	const me = useMe();
-	const queryClient = useQueryClient();
 	const navigate = useNavigate();
 	const location = useLocation();
 
 	async function signOut() {
 		await authClient.signOut();
-		// A check sent before sign-out still carries the old cookies, and its
-		// late 200 would put the person back in the app.
-		await queryClient.cancelQueries({ queryKey: meQueryKey });
-		queryClient.setQueryData(meQueryKey, null);
+		await signedOut();
 		navigate("/", { replace: true });
 	}
 

@@ -164,3 +164,17 @@ export async function fetchMe(): Promise<Me | null> {
 	if (!res.ok) throw new Error(`GET /api/me answered ${res.status}`);
 	return meAnswer.parse(await res.json());
 }
+
+// After sign-out and account delete: no data of the account stays. The
+// session check stays, as null, so the sign-in screen shows at once with no
+// new check sent.
+export async function signedOut() {
+	// A check sent before sign-out still carries the old cookies, and its
+	// late 200 would put the person back in the app.
+	await queryClient.cancelQueries({ queryKey: keys.me });
+	queryClient.setQueryData(keys.me, null);
+	queryClient.removeQueries({
+		predicate: (query) => query.queryKey[0] !== keys.me[0],
+	});
+	queryClient.getMutationCache().clear();
+}

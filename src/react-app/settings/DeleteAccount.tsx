@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { Dialog } from "radix-ui";
 import { useState } from "react";
@@ -6,8 +6,7 @@ import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
-import { request } from "../data/client";
-import { meQueryKey } from "../session";
+import { request, signedOut } from "../data/client";
 
 // The "Delete my account" row of the Settings page and its confirm.
 export function DeleteAccount() {
@@ -39,17 +38,14 @@ export function DeleteAccount() {
 }
 
 function DeleteConfirm({ onClose }: { onClose: () => void }) {
-	const queryClient = useQueryClient();
 	const navigate = useNavigate();
 	const toast = useToast();
 	const del = useMutation({
 		mutationFn: () => request("DELETE", "/api/account"),
 		onSuccess: async () => {
 			toast("Account deleted");
-			// As sign-out: a check sent before the delete still carries the old
-			// cookies, and its late 200 would put the person back in the app.
-			await queryClient.cancelQueries({ queryKey: meQueryKey });
-			queryClient.setQueryData(meQueryKey, null);
+			// As sign-out: no data of the deleted account stays.
+			await signedOut();
 			navigate("/", { replace: true });
 		},
 	});
