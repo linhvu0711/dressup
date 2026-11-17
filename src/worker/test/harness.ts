@@ -63,13 +63,39 @@ export async function makeHarness() {
 	).test;
 	// The app never reads DB here: createApp gets the database from getDb.
 	const env = testEnv as unknown as Env;
-	return { app, env, helpers, settings, sqlite };
+	// Saves the account and gives the headers of a session signed in as it.
+	const addAccount = async (person: Person) => {
+		await helpers.saveUser(helpers.createUser(person));
+		return helpers.getAuthHeaders({ userId: person.id });
+	};
+	return { app, env, helpers, settings, sqlite, addAccount };
+}
+
+export type Harness = Awaited<ReturnType<typeof makeHarness>>;
+
+type Person = { id: string; email: string; name: string };
+
+export const ALICE: Person = {
+	id: "alice-id",
+	email: "alice@example.com",
+	name: "Alice",
+};
+
+export const BOB: Person = {
+	id: "bob-id",
+	email: "bob@example.com",
+	name: "Bob",
+};
+
+// A fresh harness with one signed-in account, Alice unless named.
+export async function withAccount(person: Person = ALICE) {
+	const h = await makeHarness();
+	const headers = await h.addAccount(person);
+	return { h, headers };
 }
 
 const base64url = (value: unknown) =>
 	Buffer.from(JSON.stringify(value)).toString("base64url");
-
-type Harness = Awaited<ReturnType<typeof makeHarness>>;
 
 export const TEST_APP_ID = "https://client.example/meta.json";
 

@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import {
 	aiSession,
+	BOB,
+	type Harness,
 	makeHarness,
 	seedLooks,
 	send,
@@ -14,7 +16,6 @@ async function connected() {
 	return { h, ai };
 }
 
-type Harness = Awaited<ReturnType<typeof makeHarness>>;
 type Session = Awaited<ReturnType<typeof aiSession>>;
 
 type Dress = {
@@ -49,16 +50,7 @@ const addTag = async (h: Harness, ai: Session, name: string) => {
 
 // A second account, bob, and a way to send as him.
 async function asBob(h: Harness) {
-	await h.helpers.saveUser(
-		h.helpers.createUser({
-			id: "bob-id",
-			email: "bob@example.com",
-			name: "Bob",
-		}),
-	);
-	const headers = Object.fromEntries(
-		await h.helpers.getAuthHeaders({ userId: "bob-id" }),
-	);
+	const headers = Object.fromEntries(await h.addAccount(BOB));
 	return (method: string, path: string, body?: unknown) =>
 		h.app.request(
 			path,

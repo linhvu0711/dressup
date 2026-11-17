@@ -4,14 +4,13 @@ import {
 	connectAiApp,
 	cookie,
 	finishGoogleSignIn,
+	type Harness,
 	makeHarness,
 	startGoogleSignIn,
 	stubOutside,
 	TEST_APP_ID,
 	testAppDocument,
 } from "./test/harness";
-
-type Harness = Awaited<ReturnType<typeof makeHarness>>;
 
 const authorize = (h: Harness, path = AUTHORIZE) =>
 	h.app.request(path, { redirect: "manual" }, h.env);

@@ -1,32 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { makeHarness } from "./test/harness";
-
-type Harness = Awaited<ReturnType<typeof makeHarness>>;
-
-async function withUser(id: string, email: string, name: string) {
-	const h = await makeHarness();
-	await h.helpers.saveUser(h.helpers.createUser({ id, email, name }));
-	return h;
-}
-
-const withAlice = () => withUser("alice-id", "alice@example.com", "Alice");
-
-async function aliceSignedIn() {
-	const h = await withAlice();
-	const headers = await h.helpers.getAuthHeaders({ userId: "alice-id" });
-	return { h, headers };
-}
-
-async function withBob(h: Harness) {
-	await h.helpers.saveUser(
-		h.helpers.createUser({
-			id: "bob-id",
-			email: "bob@example.com",
-			name: "Bob",
-		}),
-	);
-	return h.helpers.getAuthHeaders({ userId: "bob-id" });
-}
+import { BOB, type Harness, withAccount } from "./test/harness";
 
 type Tag = { id: string; name: string };
 
@@ -86,7 +59,7 @@ const UUID =
 describe("GET and POST /api/tags", () => {
 	test("adds a tag and lists it", async () => {
 		// Given: alice signed in
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		// When
 		const res = await addTag(h, headers, "Work");
 		const tags = await tagsOf(h, headers);
@@ -100,7 +73,7 @@ describe("GET and POST /api/tags", () => {
 
 	test("lists the tags in the order they were made", async () => {
 		// Given: alice signed in; "Work" posted, then "Trip"
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		await addTag(h, headers, "Work");
 		await addTag(h, headers, "Trip");
 		// When
@@ -111,7 +84,7 @@ describe("GET and POST /api/tags", () => {
 
 	test("adds a tag once when the same add comes twice", async () => {
 		// Given: alice signed in
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		// When
 		const first = await addTag(h, headers, "Work");
 		const second = await addTag(h, headers, "Work");
@@ -131,7 +104,7 @@ describe("GET and POST /api/tags", () => {
 
 	test("refuses an empty name", async () => {
 		// Given: alice signed in
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		// When
 		const res = await addTag(h, headers, "   ");
 		// Then
@@ -143,7 +116,7 @@ describe("GET and POST /api/tags", () => {
 
 	test("takes a name of 24 characters", async () => {
 		// Given: alice signed in
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		// When
 		const res = await addTag(h, headers, "a".repeat(24));
 		// Then
@@ -155,7 +128,7 @@ describe("GET and POST /api/tags", () => {
 
 	test("refuses a name of 25 characters", async () => {
 		// Given: alice signed in
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		// When
 		const res = await addTag(h, headers, "a".repeat(25));
 		// Then
@@ -167,7 +140,7 @@ describe("GET and POST /api/tags", () => {
 
 	test("refuses a name the account has in another letter case", async () => {
 		// Given: alice signed in; "Work" posted
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		await addTag(h, headers, "Work");
 		// When
 		const res = await addTag(h, headers, "wORK");
@@ -185,9 +158,9 @@ describe("GET and POST /api/tags", () => {
 
 	test("takes a name another account has", async () => {
 		// Given: alice posted "Work"; bob signed in
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		await addTag(h, headers, "Work");
-		const bob = await withBob(h);
+		const bob = await h.addAccount(BOB);
 		// When
 		const res = await addTag(h, bob, "work");
 		// Then
@@ -196,9 +169,9 @@ describe("GET and POST /api/tags", () => {
 
 	test("lists only the account's own tags", async () => {
 		// Given: alice posted "Work"; bob signed in
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		await addTag(h, headers, "Work");
-		const bob = await withBob(h);
+		const bob = await h.addAccount(BOB);
 		// When
 		const res = await send(h, bob, "GET", "/api/tags");
 		// Then
@@ -210,7 +183,7 @@ describe("GET and POST /api/tags", () => {
 
 	test("refuses GET and POST /api/tags without a session", async () => {
 		// Given: alice, no session headers
-		const h = await withAlice();
+		const { h } = await withAccount();
 		// When
 		const list = await send(h, new Headers(), "GET", "/api/tags");
 		const add = await addTag(h, new Headers(), "Work");
@@ -234,7 +207,7 @@ describe("PUT and DELETE /api/tags/:id", () => {
 
 	test("renames a tag", async () => {
 		// Given: alice posted "Work"
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		const work = await added(h, headers, "Work");
 		// When
 		const res = await rename(h, headers, work, "Office");
@@ -252,7 +225,7 @@ describe("PUT and DELETE /api/tags/:id", () => {
 
 	test("renames a tag to its own name in another letter case", async () => {
 		// Given: alice posted "Work"
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		const work = await added(h, headers, "Work");
 		// When
 		const res = await rename(h, headers, work, "WORK");
@@ -265,7 +238,7 @@ describe("PUT and DELETE /api/tags/:id", () => {
 
 	test("refuses a rename to another tag's name", async () => {
 		// Given: alice posted "Work" and "Trip"
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		await added(h, headers, "Work");
 		const trip = await added(h, headers, "Trip");
 		// When
@@ -284,7 +257,7 @@ describe("PUT and DELETE /api/tags/:id", () => {
 
 	test("refuses a rename to an empty name", async () => {
 		// Given: alice posted "Work"
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		const work = await added(h, headers, "Work");
 		// When
 		const res = await rename(h, headers, work, "");
@@ -297,9 +270,9 @@ describe("PUT and DELETE /api/tags/:id", () => {
 
 	test("answers 404 for a rename of another account's tag", async () => {
 		// Given: alice posted "Work"; bob signed in
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		const work = await added(h, headers, "Work");
-		const bob = await withBob(h);
+		const bob = await h.addAccount(BOB);
 		// When
 		const res = await rename(h, bob, work, "Mine");
 		// Then
@@ -316,7 +289,7 @@ describe("PUT and DELETE /api/tags/:id", () => {
 
 	test("deletes a tag", async () => {
 		// Given: alice posted "Work"
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		const work = await added(h, headers, "Work");
 		// When
 		const res = await remove(h, headers, work);
@@ -329,7 +302,7 @@ describe("PUT and DELETE /api/tags/:id", () => {
 
 	test("renames a tag once when the same rename comes twice", async () => {
 		// Given: alice posted "Work"
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		const work = await added(h, headers, "Work");
 		// When
 		const first = await rename(h, headers, work, "Office");
@@ -344,7 +317,7 @@ describe("PUT and DELETE /api/tags/:id", () => {
 
 	test("answers 404 when the same delete comes twice", async () => {
 		// Given: alice posted "Work"
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		const work = await added(h, headers, "Work");
 		// When
 		const first = await remove(h, headers, work);
@@ -359,7 +332,7 @@ describe("PUT and DELETE /api/tags/:id", () => {
 
 	test("refuses PUT and DELETE /api/tags/:id without a session", async () => {
 		// Given: alice posted "Work"; no session headers
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		const work = await added(h, headers, "Work");
 		// When
 		const put = await rename(h, new Headers(), work, "Office");
@@ -376,9 +349,9 @@ describe("PUT and DELETE /api/tags/:id", () => {
 
 	test("answers 404 for a delete of another account's tag", async () => {
 		// Given: alice posted "Work"; bob signed in
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		const work = await added(h, headers, "Work");
-		const bob = await withBob(h);
+		const bob = await h.addAccount(BOB);
 		// When
 		const res = await remove(h, bob, work);
 		// Then
@@ -397,7 +370,7 @@ describe("PUT and DELETE /api/tags/:id", () => {
 describe("tags and looks", () => {
 	test("deletes a tag and keeps its looks", async () => {
 		// Given: alice saved NAVY with "Work" and "Trip"
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		const work = await added(h, headers, "Work");
 		const trip = await added(h, headers, "Trip");
 		await send(h, headers, "POST", "/api/looks", {
@@ -432,7 +405,7 @@ describe("a name another tab saves at the same time", () => {
 	test("answers duplicate when another tab adds the name first", async () => {
 		// Given: alice signed in; another tab stores "work" between this add's
 		// check and its write
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		otherTabWrites(h, "INSERT", "Work");
 		// When
 		const res = await addTag(h, headers, "Work");
@@ -446,7 +419,7 @@ describe("a name another tab saves at the same time", () => {
 	test("answers duplicate when another tab takes the new name first", async () => {
 		// Given: alice posted "Work"; another tab stores "office" between this
 		// rename's check and its write
-		const { h, headers } = await aliceSignedIn();
+		const { h, headers } = await withAccount();
 		const work = await added(h, headers, "Work");
 		otherTabWrites(h, "UPDATE", "Office");
 		// When

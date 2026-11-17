@@ -3,29 +3,22 @@ import type { BetterAuthOptions } from "better-auth";
 import { createApp } from "./app";
 import { type Auth, authOptions, createAuthCache } from "./auth";
 import {
+	BOB,
 	cookie,
 	finishGoogleSignIn,
 	googleUser,
+	type Harness,
 	makeHarness,
 	startGoogleSignIn,
 	stubOutside,
+	withAccount,
 } from "./test/harness";
-
-async function withUser(id: string, email: string, name: string) {
-	const h = await makeHarness();
-	await h.helpers.saveUser(h.helpers.createUser({ id, email, name }));
-	return h;
-}
 
 describe("GET /api/me", () => {
 	test("returns the signed-in user on GET /api/me", async () => {
 		// Given: alice, signed in
-		const { app, env, helpers } = await withUser(
-			"alice-id",
-			"alice@example.com",
-			"Alice",
-		);
-		const headers = await helpers.getAuthHeaders({ userId: "alice-id" });
+		const { h, headers } = await withAccount();
+		const { app, env } = h;
 		// When
 		const res = await app.request("/api/me", { headers }, env);
 		// Then
@@ -40,11 +33,7 @@ describe("GET /api/me", () => {
 
 	test("refuses GET /api/me without a session", async () => {
 		// Given: alice saved, but no session headers
-		const { app, env } = await withUser(
-			"alice-id",
-			"alice@example.com",
-			"Alice",
-		);
+		const { app, env } = (await withAccount()).h;
 		// When
 		const res = await app.request("/api/me", {}, env);
 		// Then
@@ -54,20 +43,9 @@ describe("GET /api/me", () => {
 
 	test("gives each session only its own user", async () => {
 		// Given: alice and bob, each signed in
-		const { app, env, helpers } = await withUser(
-			"alice-id",
-			"alice@example.com",
-			"Alice",
-		);
-		await helpers.saveUser(
-			helpers.createUser({
-				id: "bob-id",
-				email: "bob@example.com",
-				name: "Bob",
-			}),
-		);
-		const aliceHeaders = await helpers.getAuthHeaders({ userId: "alice-id" });
-		const bobHeaders = await helpers.getAuthHeaders({ userId: "bob-id" });
+		const { h, headers: aliceHeaders } = await withAccount();
+		const { app, env } = h;
+		const bobHeaders = await h.addAccount(BOB);
 		// When
 		const alice = await app.request("/api/me", { headers: aliceHeaders }, env);
 		const bob = await app.request("/api/me", { headers: bobHeaders }, env);
@@ -121,8 +99,6 @@ describe("migrations", () => {
 		]);
 	});
 });
-
-type Harness = Awaited<ReturnType<typeof makeHarness>>;
 
 const signIn = async (h: Harness) =>
 	finishGoogleSignIn(h, await startGoogleSignIn(h));
@@ -330,12 +306,8 @@ describe("sign-up switch", () => {
 describe("session cookie cache", () => {
 	test("reads a cached session without the database", async () => {
 		// Given: alice signed in, with only her session token cookie
-		const { app, env, helpers, sqlite } = await withUser(
-			"alice-id",
-			"alice@example.com",
-			"Alice",
-		);
-		const headers = await helpers.getAuthHeaders({ userId: "alice-id" });
+		const { h, headers } = await withAccount();
+		const { app, env, sqlite } = h;
 		// When
 		const first = await app.request("/api/me", { headers }, env);
 		sqlite.run("delete from session");
@@ -409,12 +381,8 @@ describe("Better Auth per isolate", () => {
 describe("GET /api/auth/get-session", () => {
 	test("sends the session with no set-auth-jwt header", async () => {
 		// Given: alice, signed in
-		const { app, env, helpers } = await withUser(
-			"alice-id",
-			"alice@example.com",
-			"Alice",
-		);
-		const headers = await helpers.getAuthHeaders({ userId: "alice-id" });
+		const { h, headers } = await withAccount();
+		const { app, env } = h;
 		// When
 		const res = await app.request("/api/auth/get-session", { headers }, env);
 		// Then

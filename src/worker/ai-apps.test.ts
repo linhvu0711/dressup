@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import {
+	BOB,
 	connectAiApp,
 	cookie,
+	type Harness,
 	makeHarness,
 	stubOutside,
 	TEST_APP_ID,
 } from "./test/harness";
-
-type Harness = Awaited<ReturnType<typeof makeHarness>>;
 
 const send = (
 	h: Harness,
@@ -62,17 +62,6 @@ describe("/api/ai-apps", () => {
 		};
 	}
 
-	async function withBob(h: Harness) {
-		await h.helpers.saveUser(
-			h.helpers.createUser({
-				id: "bob-id",
-				email: "bob@example.com",
-				name: "Bob",
-			}),
-		);
-		return h.helpers.getAuthHeaders({ userId: "bob-id" });
-	}
-
 	test("lists a connected AI app with its name, logo, and connect date", async () => {
 		// Given
 		const { h, alice } = await aliceConnected();
@@ -116,7 +105,7 @@ describe("/api/ai-apps", () => {
 	test("lists only the account's own AI apps", async () => {
 		// Given: alice connected the app; bob signed in
 		const { h } = await aliceConnected();
-		const bob = await withBob(h);
+		const bob = await h.addAccount(BOB);
 		// When
 		const res = await send(h, "GET", "/api/ai-apps", bob);
 		// Then
@@ -152,7 +141,7 @@ describe("/api/ai-apps", () => {
 	test("answers 404 for a disconnect of another account's AI app", async () => {
 		// Given: alice connected the app; bob signed in
 		const { h } = await aliceConnected();
-		const bob = await withBob(h);
+		const bob = await h.addAccount(BOB);
 		// When
 		const res = await send(h, "DELETE", "/api/ai-apps/allow-1", bob);
 		// Then
@@ -188,7 +177,7 @@ describe("/api/ai-apps", () => {
 		// Given: alice also holds a token of another app; bob holds one of the
 		// test app. The Google sign-in gives alice a random id.
 		const { h, alice } = await aliceConnected();
-		await withBob(h);
+		await h.addAccount(BOB);
 		const { id: aliceId } = h.sqlite
 			.query("select id from user where email = 'alice@example.com'")
 			.get() as { id: string };

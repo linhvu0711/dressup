@@ -4,6 +4,7 @@ import {
 	connectAiApp,
 	finishGoogleSignIn,
 	googleUser,
+	type Harness,
 	type Jar,
 	makeHarness,
 	send,
@@ -11,8 +12,6 @@ import {
 	store,
 	stubOutside,
 } from "./test/harness";
-
-type Harness = Awaited<ReturnType<typeof makeHarness>>;
 
 const googleSignIn = async (h: Harness): Promise<Jar> =>
 	(await finishGoogleSignIn(h, await startGoogleSignIn(h))).jar;

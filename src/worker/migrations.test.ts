@@ -1,8 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { makeHarness } from "./test/harness";
-
-type Harness = Awaited<ReturnType<typeof makeHarness>>;
+import { BOB, type Harness, withAccount } from "./test/harness";
 
 const SWAP_JACKETS = readFileSync("migrations/0007_swap_jackets.sql", "utf8")
 	.split("--> statement-breakpoint")
@@ -12,16 +10,6 @@ const SWAP_JACKETS = readFileSync("migrations/0007_swap_jackets.sql", "utf8")
 const swapJackets = (h: Harness) => {
 	for (const statement of SWAP_JACKETS) h.sqlite.run(statement);
 };
-
-async function withUsers(...ids: string[]) {
-	const h = await makeHarness();
-	for (const id of ids) {
-		await h.helpers.saveUser(
-			h.helpers.createUser({ id, email: `${id}@example.com`, name: id }),
-		);
-	}
-	return h;
-}
 
 function oldRows(h: Harness, userId: string) {
 	h.sqlite.run("INSERT INTO outfit (user_id, mode_id) VALUES (?, ?)", [
@@ -102,7 +90,7 @@ const MOVED = {
 describe("migration 0007, swap jackets", () => {
 	test("moves the chore and padded jacket rows to the Harrington and wool jackets", async () => {
 		// Given: alice with chore and padded rows in every dress table
-		const h = await withUsers("alice-id");
+		const { h } = await withAccount();
 		oldRows(h, "alice-id");
 		// When
 		swapJackets(h);
@@ -112,7 +100,7 @@ describe("migration 0007, swap jackets", () => {
 
 	test("ends in the same rows when run twice", async () => {
 		// Given: alice with chore and padded rows in every dress table
-		const h = await withUsers("alice-id");
+		const { h } = await withAccount();
 		oldRows(h, "alice-id");
 		// When
 		swapJackets(h);
@@ -124,7 +112,7 @@ describe("migration 0007, swap jackets", () => {
 	test("moves chore rows written after the first run", async () => {
 		// Given: the migration ran on an empty database, then the old Worker
 		// seeds bob's chore jacket
-		const h = await withUsers("bob-id");
+		const { h } = await withAccount(BOB);
 		swapJackets(h);
 		h.sqlite.run("INSERT INTO outfit (user_id, mode_id) VALUES (?, ?)", [
 			"bob-id",
