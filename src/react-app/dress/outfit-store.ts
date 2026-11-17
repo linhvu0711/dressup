@@ -14,6 +14,7 @@ import type { Look } from "@/looks/look";
 
 export type OutfitView = { account: string | null; unsaved: boolean } & (
 	| { status: "loading" }
+	| { status: "failed" }
 	| { status: "ready"; state: DressState; editing: Look | null }
 );
 
@@ -29,6 +30,7 @@ export function createOutfitStore(
 	server: OutfitServer,
 	{
 		report,
+		retryDelays = [1000, 2000],
 	}: {
 		report: (report: OutfitReport) => void;
 		// The waits between tries of the first load.
@@ -37,6 +39,8 @@ export function createOutfitStore(
 ) {
 	let account: string | null = null;
 	let state: DressState | null = null;
+	// The first load gave up: no outfit to show until it is tried again.
+	let failed = false;
 	// What the server has stored, so a refused change goes back to it.
 	let confirmed: DressState | null = null;
 	let queue: DressChange[] = [];
@@ -68,7 +72,7 @@ export function createOutfitStore(
 					state,
 					editing: edit?.look ?? null,
 				}
-			: { account, unsaved, status: "loading" };
+			: { account, unsaved, status: failed ? "failed" : "loading" };
 		for (const listener of listeners) listener();
 	};
 
@@ -87,11 +91,23 @@ export function createOutfitStore(
 
 	const firstLoad = async () => {
 		const at = generation;
-		const loaded = await server.load();
-		if (at !== generation) return;
-		if (loaded.kind === "signed-out") report("signed-out");
-		if (loaded.kind !== "loaded") return;
-		state = confirmed = loaded.state;
+		for (const delay of [...retryDelays, null]) {
+			const loaded = await server.load();
+			if (at !== generation) return;
+			if (loaded.kind === "signed-out") {
+				report("signed-out");
+				return;
+			}
+			if (loaded.kind === "loaded") {
+				state = confirmed = loaded.state;
+				emit();
+				return;
+			}
+			if (delay === null) break;
+			await new Promise((resolve) => setTimeout(resolve, delay));
+			if (at !== generation) return;
+		}
+		failed = true;
 		emit();
 	};
 
@@ -185,6 +201,7 @@ export function createOutfitStore(
 			unsaved = false;
 			edit = null;
 			held = false;
+			failed = false;
 			state = confirmed = null;
 			emit();
 			if (next !== null) void firstLoad();
@@ -251,6 +268,13 @@ export function createOutfitStore(
 		finishEdit: () => {
 			edit = null;
 			emit();
+		},
+		// Tries the first load again after it gave up.
+		loadAgain: () => {
+			if (!failed) return;
+			failed = false;
+			emit();
+			void firstLoad();
 		},
 		// Sends the queue again after a failed send.
 		retry: () => {

@@ -381,4 +381,51 @@ describe("outfit store", () => {
 		// Then
 		expect(shown(store)?.picked.sweater).toBe("#7A2E2E");
 	});
+
+	test("reports the failed state when the first load fails three times", async () => {
+		// Given: the first three loads fail
+		const memory = createMemoryOutfitServer();
+		memory.answerNextLoads("failed", 3);
+		const { store } = setup(memory);
+		// When
+		store.account("u1");
+		await until(() => store.view().status !== "loading");
+		// Then
+		expect({ status: store.view().status, loads: memory.loads }).toEqual({
+			status: "failed",
+			loads: 3,
+		});
+	});
+
+	test("shows the outfit when the third try loads", async () => {
+		// Given: the first two loads fail
+		const memory = createMemoryOutfitServer();
+		memory.answerNextLoads("failed", 2);
+		const { store } = setup(memory);
+		// When
+		store.account("u1");
+		await until(() => store.view().status !== "loading");
+		// Then
+		expect({ status: store.view().status, loads: memory.loads }).toEqual({
+			status: "ready",
+			loads: 3,
+		});
+	});
+
+	test("loads again after a failed first load", async () => {
+		// Given: a store whose first load failed three times
+		const memory = createMemoryOutfitServer();
+		memory.answerNextLoads("failed", 3);
+		const { store } = setup(memory);
+		store.account("u1");
+		await until(() => store.view().status === "failed");
+		// When
+		store.loadAgain();
+		await until(() => store.view().status !== "loading");
+		// Then
+		expect({ status: store.view().status, loads: memory.loads }).toEqual({
+			status: "ready",
+			loads: 4,
+		});
+	});
 });
