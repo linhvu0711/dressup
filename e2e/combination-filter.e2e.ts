@@ -245,3 +245,37 @@ test("shows No combinations here and clears all from it", async ({ page }) => {
 		0,
 	);
 });
+
+test("drops a deleted tag from the filter", async ({ page }) => {
+	// Given: both projects, a fresh account; the wall filtered by Short tee
+	// and weekend, showing FOUR
+	const { weekend } = await seedWall(page);
+	await openWall(page, `?piece=tee_s.&tag=${weekend}`);
+	await expect(titles(page)).toHaveText([FOUR_TITLE]);
+	// When: weekend is deleted on the Labels page, then Back
+	await page
+		.getByRole("navigation", { name: "Main" })
+		.getByRole("link", { name: "Labels" })
+		.click();
+	await page.getByRole("tab", { name: "Tags" }).click();
+	await page
+		.locator('[data-slot="tag-list"]')
+		.getByRole("button")
+		.filter({ hasText: "weekend" })
+		.click();
+	await page
+		.getByRole("dialog", { name: "Edit tag" })
+		.getByRole("button", { name: "Delete" })
+		.click();
+	await page
+		.getByRole("dialog", { name: "Delete this tag?" })
+		.getByRole("button", { name: "Delete" })
+		.click();
+	await expect(page.locator('[data-slot="toast"]')).toHaveText("Tag deleted");
+	await page.goBack();
+	// Then
+	await expect(page.locator('[data-slot="filter-chip"]')).toHaveText([
+		"Short tee",
+	]);
+	await expect(titles(page)).toHaveText([FOUR_TITLE, TWO_TITLE]);
+});

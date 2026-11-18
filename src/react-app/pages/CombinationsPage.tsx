@@ -15,6 +15,7 @@ import {
 	filterCombinations,
 	filterSize,
 	NO_FILTER,
+	pruneCombinationFilter,
 	readCombinationFilter,
 	shownText,
 	writeCombinationFilter,
@@ -46,7 +47,11 @@ export function CombinationsPage() {
 	const colours = useColours();
 	const [params, setParams] = useSearchParams();
 	const navigate = useNavigate();
-	const filter = readCombinationFilter(params);
+	const filter = pruneCombinationFilter(
+		readCombinationFilter(params),
+		tags.data,
+		colours.data,
+	);
 	const visible = combinations.data
 		? filterCombinations(combinations.data, filter)
 		: [];
