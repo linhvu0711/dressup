@@ -16,6 +16,13 @@ export const schema = {
 	...tagSchema,
 };
 
+// Two tabs can both pass a duplicate check; a unique index then refuses the
+// second write, with an error that names the index. D1 and drizzle may wrap
+// it, so the causes are read too.
+export const hitsIndex = (error: unknown, index: string): boolean =>
+	error instanceof Error &&
+	(error.message.includes(index) || hitsIndex(error.cause, index));
+
 // Both the D1 database in the Worker and bun:sqlite in tests fit this type.
 // D1 runs a batch as one transaction; the test harness gives bun:sqlite the
 // same, so a change's rows are written all or nothing in both.

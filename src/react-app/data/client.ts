@@ -126,6 +126,12 @@ export class RequestError extends Error {
 	}
 }
 
+// Not found: deleted on another device already, which is what was asked.
+export const goneAsDone = (error: unknown) => {
+	if (!(error instanceof RequestError && error.code === "not_found"))
+		throw error;
+};
+
 // The session is gone; the 401 rule has run.
 export class SignedOut extends Error {}
 

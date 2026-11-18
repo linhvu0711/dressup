@@ -19,7 +19,3 @@ export const colourInputSchema = z.object({
 export const colourSchema = colourInputSchema.extend({ id: colourIdSchema });
 
 export type Colour = z.infer<typeof colourSchema>;
-
-// An account has each name once, in any letter case.
-export const sameColourName = (a: string, b: string): boolean =>
-	a.trim().toLowerCase() === b.trim().toLowerCase();

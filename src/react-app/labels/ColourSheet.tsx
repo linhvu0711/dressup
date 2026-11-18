@@ -8,12 +8,8 @@ import { SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
 import { RequestError } from "@/data/client";
 import { useAddColour, useChangeColour, useDeleteColour } from "./api";
-import {
-	COLOUR_LIMIT,
-	COLOUR_NAME_MAX,
-	type Colour,
-	sameColourName,
-} from "./colour";
+import { COLOUR_LIMIT, COLOUR_NAME_MAX, type Colour } from "./colour";
+import { sameLabelName } from "./name";
 
 const START: Hex = "#1F3A5F";
 
@@ -71,7 +67,7 @@ export function ColourSheet({
 		if (!trimmed) return setChecked("empty");
 		if (
 			colours.some(
-				(c) => c.id !== editing?.id && sameColourName(c.name, trimmed),
+				(c) => c.id !== editing?.id && sameLabelName(c.name, trimmed),
 			)
 		)
 			return setChecked("taken");
