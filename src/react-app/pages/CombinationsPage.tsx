@@ -5,6 +5,8 @@ import { useCombinations } from "@/combinations/api";
 import { CombinationCard } from "@/combinations/CombinationCard";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
+import { useDressState } from "@/dress/DressState";
+import { OutfitFailed } from "@/dress/OutfitFailed";
 import { PageHeader } from "../shell/PageHeader";
 
 const WALL =
@@ -17,6 +19,7 @@ const PULSE = "animate-placeholder motion-reduce:animate-none";
 export function CombinationsPage() {
 	const { combinationId } = useParams();
 	const combinations = useCombinations();
+	const dress = useDressState();
 	let wall: ReactNode;
 	if (combinations.isPending) {
 		wall = (
@@ -58,6 +61,9 @@ export function CombinationsPage() {
 				</Button>
 			</Notice>
 		);
+	} else if (dress.status === "failed") {
+		// After the empty check: with no cards there is no mannequin to fail.
+		wall = <OutfitFailed onLoadAgain={dress.loadAgain} />;
 	} else {
 		wall = (
 			<div data-slot="combination-wall" className={WALL}>

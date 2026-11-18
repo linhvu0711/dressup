@@ -170,6 +170,95 @@ test("shows Could not load your combinations and loads on Retry", async ({
 	).toBeVisible();
 });
 
+const failDress = (page: Page) =>
+	page.route("/api/dress", (route) => route.fulfill({ status: 500 }));
+
+test("says Could not load your outfit on the wall and loads on Try again", async ({
+	page,
+}) => {
+	// Given: both projects, two saved combinations, GET /api/dress answers 500
+	// until the retry
+	const ids = await colourIds(page);
+	await postCombinations(page, three(ids), two(ids));
+	await failDress(page);
+	// When
+	await page.goto("/combinations");
+	// Then
+	// The page tries the first load 3 times, 1 s and 2 s apart, before it
+	// says so.
+	await expect(page.getByRole("alert")).toHaveText(
+		"Could not load your outfit.",
+		{ timeout: 10_000 },
+	);
+	await expect(cards(page)).toHaveCount(0);
+	await page.unroute("/api/dress");
+	// When
+	await page.getByRole("button", { name: "Try again" }).click();
+	// Then
+	await expect(cards(page)).toHaveCount(2);
+	await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("shows No combinations yet when the outfit fails and nothing is saved", async ({
+	page,
+}) => {
+	// Given: both projects, no combinations, GET /api/dress answers 500
+	await failDress(page);
+	// When
+	await page.goto("/combinations");
+	// Past the 3 tries, 1 s and 2 s apart.
+	await page.waitForTimeout(4_000);
+	// Then
+	await expect(
+		page.getByRole("heading", { name: "No combinations yet" }),
+	).toBeVisible();
+	await expect(page.getByText("Could not load your outfit.")).toHaveCount(0);
+});
+
+test("shows Could not load your combinations when the outfit fails too", async ({
+	page,
+}) => {
+	// Given: both projects, GET /api/dress and GET /api/combinations answer 500
+	await failDress(page);
+	await page.route("**/api/combinations", (route) =>
+		route.fulfill({ status: 500 }),
+	);
+	// When
+	await page.goto("/combinations");
+	// Past the 3 tries, 1 s and 2 s apart.
+	await page.waitForTimeout(4_000);
+	// Then
+	await expect(
+		page.getByRole("heading", { name: "Could not load your combinations" }),
+	).toBeVisible();
+	await expect(page.getByRole("button", { name: "Retry" })).toBeVisible();
+	await expect(page.getByText("Could not load your outfit.")).toHaveCount(0);
+});
+
+test("shows grey cards and no alert while the outfit loads", async ({
+	page,
+}) => {
+	// Given: both projects, one saved combination, GET /api/dress held until
+	// the test lets it go
+	await postCombinations(page, two(await colourIds(page)));
+	let release = () => {};
+	const held = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	await page.route("/api/dress", async (route) => {
+		await held;
+		await route.continue();
+	});
+	// When
+	await page.goto("/combinations");
+	// Then
+	const loading = cards(page).locator('svg[aria-label="Loading"]');
+	await expect(loading).toHaveCount(1);
+	await expect(page.getByRole("alert")).toHaveCount(0);
+	release();
+	await expect(loading).toHaveCount(0);
+});
+
 test("shows the sign-in screen when the combinations answer 401", async ({
 	page,
 }) => {

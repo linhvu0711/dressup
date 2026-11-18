@@ -175,6 +175,30 @@ test("shows the grey preview while the colours load", async ({ page }) => {
 	await expect(loading).toHaveCount(0);
 });
 
+test("says Could not load your outfit in Settings and loads on Try again", async ({
+	page,
+}) => {
+	// Given: GET /api/dress answers 500 until the retry
+	await page.route("/api/dress", (route) => route.fulfill({ status: 500 }));
+	// When
+	await page.goto("/settings");
+	// Then
+	// The page tries the first load 3 times, 1 s and 2 s apart, before it
+	// says so.
+	await expect(page.getByRole("alert")).toHaveText(
+		"Could not load your outfit.",
+		{ timeout: 10_000 },
+	);
+	await expect(page.locator('[data-slot="mannequin-preview"]')).toHaveCount(0);
+	await page.unroute("/api/dress");
+	// When
+	await page.getByRole("button", { name: "Try again" }).click();
+	// Then
+	await expect(preview(page)).toBeVisible();
+	await expect(row(page, "Skin colour #D6A27B")).toBeVisible();
+	await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
 const confirm = (page: Page) =>
 	page.getByRole("alertdialog", { name: "Delete your account?" });
 

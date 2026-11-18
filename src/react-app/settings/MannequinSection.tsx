@@ -7,6 +7,7 @@ import { useDressState } from "@/dress/DressState";
 import { Mannequin } from "@/dress/figure/Mannequin";
 import { MannequinPlaceholder } from "@/dress/figure/MannequinPlaceholder";
 import type { Hex } from "@/dress/garments";
+import { OutfitFailed } from "@/dress/OutfitFailed";
 import { MANNEQUIN_PARTS, type MannequinPart } from "@/dress/state";
 
 const NAMES: Record<MannequinPart, string> = {
@@ -42,60 +43,64 @@ export function MannequinSection() {
 			<h2 className="mt-1.5 mb-1.5 font-sans text-[12.5px] font-medium text-muted-foreground">
 				Mannequin
 			</h2>
-			<div className="flex items-center gap-[18px]">
-				<div
-					data-slot="mannequin-preview"
-					className="relative size-[104px] flex-none overflow-hidden rounded-[18px] bg-[#D3CFC9] [&>svg]:absolute [&>svg]:inset-0 [&>svg]:size-full"
-				>
-					{shown ? (
-						<Mannequin
-							layers={[{ garment: "tee_s", color: "#F3F1EC" }]}
-							viewBox={PREVIEW_VIEW_BOX}
-							lite
-							label="Mannequin preview"
-							skin={shown.skin}
-							hair={shown.hair}
-						/>
-					) : (
-						<MannequinPlaceholder viewBox={PREVIEW_VIEW_BOX} />
-					)}
-				</div>
-				<div className="min-w-0 flex-1">
-					{MANNEQUIN_PARTS.map((part) => (
-						<div
-							key={part}
-							data-part={part}
-							className="flex min-h-[58px] min-w-0 items-center gap-2.5 border-b border-border py-[11px]"
-						>
-							<button
-								type="button"
-								disabled={!stored}
-								onClick={() => setOpen(part)}
-								className="flex w-full items-center gap-3 text-left"
+			{dress.status === "failed" ? (
+				<OutfitFailed onLoadAgain={dress.loadAgain} />
+			) : (
+				<div className="flex items-center gap-[18px]">
+					<div
+						data-slot="mannequin-preview"
+						className="relative size-[104px] flex-none overflow-hidden rounded-[18px] bg-[#D3CFC9] [&>svg]:absolute [&>svg]:inset-0 [&>svg]:size-full"
+					>
+						{shown ? (
+							<Mannequin
+								layers={[{ garment: "tee_s", color: "#F3F1EC" }]}
+								viewBox={PREVIEW_VIEW_BOX}
+								lite
+								label="Mannequin preview"
+								skin={shown.skin}
+								hair={shown.hair}
+							/>
+						) : (
+							<MannequinPlaceholder viewBox={PREVIEW_VIEW_BOX} />
+						)}
+					</div>
+					<div className="min-w-0 flex-1">
+						{MANNEQUIN_PARTS.map((part) => (
+							<div
+								key={part}
+								data-part={part}
+								className="flex min-h-[58px] min-w-0 items-center gap-2.5 border-b border-border py-[11px]"
 							>
-								<span>{NAMES[part]}</span>
-								<span className="flex-1" />
-								{stored ? (
-									<>
-										<span
-											data-slot="mannequin-code"
-											className="font-mono text-[12.5px] text-muted-foreground"
-										>
-											{stored[part]}
-										</span>
-										<span
-											className={SQUARE}
-											style={{ background: stored[part] }}
-										/>
-									</>
-								) : (
-									<span className={cn(SQUARE, PLACEHOLDER)} />
-								)}
-							</button>
-						</div>
-					))}
+								<button
+									type="button"
+									disabled={!stored}
+									onClick={() => setOpen(part)}
+									className="flex w-full items-center gap-3 text-left"
+								>
+									<span>{NAMES[part]}</span>
+									<span className="flex-1" />
+									{stored ? (
+										<>
+											<span
+												data-slot="mannequin-code"
+												className="font-mono text-[12.5px] text-muted-foreground"
+											>
+												{stored[part]}
+											</span>
+											<span
+												className={SQUARE}
+												style={{ background: stored[part] }}
+											/>
+										</>
+									) : (
+										<span className={cn(SQUARE, PLACEHOLDER)} />
+									)}
+								</button>
+							</div>
+						))}
+					</div>
 				</div>
-			</div>
+			)}
 			{open && dress.status === "ready" ? (
 				<ColourPicker
 					title={NAMES[open]}
