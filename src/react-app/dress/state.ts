@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { hexSchema } from "@/colour/hex";
 import {
 	GARMENT_IDS,
 	type GarmentId,
@@ -156,10 +157,6 @@ export type DressChange =
 	| ({ kind: "wear" } & Outfit)
 	| ({ kind: "restore" } & Outfit);
 
-export const hexSchema = z
-	.string()
-	.regex(/^#[0-9A-F]{6}$/)
-	.transform((code) => code as Hex);
 const garment = z.enum(GARMENT_IDS);
 
 export const modeIdSchema = z.enum(

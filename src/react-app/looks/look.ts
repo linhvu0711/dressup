@@ -1,7 +1,8 @@
 import { z } from "zod";
+import { hexSchema } from "@/colour/hex";
 import { GARMENT_IDS, type GarmentId, JACKET_IDS } from "@/dress/garments";
 import { MODES, type ModeId, modeById } from "@/dress/modes";
-import { type DressState, hexSchema, modeIdSchema } from "@/dress/state";
+import { type DressState, modeIdSchema } from "@/dress/state";
 import { type TagId, tagIdSchema } from "@/tags/tag";
 
 export const LOOK_NAME_MAX = 60;

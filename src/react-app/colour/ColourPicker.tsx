@@ -1,9 +1,14 @@
 import { cn } from "cn";
 import { Dialog } from "radix-ui";
 import { type PointerEvent, useRef, useState } from "react";
-import { hexToHsv, hsvToHex, parseHex, readHexInput } from "@/colour/hex";
+import {
+	type Hex,
+	hexToHsv,
+	hsvToHex,
+	parseHex,
+	readHexInput,
+} from "@/colour/hex";
 import { Button } from "@/components/ui/button";
-import type { Hex } from "@/dress/garments";
 
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 

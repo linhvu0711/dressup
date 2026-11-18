@@ -5,6 +5,7 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
 import type {
 	AiAppsAnswer,
+	ColoursAnswer,
 	DressAnswer,
 	ErrorAnswer,
 	LookAnswer,
@@ -23,6 +24,7 @@ import {
 	createAuthCache,
 	createClientDiscovery,
 } from "./auth";
+import { listColours } from "./colour-store";
 import type { Db } from "./db";
 import { user } from "./db/auth-schema";
 import { changeDress, loadDress } from "./dress-store";
@@ -287,6 +289,12 @@ export function createApp(getDb: (env: Env) => Db) {
 		c.json({
 			tags: await listTags(getDb(c.env), c.var.user.id),
 		} satisfies TagsAnswer),
+	);
+
+	app.get("/colours", withAuth, requireUser, async (c) =>
+		c.json({
+			colours: await listColours(getDb(c.env), c.var.user.id),
+		} satisfies ColoursAnswer),
 	);
 
 	app.get("/ai-apps", withAuth, requireUser, async (c) =>

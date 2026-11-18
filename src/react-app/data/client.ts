@@ -14,6 +14,7 @@ export const keys = {
 	me: ["me"] as const,
 	looks: (userId: string | null) => ["looks", userId] as const,
 	tags: (userId: string | null) => ["tags", userId] as const,
+	colours: (userId: string | null) => ["colours", userId] as const,
 	aiApps: (userId: string | null) => ["ai-apps", userId] as const,
 	addTag: ["tags", "add"] as const,
 	allowApp: (clientId: string) => ["allow-app", clientId] as const,

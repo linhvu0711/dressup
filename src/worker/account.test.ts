@@ -47,6 +47,7 @@ const NAVY = {
 // through the routes.
 async function fillAccount(h: Harness, jar: Jar, lookId = NAVY.id) {
 	expect((await send(h, jar, "/api/dress")).status).toBe(200);
+	expect((await send(h, jar, "/api/colours")).status).toBe(200);
 	const skin = { kind: "mannequin", part: "skin", hex: "#8D5524" };
 	expect((await sendJson(h, jar, "/api/dress/changes", skin)).status).toBe(204);
 	const added = await sendJson(h, jar, "/api/tags", { name: "Work" });
@@ -123,7 +124,7 @@ describe("DELETE /api/account", () => {
 			},
 		}).toEqual({
 			rows: bobBefore,
-			filled: 10,
+			filled: 12,
 			me: { status: 200, email: "bob@example.com" },
 		});
 	});

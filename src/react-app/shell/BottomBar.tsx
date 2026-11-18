@@ -1,4 +1,4 @@
-import { LayoutGrid, Shirt } from "lucide-react";
+import { LayoutGrid, Shirt, Tag } from "lucide-react";
 import { NavLink } from "react-router";
 
 const tab =
@@ -17,6 +17,10 @@ export function BottomBar() {
 			<NavLink to="/looks" className={tab}>
 				<LayoutGrid size={20} strokeWidth={1.9} aria-hidden />
 				Looks
+			</NavLink>
+			<NavLink to="/labels" className={tab}>
+				<Tag size={20} strokeWidth={1.9} aria-hidden />
+				Labels
 			</NavLink>
 		</nav>
 	);

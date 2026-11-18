@@ -6,15 +6,17 @@
 - Edit state: the Dress page while it holds a saved look to change. It shows "Editing: <name>"; the save form then offers "Save changes" and "Save as new", and the cross puts the outfit from before back; a colour square deleted during the edit stays deleted, and a garment whose colour from before has no square wears the first square left in its row.
 - Account: one Google sign-in. Each account has a private space. No account sees another account's data.
 - Colour square: one saved colour in a garment's row. Each garment has its own row. A new account starts with a starter set.
+- Colour: a name and a colour code that the account saves once and uses on any kind of clothing. The user manages colours on the Labels page. A new account starts with a starter set, and an account holds at most 100.
 - Outfit: what the mannequin wears now: the mode, the picked colour of each garment, and each jacket open or closed. The account keeps it, with its colour squares.
 - Look: a saved outfit. It holds the mode, its own copy of each garment's colour, the jacket state (open or closed), an optional name, and tags.
 - Tag: a label the user makes and puts on looks. The Looks page filters by tag.
 - Look limit: 300 looks for each account.
 - Sign-up switch: one on/off environment variable that stops new sign-ups. People with an account can still sign in.
 - Looks page: the wall of saved looks.
+- Labels page: the page with the lists that the account makes once and uses everywhere.
 - Compare view: two to six looks in a row.
 - AI app: an outside AI assistant, such as Claude, Claude Code, ChatGPT, or Codex, that acts in an account for its user.
 - Connected AI app: an AI app the user allowed on the Allow page. Settings lists each one. Disconnect stops it at once.
-- Allow page: the dressup page where the user lets one AI app see and change their outfit, colours, looks, and tags.
+- Allow page: the dressup page where the user lets one AI app see and change the data in their account.
 - AI action: one thing an AI app does in an account, such as saving a look or picking a colour.
 - AI action limit: 60 AI actions a minute for each account.
