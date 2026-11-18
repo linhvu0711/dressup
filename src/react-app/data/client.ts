@@ -1,6 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { z } from "zod";
 import type { AiApp } from "@/ai-apps/ai-app";
+import type { Colour, ColourId } from "@/labels/colour";
 import type { Look, LookId } from "@/looks/look";
 import type { Tag, TagId } from "@/tags/tag";
 import { type ErrorCode, errorAnswer, meAnswer } from "./contract";
@@ -14,6 +15,7 @@ export const keys = {
 	me: ["me"] as const,
 	looks: (userId: string | null) => ["looks", userId] as const,
 	tags: (userId: string | null) => ["tags", userId] as const,
+	colours: (userId: string | null) => ["colours", userId] as const,
 	aiApps: (userId: string | null) => ["ai-apps", userId] as const,
 	addTag: ["tags", "add"] as const,
 	allowApp: (clientId: string) => ["allow-app", clientId] as const,
@@ -81,6 +83,28 @@ export const after = {
 		);
 		refresh(keys.tags(userId));
 		refresh(keys.looks(userId));
+	},
+	colourAdded(userId: string | null, colour: Colour) {
+		queryClient.setQueryData<Colour[]>(keys.colours(userId), (old) =>
+			old ? [...old, colour] : old,
+		);
+	},
+	// The changed colour keeps its place, as the server keeps its time.
+	colourChanged(userId: string | null, colour: Colour) {
+		queryClient.setQueryData<Colour[]>(keys.colours(userId), (old) =>
+			old?.map((c) => (c.id === colour.id ? colour : c)),
+		);
+	},
+	// The server's colours may differ from the cached ones, as after an add
+	// whose answer was lost, or a change refused for a change made elsewhere.
+	coloursMayDiffer(userId: string | null) {
+		refresh(keys.colours(userId));
+	},
+	colourDeleted(userId: string | null, id: ColourId) {
+		queryClient.setQueryData<Colour[]>(keys.colours(userId), (old) =>
+			old?.filter((c) => c.id !== id),
+		);
+		refresh(keys.colours(userId));
 	},
 	aiAppGone(userId: string | null, id: string) {
 		queryClient.setQueryData<AiApp[]>(keys.aiApps(userId), (old) =>

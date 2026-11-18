@@ -3,14 +3,13 @@ import { ArrowLeftRight } from "lucide-react";
 import { useSearchParams } from "react-router";
 import { AppLogo } from "@/ai-apps/AppLogo";
 import { Button } from "@/components/ui/button";
+import { PLACEHOLDER } from "@/components/ui/placeholder";
 import { authClient } from "../auth-client";
 import { keys } from "../data/client";
 import { useMe } from "../session";
 import { SignInPage } from "./SignInPage";
 
 type AiApp = { client_id: string; client_name?: string; logo_uri?: string };
-
-const PLACEHOLDER = "animate-placeholder bg-muted motion-reduce:animate-none";
 
 const DressupIcon = () => (
 	<img

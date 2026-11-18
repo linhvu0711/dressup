@@ -57,6 +57,13 @@
       "when": 1794829636162,
       "tag": "0007_swap_jackets",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1794960382335,
+      "tag": "0008_sparkling_molecule_man",
+      "breakpoints": true
     }
   ]
 }

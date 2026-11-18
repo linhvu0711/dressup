@@ -1,4 +1,4 @@
-import { LayoutGrid, Shirt } from "lucide-react";
+import { LayoutGrid, Shirt, Tag } from "lucide-react";
 import { NavLink } from "react-router";
 import { SettingsLink } from "./SettingsLink";
 
@@ -19,6 +19,10 @@ export function TopBar() {
 				<NavLink to="/looks" className={tab}>
 					<LayoutGrid size={16} strokeWidth={1.9} aria-hidden />
 					Looks
+				</NavLink>
+				<NavLink to="/labels" className={tab}>
+					<Tag size={16} strokeWidth={1.9} aria-hidden />
+					Labels
 				</NavLink>
 			</nav>
 			<span className="flex-1" />

@@ -18,6 +18,20 @@ export const LIMIT_USER = {
 	name: "Limit Person",
 };
 
+// Holds 100 colours, the colour limit, for the colour form's limit test.
+export const COLOURS_FULL_USER = {
+	id: "e2e-colours-full",
+	email: "colours-full@dressup.test",
+	name: "Colours Full Person",
+};
+
+// Has no colours: the starter set was deleted, for the empty list's test.
+export const COLOURS_EMPTY_USER = {
+	id: "e2e-colours-empty",
+	email: "colours-empty@dressup.test",
+	name: "Colours Empty Person",
+};
+
 type ProxyEnv = {
 	DB: Parameters<typeof drizzle>[0];
 	BETTER_AUTH_SECRET?: string;

@@ -5,6 +5,8 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
 import type {
 	AiAppsAnswer,
+	ColourAnswer,
+	ColoursAnswer,
 	DressAnswer,
 	ErrorAnswer,
 	LookAnswer,
@@ -14,6 +16,7 @@ import type {
 	TagsAnswer,
 } from "@/data/contract";
 import { type DressError, dressChangeSchema } from "@/dress/state";
+import { colourIdSchema } from "@/labels/colour";
 import { tagIdSchema } from "@/tags/tag";
 import { disconnectAiApp, listAiApps } from "./ai-app-store";
 import {
@@ -23,6 +26,13 @@ import {
 	createAuthCache,
 	createClientDiscovery,
 } from "./auth";
+import {
+	addColour,
+	type ColourError,
+	changeColour,
+	deleteColour,
+	listColours,
+} from "./colour-store";
 import type { Db } from "./db";
 import { user } from "./db/auth-schema";
 import { changeDress, loadDress } from "./dress-store";
@@ -123,6 +133,20 @@ const tagRefusals: Record<TagError["code"], Refusal> = {
 	duplicate: { status: 400, body: { error: "duplicate", field: "name" } },
 	not_found: { status: 404, body: { error: "not_found" } },
 };
+
+// A taken name is 409 here, as the colour contract says; tags answer 400.
+function colourRefusal(error: ColourError): Refusal {
+	switch (error.code) {
+		case "invalid":
+			return { status: 400, body: { error: "invalid", field: error.field } };
+		case "duplicate":
+			return { status: 409, body: { error: "duplicate", field: "name" } };
+		case "colour_limit":
+			return { status: 409, body: { error: "colour_limit" } };
+		case "not_found":
+			return { status: 404, body: { error: "not_found" } };
+	}
+}
 
 export function createApp(getDb: (env: Env) => Db) {
 	const root = new Hono<AppEnv>();
@@ -288,6 +312,60 @@ export function createApp(getDb: (env: Env) => Db) {
 			tags: await listTags(getDb(c.env), c.var.user.id),
 		} satisfies TagsAnswer),
 	);
+
+	app.get("/colours", withAuth, requireUser, async (c) =>
+		c.json({
+			colours: await listColours(getDb(c.env), c.var.user.id),
+		} satisfies ColoursAnswer),
+	);
+
+	app.post("/colours", withAuth, requireUser, async (c) => {
+		const body = await readBody(
+			c,
+			z.object({ name: z.string(), hex: z.string() }),
+		);
+		if ("refused" in body) return body.refused;
+		const added = await addColour(getDb(c.env), c.var.user.id, body.data);
+		if (!added.ok) {
+			const { status, body } = colourRefusal(added.error);
+			return c.json(body, status);
+		}
+		return c.json({ colour: added.value } satisfies ColourAnswer, 201);
+	});
+
+	// A gone colour and another account's colour answer the same 404, as tags do.
+	app.put("/colours/:id", withAuth, requireUser, async (c) => {
+		const body = await readBody(
+			c,
+			z.object({ id: colourIdSchema, name: z.string(), hex: z.string() }),
+		);
+		if ("refused" in body) return body.refused;
+		if (body.data.id !== c.req.param("id"))
+			return c.json(
+				{ error: "invalid", field: "id" } satisfies ErrorAnswer,
+				400,
+			);
+		const { id, ...input } = body.data;
+		const changed = await changeColour(getDb(c.env), c.var.user.id, id, input);
+		if (!changed.ok) {
+			const { status, body } = colourRefusal(changed.error);
+			return c.json(body, status);
+		}
+		return c.json({ colour: changed.value } satisfies ColourAnswer, 200);
+	});
+
+	app.delete("/colours/:id", withAuth, requireUser, async (c) => {
+		const deleted = await deleteColour(
+			getDb(c.env),
+			c.var.user.id,
+			c.req.param("id"),
+		);
+		if (!deleted.ok) {
+			const { status, body } = colourRefusal(deleted.error);
+			return c.json(body, status);
+		}
+		return c.body(null, 204);
+	});
 
 	app.get("/ai-apps", withAuth, requireUser, async (c) =>
 		c.json({

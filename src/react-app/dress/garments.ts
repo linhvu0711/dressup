@@ -1,4 +1,6 @@
-export type Hex = `#${string}`;
+import type { Hex } from "@/colour/hex";
+
+export type { Hex };
 
 // The garment list.
 export const GARMENT_IDS = [

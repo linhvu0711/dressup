@@ -2,8 +2,10 @@ import type { z } from "zod";
 import { GARMENT_IDS, GARMENT_NAMES, JACKET_IDS } from "@/dress/garments";
 import { MODES, type ModeId, modeById } from "@/dress/modes";
 import { type DressError, MANNEQUIN_PARTS } from "@/dress/state";
+import { COLOUR_LIMIT, COLOUR_NAME_MAX } from "@/labels/colour";
 import { LOOK_LIMIT, LOOK_NAME_MAX, LOOK_TAGS_MAX } from "@/looks/look";
 import { TAG_NAME_MAX } from "@/tags/tag";
+import type { ColourError } from "./colour-store";
 import type { LookError } from "./look-store";
 import type { TagError } from "./tag-store";
 
@@ -67,6 +69,21 @@ export function tagRefusalText(error: TagError): string {
 	}
 }
 
+export function colourRefusalText(error: ColourError): string {
+	switch (error.code) {
+		case "invalid":
+			return error.field === "name"
+				? `A colour name has 1 to ${COLOUR_NAME_MAX} characters.`
+				: "That is not a colour written as #RRGGBB with capital letters, such as #1F3A5F.";
+		case "duplicate":
+			return `You already have a colour called ${error.name}.`;
+		case "colour_limit":
+			return `You have ${COLOUR_LIMIT} colours. That is the limit. Delete one to add a new one.`;
+		case "not_found":
+			return noColour;
+	}
+}
+
 export const serverError = "dressup could not do this. Try again.";
 
 export const tooManyActions = "Too many actions. Wait a minute and try again.";
@@ -75,9 +92,13 @@ export const noLook = "No look with this id.";
 
 export const noTag = "No tag with this id.";
 
+export const noColour = "No colour with this id.";
+
 export const noLooks = "You have no saved looks yet.";
 
 export const noTags = "You have no tags yet.";
+
+export const noColours = "You have no colours yet.";
 
 export const lookLimit = (): string =>
 	`You have ${LOOK_LIMIT} looks, the limit. Delete one first.`;

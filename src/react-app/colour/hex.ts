@@ -1,6 +1,13 @@
-import type { Hex } from "@/dress/garments";
+import { z } from "zod";
 
 // Colour codes and the picker's hue, strength, and light.
+
+export type Hex = `#${string}`;
+
+export const hexSchema = z
+	.string()
+	.regex(/^#[0-9A-F]{6}$/)
+	.transform((code) => code as Hex);
 
 export function parseHex(text: string): Hex | null {
 	let code = text.trim().replace(/^#/, "");

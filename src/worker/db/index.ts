@@ -2,6 +2,7 @@ import type { BatchItem, BatchResponse } from "drizzle-orm/batch";
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import * as aiActionSchema from "./ai-action-schema";
 import * as authSchema from "./auth-schema";
+import * as colourSchema from "./colour-schema";
 import * as dressSchema from "./dress-schema";
 import * as lookSchema from "./look-schema";
 import * as tagSchema from "./tag-schema";
@@ -9,6 +10,7 @@ import * as tagSchema from "./tag-schema";
 export const schema = {
 	...aiActionSchema,
 	...authSchema,
+	...colourSchema,
 	...dressSchema,
 	...lookSchema,
 	...tagSchema,

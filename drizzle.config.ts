@@ -5,6 +5,7 @@ export default defineConfig({
 	schema: [
 		"./src/worker/db/ai-action-schema.ts",
 		"./src/worker/db/auth-schema.ts",
+		"./src/worker/db/colour-schema.ts",
 		"./src/worker/db/dress-schema.ts",
 		"./src/worker/db/look-schema.ts",
 		"./src/worker/db/tag-schema.ts",
