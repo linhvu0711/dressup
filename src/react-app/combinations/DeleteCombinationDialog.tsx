@@ -6,6 +6,7 @@ import { useToast } from "@/components/ui/toast";
 import { CombinationGone, useDeleteCombination } from "./api";
 import { type Combination, combinationTitle } from "./combination";
 import { useLeaveGoneCombination } from "./gone";
+import { useWallAddress } from "./wall-address";
 
 // The confirm. "Delete" waits for the server's answer before the confirm
 // closes.
@@ -18,6 +19,7 @@ export function DeleteCombinationDialog({
 }) {
 	const del = useDeleteCombination();
 	const navigate = useNavigate();
+	const address = useWallAddress();
 	const toast = useToast();
 	const leaveGoneCombination = useLeaveGoneCombination();
 	return (
@@ -43,7 +45,7 @@ export function DeleteCombinationDialog({
 								del.mutate(combination.id, {
 									onSuccess: () => {
 										onClose();
-										navigate("/combinations", { replace: true });
+										navigate(address.wall, { replace: true });
 										toast("Combination deleted");
 									},
 									onError: (error) => {

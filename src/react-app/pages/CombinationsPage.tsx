@@ -20,6 +20,7 @@ import {
 	shownText,
 	writeCombinationFilter,
 } from "@/combinations/filter";
+import { useWallAddress, wallAddress } from "@/combinations/wall-address";
 import { Button } from "@/components/ui/button";
 import { ActiveFilters, FilterButton } from "@/components/ui/filter";
 import { Notice } from "@/components/ui/notice";
@@ -47,6 +48,7 @@ export function CombinationsPage() {
 	const colours = useColours();
 	const [params, setParams] = useSearchParams();
 	const navigate = useNavigate();
+	const address = useWallAddress();
 	const filter = pruneCombinationFilter(
 		readCombinationFilter(params),
 		tags.data,
@@ -66,8 +68,7 @@ export function CombinationsPage() {
 			!filterCombinations(combinations.data, next).some(
 				(c) => c.id === combinationId,
 			);
-		if (hidden)
-			navigate({ pathname: "/combinations", search }, { replace: true });
+		if (hidden) navigate(wallAddress(next), { replace: true });
 		else setParams(search, { replace: true });
 	}
 	const shown = combinations.data?.find((c) => c.id === combinationId);
@@ -106,7 +107,7 @@ export function CombinationsPage() {
 					Pick 2 to 4 pieces on the mannequin. Your combinations come here.
 				</p>
 				<Button asChild variant="primary" className="mt-2">
-					<Link to="/build">Build a combination</Link>
+					<Link to={address.builder()}>Build a combination</Link>
 				</Button>
 			</Notice>
 		);
@@ -163,7 +164,7 @@ export function CombinationsPage() {
 							) : null}
 							<Button asChild variant="primary" size="icon">
 								<Link
-									to="/build"
+									to={address.builder()}
 									aria-label="New combination"
 									title="New combination"
 								>

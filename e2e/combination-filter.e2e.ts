@@ -279,3 +279,36 @@ test("drops a deleted tag from the filter", async ({ page }) => {
 	]);
 	await expect(titles(page)).toHaveText([FOUR_TITLE, TWO_TITLE]);
 });
+
+test("keeps the filter when a combination opens, on Back, and after the builder", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account; the wall filtered by Short tee
+	await seedWall(page);
+	await openWall(page, "?piece=tee_s.");
+	const chips = page.locator('[data-slot="filter-chip"]');
+	const isPhone = (page.viewportSize()?.width ?? 0) < 900;
+	// When
+	await page
+		.locator('[data-slot="combination-card"]')
+		.filter({ hasText: FOUR_TITLE })
+		.click();
+	// Then
+	await expect(page).toHaveURL(/\/combinations\/[0-9a-f-]+\?piece=tee_s\.$/);
+	// When
+	if (isPhone) await page.getByRole("link", { name: "Back" }).click();
+	// Then
+	await expect(chips).toHaveText(["Short tee"]);
+	await expect(titles(page)).toHaveCount(2);
+	// When
+	await page.getByRole("link", { name: "New combination" }).click();
+	await page.getByRole("link", { name: "Close", exact: true }).click();
+	// Then
+	await expect(chips).toHaveText(["Short tee"]);
+	await expect(titles(page)).toHaveCount(2);
+	// When
+	await page.reload();
+	// Then
+	await expect(chips).toHaveText(["Short tee"]);
+	await expect(titles(page)).toHaveCount(2);
+});
