@@ -393,3 +393,43 @@ test("shows Could not load your brands and loads them on Retry", async ({
 		brandStep.getByRole("button", { name: "Zara", exact: true }),
 	).toBeVisible();
 });
+
+test("keeps a changed quantity when an older closet load ends after the save", async ({
+	page,
+}) => {
+	// Given: a fresh account with a Navy long button-up, no brand, 2; the
+	// closet loaded; the next GET /api/owned-items, which the piece page
+	// starts, answered with the list from before and held until the save ends
+	await page.goto("/");
+	const ids = await colourIds(page);
+	await postOwnedItems(page, {
+		typeId: "shirt_l",
+		colourId: ids.Navy,
+		brandId: null,
+		quantity: 2,
+	});
+	await page.goto("/closet");
+	await expect(tiles(page)).toHaveCount(1);
+	let release = () => {};
+	const held = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	let first = true;
+	await page.route("**/api/owned-items", async (route) => {
+		if (!first || route.request().method() !== "GET") return route.continue();
+		first = false;
+		const before = await route.fetch();
+		await held;
+		await route.fulfill({ response: before });
+	});
+	await tiles(page).first().click();
+	// When
+	await page.getByRole("button", { name: "No brand × 2" }).click();
+	await editSheet(page).getByRole("button", { name: "More" }).click();
+	await editSheet(page).getByRole("button", { name: "Save" }).click();
+	await expect(page.locator('[data-slot="toast"]')).toHaveText("Changes saved");
+	release();
+	await page.waitForLoadState("networkidle");
+	// Then
+	await expect(itemRows(page)).toHaveAccessibleName("No brand × 3");
+});

@@ -187,18 +187,23 @@ export const after = {
 		refresh(keys.colours(userId));
 		refresh(keys.brands(userId));
 	},
-	// A new brand moves the item's count from one brand to another.
+	// A new brand moves the item's count from one brand to another. The
+	// refresh also drops a closet load that began before the change, which
+	// would put the old item back.
 	ownedItemChanged(userId: string | null, item: OwnedItem) {
 		queryClient.setQueryData<OwnedItem[]>(keys.closet(userId), (old) =>
 			old?.map((i) => (i.id === item.id ? item : i)),
 		);
+		refresh(keys.closet(userId));
 		refresh(keys.brands(userId));
 	},
 	// The last item of a colour may free it, and its brand counts one less.
+	// As for a change, the closet refresh drops an older closet load.
 	ownedItemDeleted(userId: string | null, id: string) {
 		queryClient.setQueryData<OwnedItem[]>(keys.closet(userId), (old) =>
 			old?.filter((i) => i.id !== id),
 		);
+		refresh(keys.closet(userId));
 		refresh(keys.colours(userId));
 		refresh(keys.brands(userId));
 	},
