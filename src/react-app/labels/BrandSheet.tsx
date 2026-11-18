@@ -1,5 +1,5 @@
 import { BRAND_LIMIT, BRAND_NAME_MAX, type Brand } from "./brand";
-import { useAddBrand } from "./brand-api";
+import { useAddBrand, useDeleteBrand, useRenameBrand } from "./brand-api";
 import { LabelSheet, type LabelWords } from "./LabelSheet";
 
 const WORDS: LabelWords = {
@@ -14,15 +14,19 @@ const WORDS: LabelWords = {
 	deleted: "Brand deleted",
 };
 
-// The form to add a brand: its name alone.
+// The form to add a brand, or to rename the one it is given: its name alone.
 export function BrandSheet({
 	brands,
+	editing,
 	onClose,
 }: {
 	brands: Brand[];
+	editing: Brand | null;
 	onClose: () => void;
 }) {
 	const add = useAddBrand();
+	const rename = useRenameBrand();
+	const del = useDeleteBrand();
 	return (
 		<LabelSheet
 			words={WORDS}
@@ -30,9 +34,13 @@ export function BrandSheet({
 			limit={BRAND_LIMIT}
 			limitCode="brand_limit"
 			nameMax={BRAND_NAME_MAX}
-			editing={null}
-			onSave={(name) => add.mutateAsync(name)}
-			onDelete={async () => {}}
+			editing={editing}
+			onSave={(name) =>
+				editing
+					? rename.mutateAsync({ id: editing.id, name })
+					: add.mutateAsync(name)
+			}
+			onDelete={(id) => del.mutateAsync(id)}
 			onClose={onClose}
 		/>
 	);

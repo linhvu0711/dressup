@@ -129,6 +129,46 @@ test("keeps the form open with Not saved when Save fails", async ({ page }) => {
 	await expect(nameBox(page)).toHaveValue("Zara");
 });
 
+test("renames a brand", async ({ page }) => {
+	// Given: a fresh account with Zara and COS added through the form
+	await openBrands(page);
+	for (const name of ["Zara", "COS"]) {
+		await addThroughForm(page, name);
+		await expect(sheet(page)).toHaveCount(0);
+	}
+	// When
+	await page.getByRole("button", { name: "Zara" }).click();
+	await nameBox(page).fill("Zara Home");
+	await sheet(page, "Edit brand")
+		.getByRole("button", { name: "Save", exact: true })
+		.click();
+	// Then
+	await expect(toast(page)).toHaveText("Changes saved");
+	await expect(rows(page)).toHaveCount(2);
+	expect(await rowNames(page)).toEqual(["COS", "Zara Home"]);
+});
+
+test("deletes a brand from the confirm step", async ({ page }) => {
+	// Given: a fresh account with Zara added
+	await openBrands(page);
+	await addThroughForm(page, "Zara");
+	await expect(rows(page)).toHaveCount(1);
+	// When
+	await page.getByRole("button", { name: "Zara" }).click();
+	await sheet(page, "Edit brand")
+		.getByRole("button", { name: "Delete" })
+		.click();
+	const confirm = sheet(page, "Delete this brand?");
+	await expect(confirm.getByText("No item uses it.")).toBeVisible();
+	await expect(confirm.getByRole("button", { name: "Back" })).toBeVisible();
+	await confirm.getByRole("button", { name: "Delete" }).click();
+	// Then
+	await expect(toast(page)).toHaveText("Brand deleted");
+	await expect(
+		page.getByRole("heading", { name: "No brands yet" }),
+	).toBeVisible();
+});
+
 test.describe("an account with 100 brands", () => {
 	test.use({ storageState: BRANDS_FULL_FILE });
 

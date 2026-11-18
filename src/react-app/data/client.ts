@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { z } from "zod";
 import type { AiApp } from "@/ai-apps/ai-app";
-import { type Brand, byBrandName } from "@/labels/brand";
+import { type Brand, type BrandId, byBrandName } from "@/labels/brand";
 import type { Colour, ColourId } from "@/labels/colour";
 import type { Look, LookId } from "@/looks/look";
 import type { Tag, TagId } from "@/tags/tag";
@@ -117,6 +117,18 @@ export const after = {
 	// The server's brands may differ from the cached ones, as after an add
 	// whose answer was lost, or a rename refused for a change made elsewhere.
 	brandsMayDiffer(userId: string | null) {
+		refresh(keys.brands(userId));
+	},
+	// A new name can move the brand in the A to Z list.
+	brandChanged(userId: string | null, brand: Brand) {
+		queryClient.setQueryData<Brand[]>(keys.brands(userId), (old) =>
+			old?.map((b) => (b.id === brand.id ? brand : b)).sort(byBrandName),
+		);
+	},
+	brandDeleted(userId: string | null, id: BrandId) {
+		queryClient.setQueryData<Brand[]>(keys.brands(userId), (old) =>
+			old?.filter((b) => b.id !== id),
+		);
 		refresh(keys.brands(userId));
 	},
 	aiAppGone(userId: string | null, id: string) {

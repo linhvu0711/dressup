@@ -1,6 +1,7 @@
 import type { UseQueryResult } from "@tanstack/react-query";
 import { cn } from "cn";
 import { ChevronRight } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { PLACEHOLDER } from "@/components/ui/placeholder";
@@ -8,12 +9,13 @@ import { BrandSheet } from "./BrandSheet";
 import type { Brand } from "./brand";
 import { LIST } from "./list";
 
-function BrandRow({ brand }: { brand: Brand }) {
+function BrandRow({ brand, onOpen }: { brand: Brand; onOpen: () => void }) {
 	return (
 		<li className="flex min-h-[58px] min-w-0 items-center border-b border-border py-[11px]">
 			<button
 				type="button"
 				aria-label={brand.name}
+				onClick={onOpen}
 				className="flex w-full min-w-0 items-center gap-3 text-left"
 			>
 				<span className="truncate text-[14px]">{brand.name}</span>
@@ -28,7 +30,7 @@ function BrandRow({ brand }: { brand: Brand }) {
 	);
 }
 
-// The account's brands, A to Z, and the form to add one.
+// The account's brands, A to Z, and the form to add or rename one.
 export function BrandsPart({
 	brands,
 	adding,
@@ -38,6 +40,7 @@ export function BrandsPart({
 	adding: boolean;
 	onAddClose: () => void;
 }) {
+	const [editing, setEditing] = useState<Brand | null>(null);
 	return (
 		<>
 			{brands.isPending ? (
@@ -70,12 +73,23 @@ export function BrandsPart({
 			) : (
 				<ul data-slot="brand-list" className={LIST}>
 					{brands.data.map((brand) => (
-						<BrandRow key={brand.id} brand={brand} />
+						<BrandRow
+							key={brand.id}
+							brand={brand}
+							onOpen={() => setEditing(brand)}
+						/>
 					))}
 				</ul>
 			)}
-			{adding && brands.data ? (
-				<BrandSheet brands={brands.data} onClose={onAddClose} />
+			{(adding || editing) && brands.data ? (
+				<BrandSheet
+					brands={brands.data}
+					editing={editing}
+					onClose={() => {
+						setEditing(null);
+						onAddClose();
+					}}
+				/>
 			) : null}
 		</>
 	);
