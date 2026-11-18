@@ -858,6 +858,10 @@ describe("tags", () => {
 			["add_tag", W],
 			["rename_tag", W],
 			["delete_tag", D],
+			["list_colours", R],
+			["add_colour", W],
+			["change_colour", W],
+			["delete_colour", D],
 		]);
 		expect(listed.every((t) => typeof t.title === "string")).toBe(true);
 	});
@@ -1049,6 +1053,137 @@ describe("tags", () => {
 	});
 });
 
+type Colour = { id: string; name: string; hex: string };
+
+const colours = async (h: Harness, ai: Session) =>
+	(
+		(await (await send(h, ai.jar, "/api/colours")).json()) as {
+			colours: Colour[];
+		}
+	).colours;
+
+describe("colours", () => {
+	// The colour the AI app added; its id is the answer's.
+	async function withTeal() {
+		const { h, ai } = await withAiSession();
+		const { data } = await ai.call("add_colour", {
+			name: "Teal",
+			hex: "#2A7F7F",
+		});
+		return { h, ai, id: (data as { colour: Colour }).colour.id };
+	}
+
+	test("lists the starter colours", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		// When
+		const { isError, data } = await ai.call("list_colours");
+		// Then
+		const listed = (data as { colours: Colour[] }).colours;
+		expect({
+			isError,
+			count: listed.length,
+			first: { name: listed[0]?.name, hex: listed[0]?.hex },
+		}).toEqual({
+			isError: false,
+			count: 13,
+			first: { name: "White", hex: "#F4F2ED" },
+		});
+	});
+
+	test("adds a colour", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		// When
+		const { isError, data } = await ai.call("add_colour", {
+			name: "Teal",
+			hex: "#2A7F7F",
+		});
+		// Then
+		const last = (await colours(h, ai)).at(-1);
+		expect({
+			isError,
+			last: last?.name,
+			sameId: last?.id === (data as { colour: Colour }).colour.id,
+		}).toEqual({ isError: false, last: "Teal", sameId: true });
+	});
+
+	test("refuses a colour name already used", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		// When
+		const { isError, text } = await ai.call("add_colour", {
+			name: "navy",
+			hex: "#2A7F7F",
+		});
+		// Then
+		expect({ isError, text, count: (await colours(h, ai)).length }).toEqual({
+			isError: true,
+			text: "You already have a colour called navy.",
+			count: 13,
+		});
+	});
+
+	test("refuses a colour code in small letters", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		// When
+		const { isError, text } = await ai.call("add_colour", {
+			name: "Teal",
+			hex: "#2a7f7f",
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "That is not a colour written as #RRGGBB with capital letters, such as #1F3A5F.",
+		});
+	});
+
+	test("changes a colour", async () => {
+		// Given
+		const { h, ai, id } = await withTeal();
+		// When
+		const { isError } = await ai.call("change_colour", {
+			id,
+			name: "Sea",
+			hex: "#2A6F7F",
+		});
+		// Then
+		expect({ isError, stored: (await colours(h, ai)).at(-1) }).toEqual({
+			isError: false,
+			stored: { id, name: "Sea", hex: "#2A6F7F" },
+		});
+	});
+
+	test("deletes a colour", async () => {
+		// Given
+		const { h, ai, id } = await withTeal();
+		// When
+		const { isError } = await ai.call("delete_colour", { id });
+		// Then
+		const names = (await colours(h, ai)).map((c) => c.name);
+		expect({
+			isError,
+			count: names.length,
+			teal: names.includes("Teal"),
+		}).toEqual({ isError: false, count: 13, teal: false });
+	});
+
+	test("refuses to delete a colour that is gone", async () => {
+		// Given
+		const { ai } = await withTeal();
+		// When
+		const { isError, text } = await ai.call("delete_colour", {
+			id: "11111111-1111-4111-8111-111111111111",
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "No colour with this id.",
+		});
+	});
+});
+
 describe("AI action limit", () => {
 	afterEach(() => setSystemTime());
 
@@ -1099,6 +1234,22 @@ describe("AI action limit", () => {
 		expect({ isError, text }).toEqual({
 			isError: true,
 			text: "Too many actions. Wait a minute and try again.",
+		});
+	});
+
+	test("refuses add_colour as the 61st AI action", async () => {
+		// Given
+		const { h, ai } = await sixtyActions();
+		// When
+		const { isError, text } = await ai.call("add_colour", {
+			name: "Teal",
+			hex: "#2A7F7F",
+		});
+		// Then
+		expect({ isError, text, rows: await h.rows(schema.colour) }).toEqual({
+			isError: true,
+			text: "Too many actions. Wait a minute and try again.",
+			rows: [],
 		});
 	});
 

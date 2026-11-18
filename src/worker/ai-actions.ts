@@ -16,13 +16,16 @@ import {
 	dressChangeSchema,
 	MANNEQUIN_PARTS,
 } from "@/dress/state";
+import { COLOUR_LIMIT, COLOUR_NAME_MAX } from "@/labels/colour";
 import { LOOK_LIMIT, LOOK_NAME_MAX, type Look } from "@/looks/look";
 import { TAG_NAME_MAX, type Tag } from "@/tags/tag";
 import { countAiAction } from "./ai-action-store";
 import {
+	colourRefusalText,
 	dressRefusalText,
 	issueText,
 	lookRefusalText,
+	noColours,
 	noLooks,
 	noTags,
 	serverError,
@@ -30,6 +33,12 @@ import {
 	tagsLeftOffText,
 	tooManyActions,
 } from "./ai-messages";
+import {
+	addColour,
+	changeColour,
+	deleteColour,
+	listColours,
+} from "./colour-store";
 import type { Db } from "./db";
 import { changeDress, loadDress } from "./dress-store";
 import { changeLook, deleteLook, listLooks, saveLook } from "./look-store";
@@ -412,6 +421,80 @@ export function registerAiActions(server: McpServer, account: Account) {
 			return deleted.ok
 				? answer({ deleted: deleted.value.id })
 				: refusal(tagRefusalText(deleted.error));
+		},
+	);
+
+	const colourRules = `A name has 1 to ${COLOUR_NAME_MAX} characters, and each name is used once in any letter case. A code is #RRGGBB in capital letters, such as #1F3A5F. An account has at most ${COLOUR_LIMIT} colours.`;
+
+	tool(
+		"list_colours",
+		{
+			title: "List the colours",
+			description:
+				"The account's colours, in the order they were added. A new account starts with 13.",
+			annotations: READ,
+			inputSchema: noArgs,
+		},
+		async () => {
+			const colours = await listColours(db, userId);
+			return colours.length === 0
+				? answer({ colours }, noColours)
+				: answer({ colours });
+		},
+	);
+
+	tool(
+		"add_colour",
+		{
+			title: "Add a colour",
+			description: `Adds a colour. ${colourRules}`,
+			annotations: WRITE,
+			inputSchema: z.object({
+				name: z.string().describe("The colour's name."),
+				hex: z.string().describe("The colour code, as #1F3A5F."),
+			}),
+		},
+		async (input) => {
+			const added = await addColour(db, userId, input);
+			return added.ok
+				? answer({ colour: added.value })
+				: refusal(colourRefusalText(added.error));
+		},
+	);
+
+	tool(
+		"change_colour",
+		{
+			title: "Change a colour",
+			description: `Changes a colour's name, code, or both. ${colourRules}`,
+			annotations: WRITE,
+			inputSchema: z.object({
+				id: z.string().describe("The colour's id."),
+				name: z.string().describe("The colour's new name."),
+				hex: z.string().describe("The colour's new code, as #1F3A5F."),
+			}),
+		},
+		async ({ id, ...input }) => {
+			const changed = await changeColour(db, userId, id, input);
+			return changed.ok
+				? answer({ colour: changed.value })
+				: refusal(colourRefusalText(changed.error));
+		},
+	);
+
+	tool(
+		"delete_colour",
+		{
+			title: "Delete a colour",
+			description: "Deletes a colour for good.",
+			annotations: DELETE,
+			inputSchema: z.object({ id: z.string().describe("The colour's id.") }),
+		},
+		async ({ id }) => {
+			const deleted = await deleteColour(db, userId, id);
+			return deleted.ok
+				? answer({ deleted: deleted.value.id })
+				: refusal(colourRefusalText(deleted.error));
 		},
 	);
 }
