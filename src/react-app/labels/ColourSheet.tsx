@@ -16,8 +16,8 @@ const WORDS: LabelWords = {
 	inUseText:
 		"A combination, an item in your closet, or a wish uses this colour, so you cannot delete it.",
 	taken: "You have this colour already.",
-	full: `You have ${COLOUR_LIMIT} colours. That is the limit. Delete one to add a new one.`,
 	added: "Colour added",
+	changed: "Changes saved",
 	deleted: "Colour deleted",
 };
 
@@ -40,8 +40,11 @@ export function ColourSheet({
 		<LabelSheet
 			words={WORDS}
 			labels={colours}
-			limit={COLOUR_LIMIT}
-			limitCode="colour_limit"
+			limit={{
+				max: COLOUR_LIMIT,
+				code: "colour_limit",
+				full: `You have ${COLOUR_LIMIT} colours. That is the limit. Delete one to add a new one.`,
+			}}
 			inUseCode="colour_in_use"
 			nameMax={COLOUR_NAME_MAX}
 			editing={editing}

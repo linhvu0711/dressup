@@ -21,3 +21,13 @@ export const listedTagSchema = tagSchema.extend({
 });
 
 export type ListedTag = z.infer<typeof listedTagSchema>;
+
+export const tagUseText = (n: number) =>
+	n === 0 ? "Not in use" : n === 1 ? "1 combination" : `${n} combinations`;
+
+export const tagDeleteText = (n: number) =>
+	n === 0
+		? "No combination uses it."
+		: n === 1
+			? "It comes off 1 combination."
+			: `It comes off ${n} combinations.`;

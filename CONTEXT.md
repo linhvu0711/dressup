@@ -19,7 +19,7 @@
 - Owned item: one brand of one piece in the closet, with a quantity. Two navy long button-ups from two brands are two owned items. An account holds at most 500.
 - Outfit: what the mannequin wears now: the mode, the picked colour of each garment, and each jacket open or closed. The account keeps it, with its colour squares.
 - Look: a saved outfit. It holds the mode, its own copy of each garment's colour, the jacket state (open or closed), an optional name, and tags.
-- Tag: a label the user makes and puts on looks. The Looks page filters by tag.
+- Tag: a label the user makes and puts on combinations. The user renames and deletes tags on the Labels page.
 - Look limit: 300 looks for each account.
 - Sign-up switch: one on/off environment variable that stops new sign-ups. People with an account can still sign in.
 - Looks page: the wall of saved looks.

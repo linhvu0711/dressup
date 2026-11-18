@@ -2,8 +2,9 @@ import { cn } from "cn";
 import { Check, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { isNameTaken } from "@/data/client";
 import { sameLabelName } from "@/labels/name";
-import { TagNameTaken, useTags } from "./api";
+import { useTags } from "./api";
 import { TAG_NAME_MAX, type TagId } from "./tag";
 
 // One box for a tag name: the add box of the save form and of Edit tags,
@@ -25,8 +26,8 @@ export function TagNameField({
 	except?: TagId;
 	className?: string;
 	boxClassName?: string;
-	// Rejects with TagNameTaken when the server finds the name taken; the
-	// caller handles every other failure.
+	// Rejects with the server's duplicate refusal when it finds the name
+	// taken; the caller handles every other failure.
 	onSave: (name: string) => Promise<void>;
 	onCancel: () => void;
 }) {
@@ -55,7 +56,7 @@ export function TagNameField({
 		try {
 			await onSave(trimmed);
 		} catch (error) {
-			if (!(error instanceof TagNameTaken)) throw error;
+			if (!isNameTaken(error)) throw error;
 			setTaken(true);
 			setSaving(false);
 		}

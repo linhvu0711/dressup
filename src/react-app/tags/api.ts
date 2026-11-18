@@ -1,12 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import {
-	after,
-	cachedUserId,
-	goneAsDone,
-	keys,
-	RequestError,
-	request,
-} from "../data/client";
+import { after, cachedUserId, goneAsDone, keys, request } from "../data/client";
 import { tagAnswer, tagsAnswer } from "../data/contract";
 import type { Tag, TagId } from "./tag";
 
@@ -22,15 +15,6 @@ export function useTags() {
 	});
 }
 
-// The account has a tag of this name already, in some letter case.
-export class TagNameTaken extends Error {}
-
-const takenAsTagNameTaken = (error: unknown): never => {
-	if (error instanceof RequestError && error.code === "duplicate")
-		throw new TagNameTaken();
-	throw error;
-};
-
 export function useAddTag() {
 	const userId = cachedUserId();
 	return useMutation({
@@ -40,7 +24,7 @@ export function useAddTag() {
 				await request("POST", "/api/tags", {
 					body: { name },
 					answer: tagAnswer,
-				}).catch(takenAsTagNameTaken)
+				})
 			).tag,
 		onSuccess: (tag) => after.tagAdded(userId, tag),
 		// On an error too: an add whose answer was lost may be stored, and
@@ -57,7 +41,7 @@ export function useRenameTag() {
 				await request("PUT", `/api/tags/${input.id}`, {
 					body: input,
 					answer: tagAnswer,
-				}).catch(takenAsTagNameTaken)
+				})
 			).tag,
 		onSuccess: (tag) => after.tagRenamed(userId, tag),
 		// A tag gone on another device, or a name taken there, shows on the

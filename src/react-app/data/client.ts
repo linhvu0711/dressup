@@ -288,6 +288,10 @@ export const goneAsDone = (error: unknown) => {
 		throw error;
 };
 
+// The account has a label of this name already, in some letter case.
+export const isNameTaken = (error: unknown) =>
+	error instanceof RequestError && error.code === "duplicate";
+
 // The session is gone; the 401 rule has run.
 export class SignedOut extends Error {}
 

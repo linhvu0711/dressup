@@ -4,6 +4,7 @@ import {
 	pick,
 	postCombinations,
 	three,
+	two,
 } from "./combination-helpers";
 import { expect, test } from "./fixtures";
 
@@ -136,4 +137,294 @@ test("takes a tag off with Save changes", async ({ page }) => {
 	// Then
 	await expect(toast(page)).toHaveText("Changes saved");
 	await expect(pills(page)).toHaveText(["work"]);
+});
+
+const tagRows = (page: Page) =>
+	page.locator('[data-slot="tag-list"]').getByRole("button");
+
+const tagRowNames = (page: Page) =>
+	tagRows(page).evaluateAll((buttons) =>
+		buttons.map((b) => b.getAttribute("aria-label")),
+	);
+
+const notes = (page: Page) => page.locator('[data-slot="label-note"]');
+
+const sheet = (page: Page, name = "New tag") =>
+	page.getByRole("dialog", { name });
+
+const nameBox = (page: Page) =>
+	page.getByRole("dialog").getByRole("textbox", { name: "Name" });
+
+const mainNav = (page: Page) => page.getByRole("navigation", { name: "Main" });
+
+async function openTags(page: Page) {
+	await page.goto("/labels");
+	await page.getByRole("tab", { name: "Tags" }).click();
+}
+
+async function renameFromRow(page: Page, from: string, to: string) {
+	await tagRows(page).filter({ hasText: from }).click();
+	await nameBox(page).fill(to);
+	await sheet(page, "Edit tag")
+		.getByRole("button", { name: "Save", exact: true })
+		.click();
+	await expect(sheet(page, "Edit tag")).toHaveCount(0);
+}
+
+async function deleteFromRow(page: Page, name: string) {
+	await tagRows(page).filter({ hasText: name }).click();
+	await page
+		.getByRole("dialog")
+		.getByRole("button", { name: "Delete" })
+		.click();
+	await page
+		.getByRole("dialog")
+		.getByRole("button", { name: "Delete" })
+		.click();
+	await expect(page.getByRole("dialog")).toHaveCount(0);
+}
+
+// From the Labels page to the combination's page.
+async function openTheCard(page: Page) {
+	await mainNav(page).getByRole("link", { name: "Combinations" }).click();
+	await page.locator('[data-slot="combination-card"]').click();
+}
+
+async function openItsSaveForm(page: Page) {
+	await page.getByRole("link", { name: "Change this combination" }).click();
+	await page.getByRole("button", { name: "Save" }).click();
+}
+
+test("lists each tag with how many combinations carry it", async ({ page }) => {
+	// Given: both projects, a fresh account; tags work, weekend, rain; THREE
+	// with work and weekend, TWO with work
+	const work = await postTag(page, "work");
+	const weekend = await postTag(page, "weekend");
+	await postTag(page, "rain");
+	const ids = await colourIds(page);
+	await postCombinations(
+		page,
+		{ ...three(ids), tags: [work, weekend] },
+		{ ...two(ids), tags: [work] },
+	);
+	// When
+	await openTags(page);
+	// Then
+	await expect(tagRows(page)).toHaveCount(3);
+	expect(await tagRowNames(page)).toEqual(["work", "weekend", "rain"]);
+	await expect(notes(page)).toHaveText([
+		"2 combinations",
+		"1 combination",
+		"Not in use",
+	]);
+});
+
+test("shows No tags yet for a new account", async ({ page }) => {
+	// Given: both projects, a fresh account
+	// When
+	await openTags(page);
+	// Then
+	await expect(
+		page.getByRole("heading", { name: "No tags yet" }),
+	).toBeVisible();
+	await expect(page.getByText("Tap + to add your first tag.")).toBeVisible();
+	await expect(page.getByRole("button", { name: "Add a tag" })).toBeVisible();
+});
+
+test("adds a tag from the + form", async ({ page }) => {
+	// Given: both projects, a fresh account, the Tags part open
+	await openTags(page);
+	// When
+	await page.getByRole("button", { name: "Add a tag" }).click();
+	await nameBox(page).fill("work");
+	await sheet(page).getByRole("button", { name: "Save", exact: true }).click();
+	// Then
+	await expect(toast(page)).toHaveText("Tag saved");
+	await expect(tagRows(page)).toHaveCount(1);
+	expect(await tagRowNames(page)).toEqual(["work"]);
+	await expect(notes(page)).toHaveText(["Not in use"]);
+});
+
+test("asks for a tag name and sends nothing", async ({ page }) => {
+	// Given: both projects, a fresh account, the Tags part open; the tag
+	// POSTs counted
+	let posts = 0;
+	page.on("request", (r) => {
+		if (r.method() === "POST" && r.url().endsWith("/api/tags")) posts++;
+	});
+	await openTags(page);
+	// When
+	await page.getByRole("button", { name: "Add a tag" }).click();
+	await sheet(page).getByRole("button", { name: "Save", exact: true }).click();
+	// Then
+	await expect(sheet(page).getByRole("alert")).toHaveText("Enter a name.");
+	expect(posts).toBe(0);
+});
+
+test("says a taken tag name is taken, in any case", async ({ page }) => {
+	// Given: both projects, a fresh account; tag work; the Tags part open
+	await postTag(page, "work");
+	await openTags(page);
+	await expect(tagRows(page)).toHaveCount(1);
+	// When
+	await page.getByRole("button", { name: "Add a tag" }).click();
+	await nameBox(page).fill("WORK");
+	await sheet(page).getByRole("button", { name: "Save", exact: true }).click();
+	// Then
+	await expect(sheet(page).getByRole("alert")).toHaveText(
+		"You have this tag already.",
+	);
+	await expect(sheet(page)).toBeVisible();
+});
+
+test("keeps a tag name to 24 characters", async ({ page }) => {
+	// Given: both projects, a fresh account, the New tag sheet open
+	await openTags(page);
+	await page.getByRole("button", { name: "Add a tag" }).click();
+	// When
+	await nameBox(page).pressSequentially("rainy days and grey skies");
+	// Then
+	await expect(nameBox(page)).toHaveValue("rainy days and grey skie");
+});
+
+test("renames a tag from its row", async ({ page }) => {
+	// Given: both projects, a fresh account; tag work; the Tags part open
+	await postTag(page, "work");
+	await openTags(page);
+	// When
+	await tagRows(page).filter({ hasText: "work" }).click();
+	// Then
+	await expect(nameBox(page)).toHaveValue("work");
+	await expect(
+		sheet(page, "Edit tag").getByRole("button", { name: "Delete" }),
+	).toBeVisible();
+	// When
+	await nameBox(page).fill("office");
+	await sheet(page, "Edit tag")
+		.getByRole("button", { name: "Save", exact: true })
+		.click();
+	// Then
+	await expect(toast(page)).toHaveText("Tag saved");
+	await expect(tagRows(page)).toHaveCount(1);
+	expect(await tagRowNames(page)).toEqual(["office"]);
+	await expect(notes(page)).toHaveText(["Not in use"]);
+});
+
+test("deletes a tag from the confirm step", async ({ page }) => {
+	// Given: both projects, a fresh account; THREE with work and weekend; the
+	// Tags part open
+	const { weekend } = await threeWithWorkAndWeekend(page);
+	await openTags(page);
+	// When
+	await tagRows(page).filter({ hasText: "work" }).click();
+	await sheet(page, "Edit tag").getByRole("button", { name: "Delete" }).click();
+	// Then
+	const confirm = page.getByRole("dialog", { name: "Delete this tag?" });
+	await expect(confirm.getByRole("button", { name: "Back" })).toBeVisible();
+	await expect(confirm).toContainText("It comes off 1 combination.");
+	// When
+	await confirm.getByRole("button", { name: "Delete" }).click();
+	// Then
+	await expect(toast(page)).toHaveText("Tag deleted");
+	await expect(tagRows(page)).toHaveCount(1);
+	expect(await tagRowNames(page)).toEqual(["weekend"]);
+	await expect(notes(page)).toHaveText(["1 combination"]);
+	expect((await storedCombinations(page)).map((c) => c.tags)).toEqual([
+		[weekend],
+	]);
+});
+
+test("shows a renamed tag on the combination page and in the save form", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account; THREE with the tag work; the
+	// Tags part open
+	const work = await postTag(page, "work");
+	await postCombinations(page, {
+		...three(await colourIds(page)),
+		tags: [work],
+	});
+	await openTags(page);
+	// When
+	await renameFromRow(page, "work", "office");
+	await openTheCard(page);
+	// Then
+	await expect(pills(page)).toHaveText(["office"]);
+	// When
+	await openItsSaveForm(page);
+	// Then
+	await expect(saveDialog(page).locator("[aria-pressed]")).toHaveText([
+		"office",
+	]);
+	await expect(saveDialog(page).locator('[aria-pressed="true"]')).toHaveText([
+		"office",
+	]);
+});
+
+test("drops a deleted tag from the combination page and the save form", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account; THREE with work and weekend; the
+	// Tags part open
+	await threeWithWorkAndWeekend(page);
+	await openTags(page);
+	// When
+	await deleteFromRow(page, "weekend");
+	await openTheCard(page);
+	// Then
+	await expect(pills(page)).toHaveText(["work"]);
+	// When
+	await openItsSaveForm(page);
+	// Then
+	await expect(saveDialog(page).locator("[aria-pressed]")).toHaveText(["work"]);
+});
+
+test("shows Could not load your tags and loads on Retry", async ({ page }) => {
+	// Given: both projects, a fresh account; the first GET of the tags
+	// answers 500
+	let calls = 0;
+	await page.route("**/api/tags", (route) =>
+		calls++ === 0 ? route.fulfill({ status: 500 }) : route.continue(),
+	);
+	// When
+	await openTags(page);
+	// Then
+	await expect(
+		page.getByRole("heading", { name: "Could not load your tags" }),
+	).toBeVisible();
+	// When
+	await page.getByRole("button", { name: "Retry" }).click();
+	// Then
+	await expect(
+		page.getByRole("heading", { name: "No tags yet" }),
+	).toBeVisible();
+});
+
+test("keeps the sheet open with Not saved when Save fails", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account; tag work; each rename answers 500
+	await postTag(page, "work");
+	await page.route("**/api/tags/*", (route) =>
+		route.request().method() === "PUT"
+			? route.fulfill({ status: 500 })
+			: route.fallback(),
+	);
+	await openTags(page);
+	// When
+	await tagRows(page).filter({ hasText: "work" }).click();
+	await nameBox(page).fill("office");
+	await sheet(page, "Edit tag")
+		.getByRole("button", { name: "Save", exact: true })
+		.click();
+	// Then
+	await expect(sheet(page, "Edit tag").getByRole("alert")).toHaveText(
+		"Not saved. Try again.",
+	);
+	await expect(sheet(page, "Edit tag")).toBeVisible();
+	// The open dialog hides the rows from role queries, so read the slot.
+	await expect(page.locator('[data-slot="tag-list"] button')).toHaveAttribute(
+		"aria-label",
+		"work",
+	);
 });

@@ -31,18 +31,24 @@ async function addThroughForm(page: Page, name: string) {
 	await sheet(page).getByRole("button", { name: "Save", exact: true }).click();
 }
 
-test("shows Colours and Brands in one row of the switch", async ({ page }) => {
+test("shows Colours, Brands, and Tags in one row of the switch", async ({
+	page,
+}) => {
 	// Given: a fresh account
 	// When
 	await page.goto("/labels");
 	// Then
 	const tablist = page.getByRole("tablist", { name: "Labels" });
-	await expect(tablist.getByRole("tab")).toHaveCount(2);
+	await expect(tablist.getByRole("tab")).toHaveCount(3);
 	expect({
 		tabs: await tablist.getByRole("tab").allTextContents(),
 		selected: await tablist.getByRole("tab", { selected: true }).textContent(),
 		height: (await tablist.boundingBox())?.height,
-	}).toEqual({ tabs: ["Colours", "Brands"], selected: "Colours", height: 38 });
+	}).toEqual({
+		tabs: ["Colours", "Brands", "Tags"],
+		selected: "Colours",
+		height: 38,
+	});
 });
 
 test("shows No brands yet for a new account", async ({ page }) => {
