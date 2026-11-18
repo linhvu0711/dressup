@@ -36,6 +36,8 @@ export function useSaveCombination() {
 				})
 			).combination,
 		onSuccess: (combination) => after.combinationSaved(userId, combination),
+		// A tag gone on another device refuses the save: drop it from the chips.
+		onError: () => after.tagsMayDiffer(userId),
 	});
 }
 
@@ -76,6 +78,7 @@ export function useChangeCombination() {
 		onError: (error, combination) => {
 			if (error instanceof CombinationGone)
 				after.combinationGone(userId, combination.id);
+			after.tagsMayDiffer(userId);
 		},
 	});
 }
