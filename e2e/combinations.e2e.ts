@@ -434,6 +434,32 @@ test("shows Could not load your combinations for a combination's address", async
 	await expect(viewTitle(page)).toHaveText(LONG_TITLE);
 });
 
+test("says Could not load your outfit on a combination's page and loads on Try again", async ({
+	page,
+}) => {
+	// Given: both projects, THREE saved, GET /api/dress answers 500 until the
+	// retry
+	const first = three(await colourIds(page));
+	await postCombinations(page, first);
+	await failDress(page);
+	// When
+	await page.goto(`/combinations/${first.id}`);
+	// Then
+	// The page tries the first load 3 times, 1 s and 2 s apart, before it
+	// says so.
+	await expect(view(page).getByRole("alert")).toHaveText(
+		"Could not load your outfit.",
+		{ timeout: 10_000 },
+	);
+	await expect(viewTitle(page)).toHaveText(LONG_TITLE);
+	await page.unroute("/api/dress");
+	// When
+	await view(page).getByRole("button", { name: "Try again" }).click();
+	// Then
+	await expect(view(page).getByRole("img", { name: LONG_TITLE })).toBeVisible();
+	await expect(view(page).getByRole("alert")).toHaveCount(0);
+});
+
 test("shows the sign-in screen when a combination's address answers 401", async ({
 	page,
 }) => {

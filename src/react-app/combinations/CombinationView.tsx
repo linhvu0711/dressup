@@ -2,7 +2,9 @@ import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
+import { useDressState } from "@/dress/DressState";
 import { LAYER_OF } from "@/dress/garments";
+import { OutfitFailed } from "@/dress/OutfitFailed";
 import { Stage } from "@/dress/Stage";
 import { CombinationFigure } from "./CombinationFigure";
 import {
@@ -23,6 +25,7 @@ export function CombinationView({
 	onDelete: () => void;
 }) {
 	const toast = useToast();
+	const dress = useDressState();
 	const title = combinationTitle(combination);
 	return (
 		<div data-slot="combination-view" className="flex min-h-0 flex-1 flex-col">
@@ -56,14 +59,18 @@ export function CombinationView({
 				</Button>
 			</div>
 			<Stage className="mx-3 flex-[0_0_52%] rounded-[24px] wide:-order-1 wide:mx-4 wide:mt-4 wide:flex-[0_0_50%] wide:rounded-[22px]">
-				<CombinationFigure
-					pieces={combination.pieces.map((p) => ({
-						typeId: p.typeId,
-						hex: p.colour.hex,
-					}))}
-					open={combination.open}
-					label={title}
-				/>
+				{dress.status === "failed" ? (
+					<OutfitFailed onLoadAgain={dress.loadAgain} />
+				) : (
+					<CombinationFigure
+						pieces={combination.pieces.map((p) => ({
+							typeId: p.typeId,
+							hex: p.colour.hex,
+						}))}
+						open={combination.open}
+						label={title}
+					/>
+				)}
 			</Stage>
 			<div className="min-h-0 flex-1 overflow-auto px-4 pb-24 wide:px-6 wide:pb-6">
 				{topFirst(combination.pieces).map((p) => (
