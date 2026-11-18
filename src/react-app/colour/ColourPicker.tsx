@@ -181,7 +181,7 @@ export function ColourPicker({
 							box.current?.focus();
 						}
 					}}
-					className="fixed inset-x-0 bottom-0 z-[21] flex max-h-[88%] flex-col gap-4 overflow-auto rounded-t-[26px] border border-border border-b-0 bg-card p-5 pb-[22px] shadow-float outline-none duration-[260ms] ease-soft data-[state=open]:slide-in-from-bottom-8 data-[state=open]:animate-in wide:inset-x-auto wide:top-[84px] wide:right-6 wide:bottom-auto wide:w-[324px] wide:rounded-[22px] wide:border-b wide:pb-5"
+					className="fixed inset-x-0 bottom-0 z-[21] flex max-h-[88%] flex-col gap-4 overflow-auto scrollbar-quiet rounded-t-[26px] border border-border border-b-0 bg-card p-5 pb-[22px] shadow-float outline-none duration-[260ms] ease-soft data-[state=open]:slide-in-from-bottom-8 data-[state=open]:animate-in wide:inset-x-auto wide:top-[84px] wide:right-6 wide:bottom-auto wide:w-[324px] wide:rounded-[22px] wide:border-b wide:pb-5"
 				>
 					<Dialog.Title className="text-[22px] leading-tight">
 						{title}
