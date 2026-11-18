@@ -91,6 +91,7 @@ test("names what dressup keeps", async ({ page }) => {
 		"Your looks and their tags.",
 		"Your combinations.",
 		"Your closet.",
+		"The pictures you add to your closet.",
 		"Your mannequin's skin and hair colour.",
 	]);
 });
@@ -130,7 +131,7 @@ test("says Settings deletes the account", async ({ page }) => {
 	const region = page.getByRole("region", { name: "How to delete it" });
 	// Then
 	await expect(region.locator("p")).toHaveText([
-		'In Settings, "Delete my account" deletes your account and all its data at once.',
+		'In Settings, "Delete my account" deletes your account and all its data at once, your pictures too.',
 	]);
 });
 

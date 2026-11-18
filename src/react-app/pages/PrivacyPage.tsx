@@ -63,6 +63,7 @@ export function PrivacyPage() {
 						<li>Your looks and their tags.</li>
 						<li>Your combinations.</li>
 						<li>Your closet.</li>
+						<li>The pictures you add to your closet.</li>
 						<li>Your mannequin's skin and hair colour.</li>
 					</ul>
 				</Section>
@@ -86,7 +87,7 @@ export function PrivacyPage() {
 				<Section id="privacy-delete" title="How to delete it">
 					<p className="mt-2">
 						In Settings, "Delete my account" deletes your account and all its
-						data at once.
+						data at once, your pictures too.
 					</p>
 				</Section>
 
