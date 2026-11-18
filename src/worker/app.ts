@@ -67,6 +67,8 @@ import {
 import { mcpRoute } from "./mcp";
 import {
 	addOwnedItem,
+	changeOwnedItem,
+	deleteOwnedItem,
 	listOwnedItems,
 	type OwnedItemError,
 } from "./owned-item-store";
@@ -474,6 +476,38 @@ export function createApp(getDb: (env: Env) => Db) {
 		}
 		const { ownedItem, created } = added.value;
 		return c.json({ ownedItem } satisfies OwnedItemAnswer, created ? 201 : 200);
+	});
+
+	app.put("/owned-items/:id", withAuth, requireUser, async (c) => {
+		const body = await readBody(
+			c,
+			z.object({ brandId: z.string().nullable(), quantity: z.number() }),
+		);
+		if ("refused" in body) return body.refused;
+		const changed = await changeOwnedItem(
+			getDb(c.env),
+			c.var.user.id,
+			c.req.param("id"),
+			body.data,
+		);
+		if (!changed.ok) {
+			const { status, body: refused } = ownedItemRefusal(changed.error);
+			return c.json(refused, status);
+		}
+		return c.json({ ownedItem: changed.value } satisfies OwnedItemAnswer, 200);
+	});
+
+	app.delete("/owned-items/:id", withAuth, requireUser, async (c) => {
+		const deleted = await deleteOwnedItem(
+			getDb(c.env),
+			c.var.user.id,
+			c.req.param("id"),
+		);
+		if (!deleted.ok) {
+			const { status, body: refused } = ownedItemRefusal(deleted.error);
+			return c.json(refused, status);
+		}
+		return c.body(null, 204);
 	});
 
 	app.get("/tags", withAuth, requireUser, async (c) =>

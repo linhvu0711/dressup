@@ -1,8 +1,10 @@
-import { and, count, desc, eq, exists, notExists, sql } from "drizzle-orm";
+import { and, count, desc, eq, exists, ne, notExists, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import {
 	OWNED_ITEM_LIMIT,
 	type OwnedItem,
 	type OwnedItemId,
+	ownedItemChangeSchema,
 	ownedItemInputSchema,
 } from "@/closet/owned-item";
 import type { Hex } from "@/colour/hex";
@@ -127,11 +129,13 @@ const samePiece = (userId: string, piece: Piece) =>
 	);
 
 // Why a write that the guards stopped did not happen, in the order a person
-// would fix it.
+// would fix it. `otherThan` is the item a change writes, which holds its own
+// piece and brand.
 async function refusedWrite(
 	db: Db,
 	userId: string,
 	piece: Piece,
+	fallback: OwnedItemError,
 	otherThan?: string,
 ): Promise<OwnedItemError> {
 	const [ownColour] = await colourOf(db, userId, piece.colourId);
@@ -147,9 +151,7 @@ async function refusedWrite(
 		.from(ownedItem)
 		.where(samePiece(userId, piece));
 	const held = holders.find((row) => row.id !== otherThan);
-	return held
-		? { code: "duplicate", id: held.id as OwnedItemId }
-		: { code: "owned_item_limit" };
+	return held ? { code: "duplicate", id: held.id as OwnedItemId } : fallback;
 }
 
 // The page makes the id when the form opens, so an add sent again after a
@@ -233,5 +235,85 @@ export async function addOwnedItem(
 		.from(ownedItem)
 		.where(eq(ownedItem.id, input.id));
 	if (taken) return conflict;
-	return { ok: false, error: await refusedWrite(db, userId, input) };
+	return {
+		ok: false,
+		error: await refusedWrite(db, userId, input, { code: "owned_item_limit" }),
+	};
+}
+
+// Only the brand and the quantity change; the piece stays. The brand and the
+// duplicate rule sit in the update itself, as in the add. The duplicate rule
+// holds only when the brand changes: a brand delete can leave two items of
+// one piece with no brand, and each must still take a new quantity.
+export async function changeOwnedItem(
+	db: Db,
+	userId: string,
+	id: string,
+	draft: unknown,
+): Promise<Result<OwnedItem, OwnedItemError>> {
+	const parsed = ownedItemChangeSchema.safeParse(draft);
+	if (!parsed.success)
+		return invalid(draft, parsed.error.issues[0]?.path ?? []);
+	const { brandId, quantity } = parsed.data;
+	const other = alias(ownedItem, "other");
+	const [row] = await db
+		.update(ownedItem)
+		.set({ brandId, quantity })
+		.where(
+			and(
+				eq(ownedItem.id, id),
+				eq(ownedItem.userId, userId),
+				brandId === null ? undefined : exists(brandOf(db, userId, brandId)),
+				sql`(${ownedItem.brandId} is ${brandId} or ${notExists(
+					db
+						.select({ one: sql`1` })
+						.from(other)
+						.where(
+							and(
+								eq(other.userId, userId),
+								eq(other.typeId, ownedItem.typeId),
+								eq(other.colourId, ownedItem.colourId),
+								sql`${other.brandId} is ${brandId}`,
+								ne(other.id, ownedItem.id),
+							),
+						),
+				)})`,
+			),
+		)
+		.returning({ id: ownedItem.id });
+	if (row) {
+		const [changed] = await readOwnedItems(db, userId, id);
+		if (changed) return { ok: true, value: changed };
+	}
+	const [held] = await db
+		.select({ typeId: ownedItem.typeId, colourId: ownedItem.colourId })
+		.from(ownedItem)
+		.where(and(eq(ownedItem.id, id), eq(ownedItem.userId, userId)));
+	if (!held) return { ok: false, error: { code: "not_found" } };
+	return {
+		ok: false,
+		error: await refusedWrite(
+			db,
+			userId,
+			{ ...held, brandId },
+			{ code: "conflict" },
+			id,
+		),
+	};
+}
+
+// Only the account's own item goes; not found when the account has no item
+// with this id.
+export async function deleteOwnedItem(
+	db: Db,
+	userId: string,
+	id: string,
+): Promise<Result<OwnedItemId, OwnedItemError>> {
+	const [row] = await db
+		.delete(ownedItem)
+		.where(and(eq(ownedItem.id, id), eq(ownedItem.userId, userId)))
+		.returning({ id: ownedItem.id });
+	return row
+		? { ok: true, value: row.id as OwnedItemId }
+		: { ok: false, error: { code: "not_found" } };
 }

@@ -58,6 +58,9 @@ const addBrand = async (h: Harness, headers: Headers, name: string) =>
 const post = (h: Harness, headers: Headers, body: unknown) =>
 	send(h, headers, "POST", "/api/owned-items", body);
 
+const put = (h: Harness, headers: Headers, id: string, body: unknown) =>
+	send(h, headers, "PUT", `/api/owned-items/${id}`, body);
+
 const list = async (h: Harness, headers: Headers) =>
 	(
 		(await (await send(h, headers, "GET", "/api/owned-items")).json()) as {
@@ -304,6 +307,156 @@ describe("POST /api/owned-items", () => {
 		expect(await answer(res)).toEqual({
 			status: 401,
 			body: { error: "unauthorized" },
+		});
+	});
+});
+
+describe("PUT and DELETE /api/owned-items/:id", () => {
+	test("changes an item's brand and quantity", async () => {
+		// Given: brand Zara; item A shirt_l, Navy, no brand, quantity 2
+		const { h, headers, ids } = await alice();
+		const zara = await addBrand(h, headers, "Zara");
+		await post(h, headers, shirt(ids));
+		// When
+		const res = await put(h, headers, FIRST_ID, { brandId: zara, quantity: 3 });
+		// Then
+		expect(await answer(res)).toEqual({
+			status: 200,
+			body: {
+				ownedItem: {
+					id: FIRST_ID,
+					typeId: "shirt_l",
+					colour: { id: ids.Navy, name: "Navy", hex: "#1F3A5F" },
+					brand: { id: zara, name: "Zara" },
+					quantity: 3,
+				},
+			},
+		});
+	});
+
+	test("keeps the piece when the change names a type", async () => {
+		// Given: item A shirt_l, Navy, no brand, quantity 2
+		const { h, headers, ids } = await alice();
+		await post(h, headers, shirt(ids));
+		// When
+		const res = await put(h, headers, FIRST_ID, {
+			typeId: "tee_s",
+			brandId: null,
+			quantity: 2,
+		});
+		// Then
+		const { status, body } = await answer(res);
+		expect({
+			status,
+			typeId: (body as { ownedItem: Listed }).ownedItem.typeId,
+		}).toEqual({
+			status: 200,
+			typeId: "shirt_l",
+		});
+	});
+
+	test("refuses a change to a brand another item of the piece has", async () => {
+		// Given: brand Zara; item A shirt_l Navy Zara; item B shirt_l Navy no brand
+		const { h, headers, ids } = await alice();
+		const zara = await addBrand(h, headers, "Zara");
+		await post(h, headers, { ...shirt(ids), brandId: zara });
+		await post(h, headers, { ...shirt(ids), id: SECOND_ID });
+		// When
+		const res = await put(h, headers, SECOND_ID, {
+			brandId: zara,
+			quantity: 1,
+		});
+		// Then
+		expect(await answer(res)).toEqual({
+			status: 409,
+			body: { error: "duplicate", id: FIRST_ID },
+		});
+	});
+
+	test("changes the quantity of one of two no-brand items of a piece", async () => {
+		// Given: brands Zara and COS; items A shirt_l Navy Zara and B shirt_l
+		// Navy COS; Zara and COS deleted, so A and B both have no brand
+		const { h, headers, ids } = await alice();
+		const zara = await addBrand(h, headers, "Zara");
+		const cos = await addBrand(h, headers, "COS");
+		await post(h, headers, { ...shirt(ids), brandId: zara });
+		await post(h, headers, { ...shirt(ids), id: SECOND_ID, brandId: cos });
+		await send(h, headers, "DELETE", `/api/brands/${zara}`);
+		await send(h, headers, "DELETE", `/api/brands/${cos}`);
+		// When
+		const res = await put(h, headers, FIRST_ID, { brandId: null, quantity: 5 });
+		// Then
+		const { status, body } = await answer(res);
+		expect({
+			status,
+			quantity: (body as { ownedItem: Listed }).ownedItem.quantity,
+		}).toEqual({
+			status: 200,
+			quantity: 5,
+		});
+	});
+
+	test("refuses a quantity of 100 on change", async () => {
+		// Given: item A shirt_l, Navy, no brand, quantity 2
+		const { h, headers, ids } = await alice();
+		await post(h, headers, shirt(ids));
+		// When
+		const res = await put(h, headers, FIRST_ID, {
+			brandId: null,
+			quantity: 100,
+		});
+		// Then
+		expect(await answer(res)).toEqual({
+			status: 400,
+			body: { error: "invalid", field: "quantity" },
+		});
+	});
+
+	test("answers not found for another account's item", async () => {
+		// Given: bob's item shirt_l, his Navy; alice signed in
+		const { h, headers } = await alice();
+		const bob = await h.addAccount(BOB);
+		const bobIds = await colourIds(h, bob);
+		await post(h, bob, shirt(bobIds));
+		// When
+		const changed = await put(h, headers, FIRST_ID, {
+			brandId: null,
+			quantity: 1,
+		});
+		const deleted = await send(
+			h,
+			headers,
+			"DELETE",
+			`/api/owned-items/${FIRST_ID}`,
+		);
+		// Then
+		expect({
+			put: await answer(changed),
+			delete: await answer(deleted),
+			bobCount: (await list(h, bob)).length,
+		}).toEqual({
+			put: { status: 404, body: { error: "not_found" } },
+			delete: { status: 404, body: { error: "not_found" } },
+			bobCount: 1,
+		});
+	});
+
+	test("deletes an item", async () => {
+		// Given: item A
+		const { h, headers, ids } = await alice();
+		await post(h, headers, shirt(ids));
+		// When
+		const res = await send(
+			h,
+			headers,
+			"DELETE",
+			`/api/owned-items/${FIRST_ID}`,
+		);
+		const listed = await send(h, headers, "GET", "/api/owned-items");
+		// Then
+		expect({ status: res.status, listed: await listed.json() }).toEqual({
+			status: 204,
+			listed: { ownedItems: [] },
 		});
 	});
 });
