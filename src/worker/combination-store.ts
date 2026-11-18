@@ -1,4 +1,14 @@
-import { and, asc, count, desc, eq, type SQL, sql } from "drizzle-orm";
+import {
+	and,
+	asc,
+	count,
+	desc,
+	eq,
+	exists,
+	inArray,
+	type SQL,
+	sql,
+} from "drizzle-orm";
 import type { Hex } from "@/colour/hex";
 import {
 	COMBINATION_LIMIT,
@@ -11,18 +21,22 @@ import {
 } from "@/combinations/combination";
 import { LAYER_OF, LAYERS } from "@/dress/garments";
 import type { ColourId } from "@/labels/colour";
+import type { TagId } from "@/tags/tag";
 import { listColours } from "./colour-store";
 import type { Db } from "./db";
 import { user } from "./db/auth-schema";
 import { colour } from "./db/colour-schema";
 import { combination, combinationPiece } from "./db/combination-schema";
+import { combinationTag, tag } from "./db/tag-schema";
 import type { Result } from "./result";
+import { listTags } from "./tag-store";
 
 // A combination as a website or an AI app sends it, before the rules ran.
 export type CombinationDraft = {
 	id: string;
 	pieces: { typeId: string; colourId: string }[];
 	open: boolean;
+	tags?: string[];
 };
 
 // A change to a saved combination: its pieces, whole. The id comes from the
@@ -47,7 +61,7 @@ async function readCombinations(
 	userId: string,
 	id?: string,
 ): Promise<Combination[]> {
-	const [rows, pieces] = await db.batch([
+	const [rows, pieces, tags] = await db.batch([
 		db
 			.select({ id: combination.id, open: combination.open })
 			.from(combination)
@@ -77,6 +91,22 @@ async function readCombinations(
 				),
 			)
 			.orderBy(asc(combinationPiece.combinationId)),
+		// In the order the tags were made, as the tag list has them, whatever
+		// order a save sent them in.
+		db
+			.select({
+				combinationId: combinationTag.combinationId,
+				tagId: combinationTag.tagId,
+			})
+			.from(combinationTag)
+			.innerJoin(tag, eq(tag.id, combinationTag.tagId))
+			.where(
+				and(
+					eq(combinationTag.userId, userId),
+					id === undefined ? undefined : eq(combinationTag.combinationId, id),
+				),
+			)
+			.orderBy(asc(tag.createdAt), asc(sql`${tag}.rowid`)),
 	]);
 	return rows.map((row) => ({
 		id: row.id as CombinationId,
@@ -89,6 +119,9 @@ async function readCombinations(
 				typeId: p.typeId,
 				colour: { id: p.colourId as ColourId, name: p.name, hex: p.hex as Hex },
 			})),
+		tags: tags
+			.filter((t) => t.combinationId === row.id)
+			.map((t) => t.tagId as TagId),
 	}));
 }
 
@@ -155,6 +188,49 @@ const pieceWrites = (
 			.onConflictDoNothing(),
 	);
 
+async function notYourTag(
+	db: Db,
+	userId: string,
+	tags: readonly string[],
+): Promise<CombinationProblem | null> {
+	const tagIds = new Set<string>((await listTags(db, userId)).map((t) => t.id));
+	const value = tags.find((id) => !tagIds.has(id));
+	return value === undefined
+		? null
+		: { code: "not_tag", path: ["tags"], value };
+}
+
+// One insert of the combination's tag links. It reads the tag table, so a
+// tag deleted after the check writes no link, and it writes only while the
+// combination is the account's (ours), so a combination not written gets
+// none.
+const tagLinks = (
+	db: Db,
+	userId: string,
+	id: string,
+	tags: readonly string[],
+	ours: SQL | undefined,
+) =>
+	db
+		.insert(combinationTag)
+		.select(
+			db
+				.select({
+					userId: tag.userId,
+					combinationId: sql<string>`${id}`.as("combination_id"),
+					tagId: tag.id,
+				})
+				.from(tag)
+				.where(
+					and(
+						eq(tag.userId, userId),
+						inArray(tag.id, [...new Set(tags)]),
+						exists(db.select({ one: sql`1` }).from(combination).where(ours)),
+					),
+				),
+		)
+		.onConflictDoNothing();
+
 // The page makes the id when the save form opens, so a Save sent again after
 // a lost answer gives back the same combination rather than a second one. An
 // id another account holds, or one saved with other pieces, is conflict. The
@@ -171,6 +247,8 @@ export async function saveCombination(
 	const input = checked.combination;
 	const notColour = await notYourColour(db, userId, input.pieces);
 	if (notColour) return { ok: false, error: notColour };
+	const notTag = await notYourTag(db, userId, input.tags);
+	if (notTag) return { ok: false, error: notTag };
 	const key = combinationKey(input.pieces, input.open);
 	const conflict = { ok: false, error: { code: "conflict" } } as const;
 	const [before] = await db
@@ -221,6 +299,9 @@ export async function saveCombination(
 				)
 				.onConflictDoNothing({ target: combination.id }),
 			...pieceWrites(db, input.pieces, ours),
+			...(input.tags.length
+				? [tagLinks(db, userId, input.id, input.tags, ours)]
+				: []),
 		]);
 	} catch (error) {
 		const taken = isKeyTaken(error) && (await keyHolder(db, userId, key));

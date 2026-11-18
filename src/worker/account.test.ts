@@ -80,6 +80,7 @@ async function fillAccount(
 			{ typeId: "tee_l", colourId: idOf("White") },
 		],
 		open: false,
+		tags: [tag.id],
 	};
 	expect(
 		(await sendJson(h, jar, "/api/combinations", combination)).status,
@@ -185,7 +186,7 @@ describe("DELETE /api/account", () => {
 			},
 		}).toEqual({
 			rows: bobBefore,
-			filled: 18,
+			filled: 19,
 			me: { status: 200, email: "bob@example.com" },
 		});
 	});

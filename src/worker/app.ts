@@ -165,12 +165,15 @@ const combinationBodySchema = z.object({
 	id: z.string(),
 	pieces: z.array(z.object({ typeId: z.string(), colourId: z.string() })),
 	open: z.boolean(),
+	tags: z.array(z.string()).optional(),
 });
 
 function combinationRefusal(error: CombinationError): Refusal {
 	switch (error.code) {
 		case "not_type":
 		case "not_colour":
+		case "not_tag":
+		case "too_many_tags":
 		case "pieces_count":
 		case "same_layer":
 		case "invalid":

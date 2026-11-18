@@ -7,7 +7,7 @@ import {
 	request,
 } from "../data/client";
 import { combinationAnswer, combinationsAnswer } from "../data/contract";
-import type { CombinationId, CombinationInput } from "./combination";
+import type { CombinationBody, CombinationId } from "./combination";
 
 export function useCombinations() {
 	const userId = cachedUserId();
@@ -28,7 +28,7 @@ export function useCombinations() {
 export function useSaveCombination() {
 	const userId = cachedUserId();
 	return useMutation({
-		mutationFn: async (combination: CombinationInput) =>
+		mutationFn: async (combination: CombinationBody) =>
 			(
 				await request("POST", "/api/combinations", {
 					body: combination,
@@ -65,7 +65,7 @@ export function useDeleteCombination() {
 export function useChangeCombination() {
 	const userId = cachedUserId();
 	return useMutation({
-		mutationFn: async (combination: CombinationInput) =>
+		mutationFn: async (combination: CombinationBody) =>
 			(
 				await request("PUT", `/api/combinations/${combination.id}`, {
 					body: combination,

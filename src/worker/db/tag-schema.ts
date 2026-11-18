@@ -8,6 +8,7 @@ import {
 	uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 import { user } from "./auth-schema";
+import { combination } from "./combination-schema";
 import { look } from "./look-schema";
 
 // The account's tags. The page checks names in any letter case; the index
@@ -49,5 +50,28 @@ export const lookTag = sqliteTable(
 	(table) => [
 		primaryKey({ columns: [table.lookId, table.tagId] }),
 		index("look_tag_userId_idx").on(table.userId),
+	],
+);
+
+// The tags on a combination. Every key cascades, so a tag delete takes the
+// tag off each combination, and a combination delete takes its links.
+export const combinationTag = sqliteTable(
+	"combination_tag",
+	{
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		combinationId: text("combination_id")
+			.notNull()
+			.references(() => combination.id, { onDelete: "cascade" }),
+		tagId: text("tag_id")
+			.notNull()
+			.references(() => tag.id, { onDelete: "cascade" }),
+	},
+	(table) => [
+		primaryKey({ columns: [table.combinationId, table.tagId] }),
+		index("combination_tag_userId_idx").on(table.userId),
+		// The tag list counts each tag's combinations by this key.
+		index("combination_tag_tagId_idx").on(table.tagId),
 	],
 );
