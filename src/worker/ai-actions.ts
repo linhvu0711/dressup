@@ -16,15 +16,18 @@ import {
 	dressChangeSchema,
 	MANNEQUIN_PARTS,
 } from "@/dress/state";
+import { BRAND_LIMIT, BRAND_NAME_MAX } from "@/labels/brand";
 import { COLOUR_LIMIT, COLOUR_NAME_MAX } from "@/labels/colour";
 import { LOOK_LIMIT, LOOK_NAME_MAX, type Look } from "@/looks/look";
 import { TAG_NAME_MAX, type Tag } from "@/tags/tag";
 import { countAiAction } from "./ai-action-store";
 import {
+	brandRefusalText,
 	colourRefusalText,
 	dressRefusalText,
 	issueText,
 	lookRefusalText,
+	noBrands,
 	noColours,
 	noLooks,
 	noTags,
@@ -33,6 +36,7 @@ import {
 	tagsLeftOffText,
 	tooManyActions,
 } from "./ai-messages";
+import { addBrand, deleteBrand, listBrands, renameBrand } from "./brand-store";
 import {
 	addColour,
 	changeColour,
@@ -495,6 +499,77 @@ export function registerAiActions(server: McpServer, account: Account) {
 			return deleted.ok
 				? answer({ deleted: deleted.value.id })
 				: refusal(colourRefusalText(deleted.error));
+		},
+	);
+
+	const brandRules = `A name has 1 to ${BRAND_NAME_MAX} characters, and each name is used once in any letter case. An account has at most ${BRAND_LIMIT} brands.`;
+
+	tool(
+		"list_brands",
+		{
+			title: "List the brands",
+			description: "The account's brands, A to Z. A new account has none.",
+			annotations: READ,
+			inputSchema: noArgs,
+		},
+		async () => {
+			const brands = await listBrands(db, userId);
+			return brands.length === 0
+				? answer({ brands }, noBrands)
+				: answer({ brands });
+		},
+	);
+
+	tool(
+		"add_brand",
+		{
+			title: "Add a brand",
+			description: `Adds a brand. ${brandRules}`,
+			annotations: WRITE,
+			inputSchema: z.object({
+				name: z.string().describe("The brand's name."),
+			}),
+		},
+		async ({ name }) => {
+			const added = await addBrand(db, userId, name);
+			return added.ok
+				? answer({ brand: added.value })
+				: refusal(brandRefusalText(added.error));
+		},
+	);
+
+	tool(
+		"rename_brand",
+		{
+			title: "Rename a brand",
+			description: `Renames a brand. ${brandRules}`,
+			annotations: WRITE,
+			inputSchema: z.object({
+				id: z.string().describe("The brand's id."),
+				name: z.string().describe("The brand's new name."),
+			}),
+		},
+		async ({ id, name }) => {
+			const renamed = await renameBrand(db, userId, id, name);
+			return renamed.ok
+				? answer({ brand: renamed.value })
+				: refusal(brandRefusalText(renamed.error));
+		},
+	);
+
+	tool(
+		"delete_brand",
+		{
+			title: "Delete a brand",
+			description: "Deletes a brand for good.",
+			annotations: DELETE,
+			inputSchema: z.object({ id: z.string().describe("The brand's id.") }),
+		},
+		async ({ id }) => {
+			const deleted = await deleteBrand(db, userId, id);
+			return deleted.ok
+				? answer({ deleted: deleted.value.id })
+				: refusal(brandRefusalText(deleted.error));
 		},
 	);
 }
