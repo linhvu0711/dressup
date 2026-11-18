@@ -80,6 +80,7 @@ import {
 import {
 	addPicture,
 	deleteDraft,
+	deleteWithPictures,
 	type PictureError,
 	readPicture,
 } from "./picture-store";
@@ -390,10 +391,18 @@ export function createApp(getDb: (env: Env) => Db) {
 	});
 
 	app.delete("/account", withAuth, requireUser, async (c) => {
-		// One statement: the sessions, the Google link, and every app row go
-		// with the user row through their foreign keys, all or nothing. Better
-		// Auth's own delete wants a session under a day old or an email (#12).
-		await getDb(c.env).delete(user).where(eq(user.id, c.var.user.id));
+		// One batch: the sessions, the Google link, and every app row go with
+		// the user row through their foreign keys, all or nothing. The picture
+		// store deletes the pictures' rows first in the same batch, so their
+		// objects and the stored bytes go too. Better Auth's own delete wants a
+		// session under a day old or an email (#12).
+		const db = getDb(c.env);
+		await deleteWithPictures(
+			db,
+			c.env.PICTURES,
+			{ userId: c.var.user.id },
+			db.delete(user).where(eq(user.id, c.var.user.id)),
+		);
 		// Sign-out also clears the 5-minute cookie cache, which would keep the
 		// deleted account on screen.
 		const { headers } = await c.var.auth.api.signOut({
@@ -589,6 +598,7 @@ export function createApp(getDb: (env: Env) => Db) {
 	app.delete("/owned-items/:id", withAuth, requireUser, async (c) => {
 		const deleted = await deleteOwnedItem(
 			getDb(c.env),
+			c.env.PICTURES,
 			c.var.user.id,
 			c.req.param("id"),
 		);

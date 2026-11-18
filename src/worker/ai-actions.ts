@@ -852,7 +852,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 			}),
 		},
 		async ({ id }) => {
-			const deleted = await deleteOwnedItem(db, userId, id);
+			const deleted = await deleteOwnedItem(db, pictures, userId, id);
 			return deleted.ok
 				? answer({ deleted: deleted.value })
 				: refusal(ownedItemRefusalText(deleted.error));

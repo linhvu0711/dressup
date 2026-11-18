@@ -478,3 +478,62 @@ describe("drafts", () => {
 		expect(h.pictures.keys()).toEqual([old, fresh].sort());
 	});
 });
+
+describe("deletes and the stored bytes", () => {
+	test("keeps the stored bytes equal to the pictures' bytes", async () => {
+		// Given: three uploads of 100 bytes; a and b on an item, c a draft
+		const { h, headers } = await withAccount();
+		const a = await uploadedId(h, headers);
+		const b = await uploadedId(h, headers);
+		const c = await uploadedId(h, headers);
+		const item = await addItem(h, headers, [a, b]);
+		const steps: { stored: number; rows: number }[] = [];
+		const record = async () =>
+			steps.push({
+				stored: await h.storedBytes(),
+				rows: (await h.rows(picture)).reduce((sum, row) => sum + row.bytes, 0),
+			});
+		// When
+		await h.app.request(
+			`/api/owned-items/${item}`,
+			{
+				method: "PUT",
+				headers: {
+					...Object.fromEntries(headers),
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({ brandId: null, quantity: 1, pictureIds: [a] }),
+			},
+			h.env,
+		);
+		await record();
+		await send(h, headers, "DELETE", `/api/pictures/${c}`);
+		await record();
+		await send(h, headers, "DELETE", `/api/owned-items/${item}`);
+		await record();
+		// Then
+		expect(steps).toEqual([
+			{ stored: 200, rows: 200 },
+			{ stored: 100, rows: 100 },
+			{ stored: 0, rows: 0 },
+		]);
+	});
+
+	test("leaves no object when the account goes during an upload", async () => {
+		// Given: the account is deleted while the upload puts its object
+		const { h, headers } = await withAccount();
+		const bucket = h.pictures;
+		bucket.beforePut = async () => {
+			bucket.beforePut = undefined;
+			await send(h, headers, "DELETE", "/api/account");
+		};
+		// When
+		const refused = await answer(await upload(h, headers));
+		// Then
+		expect({ ...refused, keys: h.pictures.keys() }).toEqual({
+			status: 404,
+			body: { error: "not_found" },
+			keys: [],
+		});
+	});
+});

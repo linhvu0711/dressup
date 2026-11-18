@@ -6,12 +6,15 @@ export class MemoryBucket {
 		{ bytes: Uint8Array; contentType: string }
 	>();
 	failPuts = false;
+	// Runs at the start of a put, so a test can act while an upload is under way.
+	beforePut?: () => Promise<void>;
 
 	async put(
 		key: string,
 		value: ArrayBuffer,
 		options?: { httpMetadata?: { contentType?: string } },
 	) {
+		await this.beforePut?.();
 		if (this.failPuts) throw new Error("bucket refused the put");
 		this.objects.set(key, {
 			bytes: new Uint8Array(value.slice(0)),

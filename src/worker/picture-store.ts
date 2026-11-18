@@ -244,6 +244,15 @@ export async function addPicture(
 		await db.batch(dropPictures(db, eq(picture.id, id)));
 		throw error;
 	}
+	// An account delete during the put took the row; the object must go too.
+	const [kept] = await db
+		.select({ id: picture.id })
+		.from(picture)
+		.where(eq(picture.id, id));
+	if (!kept) {
+		await removeObjects(bucket, [id]);
+		return { ok: false, error: { code: "not_found" } };
+	}
 	return { ok: true, value: { id } };
 }
 
@@ -391,4 +400,28 @@ export async function saveWithPictures<T extends Statement>(
 		),
 	});
 	return { ok: true, value: before[0] as Awaited<T> };
+}
+
+// The owner's delete with its pictures in one batch: the pictures' rows go
+// first, so the owner's foreign key finds none and the stored bytes and the
+// objects follow every picture. It gives back the owner delete's result.
+export async function deleteWithPictures<T extends Statement>(
+	db: Db,
+	bucket: R2Bucket,
+	scope: { userId: string; ownedItemId?: string },
+	ownerDelete: T,
+): Promise<Awaited<T>> {
+	const { after } = await runWithPictures(db, bucket, {
+		drop: dropPictures(
+			db,
+			and(
+				eq(picture.userId, scope.userId),
+				scope.ownedItemId === undefined
+					? undefined
+					: eq(picture.ownedItemId, scope.ownedItemId),
+			),
+		),
+		after: [ownerDelete],
+	});
+	return after[0] as Awaited<T>;
 }

@@ -19,6 +19,7 @@ import { brand } from "./db/brand-schema";
 import { colour } from "./db/colour-schema";
 import { ownedItem } from "./db/owned-item-schema";
 import {
+	deleteWithPictures,
 	type PictureListError,
 	pictureIdsByItem,
 	saveWithPictures,
@@ -375,13 +376,19 @@ export async function changeOwnedItem(
 // with this id.
 export async function deleteOwnedItem(
 	db: Db,
+	bucket: R2Bucket,
 	userId: string,
 	id: string,
 ): Promise<Result<OwnedItemId, OwnedItemError>> {
-	const [row] = await db
-		.delete(ownedItem)
-		.where(and(eq(ownedItem.id, id), eq(ownedItem.userId, userId)))
-		.returning({ id: ownedItem.id });
+	const [row] = await deleteWithPictures(
+		db,
+		bucket,
+		{ userId, ownedItemId: id },
+		db
+			.delete(ownedItem)
+			.where(and(eq(ownedItem.id, id), eq(ownedItem.userId, userId)))
+			.returning({ id: ownedItem.id }),
+	);
 	return row
 		? { ok: true, value: row.id as OwnedItemId }
 		: { ok: false, error: { code: "not_found" } };

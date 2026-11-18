@@ -843,7 +843,7 @@ describe("picture lists at once", () => {
 		const batch = db.batch;
 		const otherTabFirst: typeof batch = async (items) => {
 			db.batch = batch;
-			await deleteOwnedItem(db, "alice-id", FIRST_ID);
+			await deleteOwnedItem(db, bucket(h), "alice-id", FIRST_ID);
 			return batch(items);
 		};
 		db.batch = otherTabFirst;
@@ -859,5 +859,27 @@ describe("picture lists at once", () => {
 			changed: { ok: false, error: { code: "not_found" } },
 			owner: null,
 		});
+	});
+});
+
+describe("deletes with pictures", () => {
+	test("deletes an item with its pictures, from the bucket too", async () => {
+		// Given
+		const { h, headers, ids } = await alice();
+		const [a, b, d] = await uploads(h, headers, 3);
+		await post(h, headers, { ...shirt(ids), pictureIds: [a, b] });
+		// When
+		const deleted = await send(
+			h,
+			headers,
+			"DELETE",
+			`/api/owned-items/${FIRST_ID}`,
+		);
+		// Then
+		expect({
+			status: deleted.status,
+			keys: h.pictures.keys(),
+			rows: (await h.rows(picture)).map((row) => row.id),
+		}).toEqual({ status: 204, keys: [d], rows: [d] });
 	});
 });
