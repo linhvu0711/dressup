@@ -62,6 +62,7 @@ export function PrivacyPage() {
 						<li>Your last outfit.</li>
 						<li>Your looks and their tags.</li>
 						<li>Your combinations.</li>
+						<li>Your closet.</li>
 						<li>Your mannequin's skin and hair colour.</li>
 					</ul>
 				</Section>
