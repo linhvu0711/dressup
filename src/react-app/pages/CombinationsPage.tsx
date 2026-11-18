@@ -1,14 +1,24 @@
 import { cn } from "cn";
 import { Plus } from "lucide-react";
 import { type ReactNode, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useCombinations } from "@/combinations/api";
 import { CombinationCard } from "@/combinations/CombinationCard";
+import { CombinationFilterSheet } from "@/combinations/CombinationFilterSheet";
 import { CombinationsFailed } from "@/combinations/CombinationsFailed";
 import { CombinationView } from "@/combinations/CombinationView";
 import type { Combination } from "@/combinations/combination";
 import { DeleteCombinationDialog } from "@/combinations/DeleteCombinationDialog";
+import {
+	type CombinationFilter,
+	filterCombinations,
+	filterSize,
+	readCombinationFilter,
+	shownText,
+	writeCombinationFilter,
+} from "@/combinations/filter";
 import { Button } from "@/components/ui/button";
+import { FilterButton } from "@/components/ui/filter";
 import { Notice } from "@/components/ui/notice";
 import { useDressState } from "@/dress/DressState";
 import { OutfitFailed } from "@/dress/OutfitFailed";
@@ -27,6 +37,27 @@ export function CombinationsPage() {
 	const { combinationId } = useParams();
 	const combinations = useCombinations();
 	const dress = useDressState();
+	const [params, setParams] = useSearchParams();
+	const navigate = useNavigate();
+	const filter = readCombinationFilter(params);
+	const visible = combinations.data
+		? filterCombinations(combinations.data, filter)
+		: [];
+	const [filtering, setFiltering] = useState(false);
+	// Each pick replaces the address, so Back leaves the page, not one pick. A
+	// filter that hides the open combination closes it, as a look's chip does.
+	function setFilter(next: CombinationFilter) {
+		const search = writeCombinationFilter(next).toString();
+		const hidden =
+			combinationId !== undefined &&
+			combinations.data !== undefined &&
+			!filterCombinations(combinations.data, next).some(
+				(c) => c.id === combinationId,
+			);
+		if (hidden)
+			navigate({ pathname: "/combinations", search }, { replace: true });
+		else setParams(search, { replace: true });
+	}
 	const shown = combinations.data?.find((c) => c.id === combinationId);
 	const open = shown !== undefined;
 	// The confirm lives here, not in the view: the view goes when the list
@@ -73,7 +104,7 @@ export function CombinationsPage() {
 	} else {
 		wall = (
 			<div data-slot="combination-wall" className={WALL}>
-				{combinations.data.map((combination) => (
+				{visible.map((combination) => (
 					<CombinationCard
 						key={combination.id}
 						combination={combination}
@@ -100,15 +131,23 @@ export function CombinationsPage() {
 				<PageHeader
 					title="Combinations"
 					end={
-						<Button asChild variant="primary" size="icon">
-							<Link
-								to="/build"
-								aria-label="New combination"
-								title="New combination"
-							>
-								<Plus size={18} strokeWidth={1.9} aria-hidden />
-							</Link>
-						</Button>
+						<div className="flex items-center gap-3">
+							{combinations.data?.length ? (
+								<FilterButton
+									count={filterSize(filter)}
+									onClick={() => setFiltering(true)}
+								/>
+							) : null}
+							<Button asChild variant="primary" size="icon">
+								<Link
+									to="/build"
+									aria-label="New combination"
+									title="New combination"
+								>
+									<Plus size={18} strokeWidth={1.9} aria-hidden />
+								</Link>
+							</Button>
+						</div>
 					}
 				/>
 				{wall}
@@ -124,6 +163,14 @@ export function CombinationsPage() {
 						onDelete={() => setDeleting(shown)}
 					/>
 				</aside>
+			) : null}
+			{filtering ? (
+				<CombinationFilterSheet
+					filter={filter}
+					onChange={setFilter}
+					shown={shownText(visible.length)}
+					onClose={() => setFiltering(false)}
+				/>
 			) : null}
 			{deleting ? (
 				<DeleteCombinationDialog
