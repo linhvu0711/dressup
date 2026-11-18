@@ -2151,6 +2151,102 @@ describe("owned items", () => {
 			text: "No owned item with this id.",
 		});
 	});
+
+	// A COS brand and, oldest first: a Navy sweater from COS, a Navy long tee
+	// with no brand, a White long tee from COS.
+	async function filterCloset(ai: Session) {
+		const brand = await ai.call("add_brand", { name: "COS" });
+		const cosId = (brand.data as { brand: { id: string } }).brand.id;
+		const { data } = await ai.call("list_colours");
+		const colours = (data as { colours: Colour[] }).colours;
+		const navy = colours.find((c) => c.name === "Navy")?.id;
+		const white = colours.find((c) => c.name === "White")?.id;
+		const add = (typeId: string, colourId: unknown, brandId: string | null) =>
+			ai.call("add_owned_item", { typeId, colourId, brandId, quantity: 1 });
+		await add("sweater", navy, cosId);
+		await add("tee_l", navy, null);
+		await add("tee_l", white, cosId);
+		return navy;
+	}
+
+	const pieces = (data: unknown) =>
+		(data as { ownedItems: Listed[] }).ownedItems.map((i) => [
+			i.typeId,
+			i.colour.name,
+		]);
+
+	test("lists only the owned items that fit every filter given", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		const navy = await filterCloset(ai);
+		// When
+		const { data } = await ai.call("list_owned_items", {
+			types: ["sweater", "tee_l"],
+			colourIds: [navy],
+		});
+		// Then
+		expect(pieces(data)).toEqual([
+			["tee_l", "Navy"],
+			["sweater", "Navy"],
+		]);
+	});
+
+	test("lists the owned items with no brand for a null brand id", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		await filterCloset(ai);
+		// When
+		const { data } = await ai.call("list_owned_items", { brandIds: [null] });
+		// Then
+		expect(pieces(data)).toEqual([["tee_l", "Navy"]]);
+	});
+
+	test("refuses a type that is not one in a filter", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		const navy = await filterCloset(ai);
+		// When
+		const { isError, text } = await ai.call("list_owned_items", {
+			types: ["sweater", "cape"],
+			colourIds: [navy],
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "cape is not a type. list_types names the types.",
+		});
+	});
+
+	test("refuses a colour that is not the account's in a filter", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		await filterCloset(ai);
+		// When
+		const { isError, text } = await ai.call("list_owned_items", {
+			types: ["sweater", "tee_l"],
+			colourIds: ["nope"],
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "nope is not one of your colours. list_colours names them.",
+		});
+	});
+
+	test("says no owned item matches the filter", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		await filterCloset(ai);
+		// When
+		const { isError, text } = await ai.call("list_owned_items", {
+			types: ["wool"],
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: false,
+			text: "No owned item matches the filter.",
+		});
+	});
 });
 
 describe("wishes", () => {
@@ -2341,6 +2437,68 @@ describe("wishes", () => {
 		expect({ isError, text }).toEqual({
 			isError: true,
 			text: "A combination, an owned item, or a wish uses Navy, so it stays. A colour in use cannot be deleted.",
+		});
+	});
+
+	// A COS brand, and three wishes, oldest first: a Navy sweater with a COS
+	// link, a Navy long tee with a link of no brand, Navy chino pants with no
+	// link.
+	async function filterWishes(ai: Session) {
+		const brand = await ai.call("add_brand", { name: "COS" });
+		const cosId = (brand.data as { brand: { id: string } }).brand.id;
+		const navy = await colourId(ai, "Navy");
+		const wishOf = async (typeId: string) => {
+			const added = await ai.call("add_wish", { typeId, colourId: navy });
+			return (added.data as { wish: Listed }).wish.id;
+		};
+		const link = (wishId: string, brandId: string | null) => ({
+			wishId,
+			url: "https://shop.example/a",
+			brandId,
+			name: "A piece",
+		});
+		await ai.call("add_shop_link", link(await wishOf("sweater"), cosId));
+		await ai.call("add_shop_link", link(await wishOf("tee_l"), null));
+		await wishOf("chino_p");
+		return cosId;
+	}
+
+	test("lists the wishes with a shop link of a picked brand", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		const cosId = await filterWishes(ai);
+		// When
+		const { data } = await ai.call("list_wishes", { brandIds: [cosId] });
+		// Then
+		expect((data as { wishes: Listed[] }).wishes.map((w) => w.typeId)).toEqual([
+			"sweater",
+		]);
+	});
+
+	test("lists the wishes with a shop link with no brand for a null brand id", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		await filterWishes(ai);
+		// When
+		const { data } = await ai.call("list_wishes", { brandIds: [null] });
+		// Then
+		expect((data as { wishes: Listed[] }).wishes.map((w) => w.typeId)).toEqual([
+			"tee_l",
+		]);
+	});
+
+	test("refuses a brand that is not the account's in a wish filter", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		await filterWishes(ai);
+		// When
+		const { isError, text } = await ai.call("list_wishes", {
+			brandIds: ["nope"],
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "nope is not one of your brands. list_brands names them.",
 		});
 	});
 });

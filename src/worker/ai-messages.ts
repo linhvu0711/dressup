@@ -123,9 +123,9 @@ export function combinationRefusalText(error: CombinationError): string {
 		case "same_layer":
 			return `${GARMENT_NAMES[error.other]} and ${GARMENT_NAMES[error.typeId]} are both in the ${LAYER_NAMES[error.layer].toLowerCase()} layer. A combination has at most one piece for each layer.`;
 		case "not_type":
-			return `${error.value} is not a type. list_types names the types.`;
+			return notAType(error.value);
 		case "not_colour":
-			return `${error.value} is not one of your colours. list_colours names them.`;
+			return notYourColour(error.value);
 		case "not_tag":
 			return `${error.value} is not one of your tags. list_tags names them.`;
 		case "too_many_tags":
@@ -151,11 +151,11 @@ function ownedItemFieldText(
 		case "quantity":
 			return `Quantity is a whole number from 1 to ${QUANTITY_MAX}.`;
 		case "typeId":
-			return `${error.value} is not a type. list_types names the types.`;
+			return notAType(error.value);
 		case "colourId":
-			return `${error.value} is not one of your colours. list_colours names them.`;
+			return notYourColour(error.value);
 		case "brandId":
-			return `${error.value} is not one of your brands. list_brands names them.`;
+			return notYourBrand(error.value);
 		case "id":
 		case "pictureIds":
 		case "body":
@@ -191,11 +191,11 @@ function wishFieldText(error: Extract<WishError, { code: "invalid" }>): string {
 		case "price":
 			return `Price is a whole number of VND from 1 to ${new Intl.NumberFormat("vi-VN").format(PRICE_MAX)}.`;
 		case "typeId":
-			return `${error.value} is not a type. list_types names the types.`;
+			return notAType(error.value);
 		case "colourId":
-			return `${error.value} is not one of your colours. list_colours names them.`;
+			return notYourColour(error.value);
 		case "brandId":
-			return `${error.value} is not one of your brands. list_brands names them.`;
+			return notYourBrand(error.value);
 		case "id":
 		case "body":
 			return serverError;
@@ -250,9 +250,22 @@ export const noCombinationsMatch = "No combination matches these filters.";
 
 export const noBrands = "You have no brands yet.";
 
+export const notAType = (value: unknown) =>
+	`${value} is not a type. list_types names the types.`;
+
+export const notYourColour = (value: unknown) =>
+	`${value} is not one of your colours. list_colours names them.`;
+
+export const notYourBrand = (value: unknown) =>
+	`${value} is not one of your brands. list_brands names them.`;
+
 export const noOwnedItems = "Nothing in your closet yet.";
 
+export const noOwnedItemMatch = "No owned item matches the filter.";
+
 export const noWishes = "Nothing on your wishlist yet.";
+
+export const noWishMatch = "No wish matches the filter.";
 
 export const lookLimit = (): string =>
 	`You have ${LOOK_LIMIT} looks, the limit. Delete one first.`;

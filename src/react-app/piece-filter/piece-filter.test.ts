@@ -39,14 +39,14 @@ const item = (
 	typeId: GarmentId,
 	colourId: ColourId,
 	brand: BrandId | null,
-) =>
-	({
-		id: id as OwnedItemId,
-		typeId,
-		colour: colour(colourId),
-		brand: brand === null ? null : { id: brand, name: brand },
-		quantity: 1,
-	}) as OwnedItem;
+): OwnedItem => ({
+	id: id as OwnedItemId,
+	typeId,
+	colour: colour(colourId),
+	brand: brand === null ? null : { id: brand, name: brand },
+	quantity: 1,
+	pictureIds: [],
+});
 
 const link = (brand: BrandId | null): ShopLink => ({
 	id: crypto.randomUUID() as ShopLinkId,

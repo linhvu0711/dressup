@@ -28,9 +28,17 @@ import {
 	dressChangeSchema,
 	MANNEQUIN_PARTS,
 } from "@/dress/state";
-import { BRAND_LIMIT, BRAND_NAME_MAX } from "@/labels/brand";
-import { COLOUR_LIMIT, COLOUR_NAME_MAX } from "@/labels/colour";
+import { BRAND_LIMIT, BRAND_NAME_MAX, type BrandId } from "@/labels/brand";
+import { COLOUR_LIMIT, COLOUR_NAME_MAX, type ColourId } from "@/labels/colour";
 import { LOOK_LIMIT, LOOK_NAME_MAX, type Look } from "@/looks/look";
+import {
+	filterSize,
+	matchesPieceFilter,
+	NO_FILTER,
+	ownedItemPiece,
+	type PieceFilter,
+	wishPiece,
+} from "@/piece-filter/piece-filter";
 import { TAG_NAME_MAX, type Tag } from "@/tags/tag";
 import { SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";
 import { countAiAction } from "./ai-action-store";
@@ -46,9 +54,14 @@ import {
 	noCombinations,
 	noCombinationsMatch,
 	noLooks,
+	noOwnedItemMatch,
 	noOwnedItems,
 	noTags,
+	notAType,
+	notYourBrand,
+	notYourColour,
 	noWishes,
+	noWishMatch,
 	ownedItemRefusalText,
 	serverError,
 	tagRefusalText,
@@ -182,6 +195,20 @@ const field = {
 		.describe(`The open jackets of the mode: ${JACKET_IDS.join(" or ")}.`),
 	lookName: z.string().describe(`At most ${LOOK_NAME_MAX} characters.`),
 	tags: z.array(z.string()).describe("Tag ids."),
+	types: z
+		.array(z.string())
+		.optional()
+		.describe("Type ids from list_types. A piece of any of them matches."),
+	colourIds: z
+		.array(z.string())
+		.optional()
+		.describe("Colour ids from list_colours. A piece in any of them matches."),
+	brandIds: z
+		.array(z.string().nullable())
+		.optional()
+		.describe(
+			"Brand ids from list_brands, and null for no brand. Any of them matches.",
+		),
 	pieces: z.array(
 		z.object({
 			typeId: z.string().describe("A type id from list_types, such as tee_l."),
@@ -189,6 +216,17 @@ const field = {
 		}),
 	),
 };
+
+// Loose strings on purpose, as the add tools: a type or an id that is not one
+// must reach filterOf to get a sentence.
+const pieceFilterArgs = z.object({
+	types: field.types,
+	colourIds: field.colourIds,
+	brandIds: field.brandIds,
+});
+
+const filterRule =
+	"Filters are optional. Inside one filter any pick matches; an item must fit every filter given.";
 
 export function registerAiActions(server: McpServer, account: Account) {
 	const { db, pictures, userId } = account;
@@ -207,6 +245,39 @@ export function registerAiActions(server: McpServer, account: Account) {
 				? json
 				: `${tagsLeftOffText(tagsLeftOff)}\n${json}`,
 		);
+	}
+
+	// An unknown value is refused, not left out: a list from a wrong id would
+	// read as a true answer.
+	async function filterOf(
+		args: z.output<typeof pieceFilterArgs>,
+	): Promise<{ ok: true; filter: PieceFilter } | { ok: false; text: string }> {
+		const { types = [], colourIds = [], brandIds = [] } = args;
+		const badType = types.find(
+			(t) => !(GARMENT_IDS as readonly string[]).includes(t),
+		);
+		if (badType !== undefined) return { ok: false, text: notAType(badType) };
+		if (colourIds.length > 0) {
+			const colours = await listColours(db, userId);
+			const bad = colourIds.find((id) => !colours.some((c) => c.id === id));
+			if (bad !== undefined) return { ok: false, text: notYourColour(bad) };
+		}
+		if (brandIds.some((id) => id !== null)) {
+			const brands = await listBrands(db, userId);
+			const bad = brandIds.find(
+				(id) => id !== null && !brands.some((b) => b.id === id),
+			);
+			if (bad) return { ok: false, text: notYourBrand(bad) };
+		}
+		return {
+			ok: true,
+			filter: {
+				...NO_FILTER,
+				types: types as PieceFilter["types"],
+				colours: colourIds as ColourId[],
+				brands: brandIds as (BrandId | null)[],
+			},
+		};
 	}
 
 	function tool<S extends z.ZodObject>(
@@ -800,15 +871,22 @@ export function registerAiActions(server: McpServer, account: Account) {
 		"list_owned_items",
 		{
 			title: "List the closet",
-			description: `The account's owned items, newest first. An owned item is one brand of one piece (a type in a colour) with a quantity of 1 to ${QUANTITY_MAX}. An account holds at most ${OWNED_ITEM_LIMIT}. Each item has pictureCount, the number of its pictures. AI apps cannot add or read pictures.`,
+			description: `The account's owned items, newest first. An owned item is one brand of one piece (a type in a colour) with a quantity of 1 to ${QUANTITY_MAX}. An account holds at most ${OWNED_ITEM_LIMIT}. Each item has pictureCount, the number of its pictures. AI apps cannot add or read pictures. ${filterRule}`,
 			annotations: READ,
-			inputSchema: noArgs,
+			inputSchema: pieceFilterArgs,
 		},
-		async () => {
-			const ownedItems = await listOwnedItems(db, userId);
-			return ownedItems.length === 0
-				? answer({ ownedItems }, noOwnedItems)
-				: answer({ ownedItems: ownedItems.map(ownedItemView) });
+		async (args) => {
+			const picked = await filterOf(args);
+			if (!picked.ok) return refusal(picked.text);
+			const ownedItems = (await listOwnedItems(db, userId)).filter((item) =>
+				matchesPieceFilter(picked.filter, ownedItemPiece(item)),
+			);
+			if (ownedItems.length > 0)
+				return answer({ ownedItems: ownedItems.map(ownedItemView) });
+			return answer(
+				{ ownedItems },
+				filterSize(picked.filter) > 0 ? noOwnedItemMatch : noOwnedItems,
+			);
 		},
 	);
 
@@ -901,15 +979,21 @@ export function registerAiActions(server: McpServer, account: Account) {
 		"list_wishes",
 		{
 			title: "List the wishlist",
-			description: `The account's wishes, newest first, each with its shop links. A wish is one piece (a type in a colour) the account wants to buy. An account holds at most ${WISH_LIMIT} wishes, and a wish at most ${SHOP_LINK_LIMIT} shop links.`,
+			description: `The account's wishes, newest first, each with its shop links. A wish is one piece (a type in a colour) the account wants to buy. An account holds at most ${WISH_LIMIT} wishes, and a wish at most ${SHOP_LINK_LIMIT} shop links. ${filterRule} The brand of a wish is the brand of any of its shop links, so a wish with no link fits no brand filter.`,
 			annotations: READ,
-			inputSchema: noArgs,
+			inputSchema: pieceFilterArgs,
 		},
-		async () => {
-			const wishes = await listWishes(db, userId);
-			return wishes.length === 0
-				? answer({ wishes }, noWishes)
-				: answer({ wishes });
+		async (args) => {
+			const picked = await filterOf(args);
+			if (!picked.ok) return refusal(picked.text);
+			const wishes = (await listWishes(db, userId)).filter((wish) =>
+				matchesPieceFilter(picked.filter, wishPiece(wish)),
+			);
+			if (wishes.length > 0) return answer({ wishes });
+			return answer(
+				{ wishes },
+				filterSize(picked.filter) > 0 ? noWishMatch : noWishes,
+			);
 		},
 	);
 
