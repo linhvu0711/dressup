@@ -111,33 +111,11 @@ export function PieceFilterSheet({
 				</div>
 				<div className="flex flex-col gap-2">
 					<span className={LABEL}>Brand</span>
-					<ToggleGroup.Root
-						type="multiple"
-						aria-label="Brand"
-						value={filter.brands.map((b) => b ?? "none")}
-						onValueChange={(values) =>
-							onChange({
-								...filter,
-								brands: values.map((v) =>
-									v === "none" ? null : (v as BrandId),
-								),
-							})
-						}
-						className="flex flex-wrap gap-[7px]"
-					>
-						{(brands.data ?? []).map((brand) => (
-							<ToggleGroup.Item
-								key={brand.id}
-								value={brand.id}
-								className={CHIP}
-							>
-								{brand.name}
-							</ToggleGroup.Item>
-						))}
-						<ToggleGroup.Item value="none" className={CHIP}>
-							No brand
-						</ToggleGroup.Item>
-					</ToggleGroup.Root>
+					<BrandChips
+						brands={brands}
+						picks={filter.brands}
+						onPicksChange={(picks) => onChange({ ...filter, brands: picks })}
+					/>
 				</div>
 				<div className="mt-0.5 flex gap-2">
 					<Button className="flex-1" onClick={() => onChange(NO_FILTER)}>
@@ -178,5 +156,61 @@ export function PieceFilterSheet({
 				</div>
 			) : null}
 		</FormSheet>
+	);
+}
+
+// The account's brands as chips, with "No brand" last; grey chips while
+// they load and a Retry when they could not, so a failed load never looks
+// like an account with no brands.
+function BrandChips({
+	brands,
+	picks,
+	onPicksChange,
+}: {
+	brands: ReturnType<typeof useBrands>;
+	picks: (BrandId | null)[];
+	onPicksChange: (picks: (BrandId | null)[]) => void;
+}) {
+	if (brands.isPending)
+		return (
+			<div className="flex flex-wrap gap-[7px]">
+				{Array.from({ length: 3 }, (_, i) => (
+					<span
+						// biome-ignore lint/suspicious/noArrayIndexKey: the chips are all alike and never move.
+						key={i}
+						data-slot="brand-skeleton"
+						className="h-8 w-20 rounded-full bg-muted animate-placeholder motion-reduce:animate-none"
+					/>
+				))}
+			</div>
+		);
+	if (brands.isError)
+		return (
+			<div className="flex items-center gap-3">
+				<p role="alert" className="text-[13px] text-destructive">
+					Could not load your brands
+				</p>
+				<Button onClick={() => void brands.refetch()}>Retry</Button>
+			</div>
+		);
+	return (
+		<ToggleGroup.Root
+			type="multiple"
+			aria-label="Brand"
+			value={picks.map((b) => b ?? "none")}
+			onValueChange={(values) =>
+				onPicksChange(values.map((v) => (v === "none" ? null : (v as BrandId))))
+			}
+			className="flex flex-wrap gap-[7px]"
+		>
+			{brands.data.map((brand) => (
+				<ToggleGroup.Item key={brand.id} value={brand.id} className={CHIP}>
+					{brand.name}
+				</ToggleGroup.Item>
+			))}
+			<ToggleGroup.Item value="none" className={CHIP}>
+				No brand
+			</ToggleGroup.Item>
+		</ToggleGroup.Root>
 	);
 }

@@ -341,3 +341,50 @@ test("keeps the closet filter after a piece and Back, and not on the wishlist", 
 		wishlistTiles: await wishTiles(page).count(),
 	}).toEqual({ closet: ["Sweaters"], wishlistChips: 0, wishlistTiles: 1 });
 });
+
+test("shows Could not load your brands in the Filter sheet and loads them on Retry", async ({
+	page,
+}) => {
+	// Given: both projects, a Navy sweater from COS; each GET /api/brands
+	// answered 500 until Retry
+	const cos = await postBrand(page, "COS");
+	await seedCloset(page, [["sweater", "Navy", cos]]);
+	let failing = true;
+	await page.route("**/api/brands", (route) => {
+		if (!failing || route.request().method() !== "GET") return route.continue();
+		return route.fulfill({ status: 500 });
+	});
+	await page.goto("/closet");
+	// When
+	await openFilter(page);
+	const alert = sheet(page).getByRole("alert");
+	await expect(alert).toBeVisible();
+	const failed = await alert.textContent();
+	failing = false;
+	await sheet(page).getByRole("button", { name: "Retry" }).click();
+	await expect(group(page, "Brand")).toBeVisible();
+	// Then
+	expect({
+		failed,
+		brand: await group(page, "Brand").getByRole("button").allTextContents(),
+	}).toEqual({
+		failed: "Could not load your brands",
+		brand: ["COS", "No brand"],
+	});
+});
+
+test("keeps the filter of an empty closet in sight", async ({ page }) => {
+	// Given: both projects, a fresh account with an empty closet, its address
+	// filtered by Sweaters
+	await page.goto("/closet?layer=sweater");
+	await expect(
+		page.getByRole("heading", { name: "Nothing in your closet yet" }),
+	).toBeVisible();
+	// When
+	const shown = {
+		chips: await chips(page).allTextContents(),
+		count: await page.locator('[data-slot="filter-count"]').textContent(),
+	};
+	// Then
+	expect(shown).toEqual({ chips: ["Sweaters"], count: "1" });
+});
