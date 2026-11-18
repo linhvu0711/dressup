@@ -27,6 +27,7 @@ import { BRAND_LIMIT, BRAND_NAME_MAX } from "@/labels/brand";
 import { COLOUR_LIMIT, COLOUR_NAME_MAX } from "@/labels/colour";
 import { LOOK_LIMIT, LOOK_NAME_MAX, type Look } from "@/looks/look";
 import { TAG_NAME_MAX, type Tag } from "@/tags/tag";
+import { SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";
 import { countAiAction } from "./ai-action-store";
 import {
 	brandRefusalText,
@@ -41,11 +42,13 @@ import {
 	noLooks,
 	noOwnedItems,
 	noTags,
+	noWishes,
 	ownedItemRefusalText,
 	serverError,
 	tagRefusalText,
 	tagsLeftOffText,
 	tooManyActions,
+	wishRefusalText,
 } from "./ai-messages";
 import { addBrand, deleteBrand, listBrands, renameBrand } from "./brand-store";
 import {
@@ -70,6 +73,14 @@ import {
 	listOwnedItems,
 } from "./owned-item-store";
 import { addTag, deleteTag, listTags, renameTag } from "./tag-store";
+import {
+	addShopLink,
+	addWish,
+	changeShopLink,
+	deleteShopLink,
+	deleteWish,
+	listWishes,
+} from "./wish-store";
 
 type Account = { db: Db; userId: string };
 
@@ -823,6 +834,147 @@ export function registerAiActions(server: McpServer, account: Account) {
 			return deleted.ok
 				? answer({ deleted: deleted.value })
 				: refusal(ownedItemRefusalText(deleted.error));
+		},
+	);
+
+	tool(
+		"list_wishes",
+		{
+			title: "List the wishlist",
+			description: `The account's wishes, newest first, each with its shop links. A wish is one piece (a type in a colour) the account wants to buy. An account holds at most ${WISH_LIMIT} wishes, and a wish at most ${SHOP_LINK_LIMIT} shop links.`,
+			annotations: READ,
+			inputSchema: noArgs,
+		},
+		async () => {
+			const wishes = await listWishes(db, userId);
+			return wishes.length === 0
+				? answer({ wishes }, noWishes)
+				: answer({ wishes });
+		},
+	);
+
+	tool(
+		"add_wish",
+		{
+			title: "Add to the wishlist",
+			description: `Adds a wish for one piece. The account has each piece once on the wishlist, and at most ${WISH_LIMIT} wishes.`,
+			annotations: WRITE,
+			inputSchema: z.object({
+				typeId: z.string().describe("A type id from list_types, such as wool."),
+				colourId: z.string().describe("A colour id from list_colours."),
+			}),
+		},
+		async ({ typeId, colourId }) => {
+			// The server makes the id, as add_owned_item does.
+			const added = await addWish(db, userId, {
+				id: crypto.randomUUID(),
+				typeId,
+				colourId,
+			});
+			return added.ok
+				? answer({ wish: added.value.wish })
+				: refusal(wishRefusalText(added.error, "wish"));
+		},
+	);
+
+	tool(
+		"delete_wish",
+		{
+			title: "Remove a wish",
+			description: "Removes a wish and its shop links for good.",
+			annotations: DELETE,
+			inputSchema: z.object({ id: z.string().describe("The wish's id.") }),
+		},
+		async ({ id }) => {
+			const deleted = await deleteWish(db, userId, id);
+			return deleted.ok
+				? answer({ deleted: deleted.value })
+				: refusal(wishRefusalText(deleted.error, "wish"));
+		},
+	);
+
+	// Loose types on purpose, as add_owned_item: a bad price must reach the
+	// store to get a sentence.
+	const shopLinkFields = {
+		url: z.string().describe("The shop's web address, starting with https://."),
+		brandId: z
+			.string()
+			.nullable()
+			.optional()
+			.describe("A brand id from list_brands. Leave it out for no brand."),
+		name: z.string().describe("The shop's name for the piece."),
+		price: z
+			.number()
+			.nullable()
+			.optional()
+			.describe("The price in whole VND. Leave it out for no price."),
+	};
+
+	tool(
+		"add_shop_link",
+		{
+			title: "Add a shop link",
+			description: `Adds a shop that sells the piece of a wish, with its brand, name, and price in VND. A wish holds at most ${SHOP_LINK_LIMIT} shop links. Answers the whole wish.`,
+			annotations: WRITE,
+			inputSchema: z.object({
+				wishId: z.string().describe("The wish's id."),
+				...shopLinkFields,
+			}),
+		},
+		async ({ wishId, url, brandId = null, name, price = null }) => {
+			const added = await addShopLink(db, userId, wishId, {
+				id: crypto.randomUUID(),
+				url,
+				brandId,
+				name,
+				price,
+			});
+			return added.ok
+				? answer({ wish: added.value.wish })
+				: refusal(wishRefusalText(added.error, "wish"));
+		},
+	);
+
+	tool(
+		"change_shop_link",
+		{
+			title: "Change a shop link",
+			description:
+				"Writes the whole shop link: its address, brand, name, and price. Answers the whole wish.",
+			annotations: WRITE,
+			inputSchema: z.object({
+				id: z.string().describe("The shop link's id."),
+				...shopLinkFields,
+			}),
+		},
+		async ({ id, url, brandId = null, name, price = null }) => {
+			const changed = await changeShopLink(db, userId, id, {
+				url,
+				brandId,
+				name,
+				price,
+			});
+			return changed.ok
+				? answer({ wish: changed.value })
+				: refusal(wishRefusalText(changed.error, "shop link"));
+		},
+	);
+
+	tool(
+		"delete_shop_link",
+		{
+			title: "Delete a shop link",
+			description: "Deletes a shop link from its wish for good.",
+			annotations: DELETE,
+			inputSchema: z.object({
+				id: z.string().describe("The shop link's id."),
+			}),
+		},
+		async ({ id }) => {
+			const deleted = await deleteShopLink(db, userId, id);
+			return deleted.ok
+				? answer({ deleted: deleted.value })
+				: refusal(wishRefusalText(deleted.error, "shop link"));
 		},
 	);
 }

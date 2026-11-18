@@ -13,12 +13,14 @@ import { BRAND_LIMIT, BRAND_NAME_MAX } from "@/labels/brand";
 import { COLOUR_LIMIT, COLOUR_NAME_MAX } from "@/labels/colour";
 import { LOOK_LIMIT, LOOK_NAME_MAX, LOOK_TAGS_MAX } from "@/looks/look";
 import { TAG_NAME_MAX } from "@/tags/tag";
+import { PRICE_MAX, SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";
 import type { BrandError } from "./brand-store";
 import type { ColourError } from "./colour-store";
 import type { CombinationError } from "./combination-store";
 import type { LookError } from "./look-store";
 import type { OwnedItemError } from "./owned-item-store";
 import type { TagError } from "./tag-store";
+import type { WishError } from "./wish-store";
 
 // Every refusal an AI app gets names the value it sent and what is allowed,
 // so the AI app can fix its call and try again.
@@ -93,7 +95,7 @@ export function colourRefusalText(error: ColourError): string {
 		case "not_found":
 			return noColour;
 		case "colour_in_use":
-			return `A combination or an owned item uses ${error.name}, so it stays. A colour in use cannot be deleted.`;
+			return `A combination, an owned item, or a wish uses ${error.name}, so it stays. A colour in use cannot be deleted.`;
 	}
 }
 
@@ -167,6 +169,50 @@ export function ownedItemRefusalText(error: OwnedItemError): string {
 	}
 }
 
+// The sentence for one bad field of a wish or a shop link, with the value
+// sent.
+function wishFieldText(error: Extract<WishError, { code: "invalid" }>): string {
+	switch (error.field) {
+		case "url":
+			return "Enter a web address that starts with https://.";
+		case "name":
+			return "Enter a name.";
+		case "price":
+			return `Price is a whole number of VND from 1 to ${new Intl.NumberFormat("vi-VN").format(PRICE_MAX)}.`;
+		case "typeId":
+			return `${error.value} is not a type. list_types names the types.`;
+		case "colourId":
+			return `${error.value} is not one of your colours. list_colours names them.`;
+		case "brandId":
+			return `${error.value} is not one of your brands. list_brands names them.`;
+		case "id":
+		case "body":
+			return serverError;
+	}
+}
+
+// One tool acts on a wish or on a shop link; `subject` says which an id that
+// is not found names.
+export function wishRefusalText(
+	error: WishError,
+	subject: "wish" | "shop link",
+): string {
+	switch (error.code) {
+		case "invalid":
+			return wishFieldText(error);
+		case "duplicate":
+			return "You have this wish already.";
+		case "wish_limit":
+			return `You have ${WISH_LIMIT} wishes. That is the limit. Delete one to add a new one.`;
+		case "shop_link_limit":
+			return `${SHOP_LINK_LIMIT} shop links is the limit for one wish.`;
+		case "not_found":
+			return `No ${subject} with this id.`;
+		case "conflict":
+			return serverError;
+	}
+}
+
 export const serverError = "dressup could not do this. Try again.";
 
 export const tooManyActions = "Too many actions. Wait a minute and try again.";
@@ -192,6 +238,8 @@ export const noCombinations = "You have no combinations yet.";
 export const noBrands = "You have no brands yet.";
 
 export const noOwnedItems = "Nothing in your closet yet.";
+
+export const noWishes = "Nothing on your wishlist yet.";
 
 export const lookLimit = (): string =>
 	`You have ${LOOK_LIMIT} looks, the limit. Delete one first.`;
