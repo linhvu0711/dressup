@@ -150,3 +150,33 @@ export async function addColour(
 		throw error;
 	}
 }
+
+// Changes only a colour the account has. A name the account's other colours
+// hold is refused, so a change of letter case alone is taken.
+export async function changeColour(
+	db: Db,
+	userId: string,
+	id: string,
+	input: ColourInput,
+): Promise<Result<Colour, ColourError>> {
+	const checked = check(input);
+	if (!checked.ok) return checked;
+	const { name, hex } = checked;
+	const duplicate = { ok: false, error: { code: "duplicate", name } } as const;
+	const colours = await listColours(db, userId);
+	if (colours.some((c) => c.id !== id && sameColourName(c.name, name)))
+		return duplicate;
+	try {
+		const [row] = await db
+			.update(colour)
+			.set({ name, hex })
+			.where(and(eq(colour.id, id), eq(colour.userId, userId)))
+			.returning({ id: colour.id, name: colour.name, hex: colour.hex });
+		return row
+			? { ok: true, value: toColour(row) }
+			: { ok: false, error: { code: "not_found" } };
+	} catch (error) {
+		if (isNameTaken(error)) return duplicate;
+		throw error;
+	}
+}

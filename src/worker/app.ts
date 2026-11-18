@@ -16,6 +16,7 @@ import type {
 	TagsAnswer,
 } from "@/data/contract";
 import { type DressError, dressChangeSchema } from "@/dress/state";
+import { colourIdSchema } from "@/labels/colour";
 import { tagIdSchema } from "@/tags/tag";
 import { disconnectAiApp, listAiApps } from "./ai-app-store";
 import {
@@ -25,7 +26,12 @@ import {
 	createAuthCache,
 	createClientDiscovery,
 } from "./auth";
-import { addColour, type ColourError, listColours } from "./colour-store";
+import {
+	addColour,
+	type ColourError,
+	changeColour,
+	listColours,
+} from "./colour-store";
 import type { Db } from "./db";
 import { user } from "./db/auth-schema";
 import { changeDress, loadDress } from "./dress-store";
@@ -324,6 +330,27 @@ export function createApp(getDb: (env: Env) => Db) {
 			return c.json(body, status);
 		}
 		return c.json({ colour: added.value } satisfies ColourAnswer, 201);
+	});
+
+	// A gone colour and another account's colour answer the same 404, as tags do.
+	app.put("/colours/:id", withAuth, requireUser, async (c) => {
+		const body = await readBody(
+			c,
+			z.object({ id: colourIdSchema, name: z.string(), hex: z.string() }),
+		);
+		if ("refused" in body) return body.refused;
+		if (body.data.id !== c.req.param("id"))
+			return c.json(
+				{ error: "invalid", field: "id" } satisfies ErrorAnswer,
+				400,
+			);
+		const { id, ...input } = body.data;
+		const changed = await changeColour(getDb(c.env), c.var.user.id, id, input);
+		if (!changed.ok) {
+			const { status, body } = colourRefusal(changed.error);
+			return c.json(body, status);
+		}
+		return c.json({ colour: changed.value } satisfies ColourAnswer, 200);
 	});
 
 	app.get("/ai-apps", withAuth, requireUser, async (c) =>

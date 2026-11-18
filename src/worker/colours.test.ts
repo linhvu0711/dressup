@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { addColour, listColours } from "./colour-store";
 import { schema } from "./db";
-import { type Harness, makeHarness, withAccount } from "./test/harness";
+import { BOB, type Harness, makeHarness, withAccount } from "./test/harness";
 
 type Colour = { id: string; name: string; hex: string };
 
@@ -264,6 +264,105 @@ describe("two writes at the same time", () => {
 			oks: [false, true],
 			refused: [{ code: "colour_limit" }],
 			count: 100,
+		});
+	});
+});
+
+// alice with the starter set and "Teal" added; the id is Teal's.
+async function aliceWithTeal() {
+	const { h, headers } = await aliceWith(0);
+	const res = await postColour(h, headers, TEAL);
+	const { colour } = (await res.json()) as { colour: Colour };
+	return { h, headers, id: colour.id };
+}
+
+const putColour = (
+	h: Harness,
+	headers: Headers,
+	id: string,
+	body: { name: string; hex: string },
+) => send(h, headers, "PUT", `/api/colours/${id}`, { id, ...body });
+
+describe("PUT /api/colours/:id", () => {
+	test("changes a colour's name and code", async () => {
+		// Given: alice with "Teal" #2A7F7F
+		const { h, headers, id } = await aliceWithTeal();
+		// When
+		const res = await putColour(h, headers, id, {
+			name: "Sea",
+			hex: "#2A6F7F",
+		});
+		const last = (await coloursOf(h, headers)).at(-1);
+		// Then
+		expect({ status: res.status, body: await res.json(), last }).toEqual({
+			status: 200,
+			body: { colour: { id, name: "Sea", hex: "#2A6F7F" } },
+			last: { id, name: "Sea", hex: "#2A6F7F" },
+		});
+	});
+
+	test("changes the case of a colour's own name", async () => {
+		// Given: alice with "Teal" #2A7F7F
+		const { h, headers, id } = await aliceWithTeal();
+		// When
+		const res = await putColour(h, headers, id, {
+			name: "TEAL",
+			hex: "#2A7F7F",
+		});
+		// Then
+		expect({ status: res.status, body: await res.json() }).toEqual({
+			status: 200,
+			body: { colour: { id, name: "TEAL", hex: "#2A7F7F" } },
+		});
+	});
+
+	test("refuses to change a colour to a name another colour has", async () => {
+		// Given: alice with "Teal" #2A7F7F
+		const { h, headers, id } = await aliceWithTeal();
+		// When
+		const res = await putColour(h, headers, id, {
+			name: "navy",
+			hex: "#2A7F7F",
+		});
+		// Then
+		expect({ status: res.status, body: await res.json() }).toEqual({
+			status: 409,
+			body: { error: "duplicate", field: "name" },
+		});
+	});
+
+	test("refuses to change another account's colour", async () => {
+		// Given: alice with "Teal"; bob signed in
+		const { h, headers, id } = await aliceWithTeal();
+		const bob = await h.addAccount(BOB);
+		// When
+		const res = await putColour(h, bob, id, { name: "Sea", hex: "#2A6F7F" });
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			alice: (await coloursOf(h, headers)).at(-1),
+		}).toEqual({
+			status: 404,
+			body: { error: "not_found" },
+			alice: { id, name: "Teal", hex: "#2A7F7F" },
+		});
+	});
+
+	test("answers duplicate when another tab takes the new name first", async () => {
+		// Given: alice with "Teal"; another tab stores "sea" between this
+		// change's check and its write
+		const { h, headers, id } = await aliceWithTeal();
+		otherTabWrites(h, "UPDATE", "Sea");
+		// When
+		const res = await putColour(h, headers, id, {
+			name: "Sea",
+			hex: "#2A6F7F",
+		});
+		// Then
+		expect({ status: res.status, body: await res.json() }).toEqual({
+			status: 409,
+			body: { error: "duplicate", field: "name" },
 		});
 	});
 });
