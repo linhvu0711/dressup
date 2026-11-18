@@ -1,6 +1,6 @@
 import { cn } from "cn";
 import { Dialog } from "radix-ui";
-import { type PointerEvent, useRef, useState } from "react";
+import { type PointerEvent, type Ref, useRef, useState } from "react";
 import {
 	type Hex,
 	hexToHsv,
@@ -39,6 +39,115 @@ const KNOB =
 
 const EDGE = "shadow-[inset_0_0_0_1px_rgba(110,106,98,.35)]";
 
+// The area, the hue bar, and the code box, for any sheet that needs a
+// colour. It keeps the red-hint rule; the sheet gets each code, or null while
+// the text is not one.
+export function ColourField({
+	start,
+	onChange,
+	onEnter,
+	ref,
+}: {
+	start: Hex;
+	onChange: (hex: Hex | null) => void;
+	onEnter: (hex: Hex) => void;
+	ref?: Ref<HTMLInputElement>;
+}) {
+	const [[h, s, v], setHsv] = useState(() => hexToHsv(start));
+	const [text, setText] = useState<string>(start);
+	const [tried, setTried] = useState(false);
+	const { hex, bad } = readHexInput(text, tried);
+
+	const fromHsv = (nh: number, ns: number, nv: number) => {
+		const next = hsvToHex(nh, ns, nv);
+		setHsv([nh, ns, nv]);
+		setText(next);
+		setTried(false);
+		onChange(next);
+	};
+
+	const fromText = (value: string) => {
+		setText(value);
+		setTried(false);
+		const next = parseHex(value);
+		if (next) setHsv(hexToHsv(next));
+		onChange(next);
+	};
+
+	return (
+		<>
+			<div
+				data-slot="colour-area"
+				{...dragHandlers((x, y) => fromHsv(h, x, 1 - y))}
+				className={cn(
+					"relative h-[156px] flex-none cursor-crosshair touch-none rounded-[14px]",
+					EDGE,
+				)}
+				style={{
+					background: `linear-gradient(to top,#000,rgba(0,0,0,0)),linear-gradient(to right,#fff,hsl(${h} 100% 50%))`,
+				}}
+			>
+				<span
+					className={KNOB}
+					style={{ left: `${s * 100}%`, top: `${(1 - v) * 100}%` }}
+				/>
+			</div>
+			<div
+				data-slot="hue"
+				{...dragHandlers((x) => fromHsv(x * 360, s, v))}
+				className={cn(
+					"relative h-3.5 flex-none cursor-pointer touch-none rounded-full bg-[linear-gradient(to_right,#f00,#ff0_17%,#0f0_33%,#0ff_50%,#00f_67%,#f0f_83%,#f00)]",
+					EDGE,
+				)}
+			>
+				<span
+					className={cn(KNOB, "top-1/2")}
+					style={{ left: `${(h / 360) * 100}%` }}
+				/>
+			</div>
+			<div>
+				<div className="flex items-center gap-2.5">
+					<span
+						className={cn("size-10 flex-none rounded-xl", EDGE)}
+						style={{ background: hex ?? hsvToHex(h, s, v) }}
+					/>
+					<input
+						ref={ref}
+						value={text}
+						onChange={(e) => fromText(e.target.value)}
+						onKeyDown={(e) => {
+							if (e.key === "Enter") {
+								e.preventDefault();
+								if (hex) onEnter(hex);
+								else setTried(true);
+							}
+						}}
+						maxLength={9}
+						spellCheck={false}
+						autoComplete="off"
+						aria-label="Colour code"
+						aria-invalid={bad}
+						className={cn(
+							"h-[42px] min-w-0 flex-1 rounded-[10px] border border-input bg-card px-3 font-mono text-[14px] uppercase outline-none focus-visible:border-ring",
+							bad && "border-destructive focus-visible:border-destructive",
+						)}
+					/>
+				</div>
+				<p
+					className={cn(
+						"mt-1.5 text-muted-foreground text-xs",
+						bad && "text-destructive",
+					)}
+				>
+					{bad
+						? "This is not a colour code. Use 6 letters or numbers, like #1F3A5F."
+						: "A code like #1F3A5F."}
+				</p>
+			</div>
+		</>
+	);
+}
+
 // The colour picker. It knows no garment, so skin and hair (#14) can use it
 // too.
 export function ColourPicker({
@@ -56,34 +165,8 @@ export function ColourPicker({
 	onDone: (hex: Hex) => void;
 	onCancel: () => void;
 }) {
-	const [[h, s, v], setHsv] = useState(() => hexToHsv(start));
-	const [text, setText] = useState<string>(start);
-	const [tried, setTried] = useState(false);
+	const [hex, setHex] = useState<Hex | null>(start);
 	const box = useRef<HTMLInputElement>(null);
-	const { hex, bad } = readHexInput(text, tried);
-
-	const fromHsv = (nh: number, ns: number, nv: number) => {
-		const next = hsvToHex(nh, ns, nv);
-		setHsv([nh, ns, nv]);
-		setText(next);
-		setTried(false);
-		onLive(next);
-	};
-
-	const fromText = (value: string) => {
-		setText(value);
-		setTried(false);
-		const next = parseHex(value);
-		if (next) {
-			setHsv(hexToHsv(next));
-			onLive(next);
-		}
-	};
-
-	const done = () => {
-		if (hex) onDone(hex);
-		else setTried(true);
-	};
 
 	return (
 		<Dialog.Root open onOpenChange={(open) => open || onCancel()}>
@@ -103,76 +186,22 @@ export function ColourPicker({
 					<Dialog.Title className="text-[22px] leading-tight">
 						{title}
 					</Dialog.Title>
-					<div
-						data-slot="colour-area"
-						{...dragHandlers((x, y) => fromHsv(h, x, 1 - y))}
-						className={cn(
-							"relative h-[156px] flex-none cursor-crosshair touch-none rounded-[14px]",
-							EDGE,
-						)}
-						style={{
-							background: `linear-gradient(to top,#000,rgba(0,0,0,0)),linear-gradient(to right,#fff,hsl(${h} 100% 50%))`,
+					<ColourField
+						ref={box}
+						start={start}
+						onChange={(next) => {
+							setHex(next);
+							if (next) onLive(next);
 						}}
-					>
-						<span
-							className={KNOB}
-							style={{ left: `${s * 100}%`, top: `${(1 - v) * 100}%` }}
-						/>
-					</div>
-					<div
-						data-slot="hue"
-						{...dragHandlers((x) => fromHsv(x * 360, s, v))}
-						className={cn(
-							"relative h-3.5 flex-none cursor-pointer touch-none rounded-full bg-[linear-gradient(to_right,#f00,#ff0_17%,#0f0_33%,#0ff_50%,#00f_67%,#f0f_83%,#f00)]",
-							EDGE,
-						)}
-					>
-						<span
-							className={cn(KNOB, "top-1/2")}
-							style={{ left: `${(h / 360) * 100}%` }}
-						/>
-					</div>
-					<div>
-						<div className="flex items-center gap-2.5">
-							<span
-								className={cn("size-10 flex-none rounded-xl", EDGE)}
-								style={{ background: hex ?? hsvToHex(h, s, v) }}
-							/>
-							<input
-								ref={box}
-								value={text}
-								onChange={(e) => fromText(e.target.value)}
-								onKeyDown={(e) => {
-									if (e.key === "Enter") {
-										e.preventDefault();
-										done();
-									}
-								}}
-								maxLength={9}
-								spellCheck={false}
-								autoComplete="off"
-								aria-label="Colour code"
-								aria-invalid={bad}
-								className={cn(
-									"h-[42px] min-w-0 flex-1 rounded-[10px] border border-input bg-card px-3 font-mono text-[14px] uppercase outline-none focus-visible:border-ring",
-									bad && "border-destructive focus-visible:border-destructive",
-								)}
-							/>
-						</div>
-						<p
-							className={cn(
-								"mt-1.5 text-muted-foreground text-xs",
-								bad && "text-destructive",
-							)}
-						>
-							{bad
-								? "This is not a colour code. Use 6 letters or numbers, like #1F3A5F."
-								: "A code like #1F3A5F."}
-						</p>
-					</div>
+						onEnter={onDone}
+					/>
 					<div className="mt-0.5 flex flex-wrap justify-end gap-2 [&>button]:flex-1 wide:[&>button]:flex-none">
 						<Button onClick={onCancel}>Cancel</Button>
-						<Button variant="primary" disabled={!hex} onClick={done}>
+						<Button
+							variant="primary"
+							disabled={!hex}
+							onClick={() => hex && onDone(hex)}
+						>
 							{action}
 						</Button>
 					</div>
