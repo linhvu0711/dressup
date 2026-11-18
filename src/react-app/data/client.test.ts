@@ -8,7 +8,7 @@ import {
 	SignedOut,
 	signedOut,
 } from "./client";
-import { looksAnswer } from "./contract";
+import { looksAnswer, pictureAnswer } from "./contract";
 
 afterEach(() => queryClient.clear());
 
@@ -82,4 +82,34 @@ test("takes a delete answered not found as done", () => {
 	const seen = { notFound: outcome(notFound), failed: outcome(failed) };
 	// Then
 	expect(seen).toEqual({ notFound: "done", failed: "thrown" });
+});
+
+test("sends a Blob body with its own type", async () => {
+	// Given: the server answers the upload with its id
+	const seen: { type: string | null; bytes: number }[] = [];
+	globalThis.fetch = (async (_path: string, init: RequestInit) => {
+		seen.push({
+			type: new Headers(init.headers).get("content-type"),
+			bytes: (init.body as Blob).size,
+		});
+		return new Response(
+			JSON.stringify({
+				picture: { id: "5b1f2c3d-0000-4000-8000-000000000000" },
+			}),
+			{ status: 201 },
+		);
+	}) as unknown as typeof globalThis.fetch;
+	const blob = new Blob([new Uint8Array([255, 216, 255])], {
+		type: "image/jpeg",
+	});
+	// When
+	const answered = await request("POST", "/api/pictures", {
+		body: blob,
+		answer: pictureAnswer,
+	});
+	// Then
+	expect({ seen, answered: answered as unknown }).toEqual({
+		seen: [{ type: "image/jpeg", bytes: 3 }],
+		answered: { picture: { id: "5b1f2c3d-0000-4000-8000-000000000000" } },
+	});
 });
