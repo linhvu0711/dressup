@@ -9,6 +9,7 @@ import {
 } from "@/combinations/combination";
 import { LAYER_OF, LAYERS } from "@/dress/garments";
 import type { ColourId } from "@/labels/colour";
+import { listColours } from "./colour-store";
 import type { Db } from "./db";
 import { user } from "./db/auth-schema";
 import { colour } from "./db/colour-schema";
@@ -91,6 +92,19 @@ export async function saveCombination(
 	const checked = checkCombination(draft);
 	if (!checked.ok) return { ok: false, error: checked.problem };
 	const input = checked.combination;
+	const colourIds = new Set<string>(
+		(await listColours(db, userId)).map((c) => c.id),
+	);
+	const notColour = input.pieces.findIndex((p) => !colourIds.has(p.colourId));
+	if (notColour !== -1)
+		return {
+			ok: false,
+			error: {
+				code: "not_colour",
+				path: ["pieces", notColour, "colourId"],
+				value: input.pieces[notColour].colourId,
+			},
+		};
 	const key = combinationKey(input.pieces, input.open);
 	const conflict = { ok: false, error: { code: "conflict" } } as const;
 	const [before] = await db

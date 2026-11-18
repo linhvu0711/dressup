@@ -4,6 +4,7 @@ import {
 	type GarmentId,
 	LAYER_OF,
 	LAYERS,
+	type Layer,
 } from "@/dress/garments";
 import { colourSchema } from "@/labels/colour";
 
@@ -16,13 +17,36 @@ export type CombinationId = z.infer<typeof combinationIdSchema>;
 
 // The one shape of a combination as a website or an AI app sends it, so the
 // server's check and the page's parse are the same.
-export const combinationInputSchema = z.object({
-	id: combinationIdSchema,
-	pieces: z.array(
-		z.object({ typeId: z.enum(GARMENT_IDS), colourId: z.string() }),
-	),
-	open: z.boolean(),
-});
+export const combinationInputSchema = z
+	.object({
+		id: combinationIdSchema,
+		pieces: z
+			.array(z.object({ typeId: z.enum(GARMENT_IDS), colourId: z.string() }))
+			.min(2)
+			.max(4),
+		open: z.boolean(),
+	})
+	.superRefine((combination, ctx) => {
+		const seen = new Map<Layer, GarmentId>();
+		for (const [i, { typeId }] of combination.pieces.entries()) {
+			const layer = LAYER_OF[typeId];
+			const other = seen.get(layer);
+			if (other) {
+				ctx.addIssue({
+					code: "custom",
+					path: ["pieces", i, "typeId"],
+					message: "a second piece in the layer",
+					params: { typeId, other, layer } satisfies SameLayer,
+				});
+				return;
+			}
+			seen.set(layer, typeId);
+		}
+	});
+
+// zod types params as Record<string, any>, so the layer rule writes its
+// params to this shape and checkCombination reads them back.
+type SameLayer = { typeId: GarmentId; other: GarmentId; layer: Layer };
 
 export type CombinationInput = z.infer<typeof combinationInputSchema>;
 
@@ -43,7 +67,9 @@ export type Combination = z.infer<typeof combinationSchema>;
 // What a combination's own rules refuse, so the website and the AI apps each
 // turn one code into their answer. path is the zod path of the refused value.
 export type CombinationProblem =
-	| { code: "not_type"; path: PropertyKey[]; value: unknown }
+	| { code: "not_type" | "not_colour"; path: PropertyKey[]; value: unknown }
+	| { code: "pieces_count"; path: PropertyKey[] }
+	| ({ code: "same_layer"; path: PropertyKey[] } & SameLayer)
 	| {
 			code: "invalid";
 			path: PropertyKey[];
@@ -83,6 +109,17 @@ export function checkCombination(
 	}
 	const issue = parsed.error.issues[0];
 	const path = [...issue.path];
+	if (issue.code === "custom")
+		return {
+			ok: false,
+			problem: { code: "same_layer", path, ...(issue.params as SameLayer) },
+		};
+	if (
+		(issue.code === "too_small" || issue.code === "too_big") &&
+		path.length === 1 &&
+		path[0] === "pieces"
+	)
+		return { ok: false, problem: { code: "pieces_count", path } };
 	if (issue.code === "invalid_value" && path[path.length - 1] === "typeId")
 		return {
 			ok: false,

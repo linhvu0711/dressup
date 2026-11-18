@@ -200,6 +200,80 @@ describe("POST /api/combinations", () => {
 	});
 });
 
+describe("combination rules", () => {
+	const refusal = async (h: Harness, headers: Headers, body: unknown) => {
+		const res = await post(h, headers, body);
+		return { status: res.status, body: await res.json() };
+	};
+
+	test("refuses one piece", async () => {
+		// Given: alice, THREE with only its casual_p piece
+		const { h, headers, ids } = await alice();
+		const body = { ...three(ids), pieces: [three(ids).pieces[2]] };
+		// When
+		const refused = await refusal(h, headers, body);
+		// Then
+		expect({ ...refused, listed: await list(h, headers) }).toEqual({
+			status: 400,
+			body: { error: "invalid", field: "pieces" },
+			listed: [],
+		});
+	});
+
+	test("refuses five pieces", async () => {
+		// Given: alice, THREE plus a Navy sweater and Black chino shorts
+		const { h, headers, ids } = await alice();
+		const body = three(ids);
+		body.pieces.push(
+			{ typeId: "sweater", colourId: ids.Navy },
+			{ typeId: "chino_sh", colourId: ids.Black },
+		);
+		// When
+		const refused = await refusal(h, headers, body);
+		// Then
+		expect(refused).toEqual({
+			status: 400,
+			body: { error: "invalid", field: "pieces" },
+		});
+	});
+
+	test("refuses two pieces in one layer", async () => {
+		// Given: alice, Navy casual pants, Black chino shorts, White long tee
+		const { h, headers, ids } = await alice();
+		const body = {
+			...three(ids),
+			pieces: [
+				{ typeId: "casual_p", colourId: ids.Navy },
+				{ typeId: "chino_sh", colourId: ids.Black },
+				{ typeId: "tee_l", colourId: ids.White },
+			],
+		};
+		// When
+		const refused = await refusal(h, headers, body);
+		// Then
+		expect(refused).toEqual({
+			status: 400,
+			body: { error: "invalid", field: "pieces.1.typeId" },
+		});
+	});
+
+	test("refuses a colour that is not the account's", async () => {
+		// Given: alice; THREE with bob's Black id as its second colour
+		const { h, headers, ids } = await alice();
+		const bob = await h.addAccount(BOB);
+		const bobIds = await colourIds(h, bob);
+		const body = three(ids);
+		body.pieces[1].colourId = bobIds.Black;
+		// When
+		const refused = await refusal(h, headers, body);
+		// Then
+		expect(refused).toEqual({
+			status: 400,
+			body: { error: "invalid", field: "pieces.1.colourId" },
+		});
+	});
+});
+
 describe("GET /api/combinations", () => {
 	test("refuses without a session", async () => {
 		// Given: no session

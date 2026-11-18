@@ -148,6 +148,9 @@ const combinationBodySchema = z.object({
 function combinationRefusal(error: CombinationError): Refusal {
 	switch (error.code) {
 		case "not_type":
+		case "not_colour":
+		case "pieces_count":
+		case "same_layer":
 		case "invalid":
 			return {
 				status: 400,
