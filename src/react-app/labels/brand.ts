@@ -18,19 +18,30 @@ export const brandSchema = brandInputSchema.extend({ id: brandIdSchema });
 
 export type Brand = z.infer<typeof brandSchema>;
 
-// A brand in the account's list. items: how many owned items have it, so
-// its delete can say how many lose their brand.
+// A brand in the account's list. items and shopLinks: how many owned items
+// and shop links have it, so its delete can say how many lose their brand.
 export const listedBrandSchema = brandSchema.extend({
 	items: z.number().int().min(0),
+	shopLinks: z.number().int().min(0),
 });
 
 export type ListedBrand = z.infer<typeof listedBrandSchema>;
 
-// What the delete confirm says the delete does to the closet.
-export function brandDeleteText(items: number): string {
-	if (items === 0) return "No item uses it.";
-	if (items === 1) return "1 item loses its brand.";
-	return `${items} items lose their brand.`;
+// What the delete confirm says the delete does to the closet and the shop
+// links.
+export function brandDeleteText(items: number, shopLinks: number): string {
+	if (shopLinks === 0) {
+		if (items === 0) return "No item uses it.";
+		if (items === 1) return "1 item loses its brand.";
+		return `${items} items lose their brand.`;
+	}
+	const links = shopLinks === 1 ? "1 shop link" : `${shopLinks} shop links`;
+	if (items === 0)
+		return shopLinks === 1
+			? `${links} loses its brand.`
+			: `${links} lose their brand.`;
+	const owned = items === 1 ? "1 item" : `${items} items`;
+	return `${owned} and ${links} lose their brand.`;
 }
 
 // The store and the page cache both sort with this one rule, so a brand the

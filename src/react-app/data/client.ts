@@ -12,6 +12,7 @@ import {
 import type { Colour, ColourId, ListedColour } from "@/labels/colour";
 import type { Look, LookId } from "@/looks/look";
 import type { Tag, TagId } from "@/tags/tag";
+import type { Wish } from "@/wishlist/wish";
 import { type ErrorCode, errorAnswer, meAnswer } from "./contract";
 
 // Every request the web app sends to the worker goes through request(), so
@@ -28,6 +29,7 @@ export const keys = {
 	aiApps: (userId: string | null) => ["ai-apps", userId] as const,
 	combinations: (userId: string | null) => ["combinations", userId] as const,
 	closet: (userId: string | null) => ["closet", userId] as const,
+	wishlist: (userId: string | null) => ["wishlist", userId] as const,
 	addTag: ["tags", "add"] as const,
 	allowApp: (clientId: string) => ["allow-app", clientId] as const,
 };
@@ -106,9 +108,11 @@ export const after = {
 		queryClient.setQueryData<ListedColour[]>(keys.colours(userId), (old) =>
 			old?.map((c) => (c.id === colour.id ? { ...c, ...colour } : c)),
 		);
-		// A combination and an owned item show their colours' names and codes.
+		// A combination, an owned item, and a wish show their colours' names
+		// and codes.
 		refresh(keys.combinations(userId));
 		refresh(keys.closet(userId));
+		refresh(keys.wishlist(userId));
 	},
 	// The server's colours may differ from the cached ones, as after an add
 	// whose answer was lost, or a change refused for a change made elsewhere.
@@ -124,7 +128,9 @@ export const after = {
 	// The list is A to Z, so an added brand goes in its place.
 	brandAdded(userId: string | null, brand: Brand) {
 		queryClient.setQueryData<ListedBrand[]>(keys.brands(userId), (old) =>
-			old ? [...old, { ...brand, items: 0 }].sort(byBrandName) : old,
+			old
+				? [...old, { ...brand, items: 0, shopLinks: 0 }].sort(byBrandName)
+				: old,
 		);
 	},
 	// The server's brands may differ from the cached ones, as after an add
@@ -140,16 +146,18 @@ export const after = {
 				?.map((b) => (b.id === brand.id ? { ...b, ...brand } : b))
 				.sort(byBrandName),
 		);
-		// The closet shows its items' brand names.
+		// The closet and the shop links show their brand names.
 		refresh(keys.closet(userId));
+		refresh(keys.wishlist(userId));
 	},
 	brandDeleted(userId: string | null, id: BrandId) {
 		queryClient.setQueryData<ListedBrand[]>(keys.brands(userId), (old) =>
 			old?.filter((b) => b.id !== id),
 		);
 		refresh(keys.brands(userId));
-		// Its items now have no brand.
+		// Its items and shop links now have no brand.
 		refresh(keys.closet(userId));
+		refresh(keys.wishlist(userId));
 	},
 	// As lookSaved; a saved combination also makes its colours in use.
 	combinationSaved(userId: string | null, combination: Combination) {
@@ -204,6 +212,47 @@ export const after = {
 			old?.filter((i) => i.id !== id),
 		);
 		refresh(keys.closet(userId));
+		refresh(keys.colours(userId));
+		refresh(keys.brands(userId));
+	},
+	// As lookSaved; a new wish also makes its colour in use.
+	wishAdded(userId: string | null, wish: Wish) {
+		queryClient.setQueryData<Wish[]>(
+			keys.wishlist(userId),
+			(old) =>
+				old &&
+				(old.some((w) => w.id === wish.id)
+					? old.map((w) => (w.id === wish.id ? wish : w))
+					: [wish, ...old]),
+		);
+		refresh(keys.wishlist(userId));
+		refresh(keys.colours(userId));
+	},
+	// A shop link write answers its whole wish. A link's brand counts on the
+	// brand list.
+	wishChanged(userId: string | null, wish: Wish) {
+		queryClient.setQueryData<Wish[]>(keys.wishlist(userId), (old) =>
+			old?.map((w) => (w.id === wish.id ? wish : w)),
+		);
+		refresh(keys.wishlist(userId));
+		refresh(keys.brands(userId));
+	},
+	shopLinkDeleted(userId: string | null, id: string) {
+		queryClient.setQueryData<Wish[]>(keys.wishlist(userId), (old) =>
+			old?.map((w) => ({
+				...w,
+				shopLinks: w.shopLinks.filter((link) => link.id !== id),
+			})),
+		);
+		refresh(keys.wishlist(userId));
+		refresh(keys.brands(userId));
+	},
+	// A removed wish can free its colour, and its links leave their brands.
+	wishDeleted(userId: string | null, id: string) {
+		queryClient.setQueryData<Wish[]>(keys.wishlist(userId), (old) =>
+			old?.filter((w) => w.id !== id),
+		);
+		refresh(keys.wishlist(userId));
 		refresh(keys.colours(userId));
 		refresh(keys.brands(userId));
 	},

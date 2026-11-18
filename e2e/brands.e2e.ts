@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 import { colourIds, postBrand, postOwnedItems } from "./closet-helpers";
 import { expect, test } from "./fixtures";
 import { BRANDS_FULL_FILE } from "./global-setup";
+import { postShopLink, postWish } from "./wishlist-helpers";
 
 const rows = (page: Page) =>
 	page.locator('[data-slot="brand-list"]').getByRole("button");
@@ -302,4 +303,38 @@ test("shows the sign-in screen when the brands answer 401", async ({
 	await expect(
 		page.getByRole("button", { name: "Sign in with Google" }),
 	).toBeVisible();
+});
+
+test("counts shop links in the delete confirm and shows the host after", async ({
+	page,
+}) => {
+	// Given: a fresh account with Zara on one link of a Charcoal wool jacket
+	// wish
+	await page.goto("/");
+	const ids = await colourIds(page);
+	const zara = await postBrand(page, "Zara");
+	const wish = await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
+	await postShopLink(page, wish, {
+		url: "https://www.zara.com/b",
+		brandId: zara,
+		name: "Wool blend jacket",
+		price: null,
+	});
+	await openBrands(page);
+	// When
+	await page.getByRole("button", { name: "Zara" }).click();
+	await sheet(page, "Edit brand")
+		.getByRole("button", { name: "Delete" })
+		.click();
+	const confirm = sheet(page, "Delete this brand?");
+	// Then
+	await expect(confirm.getByText("1 shop link loses its brand.")).toBeVisible();
+	// When
+	await confirm.getByRole("button", { name: "Delete" }).click();
+	await expect(toast(page)).toHaveText("Brand deleted");
+	await page.goto(`/piece/wool/${ids.Charcoal}`);
+	// Then
+	await expect(
+		page.locator('[data-slot="shop-link"]').first().locator("p").first(),
+	).toHaveText("zara.com");
 });

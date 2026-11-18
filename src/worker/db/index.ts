@@ -9,6 +9,7 @@ import * as dressSchema from "./dress-schema";
 import * as lookSchema from "./look-schema";
 import * as ownedItemSchema from "./owned-item-schema";
 import * as tagSchema from "./tag-schema";
+import * as wishSchema from "./wish-schema";
 
 export const schema = {
 	...aiActionSchema,
@@ -20,6 +21,7 @@ export const schema = {
 	...lookSchema,
 	...ownedItemSchema,
 	...tagSchema,
+	...wishSchema,
 };
 
 // Two tabs can both pass a duplicate check; a unique index then refuses the

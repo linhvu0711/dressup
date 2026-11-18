@@ -1,13 +1,13 @@
-import { ArrowLeft, ChevronRight, Minus, Plus } from "lucide-react";
-import { Dialog } from "radix-ui";
-import { type ReactNode, useRef, useState } from "react";
+import { ChevronRight, Minus, Plus } from "lucide-react";
+import { useRef, useState } from "react";
 import { pieceName } from "@/combinations/combination";
 import { Button } from "@/components/ui/button";
-import { SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
+import { Field, FormSheet, ROW } from "@/components/ui/sheet-form";
 import { useToast } from "@/components/ui/toast";
 import { RequestError } from "@/data/client";
 import { TypeFigure } from "@/dress/figure/TypeFigure";
-import { GARMENT_IDS, GARMENT_NAMES, type GarmentId } from "@/dress/garments";
+import type { GarmentId } from "@/dress/garments";
+import { BrandOptions } from "@/labels/BrandOptions";
 import type { BrandId } from "@/labels/brand";
 import { useBrands } from "@/labels/brand-api";
 import { ColourSwatches } from "@/labels/ColourSwatches";
@@ -24,14 +24,7 @@ import {
 	type OwnedItemId,
 	QUANTITY_MAX,
 } from "./owned-item";
-
-const LABEL = "font-medium text-[12.5px] text-muted-foreground";
-
-const ROW =
-	"flex h-11 min-w-0 items-center gap-2 rounded-[12px] border border-input bg-card px-3 text-left text-[14px] outline-none focus-visible:border-ring";
-
-const LIST_ROW =
-	"flex h-11 min-w-0 items-center gap-2.5 rounded-[12px] px-2 text-left text-[14px] hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring";
+import { TypeField, TypeOptions } from "./TypeOptions";
 
 type Step = "form" | "types" | "brands" | "confirm";
 
@@ -141,263 +134,158 @@ export function OwnedItemSheet(
 	};
 
 	return (
-		<Dialog.Root open onOpenChange={(open) => open || onClose()}>
-			<Dialog.Portal>
-				<Dialog.Overlay className={SHEET_OVERLAY} />
-				<Dialog.Content
-					aria-describedby={undefined}
-					onOpenAutoFocus={(e) => {
-						// The phone keeps its keyboard closed until the box is tapped.
-						e.preventDefault();
-						if (window.matchMedia("(min-width: 56.25rem)").matches) {
-							first.current?.focus();
-						}
-					}}
-					className={SHEET}
-				>
-					{step === "form" ? (
-						<Dialog.Title className="text-[25px] leading-tight">
-							{editing ? "Edit item" : "Add to closet"}
-						</Dialog.Title>
-					) : (
-						<StepTitle title={STEP_TITLE[step]} onBack={back} />
-					)}
-					<form
-						hidden={step !== "form"}
-						className="flex flex-col gap-4 [&[hidden]]:hidden"
-						onSubmit={(e) => {
-							e.preventDefault();
-							save();
-						}}
-					>
-						{editing ? (
-							<p className="flex min-w-0 items-center gap-1.5 text-[14px]">
-								<TypeFigure typeId={editing.typeId} />
-								<span className="truncate">{pieceName(editing)}</span>
-							</p>
-						) : (
-							<>
-								<Field label="Type">
-									<button
-										ref={first}
-										type="button"
-										className={ROW}
-										onClick={() => setStep("types")}
-									>
-										<span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
-											{typeId ? (
-												<>
-													<TypeFigure typeId={typeId} />
-													{GARMENT_NAMES[typeId]}
-												</>
-											) : (
-												<span className="text-muted-foreground">
-													Pick a type
-												</span>
-											)}
-										</span>
-										<ChevronRight size={16} strokeWidth={1.9} aria-hidden />
-									</button>
-								</Field>
-								<Field label="Colour">
-									<ColourSwatches
-										value={colourId}
-										onChange={change(setColourId)}
-									/>
-								</Field>
-							</>
-						)}
-						<Field label="Brand">
-							<button
-								ref={editing ? first : undefined}
-								type="button"
-								className={ROW}
-								onClick={() => setStep("brands")}
-							>
-								<span className="min-w-0 flex-1 truncate">
-									{brandName ?? "No brand"}
-								</span>
-								<ChevronRight size={16} strokeWidth={1.9} aria-hidden />
-							</button>
-						</Field>
-						<Field label="Quantity">
-							<div className="flex items-center gap-2">
-								<Button
-									type="button"
-									size="icon"
-									aria-label="Less"
-									title="Less"
-									disabled={count <= 1}
-									onClick={() => setQuantity(String(Math.max(1, count - 1)))}
-								>
-									<Minus size={16} strokeWidth={1.9} aria-hidden />
-								</Button>
-								<input
-									aria-label="Quantity"
-									inputMode="numeric"
-									maxLength={2}
-									value={quantity}
-									onChange={(e) =>
-										setQuantity(e.target.value.replace(/\D/g, "").slice(0, 2))
-									}
-									onBlur={() => setQuantity(String(Math.max(1, count)))}
-									autoComplete="off"
-									className="h-10 w-14 rounded-[12px] border border-input bg-card px-3 text-center text-[14px] outline-none focus-visible:border-ring"
-								/>
-								<Button
-									type="button"
-									size="icon"
-									aria-label="More"
-									title="More"
-									disabled={count >= QUANTITY_MAX}
-									onClick={() =>
-										setQuantity(String(Math.min(QUANTITY_MAX, count + 1)))
-									}
-								>
-									<Plus size={16} strokeWidth={1.9} aria-hidden />
-								</Button>
-							</div>
-						</Field>
-						{problem ? (
-							<p role="alert" className="text-[13px] text-destructive">
-								{PROBLEM_TEXT[problem]}
-							</p>
-						) : null}
-						<div className="mt-0.5 flex flex-wrap justify-end gap-2 [&>button]:flex-1 wide:[&>button]:flex-none">
-							{editing ? (
-								<Button
-									type="button"
-									variant="destructive"
-									onClick={() => setStep("confirm")}
-								>
-									Delete
-								</Button>
-							) : null}
-							<Button type="button" onClick={onClose}>
-								Cancel
-							</Button>
-							<Button
-								type="submit"
-								variant="primary"
-								disabled={!typeId || !colourId || full || sent.isPending}
-							>
-								Save
-							</Button>
-						</div>
-					</form>
-					{step === "types" ? (
-						<div className="flex flex-col">
-							{GARMENT_IDS.map((option) => (
-								<button
-									key={option}
-									type="button"
-									data-slot="type-option"
-									className={LIST_ROW}
-									onClick={() => {
-										change(setTypeId)(option);
-										back();
-									}}
-								>
-									<TypeFigure typeId={option} className="size-11 flex-none" />
-									{GARMENT_NAMES[option]}
-								</button>
-							))}
-						</div>
-					) : null}
-					{step === "brands" && brands.isPending ? (
-						<div className="flex flex-col gap-2">
-							{Array.from({ length: 3 }, (_, i) => (
-								<span
-									// biome-ignore lint/suspicious/noArrayIndexKey: the rows are all alike and never move.
-									key={i}
-									data-slot="brand-skeleton"
-									className="h-11 rounded-[12px] bg-muted animate-placeholder motion-reduce:animate-none"
-								/>
-							))}
-						</div>
-					) : null}
-					{step === "brands" && brands.isError ? (
-						<div className="flex items-center gap-3">
-							<p role="alert" className="text-[13px] text-destructive">
-								Could not load your brands
-							</p>
-							<Button onClick={() => void brands.refetch()}>Retry</Button>
-						</div>
-					) : null}
-					{step === "brands" && brands.isSuccess ? (
-						<div className="flex flex-col">
-							{[{ id: null, name: "No brand" }, ...brands.data].map(
-								(option) => (
-									<button
-										key={option.id ?? "none"}
-										type="button"
-										className={LIST_ROW}
-										onClick={() => {
-											change(setBrandId)(option.id);
-											back();
-										}}
-									>
-										{option.name}
-									</button>
-								),
-							)}
-						</div>
-					) : null}
-					{editing && step === "confirm" ? (
-						<>
-							<p className="text-muted-foreground">
-								{pieceName(editing)} · {editing.brand?.name ?? "No brand"}
-							</p>
-							{del.isError ? (
-								<p role="alert" className="text-[13px] text-destructive">
-									Not deleted. Try again.
-								</p>
-							) : null}
-							<div className="mt-0.5 flex flex-wrap justify-end gap-2 [&>button]:flex-1 wide:[&>button]:flex-none">
-								<Button
-									variant="destructive"
-									disabled={del.isPending}
-									onClick={() =>
-										del.mutate(editing.id, {
-											onSuccess: done("Removed from your closet"),
-										})
-									}
-								>
-									Delete
-								</Button>
-							</div>
-						</>
-					) : null}
-				</Dialog.Content>
-			</Dialog.Portal>
-		</Dialog.Root>
-	);
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-	return (
-		<div className="flex flex-col gap-1.5">
-			<span className={LABEL}>{label}</span>
-			{children}
-		</div>
-	);
-}
-
-function StepTitle({ title, onBack }: { title: string; onBack: () => void }) {
-	return (
-		<div className="flex items-center gap-3">
-			<Button
-				variant="icon"
-				size="icon"
-				aria-label="Back"
-				title="Back"
-				onClick={onBack}
+		<FormSheet
+			title={editing ? "Edit item" : "Add to closet"}
+			step={step === "form" ? null : STEP_TITLE[step]}
+			onBack={back}
+			focus={first}
+			onClose={onClose}
+		>
+			<form
+				hidden={step !== "form"}
+				className="flex flex-col gap-4 [&[hidden]]:hidden"
+				onSubmit={(e) => {
+					e.preventDefault();
+					save();
+				}}
 			>
-				<ArrowLeft size={18} strokeWidth={1.9} aria-hidden />
-			</Button>
-			<Dialog.Title className="min-w-0 text-[25px] leading-tight">
-				{title}
-			</Dialog.Title>
-		</div>
+				{editing ? (
+					<p className="flex min-w-0 items-center gap-1.5 text-[14px]">
+						<TypeFigure typeId={editing.typeId} />
+						<span className="truncate">{pieceName(editing)}</span>
+					</p>
+				) : (
+					<>
+						<TypeField
+							ref={first}
+							typeId={typeId}
+							onOpen={() => setStep("types")}
+						/>
+						<Field label="Colour">
+							<ColourSwatches value={colourId} onChange={change(setColourId)} />
+						</Field>
+					</>
+				)}
+				<Field label="Brand">
+					<button
+						ref={editing ? first : undefined}
+						type="button"
+						className={ROW}
+						onClick={() => setStep("brands")}
+					>
+						<span className="min-w-0 flex-1 truncate">
+							{brandName ?? "No brand"}
+						</span>
+						<ChevronRight size={16} strokeWidth={1.9} aria-hidden />
+					</button>
+				</Field>
+				<Field label="Quantity">
+					<div className="flex items-center gap-2">
+						<Button
+							type="button"
+							size="icon"
+							aria-label="Less"
+							title="Less"
+							disabled={count <= 1}
+							onClick={() => setQuantity(String(Math.max(1, count - 1)))}
+						>
+							<Minus size={16} strokeWidth={1.9} aria-hidden />
+						</Button>
+						<input
+							aria-label="Quantity"
+							inputMode="numeric"
+							maxLength={2}
+							value={quantity}
+							onChange={(e) =>
+								setQuantity(e.target.value.replace(/\D/g, "").slice(0, 2))
+							}
+							onBlur={() => setQuantity(String(Math.max(1, count)))}
+							autoComplete="off"
+							className="h-10 w-14 rounded-[12px] border border-input bg-card px-3 text-center text-[14px] outline-none focus-visible:border-ring"
+						/>
+						<Button
+							type="button"
+							size="icon"
+							aria-label="More"
+							title="More"
+							disabled={count >= QUANTITY_MAX}
+							onClick={() =>
+								setQuantity(String(Math.min(QUANTITY_MAX, count + 1)))
+							}
+						>
+							<Plus size={16} strokeWidth={1.9} aria-hidden />
+						</Button>
+					</div>
+				</Field>
+				{problem ? (
+					<p role="alert" className="text-[13px] text-destructive">
+						{PROBLEM_TEXT[problem]}
+					</p>
+				) : null}
+				<div className="mt-0.5 flex flex-wrap justify-end gap-2 [&>button]:flex-1 wide:[&>button]:flex-none">
+					{editing ? (
+						<Button
+							type="button"
+							variant="destructive"
+							onClick={() => setStep("confirm")}
+						>
+							Delete
+						</Button>
+					) : null}
+					<Button type="button" onClick={onClose}>
+						Cancel
+					</Button>
+					<Button
+						type="submit"
+						variant="primary"
+						disabled={!typeId || !colourId || full || sent.isPending}
+					>
+						Save
+					</Button>
+				</div>
+			</form>
+			{step === "types" ? (
+				<TypeOptions
+					onPick={(option) => {
+						change(setTypeId)(option);
+						back();
+					}}
+				/>
+			) : null}
+			{step === "brands" ? (
+				<BrandOptions
+					brands={brands}
+					onPick={(option) => {
+						change(setBrandId)(option);
+						back();
+					}}
+				/>
+			) : null}
+			{editing && step === "confirm" ? (
+				<>
+					<p className="text-muted-foreground">
+						{pieceName(editing)} · {editing.brand?.name ?? "No brand"}
+					</p>
+					{del.isError ? (
+						<p role="alert" className="text-[13px] text-destructive">
+							Not deleted. Try again.
+						</p>
+					) : null}
+					<div className="mt-0.5 flex flex-wrap justify-end gap-2 [&>button]:flex-1 wide:[&>button]:flex-none">
+						<Button
+							variant="destructive"
+							disabled={del.isPending}
+							onClick={() =>
+								del.mutate(editing.id, {
+									onSuccess: done("Removed from your closet"),
+								})
+							}
+						>
+							Delete
+						</Button>
+					</div>
+				</>
+			) : null}
+		</FormSheet>
 	);
 }

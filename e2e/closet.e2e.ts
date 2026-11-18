@@ -45,6 +45,7 @@ test("opens the closet from the Closet tab", async ({ page }) => {
 		"Looks",
 		"Combinations",
 		"Closet",
+		"Wishlist",
 		"Labels",
 	]);
 });

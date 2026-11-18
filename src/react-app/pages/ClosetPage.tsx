@@ -1,9 +1,10 @@
 import { Plus } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { useCloset } from "@/closet/api";
-import { ClosetTile } from "@/closet/ClosetTile";
 import { OwnedItemSheet } from "@/closet/OwnedItemSheet";
 import { closetPieces } from "@/closet/owned-item";
+import { PieceTile } from "@/closet/PieceTile";
+import { pieceName } from "@/combinations/combination";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { PageHeader } from "../shell/PageHeader";
@@ -63,12 +64,19 @@ export function ClosetPage() {
 	} else {
 		wall = (
 			<div data-slot="closet-wall" className={WALL}>
-				{closetPieces(closet.data).map((piece) => (
-					<ClosetTile
-						key={`${piece.typeId}/${piece.colour.id}`}
-						piece={piece}
-					/>
-				))}
+				{closetPieces(closet.data).map((piece) => {
+					const name = pieceName(piece);
+					return (
+						<PieceTile
+							key={`${piece.typeId}/${piece.colour.id}`}
+							piece={piece}
+							from="/closet"
+							label={`${name}, ${piece.quantity}`}
+							slot="closet-tile"
+							badge={piece.quantity}
+						/>
+					);
+				})}
 			</div>
 		);
 	}

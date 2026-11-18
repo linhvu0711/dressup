@@ -44,13 +44,16 @@ const NAVY = {
 };
 
 // The account's colours, brands, outfit, mannequin, one look with one tag,
-// one combination, and one owned item, through the routes.
+// one combination, one owned item, and one wish with one shop link, through
+// the routes.
 async function fillAccount(
 	h: Harness,
 	jar: Jar,
 	lookId = NAVY.id,
 	combinationId = "33333333-3333-4333-8333-333333333333",
 	ownedItemId = "44444444-4444-4444-8444-444444444444",
+	wishId = "66666666-6666-4666-8666-666666666666",
+	shopLinkId = "77777777-7777-4777-8777-777777777777",
 ) {
 	expect((await send(h, jar, "/api/dress")).status).toBe(200);
 	const listed = await send(h, jar, "/api/colours");
@@ -62,7 +65,10 @@ async function fillAccount(
 	const skin = { kind: "mannequin", part: "skin", hex: "#8D5524" };
 	expect((await sendJson(h, jar, "/api/dress/changes", skin)).status).toBe(204);
 	const brand = { name: "Uniqlo" };
-	expect((await sendJson(h, jar, "/api/brands", brand)).status).toBe(201);
+	const brandAdded = await sendJson(h, jar, "/api/brands", brand);
+	expect(brandAdded.status).toBe(201);
+	const uniqlo = ((await brandAdded.json()) as { brand: { id: string } }).brand
+		.id;
 	const added = await sendJson(h, jar, "/api/tags", { name: "Work" });
 	const { tag } = (await added.json()) as { tag: { id: string } };
 	const look = { ...NAVY, id: lookId, tags: [tag.id] };
@@ -88,6 +94,19 @@ async function fillAccount(
 	expect((await sendJson(h, jar, "/api/owned-items", ownedItem)).status).toBe(
 		201,
 	);
+	const wish = { id: wishId, typeId: "casual_p", colourId: idOf("Navy") };
+	expect((await sendJson(h, jar, "/api/wishes", wish)).status).toBe(201);
+	const shopLink = {
+		id: shopLinkId,
+		url: "https://www.uniqlo.com/vn/en/casual-pants",
+		brandId: uniqlo,
+		name: "Casual pants",
+		price: 588000,
+	};
+	expect(
+		(await sendJson(h, jar, `/api/wishes/${wishId}/shop-links`, shopLink))
+			.status,
+	).toBe(201);
 }
 
 // The tables that still hold rows of the account, as [table, count].
@@ -149,6 +168,8 @@ describe("DELETE /api/account", () => {
 			"22222222-2222-4222-8222-222222222222",
 			"44444444-4444-4444-8444-444444444444",
 			"55555555-5555-4555-8555-555555555555",
+			"88888888-8888-4888-8888-888888888888",
+			"99999999-9999-4999-8999-999999999999",
 		);
 		const bobBefore = h.accountRows(bobId);
 		// When
@@ -164,7 +185,7 @@ describe("DELETE /api/account", () => {
 			},
 		}).toEqual({
 			rows: bobBefore,
-			filled: 16,
+			filled: 18,
 			me: { status: 200, email: "bob@example.com" },
 		});
 	});

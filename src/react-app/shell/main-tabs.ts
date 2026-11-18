@@ -1,5 +1,6 @@
 import {
 	DoorClosed,
+	Heart,
 	Layers,
 	LayoutGrid,
 	type LucideIcon,
@@ -17,5 +18,6 @@ export const MAIN_TABS: readonly {
 	{ to: "/looks", label: "Looks", Icon: LayoutGrid },
 	{ to: "/combinations", label: "Combinations", Icon: Layers },
 	{ to: "/closet", label: "Closet", Icon: DoorClosed },
+	{ to: "/wishlist", label: "Wishlist", Icon: Heart },
 	{ to: "/labels", label: "Labels", Icon: Tag },
 ];

@@ -20,6 +20,8 @@ import type {
 	OwnedItemsAnswer,
 	TagAnswer,
 	TagsAnswer,
+	WishAnswer,
+	WishesAnswer,
 } from "@/data/contract";
 import { type DressError, dressChangeSchema } from "@/dress/state";
 import { brandIdSchema } from "@/labels/brand";
@@ -79,6 +81,15 @@ import {
 	renameTag,
 	type TagError,
 } from "./tag-store";
+import {
+	addShopLink,
+	addWish,
+	changeShopLink,
+	deleteShopLink,
+	deleteWish,
+	listWishes,
+	type WishError,
+} from "./wish-store";
 
 type User = Auth["$Infer"]["Session"]["user"];
 type AppEnv = { Bindings: Env; Variables: { auth: Auth; user: User } };
@@ -195,6 +206,37 @@ function ownedItemRefusal(error: OwnedItemError): Refusal {
 			return { status: 409, body: { error: "duplicate", id: error.id } };
 		case "owned_item_limit":
 			return { status: 409, body: { error: "owned_item_limit" } };
+		case "conflict":
+			return { status: 409, body: { error: "conflict", field: "id" } };
+		case "not_found":
+			return { status: 404, body: { error: "not_found" } };
+	}
+}
+
+// Only the JSON shape: the Wishlist module runs the wish rules.
+const wishBodySchema = z.object({
+	id: z.string(),
+	typeId: z.string(),
+	colourId: z.string(),
+});
+
+const shopLinkBodySchema = z.object({
+	url: z.string(),
+	brandId: z.string().nullable(),
+	name: z.string(),
+	price: z.number().nullable(),
+});
+
+function wishRefusal(error: WishError): Refusal {
+	switch (error.code) {
+		case "invalid":
+			return { status: 400, body: { error: "invalid", field: error.field } };
+		case "duplicate":
+			return { status: 409, body: { error: "duplicate", id: error.id } };
+		case "wish_limit":
+			return { status: 409, body: { error: "wish_limit" } };
+		case "shop_link_limit":
+			return { status: 409, body: { error: "shop_link_limit" } };
 		case "conflict":
 			return { status: 409, body: { error: "conflict", field: "id" } };
 		case "not_found":
@@ -505,6 +547,86 @@ export function createApp(getDb: (env: Env) => Db) {
 		);
 		if (!deleted.ok) {
 			const { status, body: refused } = ownedItemRefusal(deleted.error);
+			return c.json(refused, status);
+		}
+		return c.body(null, 204);
+	});
+
+	app.get("/wishes", withAuth, requireUser, async (c) =>
+		c.json({
+			wishes: await listWishes(getDb(c.env), c.var.user.id),
+		} satisfies WishesAnswer),
+	);
+
+	app.post("/wishes", withAuth, requireUser, async (c) => {
+		const body = await readBody(c, wishBodySchema);
+		if ("refused" in body) return body.refused;
+		const added = await addWish(getDb(c.env), c.var.user.id, body.data);
+		if (!added.ok) {
+			const { status, body: refused } = wishRefusal(added.error);
+			return c.json(refused, status);
+		}
+		const { wish, created } = added.value;
+		return c.json({ wish } satisfies WishAnswer, created ? 201 : 200);
+	});
+
+	app.post("/wishes/:id/shop-links", withAuth, requireUser, async (c) => {
+		const body = await readBody(
+			c,
+			shopLinkBodySchema.extend({ id: z.string() }),
+		);
+		if ("refused" in body) return body.refused;
+		const added = await addShopLink(
+			getDb(c.env),
+			c.var.user.id,
+			c.req.param("id"),
+			body.data,
+		);
+		if (!added.ok) {
+			const { status, body: refused } = wishRefusal(added.error);
+			return c.json(refused, status);
+		}
+		const { wish, created } = added.value;
+		return c.json({ wish } satisfies WishAnswer, created ? 201 : 200);
+	});
+
+	app.put("/shop-links/:id", withAuth, requireUser, async (c) => {
+		const body = await readBody(c, shopLinkBodySchema);
+		if ("refused" in body) return body.refused;
+		const changed = await changeShopLink(
+			getDb(c.env),
+			c.var.user.id,
+			c.req.param("id"),
+			body.data,
+		);
+		if (!changed.ok) {
+			const { status, body: refused } = wishRefusal(changed.error);
+			return c.json(refused, status);
+		}
+		return c.json({ wish: changed.value } satisfies WishAnswer, 200);
+	});
+
+	app.delete("/shop-links/:id", withAuth, requireUser, async (c) => {
+		const deleted = await deleteShopLink(
+			getDb(c.env),
+			c.var.user.id,
+			c.req.param("id"),
+		);
+		if (!deleted.ok) {
+			const { status, body: refused } = wishRefusal(deleted.error);
+			return c.json(refused, status);
+		}
+		return c.body(null, 204);
+	});
+
+	app.delete("/wishes/:id", withAuth, requireUser, async (c) => {
+		const deleted = await deleteWish(
+			getDb(c.env),
+			c.var.user.id,
+			c.req.param("id"),
+		);
+		if (!deleted.ok) {
+			const { status, body: refused } = wishRefusal(deleted.error);
 			return c.json(refused, status);
 		}
 		return c.body(null, 204);

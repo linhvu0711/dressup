@@ -877,6 +877,12 @@ describe("tags", () => {
 			["add_owned_item", W],
 			["change_owned_item", W],
 			["delete_owned_item", D],
+			["list_wishes", R],
+			["add_wish", W],
+			["delete_wish", D],
+			["add_shop_link", W],
+			["change_shop_link", W],
+			["delete_shop_link", D],
 		]);
 		expect(listed.every((t) => typeof t.title === "string")).toBe(true);
 	});
@@ -1205,7 +1211,7 @@ describe("colours", () => {
 		// Then
 		expect({ isError, text }).toEqual({
 			isError: true,
-			text: "A combination or an owned item uses Navy, so it stays. A colour in use cannot be deleted.",
+			text: "A combination, an owned item, or a wish uses Navy, so it stays. A colour in use cannot be deleted.",
 		});
 	});
 
@@ -1869,6 +1875,198 @@ describe("owned items", () => {
 		expect({ isError, text }).toEqual({
 			isError: true,
 			text: "No owned item with this id.",
+		});
+	});
+});
+
+describe("wishes", () => {
+	type Link = {
+		id: string;
+		url: string;
+		brand: { name: string } | null;
+		name: string;
+		price: number | null;
+	};
+	type Listed = { id: string; typeId: string; shopLinks: Link[] };
+
+	async function colourId(ai: Session, name: string) {
+		const { data } = await ai.call("list_colours");
+		return (data as { colours: Colour[] }).colours.find((c) => c.name === name)
+			?.id;
+	}
+
+	// A Navy wool jacket, as a wish.
+	async function addJacket(ai: Session) {
+		const added = await ai.call("add_wish", {
+			typeId: "wool",
+			colourId: await colourId(ai, "Navy"),
+		});
+		return (added.data as { wish: Listed }).wish.id;
+	}
+
+	const cos = (wishId: string) => ({
+		wishId,
+		url: "https://cos.com/jacket",
+		name: "Wool jacket",
+		price: 4290000,
+	});
+
+	test("adds a wish and lists it with its shop links", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		// When
+		const wishId = await addJacket(ai);
+		await ai.call("add_shop_link", cos(wishId));
+		const { data } = await ai.call("list_wishes");
+		// Then
+		const { wishes } = data as { wishes: Listed[] };
+		expect(
+			wishes.map((w) => ({
+				typeId: w.typeId,
+				shopLinks: w.shopLinks.map(({ id, ...link }) => ({
+					hasId: typeof id === "string",
+					...link,
+				})),
+			})),
+		).toEqual([
+			{
+				typeId: "wool",
+				shopLinks: [
+					{
+						hasId: true,
+						url: "https://cos.com/jacket",
+						brand: null,
+						name: "Wool jacket",
+						price: 4290000,
+					},
+				],
+			},
+		]);
+	});
+
+	test("refuses a second wish for one piece as a sentence", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		await addJacket(ai);
+		// When
+		const { isError, text } = await ai.call("add_wish", {
+			typeId: "wool",
+			colourId: await colourId(ai, "Navy"),
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "You have this wish already.",
+		});
+	});
+
+	test("refuses wish number 201 as a sentence", async () => {
+		// Given
+		const { h, ai, userId } = await withAiSession();
+		await h.seedWishes(userId, 200);
+		// When
+		const { isError, text } = await ai.call("add_wish", {
+			typeId: "train_p",
+			colourId: await colourId(ai, "Mustard"),
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "You have 200 wishes. That is the limit. Delete one to add a new one.",
+		});
+	});
+
+	test("adds, changes, and deletes a shop link", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		const wishId = await addJacket(ai);
+		const added = await ai.call("add_shop_link", cos(wishId));
+		const [link] = (added.data as { wish: Listed }).wish.shopLinks;
+		// When
+		const changed = await ai.call("change_shop_link", {
+			id: link?.id,
+			url: "https://cos.com/jacket",
+			brandId: null,
+			name: "Wool jacket",
+			price: 3990000,
+		});
+		await ai.call("delete_shop_link", { id: link?.id });
+		const { data } = await ai.call("list_wishes");
+		// Then
+		expect({
+			price: (changed.data as { wish: Listed }).wish.shopLinks[0]?.price,
+			after: (data as { wishes: Listed[] }).wishes[0]?.shopLinks,
+		}).toEqual({ price: 3990000, after: [] });
+	});
+
+	test("refuses an address that is not http as a sentence", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		const wishId = await addJacket(ai);
+		// When
+		const { isError, text } = await ai.call("add_shop_link", {
+			...cos(wishId),
+			url: "ftp://cos.com/jacket",
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "Enter a web address that starts with https://.",
+		});
+	});
+
+	test("refuses shop link number 11 as a sentence", async () => {
+		// Given
+		const { h, ai, userId } = await withAiSession();
+		const wishId = await addJacket(ai);
+		await h.seedShopLinks(userId, wishId, 10);
+		// When
+		const { isError, text } = await ai.call("add_shop_link", cos(wishId));
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "10 shop links is the limit for one wish.",
+		});
+	});
+
+	test("deletes a wish", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		const wishId = await addJacket(ai);
+		await ai.call("add_shop_link", cos(wishId));
+		// When
+		await ai.call("delete_wish", { id: wishId });
+		const { data } = await ai.call("list_wishes");
+		// Then
+		expect((data as { wishes: Listed[] }).wishes).toEqual([]);
+	});
+
+	test("refuses a wish id that is not the account's as a sentence", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		// When
+		const { isError, text } = await ai.call("delete_wish", {
+			id: "99999999-9999-4999-8999-999999999999",
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "No wish with this id.",
+		});
+	});
+
+	test("refuses to delete a colour a wish uses as a sentence", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		await addJacket(ai);
+		// When
+		const { isError, text } = await ai.call("delete_colour", {
+			id: await colourId(ai, "Navy"),
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "A combination, an owned item, or a wish uses Navy, so it stays. A colour in use cannot be deleted.",
 		});
 	});
 });

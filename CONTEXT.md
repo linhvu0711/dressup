@@ -25,6 +25,9 @@
 - Looks page: the wall of saved looks.
 - Labels page: the page with the lists that the account makes once and uses everywhere.
 - Closet: the pieces the account owns, shown as one tile for each piece.
+- Wishlist: the pieces the account wants to buy, shown as one tile for each piece.
+- Wish: one wanted piece, with its shop links. A piece has at most one wish. An account holds at most 200.
+- Shop link: one place to buy a wish: a web address with its own brand, name, and price in VND. A wish holds at most 10.
 - Compare view: two to six looks in a row.
 - AI app: an outside AI assistant, such as Claude, Claude Code, ChatGPT, or Codex, that acts in an account for its user.
 - Connected AI app: an AI app the user allowed on the Allow page. Settings lists each one. Disconnect stops it at once.

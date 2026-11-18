@@ -13,6 +13,7 @@ import { user } from "./db/auth-schema";
 import { colour, colourSeed } from "./db/colour-schema";
 import { combinationPiece } from "./db/combination-schema";
 import { ownedItem } from "./db/owned-item-schema";
+import { wish } from "./db/wish-schema";
 import type { Result } from "./result";
 
 export type ColourError =
@@ -21,6 +22,14 @@ export type ColourError =
 	| { code: "colour_limit" }
 	| { code: "not_found" }
 	| { code: "colour_in_use"; name: string };
+
+// The account's colour with this id, as a subquery: a write puts it in its
+// own WHERE, so a colour deleted at the same time stops the write.
+export const colourOf = (db: Db, userId: string, colourId: string) =>
+	db
+		.select({ one: sql`1` })
+		.from(colour)
+		.where(and(eq(colour.id, colourId), eq(colour.userId, userId)));
 
 export const STARTER_COLOURS: readonly { name: string; hex: Hex }[] = [
 	{ name: "White", hex: "#F4F2ED" },
@@ -92,8 +101,8 @@ export async function listColours(
 	return rows.map((row) => ({ ...toColour(row), inUse: row.inUse === 1 }));
 }
 
-// The one check of "a combination wears this colour or an owned item has
-// it", for the list and the delete.
+// The one check of "a combination wears this colour, an owned item has it,
+// or a wish is for it", for the list and the delete.
 const inUse = (db: Db) =>
 	sql`(${exists(
 		db
@@ -105,6 +114,8 @@ const inUse = (db: Db) =>
 			.select({ one: sql`1` })
 			.from(ownedItem)
 			.where(eq(ownedItem.colourId, colour.id)),
+	)} or ${exists(
+		db.select({ one: sql`1` }).from(wish).where(eq(wish.colourId, colour.id)),
 	)})`;
 
 type ColourInput = { name: string; hex: string };
