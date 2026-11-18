@@ -155,8 +155,10 @@ async function refusedWrite(
 }
 
 // The page makes the id when the form opens, so an add sent again after a
-// lost answer gives back the same item rather than a second one; the same id
-// with another piece or brand, or another account's id, is conflict. The
+// lost answer gives back the same item rather than a second one, with the
+// quantity sent last, as the person may have changed it before the retry;
+// the same id with another piece or brand, or another account's id, is
+// conflict. The
 // colour, the brand, the limit, and the duplicate rule sit in the insert
 // itself, so two adds at once cannot both pass them.
 export async function addOwnedItem(
@@ -185,6 +187,10 @@ export async function addOwnedItem(
 			before.colourId === input.colourId &&
 			before.brandId === input.brandId;
 		if (!same) return conflict;
+		await db
+			.update(ownedItem)
+			.set({ quantity: input.quantity })
+			.where(and(eq(ownedItem.id, input.id), eq(ownedItem.userId, userId)));
 		const [held] = await readOwnedItems(db, userId, input.id);
 		return held
 			? { ok: true, value: { ownedItem: held, created: false } }

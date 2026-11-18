@@ -146,6 +146,19 @@ describe("POST /api/owned-items", () => {
 		}).toEqual({ status: 200, count: 1 });
 	});
 
+	test("writes the new quantity when the same item is sent again", async () => {
+		// Given: alice added the shirt with 2
+		const { h, headers, ids } = await alice();
+		await post(h, headers, shirt(ids));
+		// When
+		const again = await post(h, headers, { ...shirt(ids), quantity: 3 });
+		// Then
+		expect({
+			status: again.status,
+			quantities: (await list(h, headers)).map((item) => item.quantity),
+		}).toEqual({ status: 200, quantities: [3] });
+	});
+
 	test("refuses the same piece and brand a second time", async () => {
 		// Given: alice has Zara and a Navy long button-up from Zara
 		const { h, headers, ids } = await alice();
