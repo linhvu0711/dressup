@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
+import { addBrand } from "./brand-store";
 import { schema } from "./db";
 import {
 	type aiSession,
@@ -862,6 +863,10 @@ describe("tags", () => {
 			["add_colour", W],
 			["change_colour", W],
 			["delete_colour", D],
+			["list_brands", R],
+			["add_brand", W],
+			["rename_brand", W],
+			["delete_brand", D],
 		]);
 		expect(listed.every((t) => typeof t.title === "string")).toBe(true);
 	});
@@ -1180,6 +1185,125 @@ describe("colours", () => {
 		expect({ isError, text }).toEqual({
 			isError: true,
 			text: "No colour with this id.",
+		});
+	});
+});
+
+type Brand = { id: string; name: string };
+
+const brandNames = async (ai: Session) =>
+	((await ai.call("list_brands")).data as { brands: Brand[] }).brands.map(
+		(b) => b.name,
+	);
+
+describe("brands", () => {
+	// The brand the AI app added; its id is the answer's.
+	async function withZara() {
+		const { h, ai } = await withAiSession();
+		const { data } = await ai.call("add_brand", { name: "Zara" });
+		return { h, ai, id: (data as { brand: Brand }).brand.id };
+	}
+
+	test("lists no brands for a new account", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		// When
+		const result = await ai.call("list_brands");
+		// Then
+		expect(result).toEqual({
+			isError: false,
+			text: "You have no brands yet.",
+			data: { brands: [] },
+		});
+	});
+
+	test("adds a brand and lists it", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		// When
+		const { isError } = await ai.call("add_brand", { name: "Uniqlo" });
+		// Then
+		expect({ isError, names: await brandNames(ai) }).toEqual({
+			isError: false,
+			names: ["Uniqlo"],
+		});
+	});
+
+	test("refuses a brand name already used", async () => {
+		// Given
+		const { ai } = await withZara();
+		// When
+		const { isError, text } = await ai.call("add_brand", { name: "zara" });
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "You already have a brand called zara.",
+		});
+	});
+
+	test("refuses an empty brand name", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		// When
+		const { isError, text } = await ai.call("add_brand", { name: " " });
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "A brand name has 1 to 24 characters.",
+		});
+	});
+
+	test("refuses brand number 101", async () => {
+		// Given: 100 brands, added through the store
+		const { h, ai, userId } = await withAiSession();
+		for (let i = 1; i <= 100; i++) await addBrand(h.db, userId, `Brand ${i}`);
+		// When
+		const { isError, text } = await ai.call("add_brand", { name: "Uniqlo" });
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "You have 100 brands. That is the limit. Delete one to add a new one.",
+		});
+	});
+
+	test("renames a brand", async () => {
+		// Given
+		const { ai, id } = await withZara();
+		// When
+		const { isError, data } = await ai.call("rename_brand", {
+			id,
+			name: "Zara Home",
+		});
+		// Then
+		expect({ isError, data }).toEqual({
+			isError: false,
+			data: { brand: { id, name: "Zara Home" } },
+		});
+	});
+
+	test("deletes a brand", async () => {
+		// Given
+		const { ai, id } = await withZara();
+		// When
+		const { data } = await ai.call("delete_brand", { id });
+		// Then
+		expect({
+			deleted: (data as { deleted: string }).deleted,
+			names: await brandNames(ai),
+		}).toEqual({ deleted: id, names: [] });
+	});
+
+	test("refuses to delete a brand that is gone", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		// When
+		const { isError, text } = await ai.call("delete_brand", {
+			id: "6f1c2b9e-1d2a-4c3b-9e8f-0a1b2c3d4e5f",
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "No brand with this id.",
 		});
 	});
 });

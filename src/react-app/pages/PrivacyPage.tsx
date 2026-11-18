@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router";
 
 const SUPPORT_EMAIL = "linh.tuan.vu.contact@gmail.com";
-const LAST_CHANGED = "13 November 2026";
+const LAST_CHANGED = "18 November 2026";
 
 function Section({
 	id,
@@ -58,6 +58,7 @@ export function PrivacyPage() {
 					<ul className="mt-2 list-disc space-y-1 pl-5">
 						<li>Your Google account's name, email, and picture.</li>
 						<li>The colours you save.</li>
+						<li>The brands you save.</li>
 						<li>Your last outfit.</li>
 						<li>Your looks and their tags.</li>
 						<li>Your mannequin's skin and hair colour.</li>

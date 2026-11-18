@@ -75,6 +75,7 @@ describe("migrations", () => {
 			"__drizzle_migrations",
 			"account",
 			"ai_action_count",
+			"brand",
 			"colour",
 			"colour_seed",
 			"colour_square",

@@ -1,11 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import {
-	after,
-	cachedUserId,
-	keys,
-	RequestError,
-	request,
-} from "../data/client";
+import { after, cachedUserId, goneAsDone, keys, request } from "../data/client";
 import { aiAppsAnswer } from "../data/contract";
 
 export function useAiApps() {
@@ -25,12 +19,7 @@ export function useDisconnectAiApp() {
 	return useMutation({
 		mutationFn: (id: string) =>
 			request("DELETE", `/api/ai-apps/${encodeURIComponent(id)}`).catch(
-				(error: unknown) => {
-					// Not found: disconnected on another device already, which is
-					// what was asked.
-					if (!(error instanceof RequestError && error.code === "not_found"))
-						throw error;
-				},
+				goneAsDone,
 			),
 		onSuccess: (_, id) => after.aiAppGone(userId, id),
 	});

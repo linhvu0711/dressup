@@ -5,9 +5,9 @@ import {
 	type Colour,
 	type ColourId,
 	colourInputSchema,
-	sameColourName,
 } from "@/labels/colour";
-import type { Db } from "./db";
+import { sameLabelName } from "@/labels/name";
+import { type Db, hitsIndex } from "./db";
 import { user } from "./db/auth-schema";
 import { colour, colourSeed } from "./db/colour-schema";
 import type { Result } from "./result";
@@ -93,13 +93,6 @@ function check(input: ColourInput): Checked {
 	return { ok: false, error: { code: "invalid", field } };
 }
 
-// Two tabs can both pass the duplicate check; the index on lower(name) then
-// refuses the second write, with an error that names the index. D1 and
-// drizzle may wrap it, so the causes are read too.
-const isNameTaken = (error: unknown): boolean =>
-	error instanceof Error &&
-	(error.message.includes("colour_userId_name_uq") || isNameTaken(error.cause));
-
 // The server makes the id. The names are read through listColours, so an
 // account's first add, as from an AI app, gets the starter set before the
 // limit is counted. The count sits in the insert, so two adds at once cannot
@@ -114,7 +107,7 @@ export async function addColour(
 	const { name, hex } = checked;
 	const duplicate = { ok: false, error: { code: "duplicate", name } } as const;
 	const colours = await listColours(db, userId);
-	if (colours.some((c) => sameColourName(c.name, name))) return duplicate;
+	if (colours.some((c) => sameLabelName(c.name, name))) return duplicate;
 	try {
 		const [row] = await db
 			.insert(colour)
@@ -146,7 +139,7 @@ export async function addColour(
 			? { ok: true, value: toColour(row) }
 			: { ok: false, error: { code: "colour_limit" } };
 	} catch (error) {
-		if (isNameTaken(error)) return duplicate;
+		if (hitsIndex(error, "colour_userId_name_uq")) return duplicate;
 		throw error;
 	}
 }
@@ -164,7 +157,7 @@ export async function changeColour(
 	const { name, hex } = checked;
 	const duplicate = { ok: false, error: { code: "duplicate", name } } as const;
 	const colours = await listColours(db, userId);
-	if (colours.some((c) => c.id !== id && sameColourName(c.name, name)))
+	if (colours.some((c) => c.id !== id && sameLabelName(c.name, name)))
 		return duplicate;
 	try {
 		const [row] = await db
@@ -176,7 +169,7 @@ export async function changeColour(
 			? { ok: true, value: toColour(row) }
 			: { ok: false, error: { code: "not_found" } };
 	} catch (error) {
-		if (isNameTaken(error)) return duplicate;
+		if (hitsIndex(error, "colour_userId_name_uq")) return duplicate;
 		throw error;
 	}
 }

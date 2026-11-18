@@ -32,6 +32,13 @@ export const COLOURS_EMPTY_USER = {
 	name: "Colours Empty Person",
 };
 
+// Holds 100 brands, the brand limit, for the brand form's limit test.
+export const BRANDS_FULL_USER = {
+	id: "e2e-brands-full",
+	email: "brands-full@dressup.test",
+	name: "Brands Full Person",
+};
+
 type ProxyEnv = {
 	DB: Parameters<typeof drizzle>[0];
 	BETTER_AUTH_SECRET?: string;

@@ -2,8 +2,9 @@ import { cn } from "cn";
 import { Check, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { sameLabelName } from "@/labels/name";
 import { TagNameTaken, useTags } from "./api";
-import { sameTagName, TAG_NAME_MAX, type TagId } from "./tag";
+import { TAG_NAME_MAX, type TagId } from "./tag";
 
 // One box for a tag name: the add box of the save form and of Edit tags,
 // and the rename box. Return saves; Escape is left to the dialog, which
@@ -45,7 +46,7 @@ export function TagNameField({
 		// An empty or unchanged name sends nothing.
 		if (!trimmed || trimmed === initial) return onCancel();
 		if (
-			tags.data?.some((t) => t.id !== except && sameTagName(t.name, trimmed))
+			tags.data?.some((t) => t.id !== except && sameLabelName(t.name, trimmed))
 		) {
 			setTaken(true);
 			return;

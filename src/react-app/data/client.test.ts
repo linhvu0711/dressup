@@ -1,5 +1,13 @@
 import { afterEach, expect, test } from "bun:test";
-import { keys, queryClient, request, SignedOut, signedOut } from "./client";
+import {
+	goneAsDone,
+	keys,
+	queryClient,
+	RequestError,
+	request,
+	SignedOut,
+	signedOut,
+} from "./client";
 import { looksAnswer } from "./contract";
 
 afterEach(() => queryClient.clear());
@@ -51,4 +59,22 @@ test("keeps no data of the account after sign-out", async () => {
 			.map((q) => [q.queryKey, q.state.data]),
 		mutations: queryClient.getMutationCache().getAll().length,
 	}).toEqual({ queries: [[["me"], null]], mutations: 0 });
+});
+
+test("takes a delete answered not found as done", () => {
+	// Given
+	const notFound = new RequestError(404, "not_found", "DELETE /api/colours/x");
+	const failed = new RequestError(500, null, "DELETE /api/colours/x");
+	const outcome = (error: unknown) => {
+		try {
+			goneAsDone(error);
+			return "done";
+		} catch {
+			return "thrown";
+		}
+	};
+	// When
+	const seen = { notFound: outcome(notFound), failed: outcome(failed) };
+	// Then
+	expect(seen).toEqual({ notFound: "done", failed: "thrown" });
 });

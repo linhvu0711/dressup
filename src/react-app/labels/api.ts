@@ -1,11 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import {
-	after,
-	cachedUserId,
-	keys,
-	RequestError,
-	request,
-} from "../data/client";
+import { after, cachedUserId, goneAsDone, keys, request } from "../data/client";
 import { colourAnswer, coloursAnswer } from "../data/contract";
 import type { Colour, ColourId } from "./colour";
 
@@ -54,12 +48,6 @@ export function useChangeColour() {
 		onError: () => after.coloursMayDiffer(userId),
 	});
 }
-
-// Not found: deleted on another device already, which is what was asked.
-const goneAsDone = (error: unknown) => {
-	if (!(error instanceof RequestError && error.code === "not_found"))
-		throw error;
-};
 
 export function useDeleteColour() {
 	const userId = cachedUserId();

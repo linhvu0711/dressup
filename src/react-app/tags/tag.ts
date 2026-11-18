@@ -14,7 +14,3 @@ export const tagSchema = z.object({
 });
 
 export type Tag = z.infer<typeof tagSchema>;
-
-// An account has each name once, in any letter case.
-export const sameTagName = (a: string, b: string): boolean =>
-	a.trim().toLowerCase() === b.trim().toLowerCase();

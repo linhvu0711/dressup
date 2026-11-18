@@ -2,6 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import {
 	after,
 	cachedUserId,
+	goneAsDone,
 	keys,
 	RequestError,
 	request,
@@ -28,12 +29,6 @@ const takenAsTagNameTaken = (error: unknown): never => {
 	if (error instanceof RequestError && error.code === "duplicate")
 		throw new TagNameTaken();
 	throw error;
-};
-
-// Not found: deleted on another device already, which is what was asked.
-const goneAsDone = (error: unknown) => {
-	if (!(error instanceof RequestError && error.code === "not_found"))
-		throw error;
 };
 
 export function useAddTag() {
