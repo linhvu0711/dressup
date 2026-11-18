@@ -4,6 +4,8 @@ import { expect, test } from "./fixtures";
 
 const FOUR_TITLE = "White short tee + Navy chino pants";
 const TWO_TITLE = "White short tee + Grey training shorts";
+const THREE_TITLE =
+	"Khaki Harrington jacket (open) + Black long tee + Navy casual pants";
 
 const titles = (page: Page) => page.locator('[data-slot="combination-title"]');
 
@@ -170,4 +172,21 @@ test("shows the Filter button left of + at 36 px with a count badge", async ({
 		.click();
 	// Then
 	await expect(badge).toHaveText("1");
+});
+
+test("filters the wall by a tag", async ({ page }) => {
+	// Given: both projects, a fresh account; the wall, the Filter sheet open
+	await seedWall(page);
+	await openWall(page);
+	await openFilter(page);
+	// When
+	await sheet(page).getByRole("button", { name: "work", exact: true }).click();
+	// Then
+	await expect(titles(page)).toHaveText([FOUR_TITLE, THREE_TITLE]);
+	// When
+	await sheet(page)
+		.getByRole("button", { name: "weekend", exact: true })
+		.click();
+	// Then
+	await expect(titles(page)).toHaveText([FOUR_TITLE]);
 });

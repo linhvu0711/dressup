@@ -1,9 +1,9 @@
 import { cn } from "cn";
-import { ToggleGroup } from "radix-ui";
 import { type Dispatch, type SetStateAction, useState } from "react";
 import { CHIP, CHIP_DASHED } from "@/components/ui/chip";
 import { isNameTaken } from "@/data/client";
 import { useAddTag, useTags } from "./api";
+import { TagChips } from "./TagChips";
 import { TagNameField } from "./TagNameField";
 import type { TagId } from "./tag";
 
@@ -28,19 +28,7 @@ export function TagPicker({
 			</span>
 			<div className="flex flex-wrap gap-[7px]">
 				{tags.data?.length ? (
-					<ToggleGroup.Root
-						type="multiple"
-						aria-label="Tags"
-						value={picked}
-						onValueChange={(value) => onChange(value as TagId[])}
-						className="flex flex-wrap gap-[7px]"
-					>
-						{tags.data.map((tag) => (
-							<ToggleGroup.Item key={tag.id} value={tag.id} className={CHIP}>
-								{tag.name}
-							</ToggleGroup.Item>
-						))}
-					</ToggleGroup.Root>
+					<TagChips tags={tags.data} picked={picked} onChange={onChange} />
 				) : null}
 				{adding ? (
 					<TagNameField

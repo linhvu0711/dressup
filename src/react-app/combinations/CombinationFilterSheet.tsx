@@ -8,6 +8,8 @@ import { FilterSheet } from "@/components/ui/filter";
 import { LABEL, LIST_ROW, ROW } from "@/components/ui/sheet-form";
 import { useColours } from "@/labels/api";
 import { ColourSwatches } from "@/labels/ColourSwatches";
+import { useTags } from "@/tags/api";
+import { TagChips } from "@/tags/TagChips";
 import {
 	BLANK_ROW,
 	type CombinationFilter,
@@ -39,6 +41,7 @@ export function CombinationFilterSheet({
 	);
 	const [step, setStep] = useState<Step | null>(null);
 	const colours = useColours();
+	const tags = useTags();
 	function changeRows(next: PieceRow[]) {
 		setRows(next);
 		onChange({ ...filter, pieces: next.filter((r) => !isBlank(r)) });
@@ -131,6 +134,16 @@ export function CombinationFilterSheet({
 						Another piece
 					</button>
 				</div>
+				{tags.data?.length ? (
+					<div className="flex flex-col gap-2">
+						<span className={LABEL}>Tags</span>
+						<TagChips
+							tags={tags.data}
+							picked={filter.tags}
+							onChange={(picked) => onChange({ ...filter, tags: picked })}
+						/>
+					</div>
+				) : null}
 			</div>
 			{step?.kind === "type" ? (
 				<TypeOptions
