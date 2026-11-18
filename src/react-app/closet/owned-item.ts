@@ -39,3 +39,31 @@ export const ownedItemSchema = z.object({
 });
 
 export type OwnedItem = z.infer<typeof ownedItemSchema>;
+
+export type ClosetPiece = {
+	typeId: OwnedItem["typeId"];
+	colour: OwnedItem["colour"];
+	quantity: number;
+	items: OwnedItem[];
+};
+
+// One tile for each piece, with the total of its items. The list comes newest
+// first, so the piece of the newest item leads.
+export function closetPieces(items: readonly OwnedItem[]): ClosetPiece[] {
+	const pieces = new Map<string, ClosetPiece>();
+	for (const item of items) {
+		const key = `${item.typeId}/${item.colour.id}`;
+		const piece = pieces.get(key);
+		if (piece) {
+			piece.quantity += item.quantity;
+			piece.items.push(item);
+		} else
+			pieces.set(key, {
+				typeId: item.typeId,
+				colour: item.colour,
+				quantity: item.quantity,
+				items: [item],
+			});
+	}
+	return [...pieces.values()];
+}

@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import { combinationKey, combinationTitle, wornLayers } from "./combination";
+import {
+	combinationKey,
+	combinationTitle,
+	pieceName,
+	wornLayers,
+} from "./combination";
 
 test("keys pieces with no jacket the same, open or not", () => {
 	// Given: Navy casual pants and a Black long tee, as colour ids n and b
@@ -89,4 +94,13 @@ test("wears no blank top under a sweater", () => {
 		{ garment: "casual_p", color: "#E2DED7" },
 		{ garment: "sweater", color: "#6E1F2F" },
 	]);
+});
+
+test("names one piece by its colour and type", () => {
+	// Given
+	const piece = { typeId: "shirt_l", colour: { name: "Navy" } } as const;
+	// When
+	const name = pieceName(piece);
+	// Then
+	expect(name).toBe("Navy long button-up");
 });

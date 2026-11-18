@@ -21,6 +21,7 @@ export const keys = {
 	brands: (userId: string | null) => ["brands", userId] as const,
 	aiApps: (userId: string | null) => ["ai-apps", userId] as const,
 	combinations: (userId: string | null) => ["combinations", userId] as const,
+	closet: (userId: string | null) => ["closet", userId] as const,
 	addTag: ["tags", "add"] as const,
 	allowApp: (clientId: string) => ["allow-app", clientId] as const,
 };
