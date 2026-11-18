@@ -1,5 +1,5 @@
-import { LayoutGrid, Shirt, Tag } from "lucide-react";
 import { NavLink } from "react-router";
+import { MAIN_TABS } from "./main-tabs";
 import { SettingsLink } from "./SettingsLink";
 
 const tab =
@@ -12,18 +12,12 @@ export function TopBar() {
 				dressup
 			</span>
 			<nav aria-label="Main" className="flex gap-[22px] self-stretch">
-				<NavLink to="/" className={tab}>
-					<Shirt size={16} strokeWidth={1.9} aria-hidden />
-					Dress
-				</NavLink>
-				<NavLink to="/looks" className={tab}>
-					<LayoutGrid size={16} strokeWidth={1.9} aria-hidden />
-					Looks
-				</NavLink>
-				<NavLink to="/labels" className={tab}>
-					<Tag size={16} strokeWidth={1.9} aria-hidden />
-					Labels
-				</NavLink>
+				{MAIN_TABS.map(({ to, label, Icon }) => (
+					<NavLink key={to} to={to} className={tab}>
+						<Icon size={16} strokeWidth={1.9} aria-hidden />
+						{label}
+					</NavLink>
+				))}
 			</nav>
 			<span className="flex-1" />
 			<SettingsLink />

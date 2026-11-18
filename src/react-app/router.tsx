@@ -1,5 +1,6 @@
 import { createBrowserRouter } from "react-router";
 import { AllowPage } from "./pages/AllowPage";
+import { CombinationsPage } from "./pages/CombinationsPage";
 import { ComparePage } from "./pages/ComparePage";
 import { DressPage } from "./pages/DressPage";
 import { LabelsPage } from "./pages/LabelsPage";
@@ -18,6 +19,8 @@ export const router = createBrowserRouter([
 			{ path: "looks/compare", element: <ComparePage /> },
 			{ path: "looks/:lookId", element: <LooksPage /> },
 			{ path: "settings", element: <SettingsPage /> },
+			{ path: "combinations", element: <CombinationsPage /> },
+			{ path: "combinations/:combinationId", element: <CombinationsPage /> },
 			{ path: "labels", element: <LabelsPage /> },
 			{ path: "*", element: <NotFoundPage /> },
 		],

@@ -1,6 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { z } from "zod";
 import type { AiApp } from "@/ai-apps/ai-app";
+import type { Combination } from "@/combinations/combination";
 import { type Brand, type BrandId, byBrandName } from "@/labels/brand";
 import type { Colour, ColourId, ListedColour } from "@/labels/colour";
 import type { Look, LookId } from "@/looks/look";
@@ -19,6 +20,7 @@ export const keys = {
 	colours: (userId: string | null) => ["colours", userId] as const,
 	brands: (userId: string | null) => ["brands", userId] as const,
 	aiApps: (userId: string | null) => ["ai-apps", userId] as const,
+	combinations: (userId: string | null) => ["combinations", userId] as const,
 	addTag: ["tags", "add"] as const,
 	allowApp: (clientId: string) => ["allow-app", clientId] as const,
 };
@@ -97,6 +99,8 @@ export const after = {
 		queryClient.setQueryData<ListedColour[]>(keys.colours(userId), (old) =>
 			old?.map((c) => (c.id === colour.id ? { ...c, ...colour } : c)),
 		);
+		// A combination shows its colours' names and codes.
+		refresh(keys.combinations(userId));
 	},
 	// The server's colours may differ from the cached ones, as after an add
 	// whose answer was lost, or a change refused for a change made elsewhere.
@@ -131,6 +135,19 @@ export const after = {
 			old?.filter((b) => b.id !== id),
 		);
 		refresh(keys.brands(userId));
+	},
+	// As lookSaved; a saved combination also makes its colours in use.
+	combinationSaved(userId: string | null, combination: Combination) {
+		queryClient.setQueryData<Combination[]>(
+			keys.combinations(userId),
+			(old) =>
+				old &&
+				(old.some((c) => c.id === combination.id)
+					? old.map((c) => (c.id === combination.id ? combination : c))
+					: [combination, ...old]),
+		);
+		refresh(keys.combinations(userId));
+		refresh(keys.colours(userId));
 	},
 	aiAppGone(userId: string | null, id: string) {
 		queryClient.setQueryData<AiApp[]>(keys.aiApps(userId), (old) =>
