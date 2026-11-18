@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
 import { RequestError } from "@/data/client";
-import { useAddColour } from "./api";
+import { useAddColour, useChangeColour } from "./api";
 import {
 	COLOUR_LIMIT,
 	COLOUR_NAME_MAX,
@@ -37,39 +37,54 @@ function sentProblem(error: unknown): Problem {
 	return "failed";
 }
 
-// The form to add a colour: a name and the colour field.
+// The form to add a colour, or to change the one it is given: a name and
+// the colour field.
 export function ColourSheet({
 	colours,
+	editing,
 	onClose,
 }: {
 	colours: Colour[];
+	editing: Colour | null;
 	onClose: () => void;
 }) {
-	const [name, setName] = useState("");
-	const [hex, setHex] = useState<Hex | null>(START);
+	const [name, setName] = useState(editing?.name ?? "");
+	const [hex, setHex] = useState<Hex | null>(editing?.hex ?? START);
 	const [checked, setChecked] = useState<Problem | null>(null);
 	const box = useRef<HTMLInputElement>(null);
 	const add = useAddColour();
+	const change = useChangeColour();
+	const save = editing ? change : add;
 	const toast = useToast();
-	const full = colours.length >= COLOUR_LIMIT;
+	// A change adds no colour, so the limit never stops it.
+	const full = !editing && colours.length >= COLOUR_LIMIT;
 	const problem =
-		checked ?? (full ? "full" : add.isError ? sentProblem(add.error) : null);
+		checked ?? (full ? "full" : save.isError ? sentProblem(save.error) : null);
 
 	const submit = (code: Hex | null) => {
-		if (!code || full || add.isPending) return;
+		if (!code || full || save.isPending) return;
 		const trimmed = name.trim();
 		if (!trimmed) return setChecked("empty");
-		if (colours.some((c) => sameColourName(c.name, trimmed)))
+		if (
+			colours.some(
+				(c) => c.id !== editing?.id && sameColourName(c.name, trimmed),
+			)
+		)
 			return setChecked("taken");
-		add.mutate(
-			{ name: trimmed, hex: code },
-			{
-				onSuccess: () => {
-					toast("Colour added");
-					onClose();
-				},
-			},
-		);
+		const done = (text: string) => () => {
+			toast(text);
+			onClose();
+		};
+		if (editing)
+			change.mutate(
+				{ id: editing.id, name: trimmed, hex: code },
+				{ onSuccess: done("Changes saved") },
+			);
+		else
+			add.mutate(
+				{ name: trimmed, hex: code },
+				{ onSuccess: done("Colour added") },
+			);
 	};
 
 	return (
@@ -88,7 +103,7 @@ export function ColourSheet({
 					className={SHEET}
 				>
 					<Dialog.Title className="text-[25px] leading-tight">
-						Add a colour
+						{editing ? "Edit colour" : "Add a colour"}
 					</Dialog.Title>
 					<form
 						className="flex flex-col gap-4"
@@ -111,14 +126,18 @@ export function ColourSheet({
 								onChange={(e) => {
 									setName(e.target.value);
 									setChecked(null);
-									add.reset();
+									save.reset();
 								}}
 								maxLength={COLOUR_NAME_MAX}
 								autoComplete="off"
 								className="h-10 min-w-0 rounded-[12px] border border-input bg-card px-3 text-[14px] outline-none focus-visible:border-ring"
 							/>
 						</div>
-						<ColourField start={START} onChange={setHex} onEnter={submit} />
+						<ColourField
+							start={editing?.hex ?? START}
+							onChange={setHex}
+							onEnter={submit}
+						/>
 						{problem ? (
 							<p role="alert" className="text-[13px] text-destructive">
 								{PROBLEM_TEXT[problem]}
@@ -131,9 +150,9 @@ export function ColourSheet({
 							<Button
 								type="submit"
 								variant="primary"
-								disabled={!hex || full || add.isPending}
+								disabled={!hex || full || save.isPending}
 							>
-								Add
+								{editing ? "Save" : "Add"}
 							</Button>
 						</div>
 					</form>

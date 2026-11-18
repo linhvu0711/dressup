@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { after, cachedUserId, keys, request } from "../data/client";
 import { colourAnswer, coloursAnswer } from "../data/contract";
+import type { Colour } from "./colour";
 
 export function useColours() {
 	const userId = cachedUserId();
@@ -28,5 +29,22 @@ export function useAddColour() {
 		// On an error too: an add whose answer was lost may be stored, and
 		// sending it again finds the name taken.
 		onSettled: () => after.coloursMayDiffer(userId),
+	});
+}
+
+export function useChangeColour() {
+	const userId = cachedUserId();
+	return useMutation({
+		mutationFn: async (input: Colour) =>
+			(
+				await request("PUT", `/api/colours/${input.id}`, {
+					body: input,
+					answer: colourAnswer,
+				})
+			).colour,
+		onSuccess: (colour) => after.colourChanged(userId, colour),
+		// A colour gone on another device, or a name taken there, shows on the
+		// next load.
+		onError: () => after.coloursMayDiffer(userId),
 	});
 }

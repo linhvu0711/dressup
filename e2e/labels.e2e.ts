@@ -163,3 +163,21 @@ test.describe("an account with 100 colours", () => {
 		).toBeDisabled();
 	});
 });
+
+test("changes a colour's name and code", async ({ page }) => {
+	// Given: a fresh account, /labels open
+	await page.goto("/labels");
+	await expect(rows(page)).toHaveCount(13);
+	// When
+	await page.getByRole("button", { name: "Navy #1F3A5F" }).click();
+	await expect(nameBox(page)).toHaveValue("Navy");
+	await expect(codeBox(page)).toHaveValue("#1F3A5F");
+	await nameBox(page).fill("Ink");
+	await codeBox(page).fill("#22304A");
+	await sheet(page, "Edit colour")
+		.getByRole("button", { name: "Save", exact: true })
+		.click();
+	// Then
+	await expect(page.locator('[data-slot="toast"]')).toHaveText("Changes saved");
+	await expect(rows(page).nth(2)).toHaveAccessibleName("Ink #22304A");
+});

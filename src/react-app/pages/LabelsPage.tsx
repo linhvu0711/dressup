@@ -12,12 +12,13 @@ const SWATCH =
 const LIST =
 	"min-h-0 flex-1 overflow-auto px-4 pb-24 wide:mx-auto wide:w-full wide:max-w-[540px]";
 
-function ColourRow({ colour }: { colour: Colour }) {
+function ColourRow({ colour, onOpen }: { colour: Colour; onOpen: () => void }) {
 	return (
 		<li className="flex min-h-[58px] min-w-0 items-center border-b border-border py-[11px]">
 			<button
 				type="button"
 				aria-label={`${colour.name} ${colour.hex}`}
+				onClick={onOpen}
 				className="flex w-full min-w-0 items-center gap-3 text-left"
 			>
 				<span
@@ -48,7 +49,9 @@ function ColourRow({ colour }: { colour: Colour }) {
 // The lists the account makes once and uses everywhere; colours for now.
 export function LabelsPage() {
 	const colours = useColours();
-	const [adding, setAdding] = useState(false);
+	// The open form: null for none, "add" for a new colour, else the colour
+	// it changes.
+	const [open, setOpen] = useState<Colour | "add" | null>(null);
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
 			<PageHeader
@@ -60,7 +63,7 @@ export function LabelsPage() {
 						aria-label="Add a colour"
 						title="Add a colour"
 						disabled={!colours.data}
-						onClick={() => setAdding(true)}
+						onClick={() => setOpen("add")}
 					>
 						<Plus size={18} strokeWidth={1.9} aria-hidden />
 					</Button>
@@ -69,12 +72,20 @@ export function LabelsPage() {
 			{colours.data ? (
 				<ul data-slot="colour-list" className={LIST}>
 					{colours.data.map((colour) => (
-						<ColourRow key={colour.id} colour={colour} />
+						<ColourRow
+							key={colour.id}
+							colour={colour}
+							onOpen={() => setOpen(colour)}
+						/>
 					))}
 				</ul>
 			) : null}
-			{adding && colours.data ? (
-				<ColourSheet colours={colours.data} onClose={() => setAdding(false)} />
+			{open && colours.data ? (
+				<ColourSheet
+					colours={colours.data}
+					editing={open === "add" ? null : open}
+					onClose={() => setOpen(null)}
+				/>
 			) : null}
 		</div>
 	);
