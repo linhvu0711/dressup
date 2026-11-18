@@ -4,6 +4,7 @@
 - Combination: 2 to 4 pieces that match well, at most one for each layer, with the jacket state (open or closed). It has no name: its title is its pieces, top layer first. Two combinations with the same pieces and the same jacket state are one combination, and the account keeps it once. An account holds at most 300.
 - Builder: the page where the user picks the pieces of a combination on the mannequin.
 - Combinations page: the wall of saved combinations.
+- Combination page: one saved combination: the mannequin, the title, and a line for each piece with its colour. From 900 px it sits beside the Combinations page.
 - Garment: one kind of clothing in one length. "Short tee" and "long tee" are two garments. The app has 17, and the list is fixed.
 - Mode: a fixed set of garments worn together, for example "long polo + sweater + chino pants". The app has 23, and the list is fixed.
 - Weather group: Hot, Cool, or Cold. Each mode is in exactly one. "Training" is a fourth tab that shows the two training modes.

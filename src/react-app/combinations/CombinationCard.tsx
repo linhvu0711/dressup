@@ -1,13 +1,14 @@
 import { cn } from "cn";
 import { useEffect, useRef } from "react";
+import { Link } from "react-router";
 import { CombinationFigure } from "./CombinationFigure";
 import { type Combination, combinationTitle } from "./combination";
 
 const VIEW_BOX = "10 14 380 590";
 
-// One card on the wall: the drawn mannequin and the title. It opens nothing
-// yet (#71). A marked card, the one the address names, has an outline round
-// its picture and scrolls into view once.
+// One card on the wall: the drawn mannequin and the title. It opens its
+// combination. A marked card, the open one, has an outline round its picture
+// and scrolls into view once.
 export function CombinationCard({
 	combination,
 	marked = false,
@@ -15,13 +16,14 @@ export function CombinationCard({
 	combination: Combination;
 	marked?: boolean;
 }) {
-	const ref = useRef<HTMLDivElement>(null);
+	const ref = useRef<HTMLAnchorElement>(null);
 	useEffect(() => {
 		if (marked) ref.current?.scrollIntoView({ block: "nearest" });
 	}, [marked]);
 	return (
-		<div
+		<Link
 			ref={ref}
+			to={`/combinations/${combination.id}`}
 			data-slot="combination-card"
 			aria-current={marked ? "true" : undefined}
 			className="flex min-w-0 flex-col gap-[7px]"
@@ -48,6 +50,6 @@ export function CombinationCard({
 			>
 				{combinationTitle(combination)}
 			</span>
-		</div>
+		</Link>
 	);
 }

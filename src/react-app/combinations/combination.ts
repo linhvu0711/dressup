@@ -156,18 +156,30 @@ const typeWord = (id: GarmentId) => {
 	return id === "harrington" ? name : name[0].toLowerCase() + name.slice(1);
 };
 
+// The order a combination is read in: the top layer first.
+export const topFirst = <T extends { typeId: GarmentId }>(
+	pieces: readonly T[],
+): T[] => byLayer(pieces).reverse();
+
+// A piece as the title and the piece lines name it: "Black long tee".
+export function pieceName(piece: {
+	typeId: GarmentId;
+	colour: { name: string };
+}): string {
+	return `${piece.colour.name} ${typeWord(piece.typeId)}`;
+}
+
 // The pieces, top layer first, as "Khaki Harrington jacket (open) + Black long
 // tee + Navy casual pants".
 export function combinationTitle(combination: {
 	pieces: readonly { typeId: GarmentId; colour: { name: string } }[];
 	open: boolean;
 }): string {
-	return byLayer(combination.pieces)
-		.reverse()
+	return topFirst(combination.pieces)
 		.map((p) => {
 			const open =
 				combination.open && LAYER_OF[p.typeId] === "jacket" ? " (open)" : "";
-			return `${p.colour.name} ${typeWord(p.typeId)}${open}`;
+			return `${pieceName(p)}${open}`;
 		})
 		.join(" + ");
 }

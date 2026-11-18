@@ -277,6 +277,181 @@ test("shows the sign-in screen when the combinations answer 401", async ({
 	).toBeVisible();
 });
 
+const toast = (page: Page) => page.locator('[data-slot="toast"]');
+
+const view = (page: Page) => page.locator('[data-slot="combination-view"]');
+
+const viewTitle = (page: Page) => view(page).locator("h2");
+
+// THREE saved, then the address of its own page.
+async function savedThree(page: Page) {
+	await page.goto("/");
+	const saved = three(await colourIds(page));
+	await postCombinations(page, saved);
+	return saved;
+}
+
+test("opens a combination as a page under 900 px and beside the wall from 900 px", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account with THREE saved, /combinations
+	const saved = await savedThree(page);
+	await page.goto("/combinations");
+	const wall = page.locator('[data-slot="combination-wall"]');
+	// When
+	await cards(page).first().click();
+	// Then
+	await expect(page).toHaveURL(`/combinations/${saved.id}`);
+	await expect(
+		page.getByRole("link", { name: "Change this combination" }),
+	).toHaveAttribute("href", `/build/${saved.id}`);
+	await expect(
+		page.getByRole("button", { name: "Delete this combination" }),
+	).toBeVisible();
+	if (isPhone(page)) {
+		await expect(page.getByRole("link", { name: "Back" })).toBeVisible();
+		await expect(wall).toBeHidden();
+		await page.getByRole("link", { name: "Back" }).click();
+		await expect(page).toHaveURL("/combinations");
+		await expect(wall).toBeVisible();
+	} else {
+		await expect(wall).toBeVisible();
+		await expect(cards(page).first()).toHaveAttribute("aria-current", "true");
+		await expect(page.getByRole("link", { name: "Back" })).toBeHidden();
+		// Beside the wall the head row sits under the stage.
+		const [h, s] = [
+			await viewTitle(page).boundingBox(),
+			await view(page).locator('[data-surface="wall"]').boundingBox(),
+		];
+		expect(h && s && s.y + s.height <= h.y).toBe(true);
+	}
+});
+
+test("shows the mannequin, the whole title, and a line for each piece", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account with THREE saved
+	const saved = await savedThree(page);
+	// When
+	await page.goto(`/combinations/${saved.id}`);
+	// Then
+	await expect(viewTitle(page)).toHaveText(LONG_TITLE);
+	const box = await viewTitle(page).evaluate((el) => ({
+		lines: el.clientHeight / Number.parseFloat(getComputedStyle(el).lineHeight),
+		cut: el.scrollWidth > el.clientWidth,
+		wider:
+			document.documentElement.scrollWidth >
+			document.documentElement.clientWidth,
+	}));
+	expect({
+		wraps: isPhone(page) ? box.lines > 1.5 : true,
+		cut: box.cut,
+		wider: box.wider,
+	}).toEqual({ wraps: true, cut: false, wider: false });
+	await expect(page.getByRole("img", { name: LONG_TITLE })).toBeVisible();
+	await expect(page.locator('[data-slot="piece-line"]')).toHaveText([
+		"Khaki Harrington jacket · open#B8A57C",
+		"Black long tee#1B1B1F",
+		"Navy casual pants#1F3A5F",
+	]);
+});
+
+test.describe("copy", () => {
+	test.use({ permissions: ["clipboard-read", "clipboard-write"] });
+
+	test("copies a colour code and shows the toast", async ({ page }) => {
+		// Given: both projects, a fresh account with THREE saved and open
+		const saved = await savedThree(page);
+		await page.goto(`/combinations/${saved.id}`);
+		// When
+		await view(page).getByRole("button", { name: "Copy #1F3A5F" }).click();
+		// Then
+		await expect(toast(page)).toHaveText("#1F3A5F copied");
+		expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+			"#1F3A5F",
+		);
+	});
+});
+
+test("shows the wall for a link to a combination it does not have", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account with THREE saved
+	await savedThree(page);
+	// When
+	await page.goto("/combinations/00000000-0000-4000-8000-000000000000");
+	// Then
+	await expect(cards(page)).toHaveCount(1);
+	await expect(cards(page).first()).toBeVisible();
+	await expect(view(page)).toHaveCount(0);
+	await expect(toast(page)).toHaveCount(0);
+});
+
+test("shows skeleton cards while a combination's address loads", async ({
+	page,
+}) => {
+	// Given: both projects, THREE saved; GET /api/combinations held until the
+	// test lets it go
+	const saved = await savedThree(page);
+	let release = () => {};
+	const held = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	await page.route("**/api/combinations", async (route) => {
+		await held;
+		await route.continue();
+	});
+	// When
+	await page.goto(`/combinations/${saved.id}`);
+	// Then
+	const skeletons = page.locator('[data-slot="combination-skeleton"]');
+	await expect(skeletons).toHaveCount(6);
+	await expect(skeletons.first()).toBeVisible();
+	release();
+	await expect(skeletons).toHaveCount(0);
+	await expect(viewTitle(page)).toHaveText(LONG_TITLE);
+});
+
+test("shows Could not load your combinations for a combination's address", async ({
+	page,
+}) => {
+	// Given: both projects, THREE saved; the first GET /api/combinations
+	// answers 500
+	const saved = await savedThree(page);
+	let failed = false;
+	await page.route("**/api/combinations", (route) => {
+		if (failed) return route.continue();
+		failed = true;
+		return route.fulfill({ status: 500 });
+	});
+	// When
+	await page.goto(`/combinations/${saved.id}`);
+	// Then
+	await expect(
+		page.getByRole("heading", { name: "Could not load your combinations" }),
+	).toBeVisible();
+	await page.getByRole("button", { name: "Retry" }).click();
+	await expect(viewTitle(page)).toHaveText(LONG_TITLE);
+});
+
+test("shows the sign-in screen when a combination's address answers 401", async ({
+	page,
+}) => {
+	// Given: both projects, / open; then the session is gone for the session
+	// check and for the combinations
+	await page.goto("/");
+	await expect(mainNav(page)).toBeVisible();
+	const noSession = { status: 401, json: { error: "unauthorized" } };
+	await page.route("/api/me", (route) => route.fulfill(noSession));
+	await page.route("**/api/combinations", (route) => route.fulfill(noSession));
+	// When
+	await page.goto("/combinations/00000000-0000-4000-8000-000000000000");
+	// Then
+	await expect(
+		page.getByRole("button", { name: "Sign in with Google" }),
+	).toBeVisible();
+});
+
 const stage = (page: Page) => page.locator('[data-slot="build-stage"]');
 
 const typeChip = (page: Page, name: string) =>
