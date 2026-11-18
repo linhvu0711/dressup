@@ -1,8 +1,10 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { eq, like } from "drizzle-orm";
+import { BRAND_LIMIT } from "@/labels/brand";
 import { COLOUR_LIMIT } from "@/labels/colour";
 import { LOOK_LIMIT } from "@/looks/look";
+import { addBrand } from "../src/worker/brand-store";
 import {
 	addColour,
 	deleteColour,
@@ -10,6 +12,7 @@ import {
 } from "../src/worker/colour-store";
 import { schema } from "../src/worker/db";
 import {
+	BRANDS_FULL_USER,
 	COLOURS_EMPTY_USER,
 	COLOURS_FULL_USER,
 	E2E_USER,
@@ -21,6 +24,7 @@ export const SESSION_FILE = "e2e/.auth/session.json";
 export const LIMIT_FILE = "e2e/.auth/limit.json";
 export const COLOURS_FULL_FILE = "e2e/.auth/colours-full.json";
 export const COLOURS_EMPTY_FILE = "e2e/.auth/colours-empty.json";
+export const BRANDS_FULL_FILE = "e2e/.auth/brands-full.json";
 // Each test changes the colours it saves, and tests run in parallel, so
 // each one claims its own fresh account from this pool (e2e/fixtures.ts).
 export const POOL_SIZE = 400;
@@ -113,6 +117,21 @@ export default async function globalSetup() {
 			JSON.stringify({
 				cookies: await helpers.getCookies({
 					userId: COLOURS_EMPTY_USER.id,
+					domain: "localhost",
+				}),
+				origins: [],
+			}),
+		);
+		// Filled through the brand store; its brands go with the user row.
+		await db.delete(schema.user).where(eq(schema.user.id, BRANDS_FULL_USER.id));
+		await helpers.saveUser(helpers.createUser(BRANDS_FULL_USER));
+		for (let n = 1; n <= BRAND_LIMIT; n++)
+			await addBrand(db, BRANDS_FULL_USER.id, `Brand ${n}`);
+		writeFileSync(
+			BRANDS_FULL_FILE,
+			JSON.stringify({
+				cookies: await helpers.getCookies({
+					userId: BRANDS_FULL_USER.id,
 					domain: "localhost",
 				}),
 				origins: [],
