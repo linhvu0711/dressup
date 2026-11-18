@@ -1,5 +1,5 @@
 import type { Page, Request } from "@playwright/test";
-import { colourIds, postOwnedItems } from "./closet-helpers";
+import { colourIds, postBrand, postOwnedItems } from "./closet-helpers";
 import { expect, test } from "./fixtures";
 import {
 	bigJpeg,
@@ -353,4 +353,116 @@ test("turns a picture upright from its EXIF orientation", async ({ page }) => {
 		width: 100,
 		height: 200,
 	});
+});
+
+// A Navy long button-up with no brand and n pictures, its piece page open.
+async function openPiecePage(page: Page, n: number) {
+	await page.goto("/");
+	const pictureIds: string[] = [];
+	for (let i = 0; i < n; i++) pictureIds.push(await uploadPng(page));
+	const ids = await colourIds(page);
+	await postOwnedItems(page, {
+		typeId: "shirt_l",
+		colourId: ids.Navy,
+		brandId: null,
+		quantity: 1,
+		pictureIds,
+	});
+	await page.goto(`/piece/shirt_l/${ids.Navy}`);
+	return ids;
+}
+
+const strip = (page: Page, brand: string) =>
+	page.getByRole("list", { name: `Pictures of ${brand}` });
+
+const viewer = (page: Page) => page.getByRole("dialog", { name: /^Picture / });
+
+test("shows an item's pictures as a strip of 3:4 thumbnails", async ({
+	page,
+}) => {
+	// Given: an item with 2 pictures
+	// When
+	await openPiecePage(page, 2);
+	// Then
+	await expect(strip(page, "No brand").getByRole("button")).toHaveCount(2);
+	const box = await strip(page, "No brand")
+		.getByRole("button")
+		.first()
+		.boundingBox();
+	const width = test.info().project.name === "laptop" ? 132 : 104;
+	expect({
+		width: box?.width,
+		ratio: Math.abs((box?.height ?? 0) - (width * 4) / 3) <= 1,
+	}).toEqual({ width, ratio: true });
+});
+
+test("shows no strip for an item with no pictures", async ({ page }) => {
+	// Given: the item with 2 pictures, and a Zara one with none
+	await page.goto("/");
+	const ids = await colourIds(page);
+	const zara = await postBrand(page, "Zara");
+	await postOwnedItems(page, {
+		typeId: "shirt_l",
+		colourId: ids.Navy,
+		brandId: zara,
+		quantity: 1,
+	});
+	// When
+	await openPiecePage(page, 2);
+	// Then
+	await expect(strip(page, "No brand")).toBeVisible();
+	await expect(strip(page, "Zara")).toHaveCount(0);
+});
+
+test("opens the viewer and steps to the next picture", async ({ page }) => {
+	// Given: an item with 2 pictures
+	await openPiecePage(page, 2);
+	// When
+	await page.getByRole("button", { name: "Open picture 1 of 2" }).click();
+	await page.getByRole("button", { name: "Next picture" }).click();
+	// Then
+	await expect(
+		page.getByRole("dialog", { name: "Picture 2 of 2" }),
+	).toContainText("2 / 2");
+	await expect(
+		page.getByRole("button", { name: "Next picture" }),
+	).toBeDisabled();
+	await expect(viewer(page).getByRole("button", { name: "Close" })).toHaveCount(
+		0,
+	);
+});
+
+test("closes the viewer with Esc and with a click outside", async ({
+	page,
+}) => {
+	// Given: an item with 2 pictures; the viewer open on picture 1
+	await openPiecePage(page, 2);
+	await page.getByRole("button", { name: "Open picture 1 of 2" }).click();
+	await expect(viewer(page)).toBeVisible();
+	// When
+	await page.keyboard.press("Escape");
+	const afterEsc = await viewer(page).count();
+	await page.getByRole("button", { name: "Open picture 1 of 2" }).click();
+	await expect(viewer(page)).toBeVisible();
+	await page.mouse.click(8, 8);
+	// Then
+	await expect(viewer(page)).toHaveCount(0);
+	expect(afterEsc).toBe(0);
+});
+
+test("shows one picture with no previous and next", async ({ page }) => {
+	// Given: an item with 1 picture
+	await openPiecePage(page, 1);
+	// When
+	await page.getByRole("button", { name: "Open picture 1 of 1" }).click();
+	// Then
+	await expect(
+		page.getByRole("dialog", { name: "Picture 1 of 1" }),
+	).toBeVisible();
+	await expect(page.getByRole("button", { name: "Next picture" })).toHaveCount(
+		0,
+	);
+	await expect(
+		page.getByRole("button", { name: "Previous picture" }),
+	).toHaveCount(0);
 });
