@@ -5,6 +5,7 @@
 - Builder: the page where the user picks the pieces of a combination on the mannequin, for a new combination or to change a saved one.
 - Combinations page: the wall of saved combinations.
 - Combination page: one saved combination: the mannequin, the title, and a line for each piece with its colour. From 900 px it sits beside the Combinations page.
+- Piece page: the page for one piece, with everything the account holds about it.
 - Garment: one kind of clothing in one length. "Short tee" and "long tee" are two garments. The app has 17, and the list is fixed.
 - Mode: a fixed set of garments worn together, for example "long polo + sweater + chino pants". The app has 23, and the list is fixed.
 - Weather group: Hot, Cool, or Cold. Each mode is in exactly one. "Training" is a fourth tab that shows the two training modes.

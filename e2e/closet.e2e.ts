@@ -268,3 +268,46 @@ test.describe("at the closet limit", () => {
 		).toBeDisabled();
 	});
 });
+
+const itemRows = (page: Page) =>
+	page
+		.getByRole("region", { name: "In your closet" })
+		.locator('[data-slot="item-row"]');
+
+test("opens the piece page from a tile", async ({ page }) => {
+	// Given: a fresh account with Zara; Navy long button-up Zara 2, then Navy
+	// long button-up no brand 1
+	await page.goto("/");
+	const ids = await colourIds(page);
+	const zara = await postBrand(page, "Zara");
+	await postOwnedItems(
+		page,
+		{ typeId: "shirt_l", colourId: ids.Navy, brandId: zara, quantity: 2 },
+		{ typeId: "shirt_l", colourId: ids.Navy, brandId: null, quantity: 1 },
+	);
+	// When
+	await page.goto("/closet");
+	await page.getByRole("link", { name: "Navy long button-up, 3" }).click();
+	// Then
+	await expect(page).toHaveURL(`/piece/shirt_l/${ids.Navy}`);
+	await expect(
+		page.getByRole("heading", { name: "Navy long button-up" }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("heading", { name: "In your closet" }),
+	).toBeVisible();
+	await expect(itemRows(page)).toHaveCount(2);
+	expect(
+		await itemRows(page).evaluateAll((rows) =>
+			rows.map((row) => row.getAttribute("aria-label")),
+		),
+	).toEqual(["No brand × 1", "Zara × 2"]);
+});
+
+test("sends a piece page with no item back to the closet", async ({ page }) => {
+	// Given: a fresh account with no items
+	// When
+	await page.goto("/piece/shirt_l/00000000-0000-4000-8000-000000000000");
+	// Then
+	await expect(page).toHaveURL("/closet");
+});
