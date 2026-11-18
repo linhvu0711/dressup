@@ -1749,6 +1749,126 @@ describe("combinations", () => {
 			text: "not-a-colour is not one of your colours. list_colours names them.",
 		});
 	});
+
+	describe("tags", () => {
+		type Named = { id: string; name: string };
+		type Tagged = { id: string; tags: Named[] };
+
+		const addTagByAi = async (ai: Session, name: string) =>
+			((await ai.call("add_tag", { name })).data as { tag: Named }).tag.id;
+
+		test("saves a combination with tags and lists them with their names", async () => {
+			// Given
+			const { ai } = await withAiSession();
+			const work = await addTagByAi(ai, "Work");
+			const weekend = await addTagByAi(ai, "Weekend");
+			const ids = await colourIds(ai);
+			// When
+			const saved = await ai.call("save_combination", {
+				...three(ids),
+				tags: [work, weekend],
+			});
+			const { data } = await ai.call("list_combinations");
+			// Then
+			expect({
+				isError: saved.isError,
+				tags: (data as { combinations: Tagged[] }).combinations[0].tags,
+			}).toEqual({
+				isError: false,
+				tags: [
+					{ id: work, name: "Work" },
+					{ id: weekend, name: "Weekend" },
+				],
+			});
+		});
+
+		test("changes a combination's tags", async () => {
+			// Given: THREE saved with Work
+			const { ai } = await withAiSession();
+			const work = await addTagByAi(ai, "Work");
+			const weekend = await addTagByAi(ai, "Weekend");
+			const ids = await colourIds(ai);
+			const id = await savedId(ai, { ...three(ids), tags: [work] });
+			// When
+			const { isError, data } = await ai.call("change_combination", {
+				id,
+				pieces: three(ids).pieces,
+				tags: [weekend],
+			});
+			// Then
+			expect({
+				isError,
+				tags: (data as { combination: Tagged }).combination.tags,
+			}).toEqual({ isError: false, tags: [{ id: weekend, name: "Weekend" }] });
+		});
+
+		test("keeps a combination's tags when a change leaves them out", async () => {
+			// Given: THREE saved with Work
+			const { ai } = await withAiSession();
+			const work = await addTagByAi(ai, "Work");
+			const ids = await colourIds(ai);
+			const id = await savedId(ai, { ...three(ids), tags: [work] });
+			// When
+			const { data } = await ai.call("change_combination", {
+				id,
+				pieces: greyPants(ids),
+			});
+			// Then
+			expect((data as { combination: Tagged }).combination.tags).toEqual([
+				{ id: work, name: "Work" },
+			]);
+		});
+
+		test("refuses a tag that is not the account's as a sentence", async () => {
+			// Given
+			const { ai } = await withAiSession();
+			const ids = await colourIds(ai);
+			// When
+			const { isError, text } = await ai.call("save_combination", {
+				...three(ids),
+				tags: ["5b1f2c3d-0000-4000-8000-000000000000"],
+			});
+			// Then
+			expect({ isError, text }).toEqual({
+				isError: true,
+				text: "5b1f2c3d-0000-4000-8000-000000000000 is not one of your tags. list_tags names them.",
+			});
+		});
+
+		test("refuses 51 tags as a sentence", async () => {
+			// Given: 51 tags
+			const { ai } = await withAiSession();
+			const ids = await colourIds(ai);
+			const many: string[] = [];
+			for (let n = 0; n < 51; n++) many.push(await addTagByAi(ai, `t${n}`));
+			// When
+			const { isError, text } = await ai.call("save_combination", {
+				...three(ids),
+				tags: many,
+			});
+			// Then
+			expect({ isError, text }).toEqual({
+				isError: true,
+				text: "A combination has at most 50 tags.",
+			});
+		});
+
+		test("takes a deleted tag off its combinations", async () => {
+			// Given: THREE saved with Work and Weekend
+			const { ai } = await withAiSession();
+			const work = await addTagByAi(ai, "Work");
+			const weekend = await addTagByAi(ai, "Weekend");
+			const ids = await colourIds(ai);
+			await savedId(ai, { ...three(ids), tags: [work, weekend] });
+			// When
+			await ai.call("delete_tag", { id: weekend });
+			const { data } = await ai.call("list_combinations");
+			// Then
+			expect((data as { combinations: Tagged[] }).combinations[0].tags).toEqual(
+				[{ id: work, name: "Work" }],
+			);
+		});
+	});
 });
 
 describe("owned items", () => {
