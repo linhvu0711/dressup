@@ -433,3 +433,35 @@ test("keeps a changed quantity when an older closet load ends after the save", a
 	// Then
 	await expect(itemRows(page)).toHaveAccessibleName("No brand × 3");
 });
+
+test("saves a new pick after a save whose answer was lost", async ({
+	page,
+}) => {
+	// Given: a fresh account on /closet; the first save reaches the server,
+	// but its answer is lost
+	let first = true;
+	await page.route("**/api/owned-items", async (route) => {
+		if (!first || route.request().method() !== "POST") return route.continue();
+		first = false;
+		await route.fetch();
+		await route.abort();
+	});
+	await page.goto("/closet");
+	await openAddSheet(page);
+	await pickNavyShirt(page);
+	await addSheet(page).getByRole("button", { name: "Save" }).click();
+	await expect(addSheet(page).getByRole("alert")).toHaveText(
+		"Not saved. Try again.",
+	);
+	// When
+	await addSheet(page)
+		.getByRole("radiogroup", { name: "Colour" })
+		.getByRole("radio", { name: "Black", exact: true })
+		.click();
+	await addSheet(page).getByRole("button", { name: "Save" }).click();
+	// Then
+	await expect(page.locator('[data-slot="toast"]')).toHaveText(
+		"Added to your closet",
+	);
+	await expect(tiles(page)).toHaveCount(2);
+});

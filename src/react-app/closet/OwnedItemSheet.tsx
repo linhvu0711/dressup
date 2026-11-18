@@ -62,9 +62,11 @@ export function OwnedItemSheet(
 ) {
 	const { onClose } = props;
 	const editing = props.mode === "edit" ? props.item : null;
-	// One id for this form, so a Save after a failed Save that did reach the
-	// server gives back the same item rather than a second one.
-	const [id] = useState(
+	// One id for this piece and brand, so a Save after a failed Save that did
+	// reach the server gives back the same item rather than a second one. A
+	// new pick in the add form is a new item, so it takes a new id: the server
+	// refuses an id it holds for another piece or brand.
+	const [id, setId] = useState(
 		() => editing?.id ?? (crypto.randomUUID() as OwnedItemId),
 	);
 	const [step, setStep] = useState<Step>("form");
@@ -112,6 +114,7 @@ export function OwnedItemSheet(
 		<T,>(set: (value: T) => void) =>
 		(value: T) => {
 			set(value);
+			if (!editing) setId(crypto.randomUUID() as OwnedItemId);
 			sent.reset();
 		};
 	const back = () => {
