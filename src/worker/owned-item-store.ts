@@ -11,6 +11,7 @@ import type { Hex } from "@/colour/hex";
 import type { GarmentId } from "@/dress/garments";
 import type { BrandId } from "@/labels/brand";
 import type { ColourId } from "@/labels/colour";
+import { brandOf } from "./brand-store";
 import { colourOf } from "./colour-store";
 import type { Db } from "./db";
 import { user } from "./db/auth-schema";
@@ -106,12 +107,6 @@ function invalid(
 			: undefined;
 	return { ok: false, error: { code: "invalid", field: key, value } };
 }
-
-const brandOf = (db: Db, userId: string, brandId: string) =>
-	db
-		.select({ one: sql`1` })
-		.from(brand)
-		.where(and(eq(brand.id, brandId), eq(brand.userId, userId)));
 
 // The account's items of one piece with one brand; `is` matches no brand
 // to no brand.

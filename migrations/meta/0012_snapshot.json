@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "4583e7b7-e505-431a-b622-3e05528e15f7",
+  "id": "7a94ff4a-5211-4475-a671-7595266bbc78",
   "prevId": "1123d6e0-5799-4641-ac82-a7b6d0cccce0",
   "tables": {
     "ai_action_count": {
@@ -2428,6 +2428,135 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "shop_link": {
+      "name": "shop_link",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "wish_id": {
+          "name": "wish_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "brand_id": {
+          "name": "brand_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "price": {
+          "name": "price",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
+        }
+      },
+      "indexes": {
+        "shop_link_wishId_idx": {
+          "name": "shop_link_wishId_idx",
+          "columns": [
+            "wish_id"
+          ],
+          "isUnique": false
+        },
+        "shop_link_brandId_idx": {
+          "name": "shop_link_brandId_idx",
+          "columns": [
+            "brand_id"
+          ],
+          "isUnique": false
+        },
+        "shop_link_userId_idx": {
+          "name": "shop_link_userId_idx",
+          "columns": [
+            "user_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "shop_link_user_id_user_id_fk": {
+          "name": "shop_link_user_id_user_id_fk",
+          "tableFrom": "shop_link",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "shop_link_wish_id_wish_id_fk": {
+          "name": "shop_link_wish_id_wish_id_fk",
+          "tableFrom": "shop_link",
+          "tableTo": "wish",
+          "columnsFrom": [
+            "wish_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "shop_link_brand_id_brand_id_fk": {
+          "name": "shop_link_brand_id_brand_id_fk",
+          "tableFrom": "shop_link",
+          "tableTo": "brand",
+          "columnsFrom": [
+            "brand_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },

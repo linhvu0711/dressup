@@ -96,6 +96,7 @@ describe("migrations", () => {
 			"outfit_garment",
 			"owned_item",
 			"session",
+			"shop_link",
 			"tag",
 			"user",
 			"verification",

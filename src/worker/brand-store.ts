@@ -22,6 +22,14 @@ export type BrandError =
 
 const NAME_INDEX = "brand_userId_name_uq";
 
+// The account's brand with this id, as a subquery: a write puts it in its
+// own WHERE, so a brand deleted at the same time stops the write.
+export const brandOf = (db: Db, userId: string, brandId: string) =>
+	db
+		.select({ one: sql`1` })
+		.from(brand)
+		.where(and(eq(brand.id, brandId), eq(brand.userId, userId)));
+
 const toBrand = (row: { id: string; name: string }): Brand => ({
 	id: row.id as BrandId,
 	name: row.name,
