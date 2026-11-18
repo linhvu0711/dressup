@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { aiAppSchema } from "@/ai-apps/ai-app";
+import { ownedItemSchema } from "@/closet/owned-item";
 import { combinationSchema } from "@/combinations/combination";
 import { dressStateSchema } from "@/dress/state";
 import { brandSchema } from "@/labels/brand";
@@ -22,6 +23,7 @@ export const errorCodes = [
 	"colour_limit",
 	"brand_limit",
 	"combination_limit",
+	"owned_item_limit",
 	"colour_in_use",
 ] as const;
 
@@ -81,6 +83,16 @@ export type CombinationsAnswer = z.input<typeof combinationsAnswer>;
 export const combinationAnswer = z.object({ combination: combinationSchema });
 
 export type CombinationAnswer = z.input<typeof combinationAnswer>;
+
+export const ownedItemsAnswer = z.object({
+	ownedItems: z.array(ownedItemSchema),
+});
+
+export type OwnedItemsAnswer = z.input<typeof ownedItemsAnswer>;
+
+export const ownedItemAnswer = z.object({ ownedItem: ownedItemSchema });
+
+export type OwnedItemAnswer = z.input<typeof ownedItemAnswer>;
 
 export const aiAppsAnswer = z.object({ apps: z.array(aiAppSchema) });
 

@@ -16,6 +16,8 @@ import type {
 	LookAnswer,
 	LooksAnswer,
 	MeAnswer,
+	OwnedItemAnswer,
+	OwnedItemsAnswer,
 	TagAnswer,
 	TagsAnswer,
 } from "@/data/contract";
@@ -63,6 +65,11 @@ import {
 	saveLook,
 } from "./look-store";
 import { mcpRoute } from "./mcp";
+import {
+	addOwnedItem,
+	listOwnedItems,
+	type OwnedItemError,
+} from "./owned-item-store";
 import {
 	addTag,
 	deleteTag,
@@ -164,6 +171,30 @@ function combinationRefusal(error: CombinationError): Refusal {
 			return { status: 409, body: { error: "duplicate", id: error.id } };
 		case "combination_limit":
 			return { status: 409, body: { error: "combination_limit" } };
+		case "not_found":
+			return { status: 404, body: { error: "not_found" } };
+	}
+}
+
+// Only the JSON shape: the Closet module runs the owned item rules.
+const ownedItemBodySchema = z.object({
+	id: z.string(),
+	typeId: z.string(),
+	colourId: z.string(),
+	brandId: z.string().nullable(),
+	quantity: z.number(),
+});
+
+function ownedItemRefusal(error: OwnedItemError): Refusal {
+	switch (error.code) {
+		case "invalid":
+			return { status: 400, body: { error: "invalid", field: error.field } };
+		case "duplicate":
+			return { status: 409, body: { error: "duplicate", id: error.id } };
+		case "owned_item_limit":
+			return { status: 409, body: { error: "owned_item_limit" } };
+		case "conflict":
+			return { status: 409, body: { error: "conflict", field: "id" } };
 		case "not_found":
 			return { status: 404, body: { error: "not_found" } };
 	}
@@ -425,6 +456,24 @@ export function createApp(getDb: (env: Env) => Db) {
 			return c.json(refused, status);
 		}
 		return c.body(null, 204);
+	});
+
+	app.get("/owned-items", withAuth, requireUser, async (c) =>
+		c.json({
+			ownedItems: await listOwnedItems(getDb(c.env), c.var.user.id),
+		} satisfies OwnedItemsAnswer),
+	);
+
+	app.post("/owned-items", withAuth, requireUser, async (c) => {
+		const body = await readBody(c, ownedItemBodySchema);
+		if ("refused" in body) return body.refused;
+		const added = await addOwnedItem(getDb(c.env), c.var.user.id, body.data);
+		if (!added.ok) {
+			const { status, body: refused } = ownedItemRefusal(added.error);
+			return c.json(refused, status);
+		}
+		const { ownedItem, created } = added.value;
+		return c.json({ ownedItem } satisfies OwnedItemAnswer, created ? 201 : 200);
 	});
 
 	app.get("/tags", withAuth, requireUser, async (c) =>

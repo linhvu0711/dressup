@@ -10,6 +10,7 @@ import { createApp } from "../app";
 import { type AuthSettings, authOptions, createClientDiscovery } from "../auth";
 import { type Db, schema } from "../db";
 import { seedCombinations } from "./seed-combinations";
+import { seedOwnedItems } from "./seed-owned-items";
 
 export const testEnv = {
 	GOOGLE_CLIENT_ID: "test-client",
@@ -116,6 +117,8 @@ export async function makeHarness() {
 	};
 	const seedCombinationsOf = (userId: string, n: number) =>
 		seedCombinations(db, userId, n);
+	const seedOwnedItemsOf = (userId: string, n: number) =>
+		seedOwnedItems(db, userId, n);
 	// Each foreign key to user, read from the database itself, so a table a
 	// new migration adds is in the list with no edit.
 	const userKeys = () =>
@@ -178,6 +181,7 @@ export async function makeHarness() {
 		userForeignKeys,
 		seedLooks,
 		seedCombinations: seedCombinationsOf,
+		seedOwnedItems: seedOwnedItemsOf,
 		addTrigger,
 		runMigration,
 	};

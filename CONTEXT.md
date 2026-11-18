@@ -15,6 +15,7 @@
 - Colour square: one saved colour in a garment's row. Each garment has its own row. A new account starts with a starter set.
 - Colour: a name and a colour code that the account saves once and uses on any kind of clothing. The user manages colours on the Labels page. A new account starts with a starter set, and an account holds at most 100.
 - Brand: a name that the account saves once and puts on owned items and shop links. An item can have no brand. The user manages brands on the Labels page. An account holds at most 100.
+- Owned item: one brand of one piece in the closet, with a quantity. Two navy long button-ups from two brands are two owned items. An account holds at most 500.
 - Outfit: what the mannequin wears now: the mode, the picked colour of each garment, and each jacket open or closed. The account keeps it, with its colour squares.
 - Look: a saved outfit. It holds the mode, its own copy of each garment's colour, the jacket state (open or closed), an optional name, and tags.
 - Tag: a label the user makes and puts on looks. The Looks page filters by tag.
