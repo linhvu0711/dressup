@@ -209,6 +209,19 @@ describe("upload and load", () => {
 			rows: [],
 		});
 	});
+
+	test("takes back the month's count when the bucket refuses the upload", async () => {
+		// Given
+		const { h, headers } = await withAccount();
+		await upload(h, headers);
+		h.pictures.failPuts = true;
+		// When
+		await upload(h, headers);
+		// Then
+		expect(await h.rows(pictureUploadMonth)).toEqual([
+			{ month: new Date().toISOString().slice(0, 7), count: 1 },
+		]);
+	});
 });
 
 describe("limits and the storage stop", () => {

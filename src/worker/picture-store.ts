@@ -240,8 +240,20 @@ export async function addPicture(
 	try {
 		await bucket.put(id, bytes, { httpMetadata: { contentType: kind } });
 	} catch (error) {
-		// No row may point at no object.
-		await db.batch(dropPictures(db, eq(picture.id, id)));
+		// No row may point at no object. An upload that stored nothing does not
+		// count toward the month's stop either, so an R2 outage cannot use it up.
+		await db.batch([
+			db
+				.update(pictureUploadMonth)
+				.set({
+					count: sql`${pictureUploadMonth.count} - (${db
+						.select({ n: sql`count(*)` })
+						.from(picture)
+						.where(eq(picture.id, id))})`,
+				})
+				.where(eq(pictureUploadMonth.month, month)),
+			...dropPictures(db, eq(picture.id, id)),
+		]);
 		throw error;
 	}
 	// An account delete during the put took the row; the object must go too.
