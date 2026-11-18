@@ -174,6 +174,21 @@ export const after = {
 		refresh(keys.colours(userId));
 		refresh(keys.brands(userId));
 	},
+	// A new brand moves the item's count from one brand to another.
+	ownedItemChanged(userId: string | null, item: OwnedItem) {
+		queryClient.setQueryData<OwnedItem[]>(keys.closet(userId), (old) =>
+			old?.map((i) => (i.id === item.id ? item : i)),
+		);
+		refresh(keys.brands(userId));
+	},
+	// The last item of a colour may free it, and its brand counts one less.
+	ownedItemDeleted(userId: string | null, id: string) {
+		queryClient.setQueryData<OwnedItem[]>(keys.closet(userId), (old) =>
+			old?.filter((i) => i.id !== id),
+		);
+		refresh(keys.colours(userId));
+		refresh(keys.brands(userId));
+	},
 	aiAppGone(userId: string | null, id: string) {
 		queryClient.setQueryData<AiApp[]>(keys.aiApps(userId), (old) =>
 			old?.filter((app) => app.id !== id),

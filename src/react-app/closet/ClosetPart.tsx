@@ -1,11 +1,13 @@
 import { ChevronRight } from "lucide-react";
-import { useId } from "react";
+import { useId, useState } from "react";
+import { OwnedItemSheet } from "./OwnedItemSheet";
 import type { OwnedItem } from "./owned-item";
 
 // The piece page's part for the closet: one row for each item of the piece,
-// its brand and its quantity.
+// its brand and its quantity. A row opens the item's edit sheet.
 export function ClosetPart({ items }: { items: readonly OwnedItem[] }) {
 	const title = useId();
+	const [editing, setEditing] = useState<OwnedItem | null>(null);
 	return (
 		<section aria-labelledby={title} className="flex flex-col gap-1">
 			<h2 id={title} className="text-[22px]">
@@ -23,6 +25,7 @@ export function ClosetPart({ items }: { items: readonly OwnedItem[] }) {
 								type="button"
 								data-slot="item-row"
 								aria-label={label}
+								onClick={() => setEditing(item)}
 								className="flex w-full min-w-0 items-center gap-3 text-left"
 							>
 								<span className="truncate text-[14px]">
@@ -42,6 +45,13 @@ export function ClosetPart({ items }: { items: readonly OwnedItem[] }) {
 					);
 				})}
 			</ul>
+			{editing ? (
+				<OwnedItemSheet
+					mode="edit"
+					item={editing}
+					onClose={() => setEditing(null)}
+				/>
+			) : null}
 		</section>
 	);
 }

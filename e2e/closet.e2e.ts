@@ -311,3 +311,57 @@ test("sends a piece page with no item back to the closet", async ({ page }) => {
 	// Then
 	await expect(page).toHaveURL("/closet");
 });
+
+const editSheet = (page: Page) =>
+	page.getByRole("dialog", { name: "Edit item" });
+
+test("changes an item's quantity", async ({ page }) => {
+	// Given: a fresh account with a Navy long button-up, no brand, 2; the
+	// piece page open
+	await page.goto("/");
+	const ids = await colourIds(page);
+	await postOwnedItems(page, {
+		typeId: "shirt_l",
+		colourId: ids.Navy,
+		brandId: null,
+		quantity: 2,
+	});
+	await page.goto(`/piece/shirt_l/${ids.Navy}`);
+	// When
+	await page.getByRole("button", { name: "No brand × 2" }).click();
+	await editSheet(page).getByRole("button", { name: "More" }).click();
+	await editSheet(page).getByRole("button", { name: "Save" }).click();
+	// Then
+	await expect(page.locator('[data-slot="toast"]')).toHaveText("Changes saved");
+	await expect(itemRows(page)).toHaveCount(1);
+	await expect(itemRows(page)).toHaveAccessibleName("No brand × 3");
+});
+
+test("deletes the last item of a piece and the tile leaves", async ({
+	page,
+}) => {
+	// Given: a fresh account with a Navy long button-up, no brand, 2, and a
+	// White short tee, no brand, 1; the piece page of the shirt open
+	await page.goto("/");
+	const ids = await colourIds(page);
+	await postOwnedItems(
+		page,
+		{ typeId: "shirt_l", colourId: ids.Navy, brandId: null, quantity: 2 },
+		{ typeId: "tee_s", colourId: ids.White, brandId: null, quantity: 1 },
+	);
+	await page.goto(`/piece/shirt_l/${ids.Navy}`);
+	// When
+	await page.getByRole("button", { name: "No brand × 2" }).click();
+	await editSheet(page).getByRole("button", { name: "Delete" }).click();
+	await page
+		.getByRole("dialog", { name: "Remove this item?" })
+		.getByRole("button", { name: "Delete" })
+		.click();
+	// Then
+	await expect(page.locator('[data-slot="toast"]')).toHaveText(
+		"Removed from your closet",
+	);
+	await expect(page).toHaveURL("/closet");
+	await expect(tiles(page)).toHaveCount(1);
+	await expect(tiles(page)).toHaveAccessibleName("White short tee, 1");
+});

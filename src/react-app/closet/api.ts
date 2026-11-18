@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { after, cachedUserId, keys, request } from "../data/client";
+import { after, cachedUserId, goneAsDone, keys, request } from "../data/client";
 import { ownedItemAnswer, ownedItemsAnswer } from "../data/contract";
 import type { OwnedItemId } from "./owned-item";
 
@@ -36,5 +36,35 @@ export function useAddOwnedItem() {
 				})
 			).ownedItem,
 		onSuccess: (item) => after.ownedItemAdded(userId, item),
+	});
+}
+
+export function useChangeOwnedItem() {
+	const userId = cachedUserId();
+	return useMutation({
+		mutationFn: async ({
+			id,
+			...change
+		}: {
+			id: OwnedItemId;
+			brandId: string | null;
+			quantity: number;
+		}) =>
+			(
+				await request("PUT", `/api/owned-items/${id}`, {
+					body: change,
+					answer: ownedItemAnswer,
+				})
+			).ownedItem,
+		onSuccess: (item) => after.ownedItemChanged(userId, item),
+	});
+}
+
+export function useDeleteOwnedItem() {
+	const userId = cachedUserId();
+	return useMutation({
+		mutationFn: (id: OwnedItemId) =>
+			request("DELETE", `/api/owned-items/${id}`).catch(goneAsDone),
+		onSuccess: (_, id) => after.ownedItemDeleted(userId, id),
 	});
 }

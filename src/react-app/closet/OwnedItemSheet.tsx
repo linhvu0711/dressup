@@ -1,6 +1,7 @@
 import { ArrowLeft, ChevronRight, Minus, Plus } from "lucide-react";
 import { Dialog } from "radix-ui";
 import { type ReactNode, useRef, useState } from "react";
+import { pieceName } from "@/combinations/combination";
 import { Button } from "@/components/ui/button";
 import { SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
@@ -11,8 +12,18 @@ import type { BrandId } from "@/labels/brand";
 import { useBrands } from "@/labels/brand-api";
 import { ColourSwatches } from "@/labels/ColourSwatches";
 import type { ColourId } from "@/labels/colour";
-import { useAddOwnedItem, useCloset } from "./api";
-import { OWNED_ITEM_LIMIT, type OwnedItemId, QUANTITY_MAX } from "./owned-item";
+import {
+	useAddOwnedItem,
+	useChangeOwnedItem,
+	useCloset,
+	useDeleteOwnedItem,
+} from "./api";
+import {
+	OWNED_ITEM_LIMIT,
+	type OwnedItem,
+	type OwnedItemId,
+	QUANTITY_MAX,
+} from "./owned-item";
 
 const LABEL = "font-medium text-[12.5px] text-muted-foreground";
 
@@ -22,10 +33,16 @@ const ROW =
 const LIST_ROW =
 	"flex h-11 min-w-0 items-center gap-2.5 rounded-[12px] px-2 text-left text-[14px] hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring";
 
-type Step = "form" | "types" | "brands";
+type Step = "form" | "types" | "brands" | "confirm";
 
 // What the form says under its fields.
 type Problem = "full" | "duplicate" | "failed";
+
+const STEP_TITLE: Record<Exclude<Step, "form">, string> = {
+	types: "Pick a type",
+	brands: "Pick a brand",
+	confirm: "Remove this item?",
+};
 
 const PROBLEM_TEXT: Record<Problem, string> = {
 	full: `You have ${OWNED_ITEM_LIMIT} items. That is the limit. Delete one to add a new one.`,
@@ -33,61 +50,91 @@ const PROBLEM_TEXT: Record<Problem, string> = {
 	failed: "Not saved. Try again.",
 };
 
-// The form to add an owned item: a type, a colour, a brand, and a quantity.
-// The type and brand lists swap into the same sheet; the form stays mounted
-// behind them, so Back finds the picks.
-export function OwnedItemSheet({
-	onClose,
-}: {
-	mode: "add";
-	onClose: () => void;
-}) {
+// The form to add an owned item, a type, a colour, a brand, and a quantity,
+// or to change the brand and quantity of the one it is given. The type and
+// brand lists and the delete confirm swap into the same sheet; the form
+// stays mounted behind them, so Back finds the picks.
+export function OwnedItemSheet(
+	props: { onClose: () => void } & (
+		| { mode: "add" }
+		| { mode: "edit"; item: OwnedItem }
+	),
+) {
+	const { onClose } = props;
+	const editing = props.mode === "edit" ? props.item : null;
 	// One id for this form, so a Save after a failed Save that did reach the
 	// server gives back the same item rather than a second one.
-	const [id] = useState(() => crypto.randomUUID() as OwnedItemId);
+	const [id] = useState(
+		() => editing?.id ?? (crypto.randomUUID() as OwnedItemId),
+	);
 	const [step, setStep] = useState<Step>("form");
-	const [typeId, setTypeId] = useState<GarmentId | null>(null);
-	const [colourId, setColourId] = useState<ColourId | undefined>();
-	const [brandId, setBrandId] = useState<BrandId | null>(null);
-	const [quantity, setQuantity] = useState("1");
+	const [typeId, setTypeId] = useState<GarmentId | null>(
+		editing?.typeId ?? null,
+	);
+	const [colourId, setColourId] = useState<ColourId | undefined>(
+		editing?.colour.id,
+	);
+	const [brandId, setBrandId] = useState<BrandId | null>(
+		editing?.brand?.id ?? null,
+	);
+	const [quantity, setQuantity] = useState(String(editing?.quantity ?? 1));
 	const first = useRef<HTMLButtonElement>(null);
 	const closet = useCloset();
 	const brands = useBrands();
 	const add = useAddOwnedItem();
+	const update = useChangeOwnedItem();
+	const del = useDeleteOwnedItem();
+	const sent = editing ? update : add;
 	const toast = useToast();
 	const count = Number(quantity) || 0;
-	// A 409 owned_item_limit means another tab filled the closet.
+	// A change adds no item, so the limit never stops it. A 409
+	// owned_item_limit means another tab filled the closet.
 	const full =
-		(closet.data?.length ?? 0) >= OWNED_ITEM_LIMIT ||
-		(add.error instanceof RequestError &&
-			add.error.code === "owned_item_limit");
+		!editing &&
+		((closet.data?.length ?? 0) >= OWNED_ITEM_LIMIT ||
+			(add.error instanceof RequestError &&
+				add.error.code === "owned_item_limit"));
 	const problem: Problem | null = full
 		? "full"
-		: add.error instanceof RequestError && add.error.code === "duplicate"
+		: sent.error instanceof RequestError && sent.error.code === "duplicate"
 			? "duplicate"
-			: add.isError
+			: sent.isError
 				? "failed"
 				: null;
-	const brandName = brands.data?.find((b) => b.id === brandId)?.name;
+	// The item's own brand while the brand list loads.
+	const brandName =
+		brands.data?.find((b) => b.id === brandId)?.name ??
+		(brandId !== null && brandId === editing?.brand?.id
+			? editing.brand.name
+			: undefined);
 	// A new pick is a new try, so the last refusal no longer holds.
 	const change =
 		<T,>(set: (value: T) => void) =>
 		(value: T) => {
 			set(value);
-			add.reset();
+			sent.reset();
 		};
-	const back = () => setStep("form");
+	const back = () => {
+		setStep("form");
+		del.reset();
+	};
+	const done = (message: string) => () => {
+		toast(message);
+		onClose();
+	};
 	const save = () => {
-		if (!typeId || !colourId || full || add.isPending) return;
-		add.mutate(
-			{ id, typeId, colourId, brandId, quantity: Math.max(1, count) },
-			{
-				onSuccess: () => {
-					toast("Added to your closet");
-					onClose();
-				},
-			},
-		);
+		if (!typeId || !colourId || full || sent.isPending) return;
+		const n = Math.max(1, count);
+		if (editing)
+			update.mutate(
+				{ id, brandId, quantity: n },
+				{ onSuccess: done("Changes saved") },
+			);
+		else
+			add.mutate(
+				{ id, typeId, colourId, brandId, quantity: n },
+				{ onSuccess: done("Added to your closet") },
+			);
 	};
 
 	return (
@@ -107,13 +154,10 @@ export function OwnedItemSheet({
 				>
 					{step === "form" ? (
 						<Dialog.Title className="text-[25px] leading-tight">
-							Add to closet
+							{editing ? "Edit item" : "Add to closet"}
 						</Dialog.Title>
 					) : (
-						<StepTitle
-							title={step === "types" ? "Pick a type" : "Pick a brand"}
-							onBack={back}
-						/>
+						<StepTitle title={STEP_TITLE[step]} onBack={back} />
 					)}
 					<form
 						hidden={step !== "form"}
@@ -123,31 +167,46 @@ export function OwnedItemSheet({
 							save();
 						}}
 					>
-						<Field label="Type">
-							<button
-								ref={first}
-								type="button"
-								className={ROW}
-								onClick={() => setStep("types")}
-							>
-								<span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
-									{typeId ? (
-										<>
-											<TypeFigure typeId={typeId} />
-											{GARMENT_NAMES[typeId]}
-										</>
-									) : (
-										<span className="text-muted-foreground">Pick a type</span>
-									)}
-								</span>
-								<ChevronRight size={16} strokeWidth={1.9} aria-hidden />
-							</button>
-						</Field>
-						<Field label="Colour">
-							<ColourSwatches value={colourId} onChange={change(setColourId)} />
-						</Field>
+						{editing ? (
+							<p className="flex min-w-0 items-center gap-1.5 text-[14px]">
+								<TypeFigure typeId={editing.typeId} />
+								<span className="truncate">{pieceName(editing)}</span>
+							</p>
+						) : (
+							<>
+								<Field label="Type">
+									<button
+										ref={first}
+										type="button"
+										className={ROW}
+										onClick={() => setStep("types")}
+									>
+										<span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
+											{typeId ? (
+												<>
+													<TypeFigure typeId={typeId} />
+													{GARMENT_NAMES[typeId]}
+												</>
+											) : (
+												<span className="text-muted-foreground">
+													Pick a type
+												</span>
+											)}
+										</span>
+										<ChevronRight size={16} strokeWidth={1.9} aria-hidden />
+									</button>
+								</Field>
+								<Field label="Colour">
+									<ColourSwatches
+										value={colourId}
+										onChange={change(setColourId)}
+									/>
+								</Field>
+							</>
+						)}
 						<Field label="Brand">
 							<button
+								ref={editing ? first : undefined}
 								type="button"
 								className={ROW}
 								onClick={() => setStep("brands")}
@@ -202,13 +261,22 @@ export function OwnedItemSheet({
 							</p>
 						) : null}
 						<div className="mt-0.5 flex flex-wrap justify-end gap-2 [&>button]:flex-1 wide:[&>button]:flex-none">
+							{editing ? (
+								<Button
+									type="button"
+									variant="destructive"
+									onClick={() => setStep("confirm")}
+								>
+									Delete
+								</Button>
+							) : null}
 							<Button type="button" onClick={onClose}>
 								Cancel
 							</Button>
 							<Button
 								type="submit"
 								variant="primary"
-								disabled={!typeId || !colourId || full || add.isPending}
+								disabled={!typeId || !colourId || full || sent.isPending}
 							>
 								Save
 							</Button>
@@ -251,6 +319,31 @@ export function OwnedItemSheet({
 								),
 							)}
 						</div>
+					) : null}
+					{editing && step === "confirm" ? (
+						<>
+							<p className="text-muted-foreground">
+								{pieceName(editing)} · {editing.brand?.name ?? "No brand"}
+							</p>
+							{del.isError ? (
+								<p role="alert" className="text-[13px] text-destructive">
+									Not deleted. Try again.
+								</p>
+							) : null}
+							<div className="mt-0.5 flex flex-wrap justify-end gap-2 [&>button]:flex-1 wide:[&>button]:flex-none">
+								<Button
+									variant="destructive"
+									disabled={del.isPending}
+									onClick={() =>
+										del.mutate(editing.id, {
+											onSuccess: done("Removed from your closet"),
+										})
+									}
+								>
+									Delete
+								</Button>
+							</div>
+						</>
 					) : null}
 				</Dialog.Content>
 			</Dialog.Portal>
