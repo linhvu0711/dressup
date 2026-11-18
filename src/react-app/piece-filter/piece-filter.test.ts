@@ -14,13 +14,19 @@ import {
 	matchesPieceFilter,
 	NO_FILTER,
 	type PieceFilter,
+	pieceFilterChips,
+	prunePieceFilter,
+	readPieceFilter,
 	wishPiece,
+	writePieceFilter,
 } from "./piece-filter";
 
 const NAVY = "00000000-0000-4000-8000-0000000000a1" as ColourId;
 const WHITE = "00000000-0000-4000-8000-0000000000a2" as ColourId;
+const GONE_COLOUR = "00000000-0000-4000-8000-0000000000a9" as ColourId;
 const COS = "00000000-0000-4000-8000-0000000000b1" as BrandId;
 const UNIQLO = "00000000-0000-4000-8000-0000000000b2" as BrandId;
+const GONE_BRAND = "00000000-0000-4000-8000-0000000000b9" as BrandId;
 
 const colour = (id: ColourId) => ({
 	id,
@@ -150,5 +156,50 @@ describe("piece filter", () => {
 			.map((w) => w.typeId);
 		// Then
 		expect(shown).toEqual(["sweater"]);
+	});
+
+	test("reads the picks of the address and writes them back", () => {
+		// Given: a type that is not one, and a type given twice
+		const params = new URLSearchParams(
+			"layer=sweater&type=tee_l&type=cape&colour=c1&brand=none&brand=b1&type=tee_l",
+		);
+		// When
+		const written = writePieceFilter(readPieceFilter(params)).toString();
+		// Then
+		expect(written).toBe(
+			"layer=sweater&type=tee_l&colour=c1&brand=none&brand=b1",
+		);
+	});
+
+	test("drops a colour and a brand the account no longer has", () => {
+		// Given
+		const filter = filterOf({
+			colours: [NAVY, GONE_COLOUR],
+			brands: [COS, GONE_BRAND, null],
+		});
+		// When
+		const pruned = prunePieceFilter(filter, [{ id: NAVY }], [{ id: COS }]);
+		// Then
+		expect(pruned).toEqual({
+			layers: [],
+			types: [],
+			colours: [NAVY],
+			brands: [COS, null],
+		});
+	});
+
+	test("names each chip in group order", () => {
+		// Given
+		const filter = filterOf({
+			layers: ["sweater"],
+			types: ["tee_l"],
+			colours: [NAVY],
+			brands: [null],
+		});
+		const colours = [{ id: NAVY, name: "Navy", hex: "#1F3A5F" as const }];
+		// When
+		const labels = pieceFilterChips(filter, colours, []).map((c) => c.label);
+		// Then
+		expect(labels).toEqual(["Sweaters", "Long tee", "Navy", "No brand"]);
 	});
 });

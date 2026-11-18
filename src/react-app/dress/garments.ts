@@ -63,6 +63,15 @@ export const LAYER_NAMES: Record<Layer, string> = {
 	jacket: "Jacket",
 };
 
+// The chip of a whole layer in a filter, so the layer "Sweaters" never reads
+// as the type "Sweater".
+export const LAYER_GROUP_NAMES: Record<Layer, string> = {
+	bottom: "Bottoms",
+	inner_top: "Inner tops",
+	sweater: "Sweaters",
+	jacket: "Jackets",
+};
+
 export const LAYER_OF: Record<GarmentId, Layer> = {
 	tee_s: "inner_top",
 	tee_l: "inner_top",
