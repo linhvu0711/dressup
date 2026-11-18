@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { combinationKey, combinationTitle } from "./combination";
+import { combinationKey, combinationTitle, wornLayers } from "./combination";
 
 test("keys pieces with no jacket the same, open or not", () => {
 	// Given: Navy casual pants and a Black long tee, as colour ids n and b
@@ -49,4 +49,44 @@ test("names a closed jacket with no mark", () => {
 	expect(title).toBe(
 		"Brown wool jacket + Burgundy sweater + Navy long button-up",
 	);
+});
+
+test("draws the pieces bottom layer first", () => {
+	// Given: an open-or-closed Khaki Harrington, a Black long tee, Navy pants
+	const pieces = [
+		{ typeId: "harrington", hex: "#B8A57C" },
+		{ typeId: "tee_l", hex: "#1B1B1F" },
+		{ typeId: "casual_p", hex: "#1F3A5F" },
+	] as const;
+	// When
+	const layers = wornLayers(pieces);
+	// Then
+	expect(layers).toEqual([
+		{ garment: "casual_p", color: "#1F3A5F" },
+		{ garment: "tee_l", color: "#1B1B1F" },
+		{ garment: "harrington", color: "#B8A57C" },
+	]);
+});
+
+test("wears a pale blank bottom and top with no pieces", () => {
+	// Given: no pieces
+	// When
+	const layers = wornLayers([]);
+	// Then
+	expect(layers).toEqual([
+		{ garment: "casual_p", color: "#E2DED7" },
+		{ garment: "tee_s", color: "#E2DED7" },
+	]);
+});
+
+test("wears no blank top under a sweater", () => {
+	// Given: a Burgundy sweater alone
+	const pieces = [{ typeId: "sweater", hex: "#6E1F2F" }] as const;
+	// When
+	const layers = wornLayers(pieces);
+	// Then
+	expect(layers).toEqual([
+		{ garment: "casual_p", color: "#E2DED7" },
+		{ garment: "sweater", color: "#6E1F2F" },
+	]);
 });

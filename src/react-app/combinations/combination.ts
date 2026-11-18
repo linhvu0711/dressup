@@ -3,6 +3,8 @@ import {
 	GARMENT_IDS,
 	GARMENT_NAMES,
 	type GarmentId,
+	type GarmentLayer,
+	type Hex,
 	LAYER_OF,
 	LAYERS,
 	type Layer,
@@ -168,4 +170,32 @@ export function combinationTitle(combination: {
 			return `${p.colour.name} ${typeWord(p.typeId)}${open}`;
 		})
 		.join(" + ");
+}
+
+// The pale piece the mannequin wears in place of a missing bottom or top: the
+// bare figure leaves the body from the waist to the knee undrawn
+// (src/react-app/dress/figure/body.tsx). It is never saved.
+export const BLANK: Hex = "#E2DED7";
+
+// What the mannequin wears for these pieces, bottom layer first: a pale
+// casual pants with no bottom, and a pale short tee with no inner top and no
+// sweater.
+export function wornLayers(
+	pieces: readonly { typeId: GarmentId; hex: Hex }[],
+): GarmentLayer[] {
+	const worn: GarmentLayer[] = byLayer(pieces).map((p) => ({
+		garment: p.typeId,
+		color: p.hex,
+	}));
+	const blank = (garment: GarmentId): GarmentLayer[] => [
+		{ garment, color: BLANK },
+	];
+	const bottom = worn.filter((l) => LAYER_OF[l.garment] === "bottom");
+	const above = worn.filter((l) => LAYER_OF[l.garment] !== "bottom");
+	const hasTop = above.some((l) => LAYER_OF[l.garment] !== "jacket");
+	return [
+		...(bottom.length > 0 ? bottom : blank("casual_p")),
+		...(hasTop ? [] : blank("tee_s")),
+		...above,
+	];
 }
