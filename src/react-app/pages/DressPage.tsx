@@ -8,6 +8,7 @@ import { Mannequin } from "@/dress/figure/Mannequin";
 import { MannequinPlaceholder } from "@/dress/figure/MannequinPlaceholder";
 import { ModePicker, type PickerTab } from "@/dress/ModePicker";
 import { modeById, outfitOf } from "@/dress/modes";
+import { OutfitFailed } from "@/dress/OutfitFailed";
 import { Stage } from "@/dress/Stage";
 import { lookName } from "@/looks/look";
 import { SaveLookDialog } from "@/looks/SaveLookDialog";
@@ -109,14 +110,7 @@ export function DressPage() {
 						label={`Mannequin in ${mode.name}`}
 					/>
 				) : dress.status === "failed" ? (
-					<div className="flex h-full flex-col items-center justify-center px-6 text-center">
-						<p role="alert" className="text-[15px] text-destructive">
-							Could not load your outfit.
-						</p>
-						<Button size="lg" className="mt-4" onClick={dress.loadAgain}>
-							Try again
-						</Button>
-					</div>
+					<OutfitFailed onLoadAgain={dress.loadAgain} />
 				) : (
 					<MannequinPlaceholder />
 				)}

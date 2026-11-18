@@ -8,6 +8,7 @@ import { SaveCombinationDialog } from "@/combinations/SaveCombinationDialog";
 import { Button } from "@/components/ui/button";
 import { CHIP } from "@/components/ui/chip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useDressState } from "@/dress/DressState";
 import { TypeFigure } from "@/dress/figure/TypeFigure";
 import {
 	GARMENT_IDS,
@@ -18,6 +19,7 @@ import {
 	LAYERS,
 	type Layer,
 } from "@/dress/garments";
+import { OutfitFailed } from "@/dress/OutfitFailed";
 import { Stage } from "@/dress/Stage";
 import { useColours } from "@/labels/api";
 import type { ColourId } from "@/labels/colour";
@@ -34,6 +36,7 @@ const PULSE = "animate-placeholder motion-reduce:animate-none";
 // The builder: the mannequin on top, the picker below it (beside it from
 // 900 px). A pick shows on the mannequin at once; nothing is saved until Save.
 export function BuildPage() {
+	const dress = useDressState();
 	const colours = useColours();
 	const [picks, setPicks] = useState<Picks>({});
 	const [open, setOpen] = useState(true);
@@ -96,14 +99,18 @@ export function BuildPage() {
 					className="flex min-h-0 flex-[0_0_46%] flex-col wide:mx-6 wide:mb-4 wide:flex-1"
 				>
 					<Stage className="min-h-0 flex-1 rounded-b-[24px] wide:rounded-[26px]">
-						<CombinationFigure
-							pieces={pieces.map((p) => ({
-								typeId: p.typeId,
-								hex: p.colour.hex,
-							}))}
-							open={open}
-							label="Mannequin in the combination"
-						/>
+						{dress.status === "failed" ? (
+							<OutfitFailed onLoadAgain={dress.loadAgain} />
+						) : (
+							<CombinationFigure
+								pieces={pieces.map((p) => ({
+									typeId: p.typeId,
+									hex: p.colour.hex,
+								}))}
+								open={open}
+								label="Mannequin in the combination"
+							/>
+						)}
 					</Stage>
 				</div>
 				<Tabs

@@ -332,6 +332,28 @@ test("keeps the layer tabs in view when the picker scrolls", async ({
 	await expect(swatch(page, "Mustard")).toBeInViewport();
 });
 
+test("says Could not load your outfit in the builder and loads on Try again", async ({
+	page,
+}) => {
+	// Given: both projects, GET /api/dress answers 500 until the retry
+	await page.route("/api/dress", (route) => route.fulfill({ status: 500 }));
+	await page.goto("/build");
+	// The page tries the first load 3 times, 1 s and 2 s apart, before it
+	// says so.
+	await expect(stage(page).getByRole("alert")).toHaveText(
+		"Could not load your outfit.",
+		{ timeout: 10_000 },
+	);
+	await page.unroute("/api/dress");
+	// When
+	await stage(page).getByRole("button", { name: "Try again" }).click();
+	// Then
+	await expect(
+		stage(page).locator('svg[aria-label="Mannequin in the combination"]'),
+	).toBeVisible();
+	await expect(stage(page).getByRole("alert")).toHaveCount(0);
+});
+
 test("turns Save on at 2 pieces", async ({ page }) => {
 	// Given: both projects, /build
 	await page.goto("/build");
