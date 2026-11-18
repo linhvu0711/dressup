@@ -82,3 +82,12 @@ export function useDeleteShopLink() {
 		onSuccess: (_, id) => after.shopLinkDeleted(userId, id),
 	});
 }
+
+export function useDeleteWish() {
+	const userId = cachedUserId();
+	return useMutation({
+		mutationFn: (id: WishId) =>
+			request("DELETE", `/api/wishes/${id}`).catch(goneAsDone),
+		onSuccess: (_, id) => after.wishDeleted(userId, id),
+	});
+}

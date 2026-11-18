@@ -1,6 +1,7 @@
 import { ExternalLink, Pencil, Plus } from "lucide-react";
 import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { RemoveWishDialog } from "./RemoveWishDialog";
 import { ShopLinkSheet } from "./ShopLinkSheet";
 import {
 	isWebAddress,
@@ -18,6 +19,7 @@ export function WishlistPart({ wish }: { wish: Wish }) {
 	const title = useId();
 	// The sheet: a new link, or the link it changes.
 	const [sheet, setSheet] = useState<ShopLink | "add" | null>(null);
+	const [removing, setRemoving] = useState(false);
 	const full = wish.shopLinks.length >= SHOP_LINK_LIMIT;
 	return (
 		<section aria-labelledby={title} className="flex flex-col gap-2">
@@ -84,6 +86,16 @@ export function WishlistPart({ wish }: { wish: Wish }) {
 					))}
 				</ul>
 			)}
+			<Button
+				variant="destructive"
+				className="mt-2 self-start"
+				onClick={() => setRemoving(true)}
+			>
+				Remove from wishlist
+			</Button>
+			{removing ? (
+				<RemoveWishDialog wish={wish} onClose={() => setRemoving(false)} />
+			) : null}
 			{sheet === "add" ? (
 				<ShopLinkSheet
 					mode="add"

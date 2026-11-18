@@ -247,6 +247,15 @@ export const after = {
 		refresh(keys.wishlist(userId));
 		refresh(keys.brands(userId));
 	},
+	// A removed wish can free its colour, and its links leave their brands.
+	wishDeleted(userId: string | null, id: string) {
+		queryClient.setQueryData<Wish[]>(keys.wishlist(userId), (old) =>
+			old?.filter((w) => w.id !== id),
+		);
+		refresh(keys.wishlist(userId));
+		refresh(keys.colours(userId));
+		refresh(keys.brands(userId));
+	},
 	aiAppGone(userId: string | null, id: string) {
 		queryClient.setQueryData<AiApp[]>(keys.aiApps(userId), (old) =>
 			old?.filter((app) => app.id !== id),

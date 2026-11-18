@@ -562,3 +562,46 @@ test("keeps the shop link sheet open with Not saved when the save fails", async 
 		"Not saved. Try again.",
 	);
 });
+
+test("removes a wish after a confirm that counts its links", async ({
+	page,
+}) => {
+	// Given: a fresh account with a Charcoal wool jacket in the closet and on
+	// the wishlist with 2 links, on its piece page
+	await page.goto("/");
+	const ids = await colourIds(page);
+	await page.request.post("/api/owned-items", {
+		data: {
+			id: crypto.randomUUID(),
+			typeId: "wool",
+			colourId: ids.Charcoal,
+			brandId: null,
+			quantity: 1,
+		},
+	});
+	const wish = await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
+	for (const n of [1, 2])
+		await postShopLink(page, wish, {
+			url: `https://shop.example/${n}`,
+			brandId: null,
+			name: `Link ${n}`,
+			price: null,
+		});
+	await page.goto(`/piece/wool/${ids.Charcoal}`);
+	// When
+	await page.getByRole("button", { name: "Remove from wishlist" }).click();
+	const confirm = page.getByRole("alertdialog", {
+		name: "Remove from wishlist?",
+	});
+	// Then
+	await expect(confirm).toContainText("Its 2 shop links go with it.");
+	// When
+	await confirm.getByRole("button", { name: "Remove" }).click();
+	// Then
+	await expect(page.locator('[data-slot="toast"]')).toHaveText(
+		"Removed from your wishlist",
+	);
+	await expect(page.getByRole("heading", { level: 2 })).toHaveText([
+		"In your closet",
+	]);
+});
