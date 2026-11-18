@@ -18,6 +18,13 @@ export const LIMIT_USER = {
 	name: "Limit Person",
 };
 
+// Holds 100 colours, the colour limit, for the colour form's limit test.
+export const COLOURS_FULL_USER = {
+	id: "e2e-colours-full",
+	email: "colours-full@dressup.test",
+	name: "Colours Full Person",
+};
+
 type ProxyEnv = {
 	DB: Parameters<typeof drizzle>[0];
 	BETTER_AUTH_SECRET?: string;

@@ -1,6 +1,8 @@
 import { ChevronRight, Plus } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useColours } from "@/labels/api";
+import { ColourSheet } from "@/labels/ColourSheet";
 import type { Colour } from "@/labels/colour";
 import { PageHeader } from "../shell/PageHeader";
 
@@ -46,6 +48,7 @@ function ColourRow({ colour }: { colour: Colour }) {
 // The lists the account makes once and uses everywhere; colours for now.
 export function LabelsPage() {
 	const colours = useColours();
+	const [adding, setAdding] = useState(false);
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
 			<PageHeader
@@ -56,6 +59,8 @@ export function LabelsPage() {
 						size="icon"
 						aria-label="Add a colour"
 						title="Add a colour"
+						disabled={!colours.data}
+						onClick={() => setAdding(true)}
 					>
 						<Plus size={18} strokeWidth={1.9} aria-hidden />
 					</Button>
@@ -67,6 +72,9 @@ export function LabelsPage() {
 						<ColourRow key={colour.id} colour={colour} />
 					))}
 				</ul>
+			) : null}
+			{adding && colours.data ? (
+				<ColourSheet colours={colours.data} onClose={() => setAdding(false)} />
 			) : null}
 		</div>
 	);
