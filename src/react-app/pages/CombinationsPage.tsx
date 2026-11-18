@@ -108,6 +108,17 @@ export function CombinationsPage() {
 	} else if (dress.status === "failed") {
 		// After the empty check: with no cards there is no mannequin to fail.
 		wall = <OutfitFailed onLoadAgain={dress.loadAgain} />;
+	} else if (visible.length === 0) {
+		wall = (
+			<Notice title="No combinations here">
+				<p className="max-w-[30ch] text-muted-foreground">
+					No combination matches all of your filters.
+				</p>
+				<Button className="mt-2" onClick={() => setFilter(NO_FILTER)}>
+					Clear all
+				</Button>
+			</Notice>
+		);
 	} else {
 		wall = (
 			<div data-slot="combination-wall" className={WALL}>

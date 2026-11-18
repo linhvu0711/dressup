@@ -221,3 +221,27 @@ test("removes a filter by its chip and every filter by Clear all", async ({
 	await expect(titles(page)).toHaveCount(3);
 	expect(new URL(page.url()).search).toBe("");
 });
+
+test("shows No combinations here and clears all from it", async ({ page }) => {
+	// Given: both projects, a fresh account; the wall filtered by Sweater
+	await seedWall(page);
+	await page.goto("/combinations?piece=sweater.");
+	const notice = page.getByRole("heading", { name: "No combinations here" });
+	// Then
+	await expect(notice).toBeVisible();
+	await expect(
+		page.getByText("No combination matches all of your filters."),
+	).toBeVisible();
+	await expect(titles(page)).toHaveCount(0);
+	// When
+	await page
+		.locator("main")
+		.getByRole("button", { name: "Clear all" })
+		.last()
+		.click();
+	// Then
+	await expect(titles(page)).toHaveCount(3);
+	await expect(page.getByRole("group", { name: "Active filters" })).toHaveCount(
+		0,
+	);
+});
