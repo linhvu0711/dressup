@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { colourIds } from "./closet-helpers";
+import { colourIds, postBrand } from "./closet-helpers";
 import { expect, test } from "./fixtures";
 import { WISHLIST_FULL_FILE } from "./global-setup";
 import { postShopLink, postWish } from "./wishlist-helpers";
@@ -201,4 +201,191 @@ test.describe("at the wishlist limit", () => {
 			addSheet(page).getByRole("button", { name: "Save" }),
 		).toBeDisabled();
 	});
+});
+
+test("adds a wish from the form and opens its piece page", async ({ page }) => {
+	// Given: a fresh account on /wishlist
+	await page.goto("/");
+	const ids = await colourIds(page);
+	await page.goto("/wishlist");
+	// When
+	await openAddSheet(page);
+	await pickPiece(page, "Wool jacket", "Charcoal");
+	await addSheet(page).getByRole("button", { name: "Save" }).click();
+	// Then
+	await expect(page.locator('[data-slot="toast"]')).toHaveText(
+		"Added to your wishlist",
+	);
+	await expect(page).toHaveURL(`/piece/wool/${ids.Charcoal}`);
+	await expect(
+		page.getByRole("heading", { name: "Charcoal wool jacket" }),
+	).toBeVisible();
+});
+
+test("refuses a second wish for one piece and opens the first", async ({
+	page,
+}) => {
+	// Given: a fresh account with a Charcoal wool jacket wish
+	await page.goto("/");
+	const ids = await colourIds(page);
+	await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
+	await page.goto("/wishlist");
+	// When
+	await openAddSheet(page);
+	await pickPiece(page, "Wool jacket", "Charcoal");
+	await addSheet(page).getByRole("button", { name: "Save" }).click();
+	// Then
+	await expect(addSheet(page).getByRole("alert")).toHaveText(
+		"You have this wish already.",
+	);
+	// When
+	await addSheet(page).getByRole("link", { name: "Open it" }).click();
+	// Then
+	await expect(page).toHaveURL(`/piece/wool/${ids.Charcoal}`);
+});
+
+const cards = (page: Page) => page.locator('[data-slot="shop-link"]');
+
+// A fresh account with a Charcoal wool jacket wish holding a COS link at
+// 4.290.000, then a Zara link with no brand at 588.000.
+async function jacketWithLinks(page: Page) {
+	await page.goto("/");
+	const ids = await colourIds(page);
+	const cos = await postBrand(page, "COS");
+	const wish = await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
+	await postShopLink(page, wish, {
+		url: "https://www.cos.com/a",
+		brandId: cos,
+		name: "Single-breasted wool jacket",
+		price: 4290000,
+	});
+	await postShopLink(page, wish, {
+		url: "https://www.zara.com/b",
+		brandId: null,
+		name: "Wool blend jacket",
+		price: 588000,
+	});
+	return { ids, wish };
+}
+
+const openJacket = async (page: Page) => {
+	await page.goto("/wishlist");
+	await page
+		.getByRole("link", { name: /^Charcoal wool jacket,/ })
+		.first()
+		.click();
+};
+
+test("lists the shop links of a wish on its piece page", async ({ page }) => {
+	// Given
+	await jacketWithLinks(page);
+	// When
+	await openJacket(page);
+	// Then
+	await expect(
+		page.getByRole("heading", { name: "On your wishlist" }),
+	).toBeVisible();
+	await expect(cards(page)).toHaveCount(2);
+	expect([
+		await cards(page).nth(0).locator("p, a").allInnerTexts(),
+		await cards(page).nth(1).locator("p, a").allInnerTexts(),
+	]).toEqual([
+		["COS", "Single-breasted wool jacket", "4.290.000 ₫", "cos.com"],
+		["zara.com", "Wool blend jacket", "588.000 ₫", "zara.com"],
+	]);
+});
+
+test("opens the shop in a new tab with noopener noreferrer", async ({
+	page,
+}) => {
+	// Given: the account of the case above, on the piece page
+	await jacketWithLinks(page);
+	await openJacket(page);
+	// When
+	const address = page.locator('[data-slot="shop-address"]').first();
+	// Then
+	await expect(address).toHaveAttribute("href", "https://www.cos.com/a");
+	await expect(address).toHaveAttribute("target", "_blank");
+	await expect(address).toHaveAttribute("rel", "noopener noreferrer");
+});
+
+test("shows an address that is not http as text", async ({ page }) => {
+	// Given: the wishlist answers one Charcoal wool jacket wish with one link
+	// whose address is a script
+	await page.goto("/");
+	const ids = await colourIds(page);
+	await page.route("**/api/wishes", (route) =>
+		route.fulfill({
+			json: {
+				wishes: [
+					{
+						id: "11111111-1111-4111-8111-111111111111",
+						typeId: "wool",
+						colour: { id: ids.Charcoal, name: "Charcoal", hex: "#3A3F47" },
+						shopLinks: [
+							{
+								id: "22222222-2222-4222-8222-222222222222",
+								url: "javascript:alert(1)",
+								brand: null,
+								name: "Odd link",
+								price: null,
+							},
+						],
+					},
+				],
+			},
+		}),
+	);
+	// When
+	await page.goto(`/piece/wool/${ids.Charcoal}`);
+	// Then
+	const card = page.getByRole("listitem", { name: "Odd link" });
+	await expect(card).toContainText("javascript:alert(1)");
+	await expect(card.locator("a")).toHaveCount(0);
+});
+
+test("shows the closet part and the wishlist part for a piece in both", async ({
+	page,
+}) => {
+	// Given: a fresh account with a Charcoal wool jacket in the closet and on
+	// the wishlist
+	await page.goto("/");
+	const ids = await colourIds(page);
+	await page.request.post("/api/owned-items", {
+		data: {
+			id: crypto.randomUUID(),
+			typeId: "wool",
+			colourId: ids.Charcoal,
+			brandId: null,
+			quantity: 1,
+		},
+	});
+	await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
+	// When
+	await page.goto(`/piece/wool/${ids.Charcoal}`);
+	// Then
+	await expect(page.getByRole("heading", { level: 2 })).toHaveText([
+		"In your closet",
+		"On your wishlist",
+	]);
+});
+
+test("sends a piece page with no item and no wish back to the wishlist", async ({
+	page,
+}) => {
+	// Given: a fresh account with an Olive long polo wish, on /wishlist
+	await page.goto("/");
+	const ids = await colourIds(page);
+	const wish = await postWish(page, { typeId: "polo_l", colourId: ids.Olive });
+	await page.goto("/wishlist");
+	// When: the tile; the wish deleted elsewhere; the page in view again
+	await page.getByRole("link", { name: /^Olive long polo,/ }).click();
+	await expect(page).toHaveURL(`/piece/polo_l/${ids.Olive}`);
+	await page.request.delete(`/api/wishes/${wish}`);
+	// The tab comes back into view, so the page loads its lists again.
+	await page.evaluate(() =>
+		document.dispatchEvent(new Event("visibilitychange")),
+	);
+	// Then
+	await expect(page).toHaveURL("/wishlist");
 });
