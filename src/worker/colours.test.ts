@@ -418,6 +418,36 @@ describe("colours in use", () => {
 	});
 });
 
+describe("colours in the closet", () => {
+	test("refuses to delete a colour an owned item uses", async () => {
+		// Given: alice with a Navy long button-up, no brand, in her closet; no
+		// combination
+		const { h, headers } = await aliceWith(0);
+		const ids = Object.fromEntries(
+			(await coloursOf(h, headers)).map((c) => [c.name, c.id]),
+		);
+		await send(h, headers, "POST", "/api/owned-items", {
+			id: "11111111-1111-4111-8111-111111111111",
+			typeId: "shirt_l",
+			colourId: ids.Navy,
+			brandId: null,
+			quantity: 1,
+		});
+		// When
+		const res = await send(h, headers, "DELETE", `/api/colours/${ids.Navy}`);
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			names: (await coloursOf(h, headers)).map((c) => `${c.name} ${c.hex}`),
+		}).toEqual({
+			status: 409,
+			body: { error: "colour_in_use" },
+			names: STARTER,
+		});
+	});
+});
+
 describe("DELETE /api/colours/:id", () => {
 	test("deletes a colour", async () => {
 		// Given: alice with "Teal"

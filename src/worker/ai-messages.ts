@@ -91,7 +91,7 @@ export function colourRefusalText(error: ColourError): string {
 		case "not_found":
 			return noColour;
 		case "colour_in_use":
-			return `A combination uses ${error.name}, so it stays. A colour that a combination uses cannot be deleted.`;
+			return `A combination or an owned item uses ${error.name}, so it stays. A colour in use cannot be deleted.`;
 	}
 }
 

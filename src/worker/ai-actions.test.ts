@@ -1201,7 +1201,7 @@ describe("colours", () => {
 		// Then
 		expect({ isError, text }).toEqual({
 			isError: true,
-			text: "A combination uses Navy, so it stays. A colour that a combination uses cannot be deleted.",
+			text: "A combination or an owned item uses Navy, so it stays. A colour in use cannot be deleted.",
 		});
 	});
 

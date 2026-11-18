@@ -13,7 +13,8 @@ const WORDS: LabelWords = {
 	addLabel: "Add",
 	confirmTitle: (name) => `Delete the colour "${name}"?`,
 	confirmText: "It goes from your list of colours.",
-	inUseText: "A combination uses this colour, so you cannot delete it.",
+	inUseText:
+		"A combination or an item in your closet uses this colour, so you cannot delete it.",
 	taken: "You have this colour already.",
 	full: `You have ${COLOUR_LIMIT} colours. That is the limit. Delete one to add a new one.`,
 	added: "Colour added",
