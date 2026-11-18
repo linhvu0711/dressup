@@ -314,3 +314,30 @@ test("shows Nothing here on the wishlist and clears it", async ({ page }) => {
 		after: { tiles: 3, chips: 0 },
 	});
 });
+
+test("keeps the closet filter after a piece and Back, and not on the wishlist", async ({
+	page,
+}) => {
+	// Given: both projects, a Navy sweater and a White long tee, a wish for
+	// Navy chino pants, the closet filtered by Sweaters
+	const ids = await seedCloset(page, [
+		["sweater", "Navy", null],
+		["tee_l", "White", null],
+	]);
+	await postWish(page, { typeId: "chino_p", colourId: ids.Navy });
+	await page.goto("/closet?layer=sweater");
+	await expect(closetTiles(page)).toHaveCount(1);
+	// When
+	await page.getByRole("link", { name: "Navy sweater, 1" }).click();
+	await page.getByRole("link", { name: "Back" }).click();
+	await expect(closetTiles(page)).toHaveCount(1);
+	const closet = await chips(page).allTextContents();
+	await mainNav(page).getByRole("link", { name: "Wishlist" }).click();
+	await expect(wishTiles(page)).toHaveCount(1);
+	// Then
+	expect({
+		closet,
+		wishlistChips: await chips(page).count(),
+		wishlistTiles: await wishTiles(page).count(),
+	}).toEqual({ closet: ["Sweaters"], wishlistChips: 0, wishlistTiles: 1 });
+});

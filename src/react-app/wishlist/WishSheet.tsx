@@ -8,7 +8,7 @@ import { RequestError } from "@/data/client";
 import type { GarmentId } from "@/dress/garments";
 import { ColourSwatches } from "@/labels/ColourSwatches";
 import type { ColourId } from "@/labels/colour";
-import { pieceLink } from "@/shell/piece-link";
+import { usePieceLink } from "@/shell/piece-link";
 import { useAddWish, useWishlist } from "./api";
 import { WISH_LIMIT, type WishId } from "./wish";
 
@@ -37,6 +37,7 @@ export function WishSheet({ onClose }: { onClose: () => void }) {
 	const add = useAddWish();
 	const toast = useToast();
 	const navigate = useNavigate();
+	const linkTo = usePieceLink("/wishlist");
 	// A 409 wish_limit means another tab filled the wishlist.
 	const full =
 		(wishlist.data?.length ?? 0) >= WISH_LIMIT ||
@@ -64,7 +65,7 @@ export function WishSheet({ onClose }: { onClose: () => void }) {
 				onSuccess: (wish) => {
 					toast("Added to your wishlist");
 					onClose();
-					const link = pieceLink(wish, "/wishlist");
+					const link = linkTo(wish);
 					navigate(link.to, { state: link.state });
 				},
 			},
@@ -103,7 +104,7 @@ export function WishSheet({ onClose }: { onClose: () => void }) {
 							You have this wish already.
 						</p>
 						<Button asChild>
-							<Link {...pieceLink(piece, "/wishlist")} onClick={onClose}>
+							<Link {...linkTo(piece)} onClick={onClose}>
 								Open it
 							</Link>
 						</Button>
