@@ -90,6 +90,7 @@ test("names what dressup keeps", async ({ page }) => {
 		"Your last outfit.",
 		"Your looks and their tags.",
 		"Your combinations.",
+		"Your closet.",
 		"Your mannequin's skin and hair colour.",
 	]);
 });

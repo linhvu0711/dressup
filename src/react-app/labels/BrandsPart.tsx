@@ -6,10 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { PLACEHOLDER } from "@/components/ui/placeholder";
 import { BrandSheet } from "./BrandSheet";
-import type { Brand } from "./brand";
+import type { ListedBrand } from "./brand";
 import { LIST } from "./list";
 
-function BrandRow({ brand, onOpen }: { brand: Brand; onOpen: () => void }) {
+function BrandRow({
+	brand,
+	onOpen,
+}: {
+	brand: ListedBrand;
+	onOpen: () => void;
+}) {
 	return (
 		<li className="flex min-h-[58px] min-w-0 items-center border-b border-border py-[11px]">
 			<button
@@ -36,11 +42,11 @@ export function BrandsPart({
 	adding,
 	onAddClose,
 }: {
-	brands: UseQueryResult<Brand[]>;
+	brands: UseQueryResult<ListedBrand[]>;
 	adding: boolean;
 	onAddClose: () => void;
 }) {
-	const [editing, setEditing] = useState<Brand | null>(null);
+	const [editing, setEditing] = useState<ListedBrand | null>(null);
 	return (
 		<>
 			{brands.isPending ? (

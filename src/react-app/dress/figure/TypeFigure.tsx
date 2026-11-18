@@ -1,3 +1,4 @@
+import type { Hex } from "@/colour/hex";
 import { FigureSvg, Stretch } from "@/dress/figure/frame";
 import { GARMENT_DRAWINGS } from "@/dress/figure/garments";
 import type { GarmentId } from "@/dress/garments";
@@ -30,8 +31,17 @@ const VIEW_BOX: Record<GarmentId, string> = {
 	train_p: PANTS,
 };
 
-// One type alone in grey, as a small picture for its chip.
-export function TypeFigure({ typeId }: { typeId: GarmentId }) {
+// One type alone, grey unless a colour is given, as a small picture for its
+// chip or a tile.
+export function TypeFigure({
+	typeId,
+	hex = "#8C8A84",
+	className = "-ml-1 size-[22px] flex-none",
+}: {
+	typeId: GarmentId;
+	hex?: Hex;
+	className?: string;
+}) {
 	return (
 		<FigureSvg
 			viewBox={VIEW_BOX[typeId]}
@@ -40,9 +50,9 @@ export function TypeFigure({ typeId }: { typeId: GarmentId }) {
 			hair={STARTER_MANNEQUIN.hair}
 			lite
 			decorative
-			className="-ml-1 size-[22px] flex-none"
+			className={className}
 		>
-			<Stretch>{GARMENT_DRAWINGS[typeId]("#8C8A84", false)}</Stretch>
+			<Stretch>{GARMENT_DRAWINGS[typeId](hex, false)}</Stretch>
 		</FigureSvg>
 	);
 }

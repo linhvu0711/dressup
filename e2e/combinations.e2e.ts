@@ -1030,7 +1030,7 @@ test("leaves the combination as it was when the builder closes", async ({
 	// When
 	await changeButton(page).click();
 	await pick(page, "Bottom", "Casual pants", "Grey");
-	await page.getByRole("link", { name: "Close" }).click();
+	await page.getByRole("link", { name: "Close", exact: true }).click();
 	// Then
 	await expect(page).toHaveURL(`/combinations/${first.id}`);
 	await expect(viewTitle(page)).toHaveText(LONG_TITLE);

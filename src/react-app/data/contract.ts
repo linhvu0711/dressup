@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { aiAppSchema } from "@/ai-apps/ai-app";
+import { ownedItemSchema } from "@/closet/owned-item";
 import { combinationSchema } from "@/combinations/combination";
 import { dressStateSchema } from "@/dress/state";
-import { brandSchema } from "@/labels/brand";
+import { brandSchema, listedBrandSchema } from "@/labels/brand";
 import { colourSchema, listedColourSchema } from "@/labels/colour";
 import { lookSchema } from "@/looks/look";
 import { tagSchema } from "@/tags/tag";
@@ -22,6 +23,7 @@ export const errorCodes = [
 	"colour_limit",
 	"brand_limit",
 	"combination_limit",
+	"owned_item_limit",
 	"colour_in_use",
 ] as const;
 
@@ -64,7 +66,9 @@ export const colourAnswer = z.object({ colour: colourSchema });
 
 export type ColourAnswer = z.input<typeof colourAnswer>;
 
-export const brandsAnswer = z.object({ brands: z.array(brandSchema) });
+export const brandsAnswer = z.object({
+	brands: z.array(listedBrandSchema),
+});
 
 export type BrandsAnswer = z.input<typeof brandsAnswer>;
 
@@ -81,6 +85,16 @@ export type CombinationsAnswer = z.input<typeof combinationsAnswer>;
 export const combinationAnswer = z.object({ combination: combinationSchema });
 
 export type CombinationAnswer = z.input<typeof combinationAnswer>;
+
+export const ownedItemsAnswer = z.object({
+	ownedItems: z.array(ownedItemSchema),
+});
+
+export type OwnedItemsAnswer = z.input<typeof ownedItemsAnswer>;
+
+export const ownedItemAnswer = z.object({ ownedItem: ownedItemSchema });
+
+export type OwnedItemAnswer = z.input<typeof ownedItemAnswer>;
 
 export const aiAppsAnswer = z.object({ apps: z.array(aiAppSchema) });
 

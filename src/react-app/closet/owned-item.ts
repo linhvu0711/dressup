@@ -1,0 +1,69 @@
+import { z } from "zod";
+import { GARMENT_IDS } from "@/dress/garments";
+import { brandSchema } from "@/labels/brand";
+import { colourSchema } from "@/labels/colour";
+
+export const OWNED_ITEM_LIMIT = 500;
+
+export const QUANTITY_MAX = 99;
+
+export const ownedItemIdSchema = z.uuid().brand<"OwnedItemId">();
+
+export type OwnedItemId = z.infer<typeof ownedItemIdSchema>;
+
+export const quantitySchema = z.number().int().min(1).max(QUANTITY_MAX);
+
+// The rules for an owned item as a website or an AI app sends it, so the
+// server's check and the page's form agree. The colour and the brand are
+// ids here; the store checks that they are the account's.
+export const ownedItemInputSchema = z.object({
+	id: ownedItemIdSchema,
+	typeId: z.enum(GARMENT_IDS),
+	colourId: z.string(),
+	brandId: z.string().nullable(),
+	quantity: quantitySchema,
+});
+
+// The piece of an owned item never changes; only its brand and quantity do.
+export const ownedItemChangeSchema = z.object({
+	brandId: z.string().nullable(),
+	quantity: quantitySchema,
+});
+
+export const ownedItemSchema = z.object({
+	id: ownedItemIdSchema,
+	typeId: z.enum(GARMENT_IDS),
+	colour: colourSchema,
+	brand: brandSchema.nullable(),
+	quantity: quantitySchema,
+});
+
+export type OwnedItem = z.infer<typeof ownedItemSchema>;
+
+export type ClosetPiece = {
+	typeId: OwnedItem["typeId"];
+	colour: OwnedItem["colour"];
+	quantity: number;
+	items: OwnedItem[];
+};
+
+// One tile for each piece, with the total of its items. The list comes newest
+// first, so the piece of the newest item leads.
+export function closetPieces(items: readonly OwnedItem[]): ClosetPiece[] {
+	const pieces = new Map<string, ClosetPiece>();
+	for (const item of items) {
+		const key = `${item.typeId}/${item.colour.id}`;
+		const piece = pieces.get(key);
+		if (piece) {
+			piece.quantity += item.quantity;
+			piece.items.push(item);
+		} else
+			pieces.set(key, {
+				typeId: item.typeId,
+				colour: item.colour,
+				quantity: item.quantity,
+				items: [item],
+			});
+	}
+	return [...pieces.values()];
+}

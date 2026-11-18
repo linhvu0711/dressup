@@ -1,4 +1,9 @@
-import { BRAND_LIMIT, BRAND_NAME_MAX, type Brand } from "./brand";
+import {
+	BRAND_LIMIT,
+	BRAND_NAME_MAX,
+	brandDeleteText,
+	type ListedBrand,
+} from "./brand";
 import { useAddBrand, useDeleteBrand, useRenameBrand } from "./brand-api";
 import { LabelSheet, type LabelWords } from "./LabelSheet";
 
@@ -20,8 +25,8 @@ export function BrandSheet({
 	editing,
 	onClose,
 }: {
-	brands: Brand[];
-	editing: Brand | null;
+	brands: ListedBrand[];
+	editing: ListedBrand | null;
 	onClose: () => void;
 }) {
 	const add = useAddBrand();
@@ -29,7 +34,7 @@ export function BrandSheet({
 	const del = useDeleteBrand();
 	return (
 		<LabelSheet
-			words={WORDS}
+			words={{ ...WORDS, confirmText: brandDeleteText(editing?.items ?? 0) }}
 			labels={brands}
 			limit={BRAND_LIMIT}
 			limitCode="brand_limit"

@@ -332,3 +332,105 @@ describe("PUT and DELETE /api/brands/:id", () => {
 		]);
 	});
 });
+
+describe("owned items of a deleted brand", () => {
+	type Item = { id: string; typeId: string; brand: Brand | null };
+
+	const navyId = async (h: Harness, headers: Headers) =>
+		(
+			(await (await send(h, headers, "GET", "/api/colours")).json()) as {
+				colours: { id: string; name: string }[];
+			}
+		).colours.find((c) => c.name === "Navy")?.id;
+
+	const addShirt = async (
+		h: Harness,
+		headers: Headers,
+		id: string,
+		brandId: string,
+	) =>
+		send(h, headers, "POST", "/api/owned-items", {
+			id,
+			typeId: "shirt_l",
+			colourId: await navyId(h, headers),
+			brandId,
+			quantity: 1,
+		});
+
+	const items = async (h: Harness, headers: Headers) =>
+		(
+			(await (await send(h, headers, "GET", "/api/owned-items")).json()) as {
+				ownedItems: Item[];
+			}
+		).ownedItems;
+
+	test("counts the owned items of each brand", async () => {
+		// Given: alice with Zara and COS; a Navy long button-up, a White short
+		// tee, and a Black long tee, each from Zara
+		const { h, headers } = await withAccount();
+		const zara = await addedId(h, headers, "Zara");
+		await addedId(h, headers, "COS");
+		const colours = (
+			(await (await send(h, headers, "GET", "/api/colours")).json()) as {
+				colours: { id: string; name: string }[];
+			}
+		).colours;
+		const colourId = (name: string) => colours.find((c) => c.name === name)?.id;
+		const pieces = [
+			["11111111-1111-4111-8111-111111111111", "shirt_l", "Navy"],
+			["22222222-2222-4222-8222-222222222222", "tee_s", "White"],
+			["33333333-3333-4333-8333-333333333333", "tee_l", "Black"],
+		];
+		for (const [id, typeId, colour] of pieces)
+			await send(h, headers, "POST", "/api/owned-items", {
+				id,
+				typeId,
+				colourId: colourId(colour),
+				brandId: zara,
+				quantity: 1,
+			});
+		// When
+		const res = await send(h, headers, "GET", "/api/brands");
+		// Then
+		const { brands } = (await res.json()) as {
+			brands: { name: string; items: number }[];
+		};
+		expect(brands.map((b) => [b.name, b.items])).toEqual([
+			["COS", 0],
+			["Zara", 3],
+		]);
+	});
+
+	test("clears the brand of its items when the brand goes", async () => {
+		// Given: alice with Zara and a Navy long button-up from Zara
+		const { h, headers } = await withAccount();
+		const zara = await addedId(h, headers, "Zara");
+		await addShirt(h, headers, "11111111-1111-4111-8111-111111111111", zara);
+		// When
+		await send(h, headers, "DELETE", `/api/brands/${zara}`);
+		// Then
+		expect((await items(h, headers))[0].brand).toBeNull();
+	});
+
+	test("keeps two items of one piece when both lose their brand", async () => {
+		// Given: alice with Zara and COS, a Navy long button-up from each
+		const { h, headers } = await withAccount();
+		const zara = await addedId(h, headers, "Zara");
+		const cos = await addedId(h, headers, "COS");
+		await addShirt(h, headers, "11111111-1111-4111-8111-111111111111", zara);
+		await addShirt(h, headers, "22222222-2222-4222-8222-222222222222", cos);
+		// When
+		await send(h, headers, "DELETE", `/api/brands/${zara}`);
+		await send(h, headers, "DELETE", `/api/brands/${cos}`);
+		// Then
+		expect(
+			(await items(h, headers)).map((i) => ({
+				typeId: i.typeId,
+				brand: i.brand,
+			})),
+		).toEqual([
+			{ typeId: "shirt_l", brand: null },
+			{ typeId: "shirt_l", brand: null },
+		]);
+	});
+});

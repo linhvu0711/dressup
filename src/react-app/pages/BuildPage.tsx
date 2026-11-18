@@ -1,4 +1,3 @@
-import { cn } from "cn";
 import { X } from "lucide-react";
 import { ToggleGroup } from "radix-ui";
 import { type ReactNode, useState } from "react";
@@ -26,6 +25,7 @@ import {
 import { OutfitFailed } from "@/dress/OutfitFailed";
 import { Stage } from "@/dress/Stage";
 import { useColours } from "@/labels/api";
+import { ColourSwatches } from "@/labels/ColourSwatches";
 import type { Colour, ColourId } from "@/labels/colour";
 import { PageHeader } from "../shell/PageHeader";
 
@@ -34,8 +34,6 @@ type Picks = Partial<Record<Layer, { typeId: GarmentId; colourId: ColourId }>>;
 const LABEL = "font-medium text-[12.5px] text-muted-foreground";
 
 const NONE = "none";
-
-const PULSE = "animate-placeholder motion-reduce:animate-none";
 
 // The builder at /build makes a new combination; at /build/<id> it changes a
 // saved one, its pieces loaded. The combination found in the list is checked
@@ -263,12 +261,16 @@ function Builder({ combination }: { combination?: Combination }) {
 									</ToggleGroup.Root>
 								) : null}
 							</div>
-							<Colours
-								colours={colours}
-								picked={picked?.colourId}
-								onPick={pickColour}
-								hasType={picked !== undefined}
-							/>
+							{colours.isSuccess && !picked ? (
+								<p className="text-[13px] text-muted-foreground">
+									Pick a type to choose its colour.
+								</p>
+							) : (
+								<ColourSwatches
+									value={picked?.colourId}
+									onChange={pickColour}
+								/>
+							)}
 						</div>
 					</TabsContent>
 				</Tabs>
@@ -282,78 +284,5 @@ function Builder({ combination }: { combination?: Combination }) {
 				/>
 			) : null}
 		</div>
-	);
-}
-
-function Colours({
-	colours,
-	picked,
-	onPick,
-	hasType,
-}: {
-	colours: ReturnType<typeof useColours>;
-	picked: ColourId | undefined;
-	onPick: (id: ColourId) => void;
-	hasType: boolean;
-}) {
-	if (colours.isPending)
-		return (
-			<div className="grid grid-cols-[repeat(auto-fill,minmax(56px,1fr))] gap-y-3">
-				{Array.from({ length: 8 }, (_, i) => (
-					<span
-						// biome-ignore lint/suspicious/noArrayIndexKey: the squares are all alike and never move.
-						key={i}
-						className={`size-[34px] rounded-[10px] bg-muted ${PULSE}`}
-					/>
-				))}
-			</div>
-		);
-	if (colours.isError)
-		return (
-			<div className="flex items-center gap-3">
-				<p role="alert" className="text-[13px] text-destructive">
-					Could not load your colours
-				</p>
-				<Button onClick={() => void colours.refetch()}>Retry</Button>
-			</div>
-		);
-	if (!hasType)
-		return (
-			<p className="text-[13px] text-muted-foreground">
-				Pick a type to choose its colour.
-			</p>
-		);
-	return (
-		<ToggleGroup.Root
-			type="single"
-			aria-label="Colour"
-			value={picked ?? ""}
-			onValueChange={(value) => {
-				if (value) onPick(value as ColourId);
-			}}
-			className="grid grid-cols-[repeat(auto-fill,minmax(56px,1fr))] gap-y-3"
-		>
-			{colours.data.map((c) => (
-				<ToggleGroup.Item
-					key={c.id}
-					value={c.id}
-					aria-label={c.name}
-					title={c.hex}
-					className="group flex flex-col items-center gap-1.5"
-				>
-					<span
-						style={{ background: c.hex }}
-						className={cn(
-							"size-[34px] rounded-[10px] [box-shadow:inset_0_0_0_1px_rgba(110,106,98,.38)] transition-transform duration-150 ease-soft group-hover:scale-[1.07] dark:[box-shadow:inset_0_0_0_1px_rgba(244,241,234,.3)]",
-							c.id === picked &&
-								"outline-2 outline-foreground outline-offset-[2.5px] outline-solid",
-						)}
-					/>
-					<span className="max-w-full truncate text-[11.5px] text-muted-foreground">
-						{c.name}
-					</span>
-				</ToggleGroup.Item>
-			))}
-		</ToggleGroup.Root>
 	);
 }

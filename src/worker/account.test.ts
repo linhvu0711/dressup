@@ -44,12 +44,13 @@ const NAVY = {
 };
 
 // The account's colours, brands, outfit, mannequin, one look with one tag,
-// and one combination, through the routes.
+// one combination, and one owned item, through the routes.
 async function fillAccount(
 	h: Harness,
 	jar: Jar,
 	lookId = NAVY.id,
 	combinationId = "33333333-3333-4333-8333-333333333333",
+	ownedItemId = "44444444-4444-4444-8444-444444444444",
 ) {
 	expect((await send(h, jar, "/api/dress")).status).toBe(200);
 	const listed = await send(h, jar, "/api/colours");
@@ -77,6 +78,16 @@ async function fillAccount(
 	expect(
 		(await sendJson(h, jar, "/api/combinations", combination)).status,
 	).toBe(201);
+	const ownedItem = {
+		id: ownedItemId,
+		typeId: "casual_p",
+		colourId: idOf("Navy"),
+		brandId: null,
+		quantity: 1,
+	};
+	expect((await sendJson(h, jar, "/api/owned-items", ownedItem)).status).toBe(
+		201,
+	);
 }
 
 // The tables that still hold rows of the account, as [table, count].
@@ -137,6 +148,7 @@ describe("DELETE /api/account", () => {
 			bob,
 			"22222222-2222-4222-8222-222222222222",
 			"44444444-4444-4444-8444-444444444444",
+			"55555555-5555-4555-8555-555555555555",
 		);
 		const bobBefore = h.accountRows(bobId);
 		// When
@@ -152,7 +164,7 @@ describe("DELETE /api/account", () => {
 			},
 		}).toEqual({
 			rows: bobBefore,
-			filled: 15,
+			filled: 16,
 			me: { status: 200, email: "bob@example.com" },
 		});
 	});

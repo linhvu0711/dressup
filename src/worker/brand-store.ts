@@ -5,11 +5,13 @@ import {
 	type BrandId,
 	brandInputSchema,
 	byBrandName,
+	type ListedBrand,
 } from "@/labels/brand";
 import { sameLabelName } from "@/labels/name";
 import { type Db, hitsIndex } from "./db";
 import { user } from "./db/auth-schema";
 import { brand } from "./db/brand-schema";
+import { ownedItem } from "./db/owned-item-schema";
 import type { Result } from "./result";
 
 export type BrandError =
@@ -25,13 +27,26 @@ const toBrand = (row: { id: string; name: string }): Brand => ({
 	name: row.name,
 });
 
-// The account's brands, A to Z.
-export async function listBrands(db: Db, userId: string): Promise<Brand[]> {
+// The account's brands, A to Z, each with the count of owned items that
+// have it.
+export async function listBrands(
+	db: Db,
+	userId: string,
+): Promise<ListedBrand[]> {
 	const rows = await db
-		.select({ id: brand.id, name: brand.name })
+		.select({
+			id: brand.id,
+			name: brand.name,
+			items: sql<number>`(${db
+				.select({ n: count() })
+				.from(ownedItem)
+				.where(eq(ownedItem.brandId, brand.id))})`,
+		})
 		.from(brand)
 		.where(eq(brand.userId, userId));
-	return rows.map(toBrand).sort(byBrandName);
+	return rows
+		.map((row) => ({ ...toBrand(row), items: row.items }))
+		.sort(byBrandName);
 }
 
 type Checked = { ok: true; name: string } | { ok: false; error: BrandError };

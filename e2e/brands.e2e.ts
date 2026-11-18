@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { colourIds, postBrand, postOwnedItems } from "./closet-helpers";
 import { expect, test } from "./fixtures";
 import { BRANDS_FULL_FILE } from "./global-setup";
 
@@ -166,6 +167,39 @@ test("deletes a brand from the confirm step", async ({ page }) => {
 	await expect(toast(page)).toHaveText("Brand deleted");
 	await expect(
 		page.getByRole("heading", { name: "No brands yet" }),
+	).toBeVisible();
+});
+
+test("says how many items lose the brand and clears it", async ({ page }) => {
+	// Given: a fresh account with Zara; a Navy long button-up, a White short
+	// tee, and a Black long tee, each from Zara
+	await page.goto("/");
+	const ids = await colourIds(page);
+	const zara = await postBrand(page, "Zara");
+	await postOwnedItems(
+		page,
+		{ typeId: "shirt_l", colourId: ids.Navy, brandId: zara, quantity: 1 },
+		{ typeId: "tee_s", colourId: ids.White, brandId: zara, quantity: 1 },
+		{ typeId: "tee_l", colourId: ids.Black, brandId: zara, quantity: 1 },
+	);
+	await openBrands(page);
+	// When
+	await page.getByRole("button", { name: "Zara" }).click();
+	await sheet(page, "Edit brand")
+		.getByRole("button", { name: "Delete" })
+		.click();
+	const confirm = sheet(page, "Delete this brand?");
+	// Then
+	await expect(confirm.getByText("3 items lose their brand.")).toBeVisible();
+	// When
+	await confirm.getByRole("button", { name: "Delete" }).click();
+	await expect(toast(page)).toHaveText("Brand deleted");
+	await page.goto(`/piece/shirt_l/${ids.Navy}`);
+	// Then
+	await expect(
+		page
+			.getByRole("region", { name: "In your closet" })
+			.getByRole("button", { name: "No brand × 1" }),
 	).toBeVisible();
 });
 

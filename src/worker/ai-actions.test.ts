@@ -873,6 +873,10 @@ describe("tags", () => {
 			["save_combination", W],
 			["change_combination", W],
 			["delete_combination", D],
+			["list_owned_items", R],
+			["add_owned_item", W],
+			["change_owned_item", W],
+			["delete_owned_item", D],
 		]);
 		expect(listed.every((t) => typeof t.title === "string")).toBe(true);
 	});
@@ -1201,7 +1205,7 @@ describe("colours", () => {
 		// Then
 		expect({ isError, text }).toEqual({
 			isError: true,
-			text: "A combination uses Navy, so it stays. A colour that a combination uses cannot be deleted.",
+			text: "A combination or an owned item uses Navy, so it stays. A colour in use cannot be deleted.",
 		});
 	});
 
@@ -1735,6 +1739,136 @@ describe("combinations", () => {
 		expect({ isError, text }).toEqual({
 			isError: true,
 			text: "not-a-colour is not one of your colours. list_colours names them.",
+		});
+	});
+});
+
+describe("owned items", () => {
+	type Listed = {
+		id: string;
+		typeId: string;
+		colour: { name: string };
+		brand: { name: string } | null;
+		quantity: number;
+	};
+
+	async function navyId(ai: Session) {
+		const { data } = await ai.call("list_colours");
+		return (data as { colours: Colour[] }).colours.find(
+			(c) => c.name === "Navy",
+		)?.id;
+	}
+
+	// A Navy long button-up, no brand, two of them.
+	const shirt = async (ai: Session) => ({
+		typeId: "shirt_l",
+		colourId: await navyId(ai),
+		quantity: 2,
+	});
+
+	test("adds an owned item and lists it", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		const args = await shirt(ai);
+		// When
+		await ai.call("add_owned_item", args);
+		const { data } = await ai.call("list_owned_items");
+		// Then
+		expect(
+			(data as { ownedItems: Listed[] }).ownedItems.map((i) => [
+				i.typeId,
+				i.colour.name,
+				i.brand,
+				i.quantity,
+			]),
+		).toEqual([["shirt_l", "Navy", null, 2]]);
+	});
+
+	test("refuses the same piece and brand a second time as a sentence", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		const args = await shirt(ai);
+		await ai.call("add_owned_item", args);
+		// When
+		const { isError, text } = await ai.call("add_owned_item", args);
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "You have this item already. Change its number.",
+		});
+	});
+
+	test("refuses a quantity of 0 as a sentence", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		const args = await shirt(ai);
+		// When
+		const { isError, text } = await ai.call("add_owned_item", {
+			...args,
+			quantity: 0,
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "Quantity is a whole number from 1 to 99.",
+		});
+	});
+
+	test("refuses item number 501 as a sentence", async () => {
+		// Given
+		const { h, ai, userId } = await withAiSession();
+		const args = await shirt(ai);
+		await h.seedOwnedItems(userId, 500);
+		// When
+		const { isError, text } = await ai.call("add_owned_item", args);
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "You have 500 items. That is the limit. Delete one to add a new one.",
+		});
+	});
+
+	test("changes an owned item", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		const added = await ai.call("add_owned_item", await shirt(ai));
+		const { id } = (added.data as { ownedItem: Listed }).ownedItem;
+		// When
+		const { data } = await ai.call("change_owned_item", {
+			id,
+			brandId: null,
+			quantity: 5,
+		});
+		// Then
+		expect((data as { ownedItem: Listed }).ownedItem.quantity).toBe(5);
+	});
+
+	test("deletes an owned item", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		const added = await ai.call("add_owned_item", await shirt(ai));
+		const { id } = (added.data as { ownedItem: Listed }).ownedItem;
+		// When
+		await ai.call("delete_owned_item", { id });
+		const { isError, text } = await ai.call("list_owned_items");
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: false,
+			text: "Nothing in your closet yet.",
+		});
+	});
+
+	test("says there is no such owned item", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		// When
+		const { isError, text } = await ai.call("delete_owned_item", {
+			id: "00000000-0000-4000-8000-000000000000",
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "No owned item with this id.",
 		});
 	});
 });

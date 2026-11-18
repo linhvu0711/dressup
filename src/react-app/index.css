@@ -88,6 +88,15 @@
 	--ease-soft: var(--ease);
 }
 
+/* Chrome on Windows and Linux draws a thick grey bar with arrows on a scroll
+   area; this one is thin and in the theme's grey. macOS and phones keep their
+   bar that shows only while it scrolls. */
+@utility scrollbar-quiet {
+	scrollbar-width: thin;
+	scrollbar-color: color-mix(in srgb, var(--muted-foreground) 45%, transparent)
+		transparent;
+}
+
 @layer base {
 	body {
 		background: var(--background);

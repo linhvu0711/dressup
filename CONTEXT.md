@@ -5,6 +5,7 @@
 - Builder: the page where the user picks the pieces of a combination on the mannequin, for a new combination or to change a saved one.
 - Combinations page: the wall of saved combinations.
 - Combination page: one saved combination: the mannequin, the title, and a line for each piece with its colour. From 900 px it sits beside the Combinations page.
+- Piece page: the page for one piece, with everything the account holds about it.
 - Garment: one kind of clothing in one length. "Short tee" and "long tee" are two garments. The app has 17, and the list is fixed.
 - Mode: a fixed set of garments worn together, for example "long polo + sweater + chino pants". The app has 23, and the list is fixed.
 - Weather group: Hot, Cool, or Cold. Each mode is in exactly one. "Training" is a fourth tab that shows the two training modes.
@@ -15,6 +16,7 @@
 - Colour square: one saved colour in a garment's row. Each garment has its own row. A new account starts with a starter set.
 - Colour: a name and a colour code that the account saves once and uses on any kind of clothing. The user manages colours on the Labels page. A new account starts with a starter set, and an account holds at most 100.
 - Brand: a name that the account saves once and puts on owned items and shop links. An item can have no brand. The user manages brands on the Labels page. An account holds at most 100.
+- Owned item: one brand of one piece in the closet, with a quantity. Two navy long button-ups from two brands are two owned items. An account holds at most 500.
 - Outfit: what the mannequin wears now: the mode, the picked colour of each garment, and each jacket open or closed. The account keeps it, with its colour squares.
 - Look: a saved outfit. It holds the mode, its own copy of each garment's colour, the jacket state (open or closed), an optional name, and tags.
 - Tag: a label the user makes and puts on looks. The Looks page filters by tag.
@@ -22,6 +24,7 @@
 - Sign-up switch: one on/off environment variable that stops new sign-ups. People with an account can still sign in.
 - Looks page: the wall of saved looks.
 - Labels page: the page with the lists that the account makes once and uses everywhere.
+- Closet: the pieces the account owns, shown as one tile for each piece.
 - Compare view: two to six looks in a row.
 - AI app: an outside AI assistant, such as Claude, Claude Code, ChatGPT, or Codex, that acts in an account for its user.
 - Connected AI app: an AI app the user allowed on the Allow page. Settings lists each one. Disconnect stops it at once.

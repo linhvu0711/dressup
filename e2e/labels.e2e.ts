@@ -263,11 +263,44 @@ test("says a colour in a combination is in use and offers no Delete", async ({
 	const dialog = page.getByRole("dialog");
 	await expect(
 		dialog.getByText(
-			"A combination uses this colour, so you cannot delete it.",
+			"A combination or an item in your closet uses this colour, so you cannot delete it.",
 		),
 	).toBeVisible();
 	await expect(dialog.getByRole("button", { name: "Delete" })).toHaveCount(0);
 	await expect(dialog.getByRole("button", { name: "Back" })).toBeVisible();
+});
+
+test("says an item in the closet keeps a colour", async ({ page }) => {
+	// Given: a fresh account with a Navy long button-up in the closet; the
+	// row "Navy #1F3A5F" open
+	await page.goto("/labels");
+	const res = await page.request.get("/api/colours");
+	const { colours } = (await res.json()) as {
+		colours: { id: string; name: string }[];
+	};
+	const saved = await page.request.post("/api/owned-items", {
+		data: {
+			id: crypto.randomUUID(),
+			typeId: "shirt_l",
+			colourId: colours.find((c) => c.name === "Navy")?.id,
+			brandId: null,
+			quantity: 1,
+		},
+	});
+	expect(saved.status()).toBe(201);
+	await openNavy(page);
+	// When
+	await sheet(page, "Edit colour")
+		.getByRole("button", { name: "Delete" })
+		.click();
+	// Then
+	const dialog = page.getByRole("dialog");
+	await expect(
+		dialog.getByText(
+			"A combination or an item in your closet uses this colour, so you cannot delete it.",
+		),
+	).toBeVisible();
+	await expect(dialog.getByRole("button", { name: "Delete" })).toHaveCount(0);
 });
 
 test("says a colour is in use when the delete answers colour_in_use", async ({
@@ -293,7 +326,7 @@ test("says a colour is in use when the delete answers colour_in_use", async ({
 	const dialog = page.getByRole("dialog");
 	await expect(
 		dialog.getByText(
-			"A combination uses this colour, so you cannot delete it.",
+			"A combination or an item in your closet uses this colour, so you cannot delete it.",
 		),
 	).toBeVisible();
 	await expect(dialog.getByRole("button", { name: "Delete" })).toHaveCount(0);

@@ -94,6 +94,7 @@ describe("migrations", () => {
 			"oauth_resource",
 			"outfit",
 			"outfit_garment",
+			"owned_item",
 			"session",
 			"tag",
 			"user",
