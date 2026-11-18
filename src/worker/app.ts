@@ -30,6 +30,7 @@ import {
 	addColour,
 	type ColourError,
 	changeColour,
+	deleteColour,
 	listColours,
 } from "./colour-store";
 import type { Db } from "./db";
@@ -351,6 +352,19 @@ export function createApp(getDb: (env: Env) => Db) {
 			return c.json(body, status);
 		}
 		return c.json({ colour: changed.value } satisfies ColourAnswer, 200);
+	});
+
+	app.delete("/colours/:id", withAuth, requireUser, async (c) => {
+		const deleted = await deleteColour(
+			getDb(c.env),
+			c.var.user.id,
+			c.req.param("id"),
+		);
+		if (!deleted.ok) {
+			const { status, body } = colourRefusal(deleted.error);
+			return c.json(body, status);
+		}
+		return c.body(null, 204);
 	});
 
 	app.get("/ai-apps", withAuth, requireUser, async (c) =>

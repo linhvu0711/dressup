@@ -180,3 +180,19 @@ export async function changeColour(
 		throw error;
 	}
 }
+
+// Only the account's own colour goes; not found when the account has no
+// colour with this id.
+export async function deleteColour(
+	db: Db,
+	userId: string,
+	id: string,
+): Promise<Result<Colour, ColourError>> {
+	const [row] = await db
+		.delete(colour)
+		.where(and(eq(colour.id, id), eq(colour.userId, userId)))
+		.returning({ id: colour.id, name: colour.name, hex: colour.hex });
+	return row
+		? { ok: true, value: toColour(row) }
+		: { ok: false, error: { code: "not_found" } };
+}

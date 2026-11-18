@@ -366,3 +366,45 @@ describe("PUT /api/colours/:id", () => {
 		});
 	});
 });
+
+describe("DELETE /api/colours/:id", () => {
+	test("deletes a colour", async () => {
+		// Given: alice with "Teal"
+		const { h, headers, id } = await aliceWithTeal();
+		// When
+		const res = await send(h, headers, "DELETE", `/api/colours/${id}`);
+		// Then
+		expect({
+			status: res.status,
+			names: (await coloursOf(h, headers)).map((c) => `${c.name} ${c.hex}`),
+		}).toEqual({ status: 204, names: STARTER });
+	});
+
+	test("refuses to delete another account's colour", async () => {
+		// Given: alice with "Teal"; bob signed in
+		const { h, headers, id } = await aliceWithTeal();
+		const bob = await h.addAccount(BOB);
+		// When
+		const res = await send(h, bob, "DELETE", `/api/colours/${id}`);
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			count: (await coloursOf(h, headers)).length,
+		}).toEqual({ status: 404, body: { error: "not_found" }, count: 14 });
+	});
+
+	test("keeps an emptied list empty", async () => {
+		// Given: alice signed in, each of the 13 starter colours deleted
+		const { h, headers } = await aliceWith(0);
+		for (const c of await coloursOf(h, headers))
+			await send(h, headers, "DELETE", `/api/colours/${c.id}`);
+		// When
+		const res = await send(h, headers, "GET", "/api/colours");
+		// Then
+		expect({ status: res.status, body: await res.json() }).toEqual({
+			status: 200,
+			body: { colours: [] },
+		});
+	});
+});
