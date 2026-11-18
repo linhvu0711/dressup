@@ -18,10 +18,11 @@ export const brandSchema = brandInputSchema.extend({ id: brandIdSchema });
 
 export type Brand = z.infer<typeof brandSchema>;
 
-// A brand in the account's list. items: how many owned items have it, so
-// its delete can say how many lose their brand.
+// A brand in the account's list. items and shopLinks: how many owned items
+// and shop links have it, so its delete can say how many lose their brand.
 export const listedBrandSchema = brandSchema.extend({
 	items: z.number().int().min(0),
+	shopLinks: z.number().int().min(0),
 });
 
 export type ListedBrand = z.infer<typeof listedBrandSchema>;

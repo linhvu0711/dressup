@@ -12,6 +12,7 @@ import { type Db, hitsIndex } from "./db";
 import { user } from "./db/auth-schema";
 import { brand } from "./db/brand-schema";
 import { ownedItem } from "./db/owned-item-schema";
+import { shopLink } from "./db/wish-schema";
 import type { Result } from "./result";
 
 export type BrandError =
@@ -35,8 +36,8 @@ const toBrand = (row: { id: string; name: string }): Brand => ({
 	name: row.name,
 });
 
-// The account's brands, A to Z, each with the count of owned items that
-// have it.
+// The account's brands, A to Z, each with the count of owned items and of
+// shop links that have it.
 export async function listBrands(
 	db: Db,
 	userId: string,
@@ -49,11 +50,19 @@ export async function listBrands(
 				.select({ n: count() })
 				.from(ownedItem)
 				.where(eq(ownedItem.brandId, brand.id))})`,
+			shopLinks: sql<number>`(${db
+				.select({ n: count() })
+				.from(shopLink)
+				.where(eq(shopLink.brandId, brand.id))})`,
 		})
 		.from(brand)
 		.where(eq(brand.userId, userId));
 	return rows
-		.map((row) => ({ ...toBrand(row), items: row.items }))
+		.map((row) => ({
+			...toBrand(row),
+			items: row.items,
+			shopLinks: row.shopLinks,
+		}))
 		.sort(byBrandName);
 }
 

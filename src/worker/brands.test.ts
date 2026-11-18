@@ -434,3 +434,68 @@ describe("owned items of a deleted brand", () => {
 		]);
 	});
 });
+
+describe("brands of shop links", () => {
+	const WISH_ID = "11111111-1111-4111-8111-111111111111";
+
+	// Alice with Zara and a wish for a Navy wool jacket.
+	async function aliceWithWish() {
+		const { h, headers } = await withAccount();
+		const zara = await addedId(h, headers, "Zara");
+		const { colours } = (await (
+			await send(h, headers, "GET", "/api/colours")
+		).json()) as { colours: { id: string; name: string }[] };
+		const navy = colours.find((c) => c.name === "Navy")?.id;
+		await send(h, headers, "POST", "/api/wishes", {
+			id: WISH_ID,
+			typeId: "wool",
+			colourId: navy,
+		});
+		return { h, headers, zara, navy };
+	}
+
+	const addLink = (h: Harness, headers: Headers, id: string, brandId: string) =>
+		send(h, headers, "POST", `/api/wishes/${WISH_ID}/shop-links`, {
+			id,
+			url: "https://www.zara.com/vn/en/wool-blend-jacket.html",
+			brandId,
+			name: "Wool blend jacket",
+			price: 2990000,
+		});
+
+	test("counts the shop links of each brand", async () => {
+		// Given: alice with Zara on 2 shop links of one wish and on 1 owned item
+		const { h, headers, zara, navy } = await aliceWithWish();
+		await addLink(h, headers, "33333333-3333-4333-8333-333333333333", zara);
+		await addLink(h, headers, "44444444-4444-4444-8444-444444444444", zara);
+		await send(h, headers, "POST", "/api/owned-items", {
+			id: "22222222-2222-4222-8222-222222222222",
+			typeId: "shirt_l",
+			colourId: navy,
+			brandId: zara,
+			quantity: 1,
+		});
+		// When
+		const res = await send(h, headers, "GET", "/api/brands");
+		// Then
+		const { brands } = (await res.json()) as {
+			brands: { name: string; items: number; shopLinks: number }[];
+		};
+		expect(brands.map((b) => [b.name, b.items, b.shopLinks])).toEqual([
+			["Zara", 1, 2],
+		]);
+	});
+
+	test("clears the brand of its shop links when the brand goes", async () => {
+		// Given: alice with Zara on 1 shop link
+		const { h, headers, zara } = await aliceWithWish();
+		await addLink(h, headers, "33333333-3333-4333-8333-333333333333", zara);
+		// When
+		await send(h, headers, "DELETE", `/api/brands/${zara}`);
+		// Then
+		const { wishes } = (await (
+			await send(h, headers, "GET", "/api/wishes")
+		).json()) as { wishes: { shopLinks: { brand: unknown }[] }[] };
+		expect(wishes[0]?.shopLinks[0]?.brand).toBeNull();
+	});
+});

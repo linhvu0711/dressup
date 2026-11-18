@@ -13,6 +13,7 @@ import { user } from "./db/auth-schema";
 import { colour, colourSeed } from "./db/colour-schema";
 import { combinationPiece } from "./db/combination-schema";
 import { ownedItem } from "./db/owned-item-schema";
+import { wish } from "./db/wish-schema";
 import type { Result } from "./result";
 
 export type ColourError =
@@ -100,8 +101,8 @@ export async function listColours(
 	return rows.map((row) => ({ ...toColour(row), inUse: row.inUse === 1 }));
 }
 
-// The one check of "a combination wears this colour or an owned item has
-// it", for the list and the delete.
+// The one check of "a combination wears this colour, an owned item has it,
+// or a wish is for it", for the list and the delete.
 const inUse = (db: Db) =>
 	sql`(${exists(
 		db
@@ -113,6 +114,8 @@ const inUse = (db: Db) =>
 			.select({ one: sql`1` })
 			.from(ownedItem)
 			.where(eq(ownedItem.colourId, colour.id)),
+	)} or ${exists(
+		db.select({ one: sql`1` }).from(wish).where(eq(wish.colourId, colour.id)),
 	)})`;
 
 type ColourInput = { name: string; hex: string };

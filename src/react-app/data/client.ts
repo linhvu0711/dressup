@@ -124,7 +124,9 @@ export const after = {
 	// The list is A to Z, so an added brand goes in its place.
 	brandAdded(userId: string | null, brand: Brand) {
 		queryClient.setQueryData<ListedBrand[]>(keys.brands(userId), (old) =>
-			old ? [...old, { ...brand, items: 0 }].sort(byBrandName) : old,
+			old
+				? [...old, { ...brand, items: 0, shopLinks: 0 }].sort(byBrandName)
+				: old,
 		);
 	},
 	// The server's brands may differ from the cached ones, as after an add

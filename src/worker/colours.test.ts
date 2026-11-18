@@ -489,3 +489,49 @@ describe("DELETE /api/colours/:id", () => {
 		});
 	});
 });
+
+describe("colours on the wishlist", () => {
+	// Alice with a wish for a Navy wool jacket, and no owned item or
+	// combination in Navy.
+	async function aliceWithWish() {
+		const { h, headers } = await aliceWith(0);
+		const ids = Object.fromEntries(
+			(await coloursOf(h, headers)).map((c) => [c.name, c.id]),
+		);
+		await send(h, headers, "POST", "/api/wishes", {
+			id: "11111111-1111-4111-8111-111111111111",
+			typeId: "wool",
+			colourId: ids.Navy,
+		});
+		return { h, headers, ids };
+	}
+
+	test("refuses to delete a colour a wish uses", async () => {
+		// Given
+		const { h, headers, ids } = await aliceWithWish();
+		// When
+		const res = await send(h, headers, "DELETE", `/api/colours/${ids.Navy}`);
+		// Then
+		expect({ status: res.status, body: await res.json() }).toEqual({
+			status: 409,
+			body: { error: "colour_in_use" },
+		});
+	});
+
+	test("marks the colours a wish uses", async () => {
+		// Given
+		const { h, headers } = await aliceWithWish();
+		// When
+		const listed = (await (
+			await send(h, headers, "GET", "/api/colours")
+		).json()) as { colours: Colour[] };
+		// Then
+		const inUse = Object.fromEntries(
+			listed.colours.map((c) => [c.name, c.inUse]),
+		);
+		expect({ Navy: inUse.Navy, White: inUse.White }).toEqual({
+			Navy: true,
+			White: false,
+		});
+	});
+});
