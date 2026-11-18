@@ -925,6 +925,27 @@ test("changes a combination in the builder", async ({ page }) => {
 	expect((await stored(page)).map((c) => c.id)).toEqual([second.id, first.id]);
 });
 
+test("keeps the saved pieces in the builder when the colours do not load", async ({
+	page,
+}) => {
+	// Given: both projects, THREE then TWO saved; THREE open; the colours
+	// answer 500, so the builder has no colour list of its own
+	await threeOpenBesideTwo(page);
+	await page.route("**/api/colours", (route) =>
+		route.request().method() === "GET"
+			? route.fulfill({ status: 500 })
+			: route.fallback(),
+	);
+	// When
+	await changeButton(page).click();
+	// Then
+	await expect(
+		stage(page).locator('[data-garment="casual_p"] [fill="#1F3A5F"]').first(),
+	).toBeAttached();
+	await expect(page.getByText("Pick 2 pieces or more")).toHaveCount(0);
+	await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
+});
+
 test("refuses a change into a combination the account has", async ({
 	page,
 }) => {

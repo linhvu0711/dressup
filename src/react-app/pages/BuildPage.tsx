@@ -26,7 +26,7 @@ import {
 import { OutfitFailed } from "@/dress/OutfitFailed";
 import { Stage } from "@/dress/Stage";
 import { useColours } from "@/labels/api";
-import type { ColourId } from "@/labels/colour";
+import type { Colour, ColourId } from "@/labels/colour";
 import { PageHeader } from "../shell/PageHeader";
 
 type Picks = Partial<Record<Layer, { typeId: GarmentId; colourId: ColourId }>>;
@@ -107,9 +107,15 @@ function Builder({ combination }: { combination?: Combination }) {
 	const [layer, setLayer] = useState<Layer>("bottom");
 	const [saving, setSaving] = useState(false);
 	const list = colours.data ?? [];
+	// The saved pieces carry their own colours, so a change shows them while
+	// the account's colour list loads, or after it failed.
+	const known: readonly Colour[] = [
+		...list,
+		...(combination?.pieces.map((p) => p.colour) ?? []),
+	];
 	const pieces = LAYERS.flatMap((l) => {
 		const p = picks[l];
-		const colour = p && list.find((c) => c.id === p.colourId);
+		const colour = p && known.find((c) => c.id === p.colourId);
 		return p && colour ? [{ typeId: p.typeId, colour }] : [];
 	});
 	const picked = picks[layer];
@@ -130,7 +136,7 @@ function Builder({ combination }: { combination?: Combination }) {
 		if (picked) setPicks({ ...picks, [layer]: { ...picked, colourId } });
 	}
 	const colourOf = (l: Layer) =>
-		list.find((c) => c.id === picks[l]?.colourId)?.hex;
+		known.find((c) => c.id === picks[l]?.colourId)?.hex;
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
 			<PageHeader
