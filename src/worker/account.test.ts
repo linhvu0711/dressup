@@ -43,13 +43,15 @@ const NAVY = {
 	open: ["harrington"],
 };
 
-// The account's colours, outfit, mannequin, and one look with one tag,
+// The account's colours, brands, outfit, mannequin, and one look with one tag,
 // through the routes.
 async function fillAccount(h: Harness, jar: Jar, lookId = NAVY.id) {
 	expect((await send(h, jar, "/api/dress")).status).toBe(200);
 	expect((await send(h, jar, "/api/colours")).status).toBe(200);
 	const skin = { kind: "mannequin", part: "skin", hex: "#8D5524" };
 	expect((await sendJson(h, jar, "/api/dress/changes", skin)).status).toBe(204);
+	const brand = { name: "Uniqlo" };
+	expect((await sendJson(h, jar, "/api/brands", brand)).status).toBe(201);
 	const added = await sendJson(h, jar, "/api/tags", { name: "Work" });
 	const { tag } = (await added.json()) as { tag: { id: string } };
 	const look = { ...NAVY, id: lookId, tags: [tag.id] };
@@ -124,7 +126,7 @@ describe("DELETE /api/account", () => {
 			},
 		}).toEqual({
 			rows: bobBefore,
-			filled: 12,
+			filled: 13,
 			me: { status: 200, email: "bob@example.com" },
 		});
 	});

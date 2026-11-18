@@ -86,6 +86,7 @@ test("names what dressup keeps", async ({ page }) => {
 	await expect(items).toHaveText([
 		"Your Google account's name, email, and picture.",
 		"The colours you save.",
+		"The brands you save.",
 		"Your last outfit.",
 		"Your looks and their tags.",
 		"Your mannequin's skin and hair colour.",
@@ -139,7 +140,7 @@ test("gives the support email and the date of the last change", async ({
 	await page.goto("/privacy");
 	const contact = page.getByRole("region", { name: "Contact" });
 	// Then
-	await expect(page.getByText("Last changed: 13 November 2026")).toBeVisible();
+	await expect(page.getByText("Last changed: 18 November 2026")).toBeVisible();
 	await expect(contact.locator("p")).toHaveText([
 		"Questions about this page or your data: linh.tuan.vu.contact@gmail.com.",
 	]);

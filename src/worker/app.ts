@@ -5,6 +5,8 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
 import type {
 	AiAppsAnswer,
+	BrandAnswer,
+	BrandsAnswer,
 	ColourAnswer,
 	ColoursAnswer,
 	DressAnswer,
@@ -26,6 +28,7 @@ import {
 	createAuthCache,
 	createClientDiscovery,
 } from "./auth";
+import { addBrand, type BrandError, listBrands } from "./brand-store";
 import {
 	addColour,
 	type ColourError,
@@ -133,6 +136,20 @@ const tagRefusals: Record<TagError["code"], Refusal> = {
 	duplicate: { status: 400, body: { error: "duplicate", field: "name" } },
 	not_found: { status: 404, body: { error: "not_found" } },
 };
+
+// A taken name is 409, as for colours.
+function brandRefusal(error: BrandError): Refusal {
+	switch (error.code) {
+		case "invalid":
+			return { status: 400, body: { error: "invalid", field: "name" } };
+		case "duplicate":
+			return { status: 409, body: { error: "duplicate", field: "name" } };
+		case "brand_limit":
+			return { status: 409, body: { error: "brand_limit" } };
+		case "not_found":
+			return { status: 404, body: { error: "not_found" } };
+	}
+}
 
 // A taken name is 409 here, as the colour contract says; tags answer 400.
 function colourRefusal(error: ColourError): Refusal {
@@ -365,6 +382,23 @@ export function createApp(getDb: (env: Env) => Db) {
 			return c.json(body, status);
 		}
 		return c.body(null, 204);
+	});
+
+	app.get("/brands", withAuth, requireUser, async (c) =>
+		c.json({
+			brands: await listBrands(getDb(c.env), c.var.user.id),
+		} satisfies BrandsAnswer),
+	);
+
+	app.post("/brands", withAuth, requireUser, async (c) => {
+		const body = await readBody(c, z.object({ name: z.string() }));
+		if ("refused" in body) return body.refused;
+		const added = await addBrand(getDb(c.env), c.var.user.id, body.data.name);
+		if (!added.ok) {
+			const { status, body } = brandRefusal(added.error);
+			return c.json(body, status);
+		}
+		return c.json({ brand: added.value } satisfies BrandAnswer, 201);
 	});
 
 	app.get("/ai-apps", withAuth, requireUser, async (c) =>

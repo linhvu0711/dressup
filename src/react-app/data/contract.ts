@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { aiAppSchema } from "@/ai-apps/ai-app";
 import { dressStateSchema } from "@/dress/state";
+import { brandSchema } from "@/labels/brand";
 import { colourSchema } from "@/labels/colour";
 import { lookSchema } from "@/looks/look";
 import { tagSchema } from "@/tags/tag";
@@ -18,6 +19,7 @@ export const errorCodes = [
 	"last_square",
 	"duplicate",
 	"colour_limit",
+	"brand_limit",
 ] as const;
 
 export type ErrorCode = (typeof errorCodes)[number];
@@ -55,6 +57,14 @@ export type ColoursAnswer = z.input<typeof coloursAnswer>;
 export const colourAnswer = z.object({ colour: colourSchema });
 
 export type ColourAnswer = z.input<typeof colourAnswer>;
+
+export const brandsAnswer = z.object({ brands: z.array(brandSchema) });
+
+export type BrandsAnswer = z.input<typeof brandsAnswer>;
+
+export const brandAnswer = z.object({ brand: brandSchema });
+
+export type BrandAnswer = z.input<typeof brandAnswer>;
 
 export const aiAppsAnswer = z.object({ apps: z.array(aiAppSchema) });
 
