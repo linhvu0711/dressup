@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { saveCombination } from "./combination-store";
+import { eq } from "drizzle-orm";
+import { changeCombination, saveCombination } from "./combination-store";
+import { combination, combinationPiece } from "./db/combination-schema";
 import {
 	ALICE,
 	BOB,
@@ -81,6 +83,32 @@ const two = (ids: Ids) => ({
 	],
 	open: false,
 });
+
+const THIRD_ID = "33333333-3333-4333-8333-333333333333";
+
+// Each piece of a listed combination as its type and colour name, bottom
+// layer first.
+const piecesOf = (listed: Listed | undefined) =>
+	listed?.pieces.map((p) => [p.typeId, p.colour.name]);
+
+const put = (h: Harness, headers: Headers, id: string, body: unknown) =>
+	send(h, headers, "PUT", `/api/combinations/${id}`, body);
+
+// THREE with Grey casual pants in place of Navy.
+const greyPants = (ids: Ids) => ({
+	...three(ids),
+	pieces: [
+		{ typeId: "harrington", colourId: ids.Khaki },
+		{ typeId: "tee_l", colourId: ids.Black },
+		{ typeId: "casual_p", colourId: ids.Grey },
+	],
+});
+
+// Beige chino pants and a White long tee: the pieces the races change into.
+const beigeChinos = (ids: Ids) => [
+	{ typeId: "chino_p", colourId: ids.Beige },
+	{ typeId: "tee_l", colourId: ids.White },
+];
 
 async function alice() {
 	const { h, headers } = await withAccount();
@@ -408,6 +436,264 @@ describe("combination limit", () => {
 			count: 300,
 			oks: [false, true],
 			refused: [{ code: "combination_limit" }],
+		});
+	});
+});
+
+describe("PUT /api/combinations/:id", () => {
+	test("changes a combination and keeps its id and place", async () => {
+		// Given: alice saved THREE, then TWO, so TWO is first
+		const { h, headers, ids } = await alice();
+		await post(h, headers, three(ids));
+		await post(h, headers, two(ids));
+		// When
+		const res = await put(h, headers, FIRST_ID, greyPants(ids));
+		const listed = await list(h, headers);
+		// Then
+		expect({
+			status: res.status,
+			ids: listed.map((c) => c.id),
+			pieces: piecesOf(listed[1]),
+			open: listed[1].open,
+		}).toEqual({
+			status: 200,
+			ids: [SECOND_ID, FIRST_ID],
+			pieces: [
+				["casual_p", "Grey"],
+				["tee_l", "Black"],
+				["harrington", "Khaki"],
+			],
+			open: true,
+		});
+	});
+
+	test("changes nothing more when the same change comes twice", async () => {
+		// Given: alice saved THREE, then TWO; THREE changed once
+		const { h, headers, ids } = await alice();
+		await post(h, headers, three(ids));
+		await post(h, headers, two(ids));
+		const first = await put(h, headers, FIRST_ID, greyPants(ids));
+		const firstBody = await first.json();
+		const listedOnce = await list(h, headers);
+		// When
+		const again = await put(h, headers, FIRST_ID, greyPants(ids));
+		// Then
+		expect({
+			status: again.status,
+			body: await again.json(),
+			listed: await list(h, headers),
+		}).toEqual({ status: 200, body: firstBody, listed: listedOnce });
+	});
+
+	test("refuses a change into a combination the account has", async () => {
+		// Given: alice saved THREE, then TWO
+		const { h, headers, ids } = await alice();
+		await post(h, headers, three(ids));
+		await post(h, headers, two(ids));
+		const before = await list(h, headers);
+		// When
+		const res = await put(h, headers, FIRST_ID, { ...two(ids), id: FIRST_ID });
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			listed: await list(h, headers),
+		}).toEqual({
+			status: 409,
+			body: { error: "duplicate", id: SECOND_ID },
+			listed: before,
+		});
+	});
+
+	test("refuses a change to a combination that is gone", async () => {
+		// Given: alice saved THREE, then it was deleted
+		const { h, headers, ids } = await alice();
+		await post(h, headers, three(ids));
+		await h.db.delete(combination).where(eq(combination.id, FIRST_ID));
+		// When
+		const res = await put(h, headers, FIRST_ID, greyPants(ids));
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			listed: await list(h, headers),
+		}).toEqual({ status: 404, body: { error: "not_found" }, listed: [] });
+	});
+
+	test("refuses a change to another account's combination", async () => {
+		// Given: bob saved THREE with his own colour ids; alice signed in
+		const h = await makeHarness();
+		const bob = await h.addAccount(BOB);
+		await post(h, bob, three(await colourIds(h, bob)));
+		const bobsBefore = await list(h, bob);
+		const headers = await h.addAccount(ALICE);
+		const ids = await colourIds(h, headers);
+		// When
+		const res = await put(h, headers, FIRST_ID, greyPants(ids));
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			bobs: await list(h, bob),
+		}).toEqual({
+			status: 404,
+			body: { error: "not_found" },
+			bobs: bobsBefore,
+		});
+	});
+
+	test("refuses a change whose id is not the address's", async () => {
+		// Given: alice saved THREE, then TWO
+		const { h, headers, ids } = await alice();
+		await post(h, headers, three(ids));
+		await post(h, headers, two(ids));
+		// When
+		const res = await put(h, headers, FIRST_ID, {
+			...greyPants(ids),
+			id: SECOND_ID,
+		});
+		// Then
+		expect({ status: res.status, body: await res.json() }).toEqual({
+			status: 400,
+			body: { error: "invalid", field: "id" },
+		});
+	});
+});
+
+describe("changes at once", () => {
+	test("answers duplicate when another tab changes a combination into the same pieces first", async () => {
+		// Given: alice saved THREE, TWO, and a third; before THREE's change
+		// writes, another tab changes the third into Beige chinos
+		const { h, headers, ids } = await alice();
+		const { db } = h;
+		await post(h, headers, three(ids));
+		await post(h, headers, two(ids));
+		await post(h, headers, {
+			id: THIRD_ID,
+			pieces: [
+				{ typeId: "casual_p", colourId: ids.Grey },
+				{ typeId: "tee_s", colourId: ids.White },
+			],
+			open: false,
+		});
+		const batch = db.batch.bind(db);
+		const otherTabFirst: typeof batch = async (items) => {
+			db.batch = batch;
+			await changeCombination(db, "alice-id", THIRD_ID, {
+				pieces: beigeChinos(ids),
+			});
+			return batch(items);
+		};
+		db.batch = otherTabFirst;
+		// When
+		const changed = await changeCombination(db, "alice-id", FIRST_ID, {
+			pieces: beigeChinos(ids),
+		});
+		// Then
+		expect({
+			changed: changed as unknown,
+			pieces: piecesOf((await list(h, headers)).find((c) => c.id === FIRST_ID)),
+		}).toEqual({
+			changed: { ok: false, error: { code: "duplicate", id: THIRD_ID } },
+			pieces: [
+				["casual_p", "Navy"],
+				["tee_l", "Black"],
+				["harrington", "Khaki"],
+			],
+		});
+	});
+
+	test("answers not_found when another tab deletes the combination during a change", async () => {
+		// Given: alice saved THREE; another tab deletes it before the change
+		// writes
+		const { h, headers, ids } = await alice();
+		const { db } = h;
+		await post(h, headers, three(ids));
+		const batch = db.batch.bind(db);
+		const otherTabFirst: typeof batch = async (items) => {
+			db.batch = batch;
+			await db.delete(combination).where(eq(combination.id, FIRST_ID));
+			return batch(items);
+		};
+		db.batch = otherTabFirst;
+		// When
+		const changed = await changeCombination(db, "alice-id", FIRST_ID, {
+			pieces: beigeChinos(ids),
+		});
+		// Then
+		expect({
+			changed: changed as unknown,
+			listed: await list(h, headers),
+			pieces: (await h.rows(combinationPiece)).filter(
+				(p) => p.combinationId === FIRST_ID,
+			),
+		}).toEqual({
+			changed: { ok: false, error: { code: "not_found" } },
+			listed: [],
+			pieces: [],
+		});
+	});
+
+	test("keeps one tab's pieces whole when two tabs change one combination", async () => {
+		// Given: alice saved THREE; another tab changes it into four pieces
+		// before this change writes
+		const { h, headers, ids } = await alice();
+		const { db } = h;
+		await post(h, headers, three(ids));
+		const batch = db.batch.bind(db);
+		const otherTabFirst: typeof batch = async (items) => {
+			db.batch = batch;
+			await changeCombination(db, "alice-id", FIRST_ID, {
+				pieces: [
+					{ typeId: "casual_p", colourId: ids.Grey },
+					{ typeId: "tee_l", colourId: ids.Black },
+					{ typeId: "sweater", colourId: ids.Navy },
+					{ typeId: "harrington", colourId: ids.Khaki },
+				],
+			});
+			return batch(items);
+		};
+		db.batch = otherTabFirst;
+		// When
+		const changed = await changeCombination(db, "alice-id", FIRST_ID, {
+			pieces: beigeChinos(ids),
+		});
+		// Then
+		expect({
+			ok: changed.ok,
+			pieces: piecesOf((await list(h, headers))[0]),
+		}).toEqual({
+			ok: true,
+			pieces: [
+				["chino_p", "Beige"],
+				["tee_l", "White"],
+			],
+		});
+	});
+
+	test("keeps the old pieces when a colour is deleted while a change writes", async () => {
+		// Given: alice saved THREE; a trigger deletes Beige just before its
+		// piece is written, after the change's colour check passed
+		const { h, headers, ids } = await alice();
+		await post(h, headers, three(ids));
+		h.addTrigger(
+			`CREATE TRIGGER drop_beige BEFORE INSERT ON combination_piece WHEN NEW.colour_id = '${ids.Beige}' BEGIN DELETE FROM colour WHERE id = NEW.colour_id; END`,
+		);
+		// When
+		const threw = await changeCombination(h.db, "alice-id", FIRST_ID, {
+			pieces: beigeChinos(ids),
+		}).then(
+			() => false,
+			() => true,
+		);
+		// Then
+		expect({ threw, pieces: piecesOf((await list(h, headers))[0]) }).toEqual({
+			threw: true,
+			pieces: [
+				["casual_p", "Navy"],
+				["tee_l", "Black"],
+				["harrington", "Khaki"],
+			],
 		});
 	});
 });

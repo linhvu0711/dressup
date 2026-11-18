@@ -124,6 +124,8 @@ export function combinationRefusalText(error: CombinationError): string {
 			return `You have ${COMBINATION_LIMIT} combinations. That is the limit.`;
 		case "invalid":
 			return issueText(error.issue, error.input);
+		case "not_found":
+			return noCombination;
 		case "conflict":
 			return serverError;
 	}
@@ -140,6 +142,8 @@ export const noTag = "No tag with this id.";
 export const noColour = "No colour with this id.";
 
 export const noBrand = "No brand with this id.";
+
+export const noCombination = "No combination with this id.";
 
 export const noLooks = "You have no saved looks yet.";
 

@@ -47,6 +47,7 @@ import {
 } from "./colour-store";
 import {
 	type CombinationError,
+	changeCombination,
 	listCombinations,
 	saveCombination,
 } from "./combination-store";
@@ -162,6 +163,8 @@ function combinationRefusal(error: CombinationError): Refusal {
 			return { status: 409, body: { error: "duplicate", id: error.id } };
 		case "combination_limit":
 			return { status: 409, body: { error: "combination_limit" } };
+		case "not_found":
+			return { status: 404, body: { error: "not_found" } };
 	}
 }
 
@@ -386,6 +389,28 @@ export function createApp(getDb: (env: Env) => Db) {
 			{ combination } satisfies CombinationAnswer,
 			created ? 201 : 200,
 		);
+	});
+
+	// A gone combination and another account's answer the same 404, as looks
+	// do.
+	app.put("/combinations/:id", withAuth, requireUser, async (c) => {
+		const body = await readBody(c, combinationBodySchema);
+		if ("refused" in body) return body.refused;
+		const id = c.req.param("id");
+		if (body.data.id !== id)
+			return c.json(
+				{ error: "invalid", field: "id" } satisfies ErrorAnswer,
+				400,
+			);
+		const changed = await changeCombination(getDb(c.env), c.var.user.id, id, {
+			pieces: body.data.pieces,
+			open: body.data.open,
+		});
+		if (!changed.ok) {
+			const { status, body: refused } = combinationRefusal(changed.error);
+			return c.json(refused, status);
+		}
+		return c.json({ combination: changed.value } satisfies CombinationAnswer);
 	});
 
 	app.get("/tags", withAuth, requireUser, async (c) =>
