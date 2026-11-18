@@ -18,6 +18,7 @@ import type {
 	TagsAnswer,
 } from "@/data/contract";
 import { type DressError, dressChangeSchema } from "@/dress/state";
+import { brandIdSchema } from "@/labels/brand";
 import { colourIdSchema } from "@/labels/colour";
 import { tagIdSchema } from "@/tags/tag";
 import { disconnectAiApp, listAiApps } from "./ai-app-store";
@@ -28,7 +29,13 @@ import {
 	createAuthCache,
 	createClientDiscovery,
 } from "./auth";
-import { addBrand, type BrandError, listBrands } from "./brand-store";
+import {
+	addBrand,
+	type BrandError,
+	deleteBrand,
+	listBrands,
+	renameBrand,
+} from "./brand-store";
 import {
 	addColour,
 	type ColourError,
@@ -399,6 +406,40 @@ export function createApp(getDb: (env: Env) => Db) {
 			return c.json(body, status);
 		}
 		return c.json({ brand: added.value } satisfies BrandAnswer, 201);
+	});
+
+	// A gone brand and another account's brand answer the same 404.
+	app.put("/brands/:id", withAuth, requireUser, async (c) => {
+		const body = await readBody(
+			c,
+			z.object({ id: brandIdSchema, name: z.string() }),
+		);
+		if ("refused" in body) return body.refused;
+		if (body.data.id !== c.req.param("id"))
+			return c.json(
+				{ error: "invalid", field: "id" } satisfies ErrorAnswer,
+				400,
+			);
+		const { id, name } = body.data;
+		const renamed = await renameBrand(getDb(c.env), c.var.user.id, id, name);
+		if (!renamed.ok) {
+			const { status, body } = brandRefusal(renamed.error);
+			return c.json(body, status);
+		}
+		return c.json({ brand: renamed.value } satisfies BrandAnswer, 200);
+	});
+
+	app.delete("/brands/:id", withAuth, requireUser, async (c) => {
+		const deleted = await deleteBrand(
+			getDb(c.env),
+			c.var.user.id,
+			c.req.param("id"),
+		);
+		if (!deleted.ok) {
+			const { status, body } = brandRefusal(deleted.error);
+			return c.json(body, status);
+		}
+		return c.body(null, 204);
 	});
 
 	app.get("/ai-apps", withAuth, requireUser, async (c) =>

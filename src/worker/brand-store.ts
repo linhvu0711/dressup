@@ -90,3 +90,49 @@ export async function addBrand(
 		throw error;
 	}
 }
+
+// Renames only a brand the account has. A name the account's other brands
+// hold is refused, so a change of letter case alone is taken.
+export async function renameBrand(
+	db: Db,
+	userId: string,
+	id: string,
+	input: string,
+): Promise<Result<Brand, BrandError>> {
+	const checked = check(input);
+	if (!checked.ok) return checked;
+	const { name } = checked;
+	const duplicate = { ok: false, error: { code: "duplicate", name } } as const;
+	const brands = await listBrands(db, userId);
+	if (brands.some((b) => b.id !== id && sameLabelName(b.name, name)))
+		return duplicate;
+	try {
+		const [row] = await db
+			.update(brand)
+			.set({ name })
+			.where(and(eq(brand.id, id), eq(brand.userId, userId)))
+			.returning({ id: brand.id, name: brand.name });
+		return row
+			? { ok: true, value: toBrand(row) }
+			: { ok: false, error: { code: "not_found" } };
+	} catch (error) {
+		if (hitsIndex(error, NAME_INDEX)) return duplicate;
+		throw error;
+	}
+}
+
+// Only the account's own brand goes; not found when the account has no
+// brand with this id.
+export async function deleteBrand(
+	db: Db,
+	userId: string,
+	id: string,
+): Promise<Result<Brand, BrandError>> {
+	const [row] = await db
+		.delete(brand)
+		.where(and(eq(brand.id, id), eq(brand.userId, userId)))
+		.returning({ id: brand.id, name: brand.name });
+	return row
+		? { ok: true, value: toBrand(row) }
+		: { ok: false, error: { code: "not_found" } };
+}
