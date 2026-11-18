@@ -19,6 +19,7 @@ import {
 	checkCombination,
 	combinationKey,
 } from "@/combinations/combination";
+import { checkPieceRows, filterCombinations } from "@/combinations/filter";
 import { LAYER_OF, LAYERS } from "@/dress/garments";
 import type { ColourId } from "@/labels/colour";
 import type { TagId } from "@/tags/tag";
@@ -130,6 +131,29 @@ async function readCombinations(
 export const listCombinations = (db: Db, userId: string) =>
 	readCombinations(db, userId);
 
+// The combinations that match every piece row and carry every tag, newest
+// first. A type, colour, or tag the account does not have is refused, as a
+// save refuses it.
+export async function findCombinations(
+	db: Db,
+	userId: string,
+	filter: { pieces: { typeId?: string; colourId?: string }[]; tags: string[] },
+): Promise<Result<Combination[], CombinationProblem>> {
+	const checked = checkPieceRows(filter.pieces);
+	if (!checked.ok) return { ok: false, error: checked.problem };
+	const notColour = await notYourColour(db, userId, filter.pieces);
+	if (notColour) return { ok: false, error: notColour };
+	const notTag = await notYourTag(db, userId, filter.tags);
+	if (notTag) return { ok: false, error: notTag };
+	return {
+		ok: true,
+		value: filterCombinations(await readCombinations(db, userId), {
+			pieces: checked.rows,
+			tags: filter.tags as TagId[],
+		}),
+	};
+}
+
 const keyHolder = async (db: Db, userId: string, key: string) => {
 	const [row] = await db
 		.select({ id: combination.id })
@@ -147,15 +171,18 @@ const isKeyTaken = (error: unknown): boolean =>
 		isKeyTaken(error.cause));
 
 // The first piece whose colour is not one of the account's, as the problem.
+// A filter row may leave its colour out.
 async function notYourColour(
 	db: Db,
 	userId: string,
-	pieces: CombinationInput["pieces"],
+	pieces: readonly { colourId?: string }[],
 ): Promise<CombinationProblem | null> {
 	const colourIds = new Set<string>(
 		(await listColours(db, userId)).map((c) => c.id),
 	);
-	const i = pieces.findIndex((p) => !colourIds.has(p.colourId));
+	const i = pieces.findIndex(
+		(p) => p.colourId !== undefined && !colourIds.has(p.colourId),
+	);
 	return i === -1
 		? null
 		: {

@@ -1868,6 +1868,101 @@ describe("combinations", () => {
 				[{ id: work, name: "Work" }],
 			);
 		});
+
+		test("lists the combinations that hold every piece row and carry every tag", async () => {
+			// Given: TWO, THREE with Work, and White short tee + Navy chino pants
+			// with Work, saved in that order
+			const { ai } = await withAiSession();
+			const work = await addTagByAi(ai, "Work");
+			const ids = await colourIds(ai);
+			await savedId(ai, two(ids));
+			await savedId(ai, { ...three(ids), tags: [work] });
+			await savedId(ai, {
+				pieces: [
+					{ typeId: "chino_p", colourId: ids.Navy },
+					{ typeId: "tee_s", colourId: ids.White },
+				],
+				tags: [work],
+			});
+			// When
+			const { isError, data } = await ai.call("list_combinations", {
+				pieces: [
+					{ typeId: "tee_s", colourId: ids.White },
+					{ colourId: ids.Navy },
+				],
+				tags: [work],
+			});
+			// Then
+			expect({
+				isError,
+				titles: (data as { combinations: Listed[] }).combinations.map(
+					(c) => c.title,
+				),
+			}).toEqual({
+				isError: false,
+				titles: ["White short tee + Navy chino pants"],
+			});
+		});
+
+		test("refuses a tag in a filter that is not the account's", async () => {
+			// Given
+			const { ai } = await withAiSession();
+			await savedId(ai, three(await colourIds(ai)));
+			// When
+			const { isError, text } = await ai.call("list_combinations", {
+				tags: ["not-a-tag"],
+			});
+			// Then
+			expect({ isError, text }).toEqual({
+				isError: true,
+				text: "not-a-tag is not one of your tags. list_tags names them.",
+			});
+		});
+	});
+
+	test("refuses a type in a filter that is not a type", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		await savedId(ai, three(await colourIds(ai)));
+		// When
+		const { isError, text } = await ai.call("list_combinations", {
+			pieces: [{ typeId: "jeans" }],
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "jeans is not a type. list_types names the types.",
+		});
+	});
+
+	test("refuses a colour in a filter that is not the account's", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		await savedId(ai, three(await colourIds(ai)));
+		// When
+		const { isError, text } = await ai.call("list_combinations", {
+			pieces: [{ colourId: "not-a-colour" }],
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "not-a-colour is not one of your colours. list_colours names them.",
+		});
+	});
+
+	test("says no combination matches the filters", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		await savedId(ai, three(await colourIds(ai)));
+		// When
+		const { isError, text } = await ai.call("list_combinations", {
+			pieces: [{ typeId: "sweater" }],
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: false,
+			text: "No combination matches these filters.",
+		});
 	});
 });
 

@@ -246,6 +246,8 @@ export const noColours = "You have no colours yet.";
 
 export const noCombinations = "You have no combinations yet.";
 
+export const noCombinationsMatch = "No combination matches these filters.";
+
 export const noBrands = "You have no brands yet.";
 
 export const noOwnedItems = "Nothing in your closet yet.";

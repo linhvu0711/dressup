@@ -44,6 +44,7 @@ import {
 	noBrands,
 	noColours,
 	noCombinations,
+	noCombinationsMatch,
 	noLooks,
 	noOwnedItems,
 	noTags,
@@ -65,7 +66,7 @@ import {
 import {
 	changeCombination,
 	deleteCombination,
-	listCombinations,
+	findCombinations,
 	saveCombination,
 } from "./combination-store";
 import type { Db } from "./db";
@@ -667,19 +668,46 @@ export function registerAiActions(server: McpServer, account: Account) {
 		{
 			title: "List the combinations",
 			description:
-				"The account's saved combinations, newest first, each with its title, its pieces, whether its jacket is open, and its tags.",
+				"The account's saved combinations, newest first, each with its title, its pieces, whether its jacket is open, and its tags. pieces and tags narrow the list: a combination must match every piece row and carry every tag.",
 			annotations: READ,
-			inputSchema: noArgs,
+			inputSchema: z.object({
+				pieces: z
+					.array(
+						z.object({
+							typeId: z
+								.string()
+								.optional()
+								.describe("A type id from list_types, such as tee_s."),
+							colourId: z
+								.string()
+								.optional()
+								.describe("A colour id from list_colours."),
+						}),
+					)
+					.optional()
+					.describe(
+						"Piece rows. A combination is listed when, for each row, one of its pieces has the row's type and colour; a row may give only one of the two.",
+					),
+				tags: field.tags
+					.optional()
+					.describe(
+						"Tag ids from list_tags. A combination is listed when it carries every one.",
+					),
+			}),
 		},
-		async () => {
-			const [all, tags] = await Promise.all([
-				listCombinations(db, userId),
+		async ({ pieces = [], tags: tagIds = [] }) => {
+			const [found, tags] = await Promise.all([
+				findCombinations(db, userId, { pieces, tags: tagIds }),
 				listTags(db, userId),
 			]);
-			const combinations = all.map((c) => combinationView(c, tags));
-			return combinations.length === 0
-				? answer({ combinations }, noCombinations)
-				: answer({ combinations });
+			if (!found.ok) return refusal(combinationRefusalText(found.error));
+			const combinations = found.value.map((c) => combinationView(c, tags));
+			if (combinations.length > 0) return answer({ combinations });
+			const filtered = pieces.length > 0 || tagIds.length > 0;
+			return answer(
+				{ combinations },
+				filtered ? noCombinationsMatch : noCombinations,
+			);
 		},
 	);
 
