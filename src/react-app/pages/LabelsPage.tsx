@@ -1,7 +1,9 @@
+import { cn } from "cn";
 import { ChevronRight, Plus } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
+import { PLACEHOLDER } from "@/components/ui/placeholder";
 import { useColours } from "@/labels/api";
 import { ColourSheet } from "@/labels/ColourSheet";
 import type { Colour } from "@/labels/colour";
@@ -70,13 +72,45 @@ export function LabelsPage() {
 					</Button>
 				}
 			/>
-			{colours.data?.length === 0 ? (
+			{colours.isPending ? (
+				<ul data-slot="colour-list-loading" className={LIST}>
+					{Array.from({ length: 6 }, (_, i) => (
+						<li
+							// biome-ignore lint/suspicious/noArrayIndexKey: the rows are all alike and never move.
+							key={i}
+							className="flex min-h-[58px] items-center gap-3 border-b border-border py-[11px]"
+						>
+							<span
+								className={cn(
+									"size-[34px] flex-none rounded-[10px]",
+									PLACEHOLDER,
+								)}
+							/>
+							<span className="flex flex-1 flex-col gap-1.5">
+								<span
+									className={cn("h-3.5 w-[40%] rounded-[6px]", PLACEHOLDER)}
+								/>
+								<span
+									className={cn("h-3 w-[25%] rounded-[6px]", PLACEHOLDER)}
+								/>
+							</span>
+						</li>
+					))}
+				</ul>
+			) : colours.isError ? (
+				// Checked before the data: a failed refetch keeps the old colours.
+				<Notice title="Could not load your colours">
+					<Button className="mt-2" onClick={() => void colours.refetch()}>
+						Retry
+					</Button>
+				</Notice>
+			) : colours.data.length === 0 ? (
 				<Notice title="No colours yet">
 					<p className="max-w-[30ch] text-muted-foreground">
 						Tap + to add your first colour.
 					</p>
 				</Notice>
-			) : colours.data ? (
+			) : (
 				<ul data-slot="colour-list" className={LIST}>
 					{colours.data.map((colour) => (
 						<ColourRow
@@ -86,7 +120,7 @@ export function LabelsPage() {
 						/>
 					))}
 				</ul>
-			) : null}
+			)}
 			{open && colours.data ? (
 				<ColourSheet
 					colours={colours.data}

@@ -4,6 +4,7 @@ import { ToggleGroup } from "radix-ui";
 import { useState } from "react";
 import { ColourPicker } from "@/colour/ColourPicker";
 import { Button } from "@/components/ui/button";
+import { PLACEHOLDER } from "@/components/ui/placeholder";
 import { useToast } from "@/components/ui/toast";
 import { useDressState } from "@/dress/DressState";
 import {
@@ -181,8 +182,6 @@ export function ColourRows({
 		</>
 	);
 }
-
-const PLACEHOLDER = "animate-placeholder bg-muted motion-reduce:animate-none";
 
 // The rows wait for the server, so while they load they show as grey bars
 // and squares, in the look of the other loading placeholders.

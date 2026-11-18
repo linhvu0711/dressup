@@ -250,3 +250,66 @@ test.describe("an account with no colours", () => {
 		await expect(rows(page)).toHaveCount(0);
 	});
 });
+
+test("shows skeleton rows while the colours load", async ({ page }) => {
+	// Given: a fresh account; GET /api/colours held until the test lets it go
+	let release = () => {};
+	const held = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	await page.route("**/api/colours", async (route) => {
+		await held;
+		await route.continue();
+	});
+	// When
+	await page.goto("/labels");
+	// Then
+	const loading = page.locator('[data-slot="colour-list-loading"] li');
+	await expect(loading).toHaveCount(6);
+	release();
+	await expect(rows(page)).toHaveCount(13);
+	await expect(loading).toHaveCount(0);
+});
+
+test("shows Could not load your colours and loads on Retry", async ({
+	page,
+}) => {
+	// Given: a fresh account; the first GET /api/colours answers 500
+	let calls = 0;
+	await page.route("**/api/colours", (route) =>
+		calls++ === 0 ? route.fulfill({ status: 500 }) : route.continue(),
+	);
+	// When
+	await page.goto("/labels");
+	await expect(
+		page.getByRole("heading", { name: "Could not load your colours" }),
+	).toBeVisible();
+	await page.getByRole("button", { name: "Retry" }).click();
+	// Then
+	await expect(rows(page)).toHaveCount(13);
+});
+
+test("shows the sign-in screen when the colours answer 401", async ({
+	page,
+}) => {
+	// Given: / open and its session check passed; then the session is gone for
+	// the session check and for the colours
+	await page.goto("/");
+	await expect(
+		page.getByRole("navigation", { name: "Main" }).getByRole("link", {
+			name: "Labels",
+		}),
+	).toBeVisible();
+	const noSession = { status: 401, json: { error: "unauthorized" } };
+	await page.route("/api/me", (route) => route.fulfill(noSession));
+	await page.route("**/api/colours", (route) => route.fulfill(noSession));
+	// When
+	await page
+		.getByRole("navigation", { name: "Main" })
+		.getByRole("link", { name: "Labels" })
+		.click();
+	// Then
+	await expect(
+		page.getByRole("button", { name: "Sign in with Google" }),
+	).toBeVisible();
+});

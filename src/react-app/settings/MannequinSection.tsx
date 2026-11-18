@@ -1,6 +1,7 @@
 import { cn } from "cn";
 import { useState } from "react";
 import { ColourPicker } from "@/colour/ColourPicker";
+import { PLACEHOLDER } from "@/components/ui/placeholder";
 import { useToast } from "@/components/ui/toast";
 import { useDressState } from "@/dress/DressState";
 import { Mannequin } from "@/dress/figure/Mannequin";
@@ -17,8 +18,6 @@ const PREVIEW_VIEW_BOX = "90 20 220 220";
 
 const SQUARE =
 	"size-[34px] flex-none rounded-[10px] shadow-[inset_0_0_0_1px_rgba(110,106,98,.38)] dark:[box-shadow:inset_0_0_0_1px_rgba(244,241,234,.3)]";
-
-const PLACEHOLDER = "animate-placeholder bg-muted motion-reduce:animate-none";
 
 type Live = { part: MannequinPart; hex: Hex };
 
