@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { z } from "zod";
 import type { AiApp } from "@/ai-apps/ai-app";
-import type { Combination } from "@/combinations/combination";
+import type { Combination, CombinationId } from "@/combinations/combination";
 import { type Brand, type BrandId, byBrandName } from "@/labels/brand";
 import type { Colour, ColourId, ListedColour } from "@/labels/colour";
 import type { Look, LookId } from "@/looks/look";
@@ -145,6 +145,14 @@ export const after = {
 				(old.some((c) => c.id === combination.id)
 					? old.map((c) => (c.id === combination.id ? combination : c))
 					: [combination, ...old]),
+		);
+		refresh(keys.combinations(userId));
+		refresh(keys.colours(userId));
+	},
+	// A deleted combination can free its colours.
+	combinationGone(userId: string | null, id: CombinationId) {
+		queryClient.setQueryData<Combination[]>(keys.combinations(userId), (old) =>
+			old?.filter((c) => c.id !== id),
 		);
 		refresh(keys.combinations(userId));
 		refresh(keys.colours(userId));
