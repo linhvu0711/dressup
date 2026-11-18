@@ -560,6 +560,65 @@ describe("PUT /api/combinations/:id", () => {
 	});
 });
 
+describe("DELETE /api/combinations/:id", () => {
+	const del = (h: Harness, headers: Headers, id: string) =>
+		send(h, headers, "DELETE", `/api/combinations/${id}`);
+
+	test("deletes a combination and frees its colours", async () => {
+		// Given: alice saved THREE
+		const { h, headers, ids } = await alice();
+		await post(h, headers, three(ids));
+		// When
+		const res = await del(h, headers, FIRST_ID);
+		// Then
+		const { colours } = (await (
+			await send(h, headers, "GET", "/api/colours")
+		).json()) as { colours: { name: string; inUse: boolean }[] };
+		expect({
+			status: res.status,
+			listed: await list(h, headers),
+			inUse: colours
+				.filter((c) => ["Khaki", "Black", "Navy"].includes(c.name))
+				.map((c) => c.inUse),
+		}).toEqual({ status: 204, listed: [], inUse: [false, false, false] });
+	});
+
+	test("refuses to delete a combination that is gone", async () => {
+		// Given: alice saved THREE and deleted it
+		const { h, headers, ids } = await alice();
+		await post(h, headers, three(ids));
+		await del(h, headers, FIRST_ID);
+		// When
+		const res = await del(h, headers, FIRST_ID);
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			listed: await list(h, headers),
+		}).toEqual({ status: 404, body: { error: "not_found" }, listed: [] });
+	});
+
+	test("refuses to delete another account's combination", async () => {
+		// Given: bob saved THREE with his own colour ids; alice signed in
+		const h = await makeHarness();
+		const bob = await h.addAccount(BOB);
+		await post(h, bob, three(await colourIds(h, bob)));
+		const headers = await h.addAccount(ALICE);
+		// When
+		const res = await del(h, headers, FIRST_ID);
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			bobs: (await list(h, bob)).map((c) => c.id),
+		}).toEqual({
+			status: 404,
+			body: { error: "not_found" },
+			bobs: [FIRST_ID],
+		});
+	});
+});
+
 describe("changes at once", () => {
 	test("answers duplicate when another tab changes a combination into the same pieces first", async () => {
 		// Given: alice saved THREE, TWO, and a third; before THREE's change

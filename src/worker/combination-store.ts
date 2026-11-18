@@ -292,3 +292,19 @@ export async function changeCombination(
 	const [changed] = await readCombinations(db, userId, id);
 	return changed ? { ok: true, value: changed } : notFound;
 }
+
+// Only the account's own combination goes, with its pieces (the key's
+// cascade); not_found when there is none to delete.
+export async function deleteCombination(
+	db: Db,
+	userId: string,
+	id: string,
+): Promise<Result<CombinationId, CombinationError>> {
+	const [row] = await db
+		.delete(combination)
+		.where(and(eq(combination.id, id), eq(combination.userId, userId)))
+		.returning({ id: combination.id });
+	return row
+		? { ok: true, value: row.id as CombinationId }
+		: { ok: false, error: { code: "not_found" } };
+}

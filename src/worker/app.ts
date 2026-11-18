@@ -48,6 +48,7 @@ import {
 import {
 	type CombinationError,
 	changeCombination,
+	deleteCombination,
 	listCombinations,
 	saveCombination,
 } from "./combination-store";
@@ -411,6 +412,19 @@ export function createApp(getDb: (env: Env) => Db) {
 			return c.json(refused, status);
 		}
 		return c.json({ combination: changed.value } satisfies CombinationAnswer);
+	});
+
+	app.delete("/combinations/:id", withAuth, requireUser, async (c) => {
+		const deleted = await deleteCombination(
+			getDb(c.env),
+			c.var.user.id,
+			c.req.param("id"),
+		);
+		if (!deleted.ok) {
+			const { status, body: refused } = combinationRefusal(deleted.error);
+			return c.json(refused, status);
+		}
+		return c.body(null, 204);
 	});
 
 	app.get("/tags", withAuth, requireUser, async (c) =>
