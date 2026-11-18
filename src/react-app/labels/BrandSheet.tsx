@@ -14,8 +14,8 @@ const WORDS: LabelWords = {
 	confirmTitle: () => "Delete this brand?",
 	confirmText: "No item uses it.",
 	taken: "You have this brand already.",
-	full: `You have ${BRAND_LIMIT} brands. That is the limit. Delete one to add a new one.`,
 	added: "Brand added",
+	changed: "Changes saved",
 	deleted: "Brand deleted",
 };
 
@@ -42,8 +42,11 @@ export function BrandSheet({
 				),
 			}}
 			labels={brands}
-			limit={BRAND_LIMIT}
-			limitCode="brand_limit"
+			limit={{
+				max: BRAND_LIMIT,
+				code: "brand_limit",
+				full: `You have ${BRAND_LIMIT} brands. That is the limit. Delete one to add a new one.`,
+			}}
 			nameMax={BRAND_NAME_MAX}
 			editing={editing}
 			onSave={(name) =>

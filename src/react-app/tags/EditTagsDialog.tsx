@@ -3,7 +3,8 @@ import { Dialog } from "radix-ui";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
-import { TagNameTaken, useAddTag, useRenameTag, useTags } from "./api";
+import { isNameTaken } from "@/data/client";
+import { useAddTag, useRenameTag, useTags } from "./api";
 import { DeleteTagDialog } from "./DeleteTagDialog";
 import { TagNameField } from "./TagNameField";
 import type { Tag, TagId } from "./tag";
@@ -34,7 +35,7 @@ export function EditTagsDialog({ onClose }: { onClose: () => void }) {
 			try {
 				await send(value);
 			} catch (error) {
-				if (error instanceof TagNameTaken) throw error;
+				if (isNameTaken(error)) throw error;
 				setFailed(true);
 			}
 			setField(null);

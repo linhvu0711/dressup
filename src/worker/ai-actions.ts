@@ -7,6 +7,7 @@ import { z } from "zod";
 import { OWNED_ITEM_LIMIT, QUANTITY_MAX } from "@/closet/owned-item";
 import {
 	COMBINATION_LIMIT,
+	COMBINATION_TAGS_MAX,
 	type Combination,
 	combinationTitle,
 } from "@/combinations/combination";
@@ -130,10 +131,12 @@ const lookView = (look: Look, tags: Tag[]) => ({
 	modeId: look.modeId,
 	colours: look.colours,
 	open: look.open,
-	tags: tags.filter((t) => look.tags.includes(t.id)),
+	tags: tags
+		.filter((t) => look.tags.includes(t.id))
+		.map(({ id, name }) => ({ id, name })),
 });
 
-const combinationView = (combination: Combination) => ({
+const combinationView = (combination: Combination, tags: Tag[]) => ({
 	id: combination.id,
 	title: combinationTitle(combination),
 	open: combination.open,
@@ -143,6 +146,9 @@ const combinationView = (combination: Combination) => ({
 		type: GARMENT_NAMES[p.typeId],
 		colour: p.colour,
 	})),
+	tags: tags
+		.filter((t) => combination.tags.includes(t.id))
+		.map(({ id, name }) => ({ id, name })),
 });
 
 const noArgs = z.object({});
@@ -419,7 +425,8 @@ export function registerAiActions(server: McpServer, account: Account) {
 		"list_tags",
 		{
 			title: "List tags",
-			description: "The tags, in the order they were made.",
+			description:
+				"The tags, in the order they were made, each with combinations, the number of combinations that carry it.",
 			annotations: READ,
 			inputSchema: noArgs,
 		},
@@ -449,7 +456,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		"rename_tag",
 		{
 			title: "Rename a tag",
-			description: "Renames a tag. Its looks keep it.",
+			description: "Renames a tag. Its looks and combinations keep it.",
 			annotations: WRITE,
 			inputSchema: z.object({
 				id: z.string().describe("The tag's id."),
@@ -468,7 +475,8 @@ export function registerAiActions(server: McpServer, account: Account) {
 		"delete_tag",
 		{
 			title: "Delete a tag",
-			description: "Deletes a tag and takes it off every look. The looks stay.",
+			description:
+				"Deletes a tag and takes it off every look and combination. The looks and combinations stay.",
 			annotations: DELETE,
 			inputSchema: z.object({ id: z.string().describe("The tag's id.") }),
 		},
@@ -649,14 +657,16 @@ export function registerAiActions(server: McpServer, account: Account) {
 		{
 			title: "List the combinations",
 			description:
-				"The account's saved combinations, newest first, each with its title, its pieces, and whether its jacket is open.",
+				"The account's saved combinations, newest first, each with its title, its pieces, whether its jacket is open, and its tags.",
 			annotations: READ,
 			inputSchema: noArgs,
 		},
 		async () => {
-			const combinations = (await listCombinations(db, userId)).map(
-				combinationView,
-			);
+			const [all, tags] = await Promise.all([
+				listCombinations(db, userId),
+				listTags(db, userId),
+			]);
+			const combinations = all.map((c) => combinationView(c, tags));
 			return combinations.length === 0
 				? answer({ combinations }, noCombinations)
 				: answer({ combinations });
@@ -667,7 +677,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		"save_combination",
 		{
 			title: "Save a combination",
-			description: `Saves a combination of 2 to 4 pieces, at most one for each layer. A piece is a type id from list_types and a colour id from list_colours. An account keeps each combination once and at most ${COMBINATION_LIMIT} combinations.`,
+			description: `Saves a combination of 2 to 4 pieces, at most one for each layer. A piece is a type id from list_types and a colour id from list_colours. An account keeps each combination once and at most ${COMBINATION_LIMIT} combinations. tags is a list of tag ids from list_tags; each must be one of your tags, at most ${COMBINATION_TAGS_MAX}.`,
 			annotations: WRITE,
 			inputSchema: z.object({
 				pieces: field.pieces,
@@ -677,18 +687,24 @@ export function registerAiActions(server: McpServer, account: Account) {
 					.describe(
 						"The jacket is open. Only for a combination with a jacket.",
 					),
+				tags: field.tags.optional(),
 			}),
 		},
-		async ({ pieces, open = false }) => {
+		async ({ pieces, open = false, tags = [] }) => {
 			// The server makes the id, as save_look does.
 			const saved = await saveCombination(db, userId, {
 				id: crypto.randomUUID(),
 				pieces,
 				open,
+				tags,
 			});
-			return saved.ok
-				? answer({ combination: combinationView(saved.value.combination) })
-				: refusal(combinationRefusalText(saved.error));
+			if (!saved.ok) return refusal(combinationRefusalText(saved.error));
+			return answer({
+				combination: combinationView(
+					saved.value.combination,
+					await listTags(db, userId),
+				),
+			});
 		},
 	);
 
@@ -697,7 +713,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		{
 			title: "Change a combination",
 			description:
-				"Changes a saved combination's pieces. The pieces given replace all of its pieces: 2 to 4, at most one for each layer. It keeps its id and its place in the list. open sets the jacket state; left out, it stays.",
+				"Changes a saved combination's pieces. The pieces given replace all of its pieces: 2 to 4, at most one for each layer. It keeps its id and its place in the list. open sets the jacket state; left out, it stays. tags given replace its tags; left out, they stay.",
 			annotations: WRITE,
 			inputSchema: z.object({
 				id: z.string().describe("The combination's id."),
@@ -708,13 +724,19 @@ export function registerAiActions(server: McpServer, account: Account) {
 					.describe(
 						"The jacket is open. Only for a combination with a jacket. Left out, the jacket state stays.",
 					),
+				tags: field.tags.optional(),
 			}),
 		},
-		async ({ id, pieces, open }) => {
-			const changed = await changeCombination(db, userId, id, { pieces, open });
-			return changed.ok
-				? answer({ combination: combinationView(changed.value) })
-				: refusal(combinationRefusalText(changed.error));
+		async ({ id, pieces, open, tags }) => {
+			const changed = await changeCombination(db, userId, id, {
+				pieces,
+				open,
+				tags,
+			});
+			if (!changed.ok) return refusal(combinationRefusalText(changed.error));
+			return answer({
+				combination: combinationView(changed.value, await listTags(db, userId)),
+			});
 		},
 	);
 

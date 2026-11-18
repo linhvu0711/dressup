@@ -10,9 +10,14 @@ import {
 	type Layer,
 } from "@/dress/garments";
 import { colourSchema } from "@/labels/colour";
+import { tagIdSchema } from "@/tags/tag";
 
 // Combinations for each account (docs/adr/0008-open-sign-up-with-limits.md).
 export const COMBINATION_LIMIT = 300;
+
+// A combination's tags go in one statement, and D1 takes at most 100 bound
+// parameters (src/worker/dress-store.ts:30-31).
+export const COMBINATION_TAGS_MAX = 50;
 
 export const combinationIdSchema = z.uuid().brand<"CombinationId">();
 
@@ -28,6 +33,7 @@ export const combinationInputSchema = z
 			.min(2)
 			.max(4),
 		open: z.boolean(),
+		tags: z.array(tagIdSchema).max(COMBINATION_TAGS_MAX).default([]),
 	})
 	.superRefine((combination, ctx) => {
 		const seen = new Map<Layer, GarmentId>();
@@ -53,6 +59,10 @@ type SameLayer = { typeId: GarmentId; other: GarmentId; layer: Layer };
 
 export type CombinationInput = z.infer<typeof combinationInputSchema>;
 
+// What the page sends: tags left out on a change keep the stored ones.
+export type CombinationBody = Omit<CombinationInput, "tags"> &
+	Partial<Pick<CombinationInput, "tags">>;
+
 export const combinationSchema = z.object({
 	id: combinationIdSchema,
 	pieces: z.array(
@@ -63,6 +73,7 @@ export const combinationSchema = z.object({
 		}),
 	),
 	open: z.boolean(),
+	tags: z.array(tagIdSchema),
 });
 
 export type Combination = z.infer<typeof combinationSchema>;
@@ -70,7 +81,12 @@ export type Combination = z.infer<typeof combinationSchema>;
 // What a combination's own rules refuse, so the website and the AI apps each
 // turn one code into their answer. path is the zod path of the refused value.
 export type CombinationProblem =
-	| { code: "not_type" | "not_colour"; path: PropertyKey[]; value: unknown }
+	| {
+			code: "not_type" | "not_colour" | "not_tag";
+			path: PropertyKey[];
+			value: unknown;
+	  }
+	| { code: "too_many_tags"; path: PropertyKey[] }
 	| { code: "pieces_count"; path: PropertyKey[] }
 	| ({ code: "same_layer"; path: PropertyKey[] } & SameLayer)
 	| {
@@ -117,6 +133,17 @@ export function checkCombination(
 			ok: false,
 			problem: { code: "same_layer", path, ...(issue.params as SameLayer) },
 		};
+	if (path[0] === "tags")
+		return issue.code === "too_big" && path.length === 1
+			? { ok: false, problem: { code: "too_many_tags", path } }
+			: {
+					ok: false,
+					problem: {
+						code: "not_tag",
+						path: ["tags"],
+						value: valueAt(input, path),
+					},
+				};
 	if (
 		(issue.code === "too_small" || issue.code === "too_big") &&
 		path.length === 1 &&

@@ -2,7 +2,8 @@ import { cn } from "cn";
 import { ToggleGroup } from "radix-ui";
 import { type Dispatch, type SetStateAction, useState } from "react";
 import { CHIP, CHIP_DASHED } from "@/components/ui/chip";
-import { TagNameTaken, useAddTag, useTags } from "./api";
+import { isNameTaken } from "@/data/client";
+import { useAddTag, useTags } from "./api";
 import { TagNameField } from "./TagNameField";
 import type { TagId } from "./tag";
 
@@ -53,7 +54,7 @@ export function TagPicker({
 								// joins the picks as they are now, not as they were.
 								onChange((now) => [...now, tag.id]);
 							} catch (error) {
-								if (error instanceof TagNameTaken) throw error;
+								if (isNameTaken(error)) throw error;
 								setFailed(true);
 							}
 							setAdding(false);

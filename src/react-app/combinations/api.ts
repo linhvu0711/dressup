@@ -7,7 +7,7 @@ import {
 	request,
 } from "../data/client";
 import { combinationAnswer, combinationsAnswer } from "../data/contract";
-import type { CombinationId, CombinationInput } from "./combination";
+import type { CombinationBody, CombinationId } from "./combination";
 
 export function useCombinations() {
 	const userId = cachedUserId();
@@ -28,7 +28,7 @@ export function useCombinations() {
 export function useSaveCombination() {
 	const userId = cachedUserId();
 	return useMutation({
-		mutationFn: async (combination: CombinationInput) =>
+		mutationFn: async (combination: CombinationBody) =>
 			(
 				await request("POST", "/api/combinations", {
 					body: combination,
@@ -36,6 +36,8 @@ export function useSaveCombination() {
 				})
 			).combination,
 		onSuccess: (combination) => after.combinationSaved(userId, combination),
+		// A tag gone on another device refuses the save: drop it from the chips.
+		onError: () => after.tagsMayDiffer(userId),
 	});
 }
 
@@ -65,7 +67,7 @@ export function useDeleteCombination() {
 export function useChangeCombination() {
 	const userId = cachedUserId();
 	return useMutation({
-		mutationFn: async (combination: CombinationInput) =>
+		mutationFn: async (combination: CombinationBody) =>
 			(
 				await request("PUT", `/api/combinations/${combination.id}`, {
 					body: combination,
@@ -76,6 +78,7 @@ export function useChangeCombination() {
 		onError: (error, combination) => {
 			if (error instanceof CombinationGone)
 				after.combinationGone(userId, combination.id);
+			after.tagsMayDiffer(userId);
 		},
 	});
 }

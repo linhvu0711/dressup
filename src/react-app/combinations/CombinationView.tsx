@@ -6,6 +6,7 @@ import { useDressState } from "@/dress/DressState";
 import { LAYER_OF } from "@/dress/garments";
 import { OutfitFailed } from "@/dress/OutfitFailed";
 import { Stage } from "@/dress/Stage";
+import { useTags } from "@/tags/api";
 import { CombinationFigure } from "./CombinationFigure";
 import {
 	type Combination,
@@ -27,6 +28,9 @@ export function CombinationView({
 	const toast = useToast();
 	const dress = useDressState();
 	const title = combinationTitle(combination);
+	// In the tag list's order; a tag deleted on another device is skipped.
+	const tags =
+		useTags().data?.filter((t) => combination.tags.includes(t.id)) ?? [];
 	return (
 		<div data-slot="combination-view" className="flex min-h-0 flex-1 flex-col">
 			<div className="flex min-h-[62px] flex-none items-center gap-3 px-4 pt-[14px] pb-2 wide:px-6 wide:pt-[18px]">
@@ -73,6 +77,22 @@ export function CombinationView({
 				)}
 			</Stage>
 			<div className="min-h-0 flex-1 overflow-auto px-4 pb-24 wide:px-6 wide:pb-6">
+				{tags.length ? (
+					<div
+						data-slot="combination-tags"
+						className="flex flex-wrap gap-[7px] pb-3"
+					>
+						{tags.map((tag) => (
+							<span
+								key={tag.id}
+								data-slot="combination-tag"
+								className="rounded-full bg-muted px-[11px] py-[3px] font-medium text-[12px]"
+							>
+								{tag.name}
+							</span>
+						))}
+					</div>
+				) : null}
 				{topFirst(combination.pieces).map((p) => (
 					<div
 						key={p.layer}

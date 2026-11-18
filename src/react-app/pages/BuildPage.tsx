@@ -279,7 +279,7 @@ function Builder({ combination }: { combination?: Combination }) {
 				<SaveCombinationDialog
 					pieces={pieces}
 					open={open}
-					changing={combination?.id}
+					changing={combination}
 					onClose={() => setSaving(false)}
 				/>
 			) : null}

@@ -5,7 +5,7 @@ import { type ReactNode, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
-import { RequestError } from "@/data/client";
+import { isNameTaken, RequestError } from "@/data/client";
 import type { ErrorCode } from "@/data/contract";
 import { sameLabelName } from "./name";
 
@@ -20,8 +20,9 @@ export type LabelWords = {
 	// use; a kind with no such rule leaves it out.
 	inUseText?: string;
 	taken: string;
-	full: string;
 	added: string;
+	// The toast of a Save in the edit sheet.
+	changed: string;
 	deleted: string;
 };
 
@@ -36,7 +37,6 @@ export function LabelSheet<Id extends string>({
 	words,
 	labels,
 	limit,
-	limitCode,
 	inUseCode,
 	nameMax,
 	editing,
@@ -47,8 +47,9 @@ export function LabelSheet<Id extends string>({
 }: {
 	words: LabelWords;
 	labels: readonly { id: Id; name: string }[];
-	limit: number;
-	limitCode: ErrorCode;
+	// The most labels of this kind, the server's refusal over it, and what the
+	// form says then; a kind with no limit leaves it out.
+	limit?: { max: number; code: ErrorCode; full: string };
 	// The server's refusal to delete a label in use.
 	inUseCode?: ErrorCode;
 	nameMax: number;
@@ -74,20 +75,19 @@ export function LabelSheet<Id extends string>({
 			del.error instanceof RequestError &&
 			del.error.code === inUseCode);
 	// A change adds no label, so the limit never stops it.
-	const full = !editing && labels.length >= limit;
+	const full = !editing && limit !== undefined && labels.length >= limit.max;
 	const sentProblem = (error: unknown): Problem => {
-		if (error instanceof RequestError && error.code === "duplicate")
-			return "taken";
-		if (error instanceof RequestError && error.code === limitCode)
+		if (isNameTaken(error)) return "taken";
+		if (error instanceof RequestError && error.code === limit?.code)
 			return "full";
 		return "failed";
 	};
 	const problem =
 		checked ?? (full ? "full" : save.isError ? sentProblem(save.error) : null);
-	const problemText: Record<Problem, string> = {
+	const problemText: Record<Problem, string | undefined> = {
 		empty: "Enter a name.",
 		taken: words.taken,
-		full: words.full,
+		full: limit?.full,
 		failed: "Not saved. Try again.",
 	};
 
@@ -101,7 +101,7 @@ export function LabelSheet<Id extends string>({
 			return setChecked("taken");
 		save.mutate(trimmed, {
 			onSuccess: () => {
-				toast(editing ? "Changes saved" : words.added);
+				toast(editing ? words.changed : words.added);
 				onClose();
 			},
 		});

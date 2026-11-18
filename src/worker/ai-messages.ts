@@ -1,6 +1,9 @@
 import type { z } from "zod";
 import { OWNED_ITEM_LIMIT, QUANTITY_MAX } from "@/closet/owned-item";
-import { COMBINATION_LIMIT } from "@/combinations/combination";
+import {
+	COMBINATION_LIMIT,
+	COMBINATION_TAGS_MAX,
+} from "@/combinations/combination";
 import {
 	GARMENT_IDS,
 	GARMENT_NAMES,
@@ -122,6 +125,10 @@ export function combinationRefusalText(error: CombinationError): string {
 			return `${error.value} is not a type. list_types names the types.`;
 		case "not_colour":
 			return `${error.value} is not one of your colours. list_colours names them.`;
+		case "not_tag":
+			return `${error.value} is not one of your tags. list_tags names them.`;
+		case "too_many_tags":
+			return `A combination has at most ${COMBINATION_TAGS_MAX} tags.`;
 		case "duplicate":
 			return `You have this combination already, with id ${error.id}.`;
 		case "combination_limit":

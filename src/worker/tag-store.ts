@@ -1,8 +1,8 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, count, eq, sql } from "drizzle-orm";
 import { sameLabelName } from "@/labels/name";
-import { type Tag, type TagId, tagSchema } from "@/tags/tag";
+import { type ListedTag, type Tag, type TagId, tagSchema } from "@/tags/tag";
 import { type Db, hitsIndex } from "./db";
-import { tag } from "./db/tag-schema";
+import { combinationTag, tag } from "./db/tag-schema";
 import type { Result } from "./result";
 
 export type TagError =
@@ -16,15 +16,22 @@ const toTag = (row: { id: string; name: string }): Tag => ({
 });
 
 // The account's tags in the order they were made: a new tag comes last, and
-// a renamed one keeps its place.
-export async function listTags(db: Db, userId: string): Promise<Tag[]> {
+// a renamed one keeps its place. Each counts the combinations that carry it.
+export async function listTags(db: Db, userId: string): Promise<ListedTag[]> {
 	const rows = await db
-		.select({ id: tag.id, name: tag.name })
+		.select({
+			id: tag.id,
+			name: tag.name,
+			combinations: sql<number>`(${db
+				.select({ n: count() })
+				.from(combinationTag)
+				.where(eq(combinationTag.tagId, tag.id))})`,
+		})
 		.from(tag)
 		.where(eq(tag.userId, userId))
 		// Two adds in one millisecond share created_at; rowid keeps their order.
 		.orderBy(asc(tag.createdAt), asc(sql`rowid`));
-	return rows.map(toTag);
+	return rows.map((row) => ({ ...toTag(row), combinations: row.combinations }));
 }
 
 // The server makes the id: an add sent again after a lost answer finds its
@@ -86,8 +93,9 @@ export async function renameTag(
 	}
 }
 
-// Only the account's own tag goes, and with it the tag on each look; not
-// found when the account has no tag with this id.
+// Only the account's own tag goes, and with it the tag on each look and each
+// combination (the keys' cascade); not found when the account has no tag
+// with this id.
 export async function deleteTag(
 	db: Db,
 	userId: string,

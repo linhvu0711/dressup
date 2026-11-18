@@ -165,12 +165,15 @@ const combinationBodySchema = z.object({
 	id: z.string(),
 	pieces: z.array(z.object({ typeId: z.string(), colourId: z.string() })),
 	open: z.boolean(),
+	tags: z.array(z.string()).optional(),
 });
 
 function combinationRefusal(error: CombinationError): Refusal {
 	switch (error.code) {
 		case "not_type":
 		case "not_colour":
+		case "not_tag":
+		case "too_many_tags":
 		case "pieces_count":
 		case "same_layer":
 		case "invalid":
@@ -481,6 +484,7 @@ export function createApp(getDb: (env: Env) => Db) {
 		const changed = await changeCombination(getDb(c.env), c.var.user.id, id, {
 			pieces: body.data.pieces,
 			open: body.data.open,
+			tags: body.data.tags,
 		});
 		if (!changed.ok) {
 			const { status, body: refused } = combinationRefusal(changed.error);

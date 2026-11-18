@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { changeCombination, saveCombination } from "./combination-store";
 import { combination, combinationPiece } from "./db/combination-schema";
+import { deleteTag } from "./tag-store";
 import {
 	ALICE,
 	BOB,
@@ -15,6 +16,7 @@ type Ids = Record<string, string>;
 type Listed = {
 	id: string;
 	open: boolean;
+	tags: string[];
 	pieces: {
 		layer: string;
 		typeId: string;
@@ -130,6 +132,7 @@ describe("POST /api/combinations", () => {
 				{
 					id: FIRST_ID,
 					open: true,
+					tags: [],
 					pieces: [
 						{
 							layer: "bottom",
@@ -819,5 +822,376 @@ describe("GET /api/combinations", () => {
 			name: "Ink",
 			hex: "#22324A",
 		});
+	});
+});
+
+// The id of a tag the account adds through the page's route.
+const addTag = async (h: Harness, headers: Headers, name: string) =>
+	(
+		(await (await send(h, headers, "POST", "/api/tags", { name })).json()) as {
+			tag: { id: string };
+		}
+	).tag.id;
+
+const NO_TAG = "5b1f2c3d-0000-4000-8000-000000000000";
+
+describe("tags on a combination", () => {
+	const refusal = async (h: Harness, headers: Headers, body: unknown) => {
+		const res = await post(h, headers, body);
+		return { status: res.status, body: await res.json() };
+	};
+
+	test("saves a combination with its tags and lists them", async () => {
+		// Given: alice; tags Work and Weekend
+		const { h, headers, ids } = await alice();
+		const work = await addTag(h, headers, "Work");
+		const weekend = await addTag(h, headers, "Weekend");
+		// When
+		const saved = await post(h, headers, {
+			...three(ids),
+			tags: [work, weekend],
+		});
+		const listed = await list(h, headers);
+		// Then
+		expect({ status: saved.status, tags: listed.map((c) => c.tags) }).toEqual({
+			status: 201,
+			tags: [[work, weekend]],
+		});
+	});
+
+	test("saves a combination with no tags when the body has none", async () => {
+		// Given: alice; THREE with no tags key
+		const { h, headers, ids } = await alice();
+		// When
+		const saved = await post(h, headers, three(ids));
+		const listed = await list(h, headers);
+		// Then
+		expect({ status: saved.status, tags: listed.map((c) => c.tags) }).toEqual({
+			status: 201,
+			tags: [[]],
+		});
+	});
+
+	test("writes the tags of a save sent again with other tags", async () => {
+		// Given: alice; tags Work and Weekend; THREE saved with Work, its
+		// answer lost
+		const { h, headers, ids } = await alice();
+		const work = await addTag(h, headers, "Work");
+		const weekend = await addTag(h, headers, "Weekend");
+		const body = three(ids);
+		await post(h, headers, { ...body, tags: [work] });
+		// When: the same save is sent again with Weekend picked instead
+		const again = await post(h, headers, { ...body, tags: [weekend] });
+		const listed = await list(h, headers);
+		// Then
+		expect({
+			status: again.status,
+			answered: ((await again.json()) as { combination: { tags: string[] } })
+				.combination.tags,
+			listed: listed.map((c) => c.tags),
+		}).toEqual({ status: 200, answered: [weekend], listed: [[weekend]] });
+	});
+
+	test("saves a combination's tags once when the same save comes twice", async () => {
+		// Given: alice; tag Work; THREE with it
+		const { h, headers, ids } = await alice();
+		const work = await addTag(h, headers, "Work");
+		const body = { ...three(ids), tags: [work] };
+		// When
+		const first = await post(h, headers, body);
+		const second = await post(h, headers, body);
+		const listed = await list(h, headers);
+		// Then
+		expect({
+			statuses: [first.status, second.status],
+			tags: listed.map((c) => c.tags),
+		}).toEqual({ statuses: [201, 200], tags: [[work]] });
+	});
+
+	test("saves a combination with 50 tags", async () => {
+		// Given: alice; 50 tags t1 to t50
+		const { h, headers, ids } = await alice();
+		const tags: string[] = [];
+		for (let i = 1; i <= 50; i++) tags.push(await addTag(h, headers, `t${i}`));
+		// When
+		const res = await post(h, headers, { ...three(ids), tags });
+		// Then
+		const body = (await res.json()) as { combination: Listed };
+		expect({ status: res.status, count: body.combination.tags.length }).toEqual(
+			{ status: 201, count: 50 },
+		);
+	});
+
+	test("refuses a combination with 51 tags", async () => {
+		// Given: alice; 51 tags t1 to t51
+		const { h, headers, ids } = await alice();
+		const tags: string[] = [];
+		for (let i = 1; i <= 51; i++) tags.push(await addTag(h, headers, `t${i}`));
+		// When
+		const refused = await refusal(h, headers, { ...three(ids), tags });
+		// Then
+		expect(refused).toEqual({
+			status: 400,
+			body: { error: "invalid", field: "tags" },
+		});
+	});
+
+	test("refuses a tag that is not the account's", async () => {
+		// Given: alice; tag Work and a uuid no tag has
+		const { h, headers, ids } = await alice();
+		const work = await addTag(h, headers, "Work");
+		// When
+		const refused = await refusal(h, headers, {
+			...three(ids),
+			tags: [work, NO_TAG],
+		});
+		// Then
+		expect(refused).toEqual({
+			status: 400,
+			body: { error: "invalid", field: "tags" },
+		});
+	});
+
+	test("refuses a tag id that is not a uuid", async () => {
+		// Given: alice; tag Work and the id "work"
+		const { h, headers, ids } = await alice();
+		const work = await addTag(h, headers, "Work");
+		// When
+		const refused = await refusal(h, headers, {
+			...three(ids),
+			tags: [work, "work"],
+		});
+		// Then
+		expect(refused).toEqual({
+			status: 400,
+			body: { error: "invalid", field: "tags" },
+		});
+	});
+
+	test("refuses a combination with tags at the combination limit", async () => {
+		// Given: alice with 300 combinations; tag Work
+		const { h, headers, ids } = await alice();
+		await h.seedCombinations("alice-id", 300);
+		const work = await addTag(h, headers, "Work");
+		// When
+		const refused = await refusal(h, headers, { ...three(ids), tags: [work] });
+		// Then
+		expect(refused).toEqual({
+			status: 409,
+			body: { error: "combination_limit" },
+		});
+	});
+
+	test("refuses a tag another account has", async () => {
+		// Given: alice; bob's tag Work
+		const { h, headers, ids } = await alice();
+		const bob = await h.addAccount(BOB);
+		const bobWork = await addTag(h, bob, "Work");
+		// When
+		const refused = await refusal(h, headers, {
+			...three(ids),
+			tags: [bobWork],
+		});
+		const bobTags = (await (await send(h, bob, "GET", "/api/tags")).json()) as {
+			tags: { name: string }[];
+		};
+		// Then
+		expect({ refused, bobTags: bobTags.tags.map((t) => t.name) }).toEqual({
+			refused: { status: 400, body: { error: "invalid", field: "tags" } },
+			bobTags: ["Work"],
+		});
+	});
+
+	test("saves a combination without a tag deleted while the save writes", async () => {
+		// Given: alice; tags Work and Weekend; another tab deletes Weekend
+		// after the save's tag check and before its batch
+		const { h, headers, ids } = await alice();
+		const { db } = h;
+		const work = await addTag(h, headers, "Work");
+		const weekend = await addTag(h, headers, "Weekend");
+		const batch = db.batch.bind(db);
+		const otherTabFirst: typeof batch = async (items) => {
+			db.batch = batch;
+			await deleteTag(db, "alice-id", weekend);
+			return batch(items);
+		};
+		db.batch = otherTabFirst;
+		// When
+		const saved = await saveCombination(db, "alice-id", {
+			...three(ids),
+			tags: [work, weekend],
+		});
+		// Then
+		expect({
+			ok: saved.ok,
+			tags: (await list(h, headers)).map((c) => c.tags),
+		}).toEqual({ ok: true, tags: [[work]] });
+	});
+
+	test("changes only a combination's tags", async () => {
+		// Given: alice; tags Work and Weekend; THREE saved with Work
+		const { h, headers, ids } = await alice();
+		const work = await addTag(h, headers, "Work");
+		const weekend = await addTag(h, headers, "Weekend");
+		await post(h, headers, { ...three(ids), tags: [work] });
+		// When
+		const res = await put(h, headers, FIRST_ID, {
+			...three(ids),
+			tags: [weekend],
+		});
+		const [listed] = await list(h, headers);
+		// Then
+		expect({
+			status: res.status,
+			tags: listed.tags,
+			pieces: piecesOf(listed),
+		}).toEqual({
+			status: 200,
+			tags: [weekend],
+			pieces: [
+				["casual_p", "Navy"],
+				["tee_l", "Black"],
+				["harrington", "Khaki"],
+			],
+		});
+	});
+
+	test("keeps a combination's tags when a change leaves them out", async () => {
+		// Given: alice; tag Work; THREE saved with it
+		const { h, headers, ids } = await alice();
+		const work = await addTag(h, headers, "Work");
+		await post(h, headers, { ...three(ids), tags: [work] });
+		// When
+		const res = await put(h, headers, FIRST_ID, {
+			...three(ids),
+			pieces: beigeChinos(ids),
+		});
+		const [listed] = await list(h, headers);
+		// Then
+		expect({ status: res.status, tags: listed.tags }).toEqual({
+			status: 200,
+			tags: [work],
+		});
+	});
+
+	test("changes a combination's tags once when the same change comes twice", async () => {
+		// Given: alice; tags Work and Weekend; THREE saved with Work
+		const { h, headers, ids } = await alice();
+		const work = await addTag(h, headers, "Work");
+		const weekend = await addTag(h, headers, "Weekend");
+		await post(h, headers, { ...three(ids), tags: [work] });
+		const body = { ...three(ids), tags: [work, weekend] };
+		// When
+		const first = await put(h, headers, FIRST_ID, body);
+		const second = await put(h, headers, FIRST_ID, body);
+		const [listed] = await list(h, headers);
+		// Then
+		expect({
+			statuses: [first.status, second.status],
+			tags: listed.tags,
+		}).toEqual({ statuses: [200, 200], tags: [work, weekend] });
+	});
+
+	test("refuses a change with a tag that is not the account's", async () => {
+		// Given: alice; tag Work; THREE saved with it
+		const { h, headers, ids } = await alice();
+		const work = await addTag(h, headers, "Work");
+		await post(h, headers, { ...three(ids), tags: [work] });
+		// When
+		const res = await put(h, headers, FIRST_ID, {
+			...three(ids),
+			tags: [NO_TAG],
+		});
+		const [listed] = await list(h, headers);
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			tags: listed.tags,
+		}).toEqual({
+			status: 400,
+			body: { error: "invalid", field: "tags" },
+			tags: [work],
+		});
+	});
+
+	test("answers not_found when another tab deletes the combination during a tag change", async () => {
+		// Given: alice; tag Work; THREE saved with no tags; another tab deletes
+		// it before the change writes
+		const { h, headers, ids } = await alice();
+		const { db } = h;
+		const work = await addTag(h, headers, "Work");
+		await post(h, headers, three(ids));
+		const batch = db.batch.bind(db);
+		const otherTabFirst: typeof batch = async (items) => {
+			db.batch = batch;
+			await db.delete(combination).where(eq(combination.id, FIRST_ID));
+			return batch(items);
+		};
+		db.batch = otherTabFirst;
+		// When
+		const changed = await changeCombination(db, "alice-id", FIRST_ID, {
+			pieces: three(ids).pieces,
+			tags: [work],
+		});
+		// Then
+		expect(changed as unknown).toEqual({
+			ok: false,
+			error: { code: "not_found" },
+		});
+	});
+
+	test("changes a combination without a tag deleted while the change writes", async () => {
+		// Given: alice; tags Work and Weekend; THREE saved with no tags;
+		// another tab deletes Weekend before the change writes
+		const { h, headers, ids } = await alice();
+		const { db } = h;
+		const work = await addTag(h, headers, "Work");
+		const weekend = await addTag(h, headers, "Weekend");
+		await post(h, headers, three(ids));
+		const batch = db.batch.bind(db);
+		const otherTabFirst: typeof batch = async (items) => {
+			db.batch = batch;
+			await deleteTag(db, "alice-id", weekend);
+			return batch(items);
+		};
+		db.batch = otherTabFirst;
+		// When
+		const changed = await changeCombination(db, "alice-id", FIRST_ID, {
+			pieces: three(ids).pieces,
+			tags: [work, weekend],
+		});
+		// Then
+		expect({
+			ok: changed.ok,
+			tags: (await list(h, headers)).map((c) => c.tags),
+		}).toEqual({ ok: true, tags: [[work]] });
+	});
+
+	test("keeps one tab's tags when two tabs change them at once", async () => {
+		// Given: alice; tags Work and Weekend; THREE saved with no tags;
+		// another tab sets Weekend before this change writes
+		const { h, headers, ids } = await alice();
+		const { db } = h;
+		const work = await addTag(h, headers, "Work");
+		const weekend = await addTag(h, headers, "Weekend");
+		await post(h, headers, three(ids));
+		const batch = db.batch.bind(db);
+		const otherTabFirst: typeof batch = async (items) => {
+			db.batch = batch;
+			await changeCombination(db, "alice-id", FIRST_ID, {
+				pieces: three(ids).pieces,
+				tags: [weekend],
+			});
+			return batch(items);
+		};
+		db.batch = otherTabFirst;
+		// When
+		await changeCombination(db, "alice-id", FIRST_ID, {
+			pieces: three(ids).pieces,
+			tags: [work],
+		});
+		// Then
+		expect((await list(h, headers)).map((c) => c.tags)).toEqual([[work]]);
 	});
 });
