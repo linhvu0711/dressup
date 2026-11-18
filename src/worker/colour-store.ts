@@ -1,8 +1,22 @@
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, count, eq, sql } from "drizzle-orm";
 import type { Hex } from "@/colour/hex";
-import type { Colour, ColourId } from "@/labels/colour";
+import {
+	COLOUR_LIMIT,
+	type Colour,
+	type ColourId,
+	colourInputSchema,
+	sameColourName,
+} from "@/labels/colour";
 import type { Db } from "./db";
+import { user } from "./db/auth-schema";
 import { colour, colourSeed } from "./db/colour-schema";
+import type { Result } from "./result";
+
+export type ColourError =
+	| { code: "invalid"; field: "name" | "hex" }
+	| { code: "duplicate"; name: string }
+	| { code: "colour_limit" }
+	| { code: "not_found" };
 
 export const STARTER_COLOURS: readonly { name: string; hex: Hex }[] = [
 	{ name: "White", hex: "#F4F2ED" },
@@ -64,4 +78,75 @@ export async function listColours(db: Db, userId: string): Promise<Colour[]> {
 		// Two adds in one millisecond share created_at; rowid keeps their order.
 		.orderBy(asc(colour.createdAt), asc(sql`rowid`));
 	return rows.map(toColour);
+}
+
+type ColourInput = { name: string; hex: string };
+
+type Checked =
+	| { ok: true; name: string; hex: Hex }
+	| { ok: false; error: ColourError };
+
+function check(input: ColourInput): Checked {
+	const parsed = colourInputSchema.safeParse(input);
+	if (parsed.success) return { ok: true, ...parsed.data };
+	const field = parsed.error.issues[0]?.path[0] === "hex" ? "hex" : "name";
+	return { ok: false, error: { code: "invalid", field } };
+}
+
+// Two tabs can both pass the duplicate check; the index on lower(name) then
+// refuses the second write, with an error that names the index. D1 and
+// drizzle may wrap it, so the causes are read too.
+const isNameTaken = (error: unknown): boolean =>
+	error instanceof Error &&
+	(error.message.includes("colour_userId_name_uq") || isNameTaken(error.cause));
+
+// The server makes the id. The names are read through listColours, so an
+// account's first add, as from an AI app, gets the starter set before the
+// limit is counted. The count sits in the insert, so two adds at once cannot
+// both pass it.
+export async function addColour(
+	db: Db,
+	userId: string,
+	input: ColourInput,
+): Promise<Result<Colour, ColourError>> {
+	const checked = check(input);
+	if (!checked.ok) return checked;
+	const { name, hex } = checked;
+	const duplicate = { ok: false, error: { code: "duplicate", name } } as const;
+	const colours = await listColours(db, userId);
+	if (colours.some((c) => sameColourName(c.name, name))) return duplicate;
+	try {
+		const [row] = await db
+			.insert(colour)
+			.select(
+				db
+					.select({
+						id: sql<string>`${crypto.randomUUID()}`.as("id"),
+						userId: user.id,
+						name: sql<string>`${name}`.as("name"),
+						hex: sql<string>`${hex}`.as("hex"),
+						createdAt:
+							sql<number>`(cast(unixepoch('subsecond') * 1000 as integer))`.as(
+								"created_at",
+							),
+					})
+					.from(user)
+					.where(
+						and(
+							eq(user.id, userId),
+							sql`(${db
+								.select({ n: count() })
+								.from(colour)
+								.where(eq(colour.userId, userId))}) < ${COLOUR_LIMIT}`,
+						),
+					),
+			)
+			.returning({ id: colour.id, name: colour.name, hex: colour.hex });
+		return row
+			? { ok: true, value: toColour(row) }
+			: { ok: false, error: { code: "colour_limit" } };
+	} catch (error) {
+		if (isNameTaken(error)) return duplicate;
+		throw error;
+	}
 }
