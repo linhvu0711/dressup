@@ -4,7 +4,11 @@ import type {
 	ToolAnnotations,
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { OWNED_ITEM_LIMIT, QUANTITY_MAX } from "@/closet/owned-item";
+import {
+	OWNED_ITEM_LIMIT,
+	type OwnedItem,
+	QUANTITY_MAX,
+} from "@/closet/owned-item";
 import {
 	COMBINATION_LIMIT,
 	COMBINATION_TAGS_MAX,
@@ -134,6 +138,12 @@ const lookView = (look: Look, tags: Tag[]) => ({
 	tags: tags
 		.filter((t) => look.tags.includes(t.id))
 		.map(({ id, name }) => ({ id, name })),
+});
+
+// AI apps cannot add or read pictures, so an item shows only how many it has.
+const ownedItemView = ({ pictureIds, ...item }: OwnedItem) => ({
+	...item,
+	pictureCount: pictureIds.length,
 });
 
 const combinationView = (combination: Combination, tags: Tag[]) => ({
@@ -762,7 +772,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		"list_owned_items",
 		{
 			title: "List the closet",
-			description: `The account's owned items, newest first. An owned item is one brand of one piece (a type in a colour) with a quantity of 1 to ${QUANTITY_MAX}. An account holds at most ${OWNED_ITEM_LIMIT}.`,
+			description: `The account's owned items, newest first. An owned item is one brand of one piece (a type in a colour) with a quantity of 1 to ${QUANTITY_MAX}. An account holds at most ${OWNED_ITEM_LIMIT}. Each item has pictureCount, the number of its pictures. AI apps cannot add or read pictures.`,
 			annotations: READ,
 			inputSchema: noArgs,
 		},
@@ -770,7 +780,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 			const ownedItems = await listOwnedItems(db, userId);
 			return ownedItems.length === 0
 				? answer({ ownedItems }, noOwnedItems)
-				: answer({ ownedItems });
+				: answer({ ownedItems: ownedItems.map(ownedItemView) });
 		},
 	);
 
@@ -807,7 +817,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 				quantity,
 			});
 			return added.ok
-				? answer({ ownedItem: added.value.ownedItem })
+				? answer({ ownedItem: ownedItemView(added.value.ownedItem) })
 				: refusal(ownedItemRefusalText(added.error));
 		},
 	);
@@ -836,7 +846,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 				quantity,
 			});
 			return changed.ok
-				? answer({ ownedItem: changed.value })
+				? answer({ ownedItem: ownedItemView(changed.value) })
 				: refusal(ownedItemRefusalText(changed.error));
 		},
 	);

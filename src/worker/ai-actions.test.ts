@@ -2026,6 +2026,23 @@ describe("owned items", () => {
 		expect(h.pictures.keys()).toEqual([]);
 	});
 
+	test("lists the number of pictures of each item and no picture data", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		const a = await uploadPicture(h, ai);
+		const b = await uploadPicture(h, ai);
+		await addWithPictures(h, ai, [a, b]);
+		// When
+		const { data } = await ai.call("list_owned_items");
+		// Then
+		const [item] = (data as { ownedItems: Record<string, unknown>[] })
+			.ownedItems;
+		expect({
+			pictureCount: item.pictureCount,
+			hasPictureIds: "pictureIds" in item,
+		}).toEqual({ pictureCount: 2, hasPictureIds: false });
+	});
+
 	test("says there is no such owned item", async () => {
 		// Given
 		const { ai } = await withAiSession();
