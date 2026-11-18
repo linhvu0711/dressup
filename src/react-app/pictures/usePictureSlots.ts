@@ -91,6 +91,8 @@ export function usePictureSlots(saved: readonly PictureId[]) {
 		} finally {
 			shrinking.current -= 1;
 		}
+		// The sheet closed while the picture shrank.
+		if (discarded.current) return;
 		const key = crypto.randomUUID();
 		const url = URL.createObjectURL(blob);
 		objectUrls.current.add(url);

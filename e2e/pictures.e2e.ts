@@ -145,6 +145,58 @@ test("keeps the sheet usable and saves after a slow upload", async ({
 	expect(await itemPictureIds(page)).toHaveLength(1);
 });
 
+test("uploads nothing when Cancel comes while a picture shrinks", async ({
+	page,
+}) => {
+	// Given: shrinking waits for a go; the edit sheet open; one picture picked
+	await page.addInitScript(() => {
+		const w = window as unknown as {
+			openShrink: () => void;
+			shrunk: boolean;
+		};
+		const gate = new Promise<void>((go) => {
+			w.openShrink = go;
+		});
+		const read = window.createImageBitmap.bind(window);
+		window.createImageBitmap = (async (
+			...args: Parameters<typeof createImageBitmap>
+		) => {
+			await gate;
+			return read(...args);
+		}) as typeof createImageBitmap;
+		const toBlob = HTMLCanvasElement.prototype.toBlob;
+		HTMLCanvasElement.prototype.toBlob = function (done, ...rest) {
+			toBlob.call(
+				this,
+				(blob) => {
+					done(blob);
+					w.shrunk = true;
+				},
+				...rest,
+			);
+		};
+	});
+	await openEditSheet(page);
+	const uploads: string[] = [];
+	page.on("request", (r) => {
+		if (r.method() === "POST" && r.url().endsWith("/api/pictures"))
+			uploads.push(r.url());
+	});
+	await pickFiles(page, addButton(page), [pngFile("front.png")]);
+	// When
+	await editSheet(page).getByRole("button", { name: "Cancel" }).click();
+	await page.evaluate(() =>
+		(window as unknown as { openShrink: () => void }).openShrink(),
+	);
+	await page.waitForFunction(
+		() => (window as unknown as { shrunk?: boolean }).shrunk === true,
+	);
+	// The upload would start a few awaits after the shrink ends.
+	await page.waitForTimeout(500);
+	// Then
+	expect(uploads).toEqual([]);
+});
+
 test("saves nothing when Cancel comes while Save waits for an upload", async ({
 	page,
 }) => {
