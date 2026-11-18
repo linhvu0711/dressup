@@ -1,6 +1,8 @@
+import type { ClosetPiece, OwnedItem } from "@/closet/owned-item";
 import { type GarmentId, LAYER_OF, type Layer } from "@/dress/garments";
 import type { BrandId } from "@/labels/brand";
 import type { ColourId } from "@/labels/colour";
+import type { Wish } from "@/wishlist/wish";
 
 // One rule for the closet, the wishlist, and the AI list tools, so an AI app
 // and the page never disagree on what a filter shows.
@@ -45,3 +47,23 @@ export function matchesPieceFilter(
 
 export const filterSize = (f: PieceFilter) =>
 	f.layers.length + f.types.length + f.colours.length + f.brands.length;
+
+export const ownedItemPiece = (item: OwnedItem): FilterPiece => ({
+	typeId: item.typeId,
+	colourId: item.colour.id,
+	brandIds: [item.brand?.id ?? null],
+});
+
+export const closetPiece = (piece: ClosetPiece): FilterPiece => ({
+	typeId: piece.typeId,
+	colourId: piece.colour.id,
+	brandIds: piece.items.map((i) => i.brand?.id ?? null),
+});
+
+// A wish has no brand of its own, only its shop links do, so a wish with no
+// link fits no brand pick, No brand too.
+export const wishPiece = (wish: Wish): FilterPiece => ({
+	typeId: wish.typeId,
+	colourId: wish.colour.id,
+	brandIds: wish.shopLinks.map((l) => l.brand?.id ?? null),
+});
