@@ -21,6 +21,7 @@ export const errorCodes = [
 	"duplicate",
 	"colour_limit",
 	"brand_limit",
+	"combination_limit",
 ] as const;
 
 export type ErrorCode = (typeof errorCodes)[number];

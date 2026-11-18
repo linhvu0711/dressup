@@ -1,6 +1,7 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, sql } from "drizzle-orm";
 import type { Hex } from "@/colour/hex";
 import {
+	COMBINATION_LIMIT,
 	type Combination,
 	type CombinationId,
 	type CombinationProblem,
@@ -26,7 +27,8 @@ export type CombinationDraft = {
 export type CombinationError =
 	| CombinationProblem
 	| { code: "conflict" }
-	| { code: "duplicate"; id: CombinationId };
+	| { code: "duplicate"; id: CombinationId }
+	| { code: "combination_limit" };
 
 export type SavedCombination = { combination: Combination; created: boolean };
 
@@ -103,7 +105,9 @@ const isKeyTaken = (error: unknown): boolean =>
 // The page makes the id when the save form opens, so a Save sent again after
 // a lost answer gives back the same combination rather than a second one. An
 // id another account holds, or one saved with other pieces, is conflict. The
-// same pieces and jacket state under another id is duplicate, with its id.
+// same pieces and jacket state under another id is duplicate, with its id. A
+// new combination past the limit is not saved: combination_limit. The count
+// sits in the insert, so two saves at once cannot both pass it.
 export async function saveCombination(
 	db: Db,
 	userId: string,
@@ -161,7 +165,17 @@ export async function saveCombination(
 								),
 						})
 						.from(user)
-						.where(eq(user.id, userId)),
+						.where(
+							and(
+								eq(user.id, userId),
+								sql`(${db
+									.select({ n: count() })
+									.from(combination)
+									.where(
+										eq(combination.userId, userId),
+									)}) < ${COMBINATION_LIMIT}`,
+							),
+						),
 				)
 				.onConflictDoNothing({ target: combination.id }),
 			...input.pieces.map((piece) =>
@@ -188,7 +202,10 @@ export async function saveCombination(
 		return { ok: false, error: { code: "duplicate", id: taken } };
 	}
 	const [saved] = await readCombinations(db, userId, input.id);
-	return saved
-		? { ok: true, value: { combination: saved, created: true } }
-		: conflict;
+	if (saved) return { ok: true, value: { combination: saved, created: true } };
+	const [taken] = await db
+		.select({ id: combination.id })
+		.from(combination)
+		.where(eq(combination.id, input.id));
+	return taken ? conflict : { ok: false, error: { code: "combination_limit" } };
 }

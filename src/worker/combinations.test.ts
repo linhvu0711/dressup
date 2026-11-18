@@ -350,6 +350,68 @@ describe("duplicate", () => {
 	});
 });
 
+describe("combination limit", () => {
+	const count = async (h: Harness, headers: Headers) =>
+		(await list(h, headers)).length;
+
+	test("refuses combination number 301", async () => {
+		// Given: alice with 300 combinations
+		const { h, headers, ids } = await alice();
+		await h.seedCombinations("alice-id", 300);
+		// When
+		const res = await post(h, headers, three(ids));
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			count: await count(h, headers),
+		}).toEqual({
+			status: 409,
+			body: { error: "combination_limit" },
+			count: 300,
+		});
+	});
+
+	test("saves combination number 300", async () => {
+		// Given: alice with 299 combinations
+		const { h, headers, ids } = await alice();
+		await h.seedCombinations("alice-id", 299);
+		// When
+		const res = await post(h, headers, three(ids));
+		// Then
+		expect({ status: res.status, count: await count(h, headers) }).toEqual({
+			status: 201,
+			count: 300,
+		});
+	});
+
+	test("saves one of two combinations sent at once at 299", async () => {
+		// Given: alice with 299 combinations; the seed makes no jacket, so
+		// neither save below is a duplicate
+		const { h, headers, ids } = await alice();
+		await h.seedCombinations("alice-id", 299);
+		// When
+		const results = await Promise.all([
+			saveCombination(h.db, "alice-id", three(ids)),
+			saveCombination(h.db, "alice-id", {
+				...three(ids),
+				id: SECOND_ID,
+				open: false,
+			}),
+		]);
+		// Then
+		expect({
+			count: await count(h, headers),
+			oks: results.map((r) => r.ok).sort(),
+			refused: results.flatMap((r) => (r.ok ? [] : [r.error as unknown])),
+		}).toEqual({
+			count: 300,
+			oks: [false, true],
+			refused: [{ code: "combination_limit" }],
+		});
+	});
+});
+
 describe("GET /api/combinations", () => {
 	test("refuses without a session", async () => {
 		// Given: no session

@@ -160,6 +160,8 @@ function combinationRefusal(error: CombinationError): Refusal {
 			return { status: 409, body: { error: "conflict", field: "id" } };
 		case "duplicate":
 			return { status: 409, body: { error: "duplicate", id: error.id } };
+		case "combination_limit":
+			return { status: 409, body: { error: "combination_limit" } };
 	}
 }
 
