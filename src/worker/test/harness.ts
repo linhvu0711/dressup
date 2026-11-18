@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite";
 import { readFileSync } from "node:fs";
 import { betterAuth } from "better-auth";
 import { testUtils } from "better-auth/plugins";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
@@ -125,6 +125,38 @@ export async function makeHarness() {
 	const seedWishesOf = (userId: string, n: number) => seedWishes(db, userId, n);
 	const seedShopLinksOf = (userId: string, wishId: string, n: number) =>
 		seedShopLinks(db, userId, wishId, n);
+	// Writes n draft pictures of the account with no objects, and raises the
+	// stored bytes by them, so a test can reach a limit without n uploads.
+	const seedPictures = async (userId: string, n: number, bytes = 1) => {
+		const all = Array.from({ length: n }, () => ({
+			id: crypto.randomUUID(),
+			userId,
+			ownedItemId: null,
+			bytes,
+			createdAt: new Date(),
+		}));
+		// D1 takes at most 100 bound values in one statement; a picture binds 5.
+		for (let i = 0; i < all.length; i += 20)
+			await db.insert(schema.picture).values(all.slice(i, i + 20));
+		await db
+			.insert(schema.pictureStorage)
+			.values({ id: 1, bytes: n * bytes })
+			.onConflictDoUpdate({
+				target: schema.pictureStorage.id,
+				set: { bytes: sql`${schema.pictureStorage.bytes} + excluded.bytes` },
+			});
+	};
+	const setUploads = async (month: string, count: number) => {
+		await db
+			.insert(schema.pictureUploadMonth)
+			.values({ month, count })
+			.onConflictDoUpdate({
+				target: schema.pictureUploadMonth.month,
+				set: { count },
+			});
+	};
+	const storedBytes = async () =>
+		(await db.select().from(schema.pictureStorage))[0]?.bytes ?? 0;
 	// Each foreign key to user, read from the database itself, so a table a
 	// new migration adds is in the list with no edit.
 	const userKeys = () =>
@@ -191,6 +223,9 @@ export async function makeHarness() {
 		seedOwnedItems: seedOwnedItemsOf,
 		seedWishes: seedWishesOf,
 		seedShopLinks: seedShopLinksOf,
+		seedPictures,
+		setUploads,
+		storedBytes,
 		addTrigger,
 		runMigration,
 	};

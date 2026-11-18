@@ -1,5 +1,6 @@
-import { describe, expect, test } from "bun:test";
-import { picture } from "./db/picture-schema";
+import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
+import { picture, pictureUploadMonth } from "./db/picture-schema";
+import { addPicture } from "./picture-store";
 import { BOB, type Harness, makeHarness, withAccount } from "./test/harness";
 
 const bytes = (head: number[], length: number) => {
@@ -206,6 +207,181 @@ describe("upload and load", () => {
 		expect({ status: uploaded.status, rows: await h.rows(picture) }).toEqual({
 			status: 500,
 			rows: [],
+		});
+	});
+});
+
+describe("limits and the storage stop", () => {
+	afterEach(() => setSystemTime());
+
+	const months = (h: Harness) => h.rows(pictureUploadMonth);
+
+	test("takes picture 1,000 of an account", async () => {
+		// Given
+		const { h, headers } = await withAccount();
+		await h.seedPictures("alice-id", 999);
+		// When
+		const uploaded = await upload(h, headers);
+		// Then
+		expect(uploaded.status).toBe(201);
+	});
+
+	test("refuses picture 1,001 of an account", async () => {
+		// Given
+		const { h, headers } = await withAccount();
+		await h.seedPictures("alice-id", 1000);
+		// When
+		const refused = await answer(await upload(h, headers));
+		// Then
+		expect({ ...refused, keys: h.pictures.keys() }).toEqual({
+			status: 409,
+			body: { error: "account_picture_limit" },
+			keys: [],
+		});
+	});
+
+	test("stops uploads when all pictures reach 9 GB", async () => {
+		// Given
+		const { h, headers } = await withAccount();
+		await h.addAccount(BOB);
+		await h.seedPictures("bob-id", 1, 8_999_999_950);
+		// When
+		const refused = await answer(await upload(h, headers));
+		// Then
+		expect({ ...refused, stored: await h.storedBytes() }).toEqual({
+			status: 507,
+			body: { error: "storage_full" },
+			stored: 8999999950,
+		});
+	});
+
+	test("takes an upload that ends at 9 GB", async () => {
+		// Given
+		const { h, headers } = await withAccount();
+		await h.addAccount(BOB);
+		await h.seedPictures("bob-id", 1, 8_999_999_900);
+		// When
+		const uploaded = await upload(h, headers);
+		// Then
+		expect({
+			status: uploaded.status,
+			stored: await h.storedBytes(),
+		}).toEqual({ status: 201, stored: 9000000000 });
+	});
+
+	test("stops uploads at 900,000 uploads this month", async () => {
+		// Given
+		const { h, headers } = await withAccount();
+		setSystemTime(new Date("2026-11-18T12:00:00Z"));
+		await h.setUploads("2026-11", 900_000);
+		// When
+		const refused = await answer(await upload(h, headers));
+		// Then
+		expect({ ...refused, months: await months(h) }).toEqual({
+			status: 507,
+			body: { error: "storage_full" },
+			months: [{ month: "2026-11", count: 900000 }],
+		});
+	});
+
+	test("takes uploads again in a new month", async () => {
+		// Given
+		const { h, headers } = await withAccount();
+		setSystemTime(new Date("2026-11-18T12:00:00Z"));
+		await h.setUploads("2026-10", 900_000);
+		// When
+		const uploaded = await upload(h, headers);
+		// Then
+		expect({
+			status: uploaded.status,
+			months: (await months(h)).sort((a, b) => a.month.localeCompare(b.month)),
+		}).toEqual({
+			status: 201,
+			months: [
+				{ month: "2026-10", count: 900000 },
+				{ month: "2026-11", count: 1 },
+			],
+		});
+	});
+
+	test("counts each upload in its month", async () => {
+		// Given
+		const { h, headers } = await withAccount();
+		setSystemTime(new Date("2026-11-18T12:00:00Z"));
+		// When
+		const statuses = [
+			(await upload(h, headers)).status,
+			(await upload(h, headers)).status,
+		];
+		await h.seedPictures("alice-id", 998);
+		statuses.push((await upload(h, headers, PNG)).status);
+		// Then
+		expect({ statuses, months: await months(h) }).toEqual({
+			statuses: [201, 201, 409],
+			months: [{ month: "2026-11", count: 2 }],
+		});
+	});
+
+	test("refuses one of two uploads that overlap at 999 pictures", async () => {
+		// Given
+		const { h } = await withAccount();
+		await h.seedPictures("alice-id", 999);
+		// When
+		const results = await Promise.all([
+			addPicture(
+				h.db,
+				h.pictures as unknown as R2Bucket,
+				"alice-id",
+				JPEG.buffer,
+			),
+			addPicture(
+				h.db,
+				h.pictures as unknown as R2Bucket,
+				"alice-id",
+				JPEG.buffer,
+			),
+		]);
+		// Then
+		expect({
+			count: (await h.rows(picture, "alice-id")).length,
+			oks: results.map((r) => r.ok).sort(),
+			refused: results.flatMap((r) => (r.ok ? [] : [r.error as unknown])),
+		}).toEqual({
+			count: 1000,
+			oks: [false, true],
+			refused: [{ code: "account_picture_limit" }],
+		});
+	});
+
+	test("refuses one of two uploads that overlap at 899,999 uploads this month", async () => {
+		// Given
+		const { h } = await withAccount();
+		setSystemTime(new Date("2026-11-18T12:00:00Z"));
+		await h.setUploads("2026-11", 899_999);
+		// When
+		const results = await Promise.all([
+			addPicture(
+				h.db,
+				h.pictures as unknown as R2Bucket,
+				"alice-id",
+				JPEG.buffer,
+			),
+			addPicture(
+				h.db,
+				h.pictures as unknown as R2Bucket,
+				"alice-id",
+				JPEG.buffer,
+			),
+		]);
+		// Then
+		expect({
+			oks: results.map((r) => r.ok).sort(),
+			refused: results.flatMap((r) => (r.ok ? [] : [r.error as unknown])),
+			month: (await months(h))[0]?.count,
+		}).toEqual({
+			oks: [false, true],
+			refused: [{ code: "storage_full" }],
+			month: 900000,
 		});
 	});
 });

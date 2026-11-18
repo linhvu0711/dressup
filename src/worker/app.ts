@@ -255,6 +255,10 @@ function pictureRefusal(error: PictureError): Refusal {
 	switch (error.code) {
 		case "invalid":
 			return { status: 400, body: { error: "invalid", field: error.field } };
+		case "account_picture_limit":
+			return { status: 409, body: { error: "account_picture_limit" } };
+		case "storage_full":
+			return { status: 507, body: { error: "storage_full" } };
 		case "not_found":
 			return { status: 404, body: { error: "not_found" } };
 	}

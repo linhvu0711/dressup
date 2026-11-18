@@ -97,6 +97,8 @@ describe("migrations", () => {
 			"outfit_garment",
 			"owned_item",
 			"picture",
+			"picture_storage",
+			"picture_upload_month",
 			"session",
 			"shop_link",
 			"tag",

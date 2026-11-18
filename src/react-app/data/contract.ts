@@ -30,6 +30,8 @@ export const errorCodes = [
 	"wish_limit",
 	"shop_link_limit",
 	"too_large",
+	"account_picture_limit",
+	"storage_full",
 ] as const;
 
 export type ErrorCode = (typeof errorCodes)[number];

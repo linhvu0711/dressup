@@ -25,3 +25,18 @@ export const picture = sqliteTable(
 		index("picture_ownedItemId_idx").on(table.ownedItemId),
 	],
 );
+
+// Uploads in one UTC month, as "2026-11", for all accounts: R2 bills each
+// write past its free amount.
+export const pictureUploadMonth = sqliteTable("picture_upload_month", {
+	month: text("month").primaryKey(),
+	count: integer("count").notNull(),
+});
+
+// One row, id 1: the bytes of every picture row. The upload raises it and
+// every picture delete lowers it in the same batch, so the stop never sums
+// every row.
+export const pictureStorage = sqliteTable("picture_storage", {
+	id: integer("id").primaryKey(),
+	bytes: integer("bytes").notNull(),
+});
