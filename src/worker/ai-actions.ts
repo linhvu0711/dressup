@@ -5,10 +5,16 @@ import type {
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
+	COMBINATION_LIMIT,
+	type Combination,
+	combinationTitle,
+} from "@/combinations/combination";
+import {
 	GARMENT_IDS,
 	GARMENT_NAMES,
 	isJacket,
 	JACKET_IDS,
+	LAYER_OF,
 } from "@/dress/garments";
 import { MODES } from "@/dress/modes";
 import {
@@ -24,11 +30,13 @@ import { countAiAction } from "./ai-action-store";
 import {
 	brandRefusalText,
 	colourRefusalText,
+	combinationRefusalText,
 	dressRefusalText,
 	issueText,
 	lookRefusalText,
 	noBrands,
 	noColours,
+	noCombinations,
 	noLooks,
 	noTags,
 	serverError,
@@ -43,6 +51,7 @@ import {
 	deleteColour,
 	listColours,
 } from "./colour-store";
+import { listCombinations, saveCombination } from "./combination-store";
 import type { Db } from "./db";
 import { changeDress, loadDress } from "./dress-store";
 import { changeLook, deleteLook, listLooks, saveLook } from "./look-store";
@@ -97,6 +106,18 @@ const lookView = (look: Look, tags: Tag[]) => ({
 	colours: look.colours,
 	open: look.open,
 	tags: tags.filter((t) => look.tags.includes(t.id)),
+});
+
+const combinationView = (combination: Combination) => ({
+	id: combination.id,
+	title: combinationTitle(combination),
+	open: combination.open,
+	pieces: combination.pieces.map((p) => ({
+		layer: p.layer,
+		typeId: p.typeId,
+		type: GARMENT_NAMES[p.typeId],
+		colour: p.colour,
+	})),
 });
 
 const noArgs = z.object({});
@@ -570,6 +591,80 @@ export function registerAiActions(server: McpServer, account: Account) {
 			return deleted.ok
 				? answer({ deleted: deleted.value.id })
 				: refusal(brandRefusalText(deleted.error));
+		},
+	);
+
+	tool(
+		"list_types",
+		{
+			title: "List the types",
+			description:
+				"The 17 types of clothing a combination picks from, each with its layer: bottom, inner_top, sweater, or jacket. A combination has at most one piece for each layer.",
+			annotations: READ,
+			inputSchema: noArgs,
+		},
+		async () =>
+			answer({
+				types: GARMENT_IDS.map((id) => ({
+					id,
+					name: GARMENT_NAMES[id],
+					layer: LAYER_OF[id],
+				})),
+			}),
+	);
+
+	tool(
+		"list_combinations",
+		{
+			title: "List the combinations",
+			description:
+				"The account's saved combinations, newest first, each with its title, its pieces, and whether its jacket is open.",
+			annotations: READ,
+			inputSchema: noArgs,
+		},
+		async () => {
+			const combinations = (await listCombinations(db, userId)).map(
+				combinationView,
+			);
+			return combinations.length === 0
+				? answer({ combinations }, noCombinations)
+				: answer({ combinations });
+		},
+	);
+
+	tool(
+		"save_combination",
+		{
+			title: "Save a combination",
+			description: `Saves a combination of 2 to 4 pieces, at most one for each layer. A piece is a type id from list_types and a colour id from list_colours. An account keeps each combination once and at most ${COMBINATION_LIMIT} combinations.`,
+			annotations: WRITE,
+			inputSchema: z.object({
+				pieces: z.array(
+					z.object({
+						typeId: z
+							.string()
+							.describe("A type id from list_types, such as tee_l."),
+						colourId: z.string().describe("A colour id from list_colours."),
+					}),
+				),
+				open: z
+					.boolean()
+					.optional()
+					.describe(
+						"The jacket is open. Only for a combination with a jacket.",
+					),
+			}),
+		},
+		async ({ pieces, open = false }) => {
+			// The server makes the id, as save_look does.
+			const saved = await saveCombination(db, userId, {
+				id: crypto.randomUUID(),
+				pieces,
+				open,
+			});
+			return saved.ok
+				? answer({ combination: combinationView(saved.value.combination) })
+				: refusal(combinationRefusalText(saved.error));
 		},
 	);
 }

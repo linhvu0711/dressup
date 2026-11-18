@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
 	GARMENT_IDS,
+	GARMENT_NAMES,
 	type GarmentId,
 	LAYER_OF,
 	LAYERS,
@@ -144,4 +145,27 @@ export function combinationKey(
 		.map((p) => `${p.typeId}:${p.colourId}`)
 		.join("+");
 	return open && hasJacket(pieces) ? `${key}|open` : key;
+}
+
+// A type's name inside a title: "long tee", but "Harrington jacket", since
+// Harrington is a name.
+const typeWord = (id: GarmentId) => {
+	const name = GARMENT_NAMES[id];
+	return id === "harrington" ? name : name[0].toLowerCase() + name.slice(1);
+};
+
+// The pieces, top layer first, as "Khaki Harrington jacket (open) + Black long
+// tee + Navy casual pants".
+export function combinationTitle(combination: {
+	pieces: readonly { typeId: GarmentId; colour: { name: string } }[];
+	open: boolean;
+}): string {
+	return byLayer(combination.pieces)
+		.reverse()
+		.map((p) => {
+			const open =
+				combination.open && LAYER_OF[p.typeId] === "jacket" ? " (open)" : "";
+			return `${p.colour.name} ${typeWord(p.typeId)}${open}`;
+		})
+		.join(" + ");
 }

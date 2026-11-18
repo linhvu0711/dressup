@@ -868,6 +868,9 @@ describe("tags", () => {
 			["add_brand", W],
 			["rename_brand", W],
 			["delete_brand", D],
+			["list_types", R],
+			["list_combinations", R],
+			["save_combination", W],
 		]);
 		expect(listed.every((t) => typeof t.title === "string")).toBe(true);
 	});
@@ -1416,5 +1419,197 @@ describe("AI action limit", () => {
 			count: statuses.length,
 			statuses: [...new Set(statuses)],
 		}).toEqual({ count: 61, statuses: [200] });
+	});
+});
+
+describe("combinations", () => {
+	type Listed = { title: string; id: string };
+
+	// The colour ids of the account by name, from list_colours.
+	async function colourIds(ai: Session) {
+		const { data } = await ai.call("list_colours");
+		return Object.fromEntries(
+			(data as { colours: Colour[] }).colours.map((c) => [c.name, c.id]),
+		);
+	}
+
+	// Khaki Harrington jacket (open) + Black long tee + Navy casual pants.
+	const three = (ids: Record<string, string>) => ({
+		pieces: [
+			{ typeId: "harrington", colourId: ids.Khaki },
+			{ typeId: "tee_l", colourId: ids.Black },
+			{ typeId: "casual_p", colourId: ids.Navy },
+		],
+		open: true,
+	});
+
+	test("lists the types with their layers", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		// When
+		const { data } = await ai.call("list_types");
+		// Then
+		const types = (
+			data as { types: { id: string; name: string; layer: string }[] }
+		).types;
+		const byLayer: Record<string, string[]> = {};
+		for (const t of types)
+			byLayer[t.layer] = [...(byLayer[t.layer] ?? []), t.id];
+		expect({ byLayer, first: types[0] }).toEqual({
+			byLayer: {
+				inner_top: [
+					"tee_s",
+					"tee_l",
+					"polo_s",
+					"polo_l",
+					"shirt_s",
+					"shirt_l",
+					"ttee_s",
+					"ttee_l",
+				],
+				sweater: ["sweater"],
+				jacket: ["harrington", "wool"],
+				bottom: [
+					"chino_sh",
+					"chino_p",
+					"casual_sh",
+					"casual_p",
+					"train_sh",
+					"train_p",
+				],
+			},
+			first: { id: "tee_s", name: "Short tee", layer: "inner_top" },
+		});
+	});
+
+	test("lists no combinations with its own text", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		// When
+		const { isError, text } = await ai.call("list_combinations");
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: false,
+			text: "You have no combinations yet.",
+		});
+	});
+
+	test("saves a combination and lists it with its title", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		const ids = await colourIds(ai);
+		// When
+		const saved = await ai.call("save_combination", three(ids));
+		const { data } = await ai.call("list_combinations");
+		// Then
+		expect({
+			isError: saved.isError,
+			titles: (data as { combinations: Listed[] }).combinations.map(
+				(c) => c.title,
+			),
+		}).toEqual({
+			isError: false,
+			titles: [
+				"Khaki Harrington jacket (open) + Black long tee + Navy casual pants",
+			],
+		});
+	});
+
+	test("refuses a combination the account has", async () => {
+		// Given: the combination saved once
+		const { ai } = await withAiSession();
+		const ids = await colourIds(ai);
+		const first = await ai.call("save_combination", three(ids));
+		const id = (first.data as { combination: Listed }).combination.id;
+		// When
+		const { isError, text } = await ai.call("save_combination", three(ids));
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: `You have this combination already, with id ${id}.`,
+		});
+	});
+
+	test("refuses a save at 300 combinations", async () => {
+		// Given
+		const { h, ai, userId } = await withAiSession();
+		const ids = await colourIds(ai);
+		await h.seedCombinations(userId, 300);
+		// When
+		const { isError, text } = await ai.call("save_combination", three(ids));
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "You have 300 combinations. That is the limit.",
+		});
+	});
+
+	test("refuses one piece", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		const ids = await colourIds(ai);
+		// When
+		const { isError, text } = await ai.call("save_combination", {
+			pieces: [{ typeId: "casual_p", colourId: ids.Navy }],
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "A combination has 2 to 4 pieces.",
+		});
+	});
+
+	test("refuses two pieces in one layer", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		const ids = await colourIds(ai);
+		// When
+		const { isError, text } = await ai.call("save_combination", {
+			pieces: [
+				{ typeId: "casual_p", colourId: ids.Navy },
+				{ typeId: "chino_sh", colourId: ids.Black },
+			],
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "Casual pants and Chino shorts are both in the bottom layer. A combination has at most one piece for each layer.",
+		});
+	});
+
+	test("refuses a type that is not in the list", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		const ids = await colourIds(ai);
+		// When
+		const { isError, text } = await ai.call("save_combination", {
+			pieces: [
+				{ typeId: "jeans", colourId: ids.Navy },
+				{ typeId: "tee_l", colourId: ids.Black },
+			],
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "jeans is not a type. list_types names the types.",
+		});
+	});
+
+	test("refuses a colour that is not the account's", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		const ids = await colourIds(ai);
+		// When
+		const { isError, text } = await ai.call("save_combination", {
+			pieces: [
+				{ typeId: "casual_p", colourId: "not-a-colour" },
+				{ typeId: "tee_l", colourId: ids.Black },
+			],
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "not-a-colour is not one of your colours. list_colours names them.",
+		});
 	});
 });

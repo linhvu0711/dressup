@@ -1,5 +1,11 @@
 import type { z } from "zod";
-import { GARMENT_IDS, GARMENT_NAMES, JACKET_IDS } from "@/dress/garments";
+import { COMBINATION_LIMIT } from "@/combinations/combination";
+import {
+	GARMENT_IDS,
+	GARMENT_NAMES,
+	JACKET_IDS,
+	LAYER_NAMES,
+} from "@/dress/garments";
 import { MODES, type ModeId, modeById } from "@/dress/modes";
 import { type DressError, MANNEQUIN_PARTS } from "@/dress/state";
 import { BRAND_LIMIT, BRAND_NAME_MAX } from "@/labels/brand";
@@ -8,6 +14,7 @@ import { LOOK_LIMIT, LOOK_NAME_MAX, LOOK_TAGS_MAX } from "@/looks/look";
 import { TAG_NAME_MAX } from "@/tags/tag";
 import type { BrandError } from "./brand-store";
 import type { ColourError } from "./colour-store";
+import type { CombinationError } from "./combination-store";
 import type { LookError } from "./look-store";
 import type { TagError } from "./tag-store";
 
@@ -101,6 +108,27 @@ export function brandRefusalText(error: BrandError): string {
 	}
 }
 
+export function combinationRefusalText(error: CombinationError): string {
+	switch (error.code) {
+		case "pieces_count":
+			return "A combination has 2 to 4 pieces.";
+		case "same_layer":
+			return `${GARMENT_NAMES[error.other]} and ${GARMENT_NAMES[error.typeId]} are both in the ${LAYER_NAMES[error.layer].toLowerCase()} layer. A combination has at most one piece for each layer.`;
+		case "not_type":
+			return `${error.value} is not a type. list_types names the types.`;
+		case "not_colour":
+			return `${error.value} is not one of your colours. list_colours names them.`;
+		case "duplicate":
+			return `You have this combination already, with id ${error.id}.`;
+		case "combination_limit":
+			return `You have ${COMBINATION_LIMIT} combinations. That is the limit.`;
+		case "invalid":
+			return issueText(error.issue, error.input);
+		case "conflict":
+			return serverError;
+	}
+}
+
 export const serverError = "dressup could not do this. Try again.";
 
 export const tooManyActions = "Too many actions. Wait a minute and try again.";
@@ -118,6 +146,8 @@ export const noLooks = "You have no saved looks yet.";
 export const noTags = "You have no tags yet.";
 
 export const noColours = "You have no colours yet.";
+
+export const noCombinations = "You have no combinations yet.";
 
 export const noBrands = "You have no brands yet.";
 
