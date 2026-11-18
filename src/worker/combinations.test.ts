@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { saveCombination } from "./combination-store";
 import {
 	ALICE,
 	BOB,
@@ -270,6 +271,81 @@ describe("combination rules", () => {
 		expect(refused).toEqual({
 			status: 400,
 			body: { error: "invalid", field: "pieces.1.colourId" },
+		});
+	});
+});
+
+describe("duplicate", () => {
+	test("refuses the same pieces and jacket state", async () => {
+		// Given: alice saved THREE
+		const { h, headers, ids } = await alice();
+		await post(h, headers, three(ids));
+		const [jacket, tee, pants] = three(ids).pieces;
+		// When: the same pieces in another order, with a new id
+		const res = await post(h, headers, {
+			id: SECOND_ID,
+			pieces: [pants, jacket, tee],
+			open: true,
+		});
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			count: (await list(h, headers)).length,
+		}).toEqual({
+			status: 409,
+			body: { error: "duplicate", id: FIRST_ID },
+			count: 1,
+		});
+	});
+
+	test("refuses the same pieces with no jacket sent open and closed", async () => {
+		// Given: alice saved TWO (no jacket, open false)
+		const { h, headers, ids } = await alice();
+		await post(h, headers, two(ids));
+		// When
+		const res = await post(h, headers, {
+			...two(ids),
+			id: "33333333-3333-4333-8333-333333333333",
+			open: true,
+		});
+		// Then
+		expect({ status: res.status, body: await res.json() }).toEqual({
+			status: 409,
+			body: { error: "duplicate", id: SECOND_ID },
+		});
+	});
+
+	test("answers duplicate when another tab saves the same pieces first", async () => {
+		// Given: alice; her save's write waits until another tab saved the same
+		// pieces with id 33333333-…, as looks.test.ts races two changes
+		const { h, headers, ids } = await alice();
+		const { db } = h;
+		const batch = db.batch.bind(db);
+		const otherTabFirst: typeof batch = async (items) => {
+			db.batch = batch;
+			await saveCombination(db, "alice-id", {
+				...three(ids),
+				id: "33333333-3333-4333-8333-333333333333",
+			});
+			return batch(items);
+		};
+		db.batch = otherTabFirst;
+		// When
+		const saved = await saveCombination(db, "alice-id", three(ids));
+		// Then
+		expect({
+			saved: saved as unknown,
+			ids: (await list(h, headers)).map((c) => c.id),
+		}).toEqual({
+			saved: {
+				ok: false,
+				error: {
+					code: "duplicate",
+					id: "33333333-3333-4333-8333-333333333333",
+				},
+			},
+			ids: ["33333333-3333-4333-8333-333333333333"],
 		});
 	});
 });

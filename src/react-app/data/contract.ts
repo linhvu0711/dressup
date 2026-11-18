@@ -28,6 +28,7 @@ export type ErrorCode = (typeof errorCodes)[number];
 export const errorAnswer = z.object({
 	error: z.enum(errorCodes),
 	field: z.string().optional(),
+	id: z.string().optional(),
 });
 
 export type ErrorAnswer = z.input<typeof errorAnswer>;

@@ -158,6 +158,8 @@ function combinationRefusal(error: CombinationError): Refusal {
 			};
 		case "conflict":
 			return { status: 409, body: { error: "conflict", field: "id" } };
+		case "duplicate":
+			return { status: 409, body: { error: "duplicate", id: error.id } };
 	}
 }
 

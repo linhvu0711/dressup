@@ -23,7 +23,10 @@ export type CombinationDraft = {
 	open: boolean;
 };
 
-export type CombinationError = CombinationProblem | { code: "conflict" };
+export type CombinationError =
+	| CombinationProblem
+	| { code: "conflict" }
+	| { code: "duplicate"; id: CombinationId };
 
 export type SavedCombination = { combination: Combination; created: boolean };
 
@@ -81,9 +84,26 @@ async function readCombinations(
 export const listCombinations = (db: Db, userId: string) =>
 	readCombinations(db, userId);
 
+const keyHolder = async (db: Db, userId: string, key: string) => {
+	const [row] = await db
+		.select({ id: combination.id })
+		.from(combination)
+		.where(and(eq(combination.userId, userId), eq(combination.key, key)));
+	return row?.id as CombinationId | undefined;
+};
+
+// Two tabs can both pass the duplicate check; the index on (user_id, key)
+// then refuses the second write, with an error that names it. D1 and drizzle
+// may wrap it, so the causes are read too.
+const isKeyTaken = (error: unknown): boolean =>
+	error instanceof Error &&
+	(error.message.includes("combination.user_id, combination.key") ||
+		isKeyTaken(error.cause));
+
 // The page makes the id when the save form opens, so a Save sent again after
 // a lost answer gives back the same combination rather than a second one. An
-// id another account holds, or one saved with other pieces, is conflict.
+// id another account holds, or one saved with other pieces, is conflict. The
+// same pieces and jacket state under another id is duplicate, with its id.
 export async function saveCombination(
 	db: Db,
 	userId: string,
@@ -118,47 +138,55 @@ export async function saveCombination(
 			? { ok: true, value: { combination: same, created: false } }
 			: conflict;
 	}
+	const held = await keyHolder(db, userId, key);
+	if (held) return { ok: false, error: { code: "duplicate", id: held } };
 	const ours = and(
 		eq(combination.id, input.id),
 		eq(combination.userId, userId),
 	);
-	await db.batch([
-		db
-			.insert(combination)
-			.select(
-				db
-					.select({
-						id: sql<string>`${input.id}`.as("id"),
-						userId: user.id,
-						key: sql<string>`${key}`.as("key"),
-						open: sql<number>`${input.open ? 1 : 0}`.as("open"),
-						createdAt:
-							sql<number>`(cast(unixepoch('subsecond') * 1000 as integer))`.as(
-								"created_at",
-							),
-					})
-					.from(user)
-					.where(eq(user.id, userId)),
-			)
-			.onConflictDoNothing(),
-		...input.pieces.map((piece) =>
+	try {
+		await db.batch([
 			db
-				.insert(combinationPiece)
+				.insert(combination)
 				.select(
 					db
 						.select({
-							combinationId: combination.id,
-							userId: combination.userId,
-							layer: sql<string>`${LAYER_OF[piece.typeId]}`.as("layer"),
-							typeId: sql<string>`${piece.typeId}`.as("type_id"),
-							colourId: sql<string>`${piece.colourId}`.as("colour_id"),
+							id: sql<string>`${input.id}`.as("id"),
+							userId: user.id,
+							key: sql<string>`${key}`.as("key"),
+							open: sql<number>`${input.open ? 1 : 0}`.as("open"),
+							createdAt:
+								sql<number>`(cast(unixepoch('subsecond') * 1000 as integer))`.as(
+									"created_at",
+								),
 						})
-						.from(combination)
-						.where(ours),
+						.from(user)
+						.where(eq(user.id, userId)),
 				)
-				.onConflictDoNothing(),
-		),
-	]);
+				.onConflictDoNothing({ target: combination.id }),
+			...input.pieces.map((piece) =>
+				db
+					.insert(combinationPiece)
+					.select(
+						db
+							.select({
+								combinationId: combination.id,
+								userId: combination.userId,
+								layer: sql<string>`${LAYER_OF[piece.typeId]}`.as("layer"),
+								typeId: sql<string>`${piece.typeId}`.as("type_id"),
+								colourId: sql<string>`${piece.colourId}`.as("colour_id"),
+							})
+							.from(combination)
+							.where(ours),
+					)
+					.onConflictDoNothing(),
+			),
+		]);
+	} catch (error) {
+		const taken = isKeyTaken(error) && (await keyHolder(db, userId, key));
+		if (!taken) throw error;
+		return { ok: false, error: { code: "duplicate", id: taken } };
+	}
 	const [saved] = await readCombinations(db, userId, input.id);
 	return saved
 		? { ok: true, value: { combination: saved, created: true } }
