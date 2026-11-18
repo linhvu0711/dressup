@@ -4,6 +4,7 @@ import type {
 	ToolAnnotations,
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
+import { OWNED_ITEM_LIMIT, QUANTITY_MAX } from "@/closet/owned-item";
 import {
 	COMBINATION_LIMIT,
 	type Combination,
@@ -38,7 +39,9 @@ import {
 	noColours,
 	noCombinations,
 	noLooks,
+	noOwnedItems,
 	noTags,
+	ownedItemRefusalText,
 	serverError,
 	tagRefusalText,
 	tagsLeftOffText,
@@ -60,6 +63,12 @@ import {
 import type { Db } from "./db";
 import { changeDress, loadDress } from "./dress-store";
 import { changeLook, deleteLook, listLooks, saveLook } from "./look-store";
+import {
+	addOwnedItem,
+	changeOwnedItem,
+	deleteOwnedItem,
+	listOwnedItems,
+} from "./owned-item-store";
 import { addTag, deleteTag, listTags, renameTag } from "./tag-store";
 
 type Account = { db: Db; userId: string };
@@ -713,6 +722,107 @@ export function registerAiActions(server: McpServer, account: Account) {
 			return deleted.ok
 				? answer({ deleted: id })
 				: refusal(combinationRefusalText(deleted.error));
+		},
+	);
+
+	tool(
+		"list_owned_items",
+		{
+			title: "List the closet",
+			description: `The account's owned items, newest first. An owned item is one brand of one piece (a type in a colour) with a quantity of 1 to ${QUANTITY_MAX}. An account holds at most ${OWNED_ITEM_LIMIT}.`,
+			annotations: READ,
+			inputSchema: noArgs,
+		},
+		async () => {
+			const ownedItems = await listOwnedItems(db, userId);
+			return ownedItems.length === 0
+				? answer({ ownedItems }, noOwnedItems)
+				: answer({ ownedItems });
+		},
+	);
+
+	// Loose types on purpose: a quantity of 0 must reach the store to get a
+	// sentence, since the SDK's own schema error is not one.
+	tool(
+		"add_owned_item",
+		{
+			title: "Add to the closet",
+			description: `Adds one brand of one piece to the closet, with a quantity. The account has each piece and brand once, and at most ${OWNED_ITEM_LIMIT} items.`,
+			annotations: WRITE,
+			inputSchema: z.object({
+				typeId: z
+					.string()
+					.describe("A type id from list_types, such as shirt_l."),
+				colourId: z.string().describe("A colour id from list_colours."),
+				brandId: z
+					.string()
+					.nullable()
+					.optional()
+					.describe("A brand id from list_brands. Leave it out for no brand."),
+				quantity: z
+					.number()
+					.describe(`How many the account owns, 1 to ${QUANTITY_MAX}.`),
+			}),
+		},
+		async ({ typeId, colourId, brandId = null, quantity }) => {
+			// The server makes the id, as save_combination does.
+			const added = await addOwnedItem(db, userId, {
+				id: crypto.randomUUID(),
+				typeId,
+				colourId,
+				brandId,
+				quantity,
+			});
+			return added.ok
+				? answer({ ownedItem: added.value.ownedItem })
+				: refusal(ownedItemRefusalText(added.error));
+		},
+	);
+
+	tool(
+		"change_owned_item",
+		{
+			title: "Change an owned item",
+			description:
+				"Changes the brand and the quantity of an owned item. Its piece stays.",
+			annotations: WRITE,
+			inputSchema: z.object({
+				id: z.string().describe("The owned item's id."),
+				brandId: z
+					.string()
+					.nullable()
+					.describe("A brand id from list_brands, or null for no brand."),
+				quantity: z
+					.number()
+					.describe(`How many the account owns, 1 to ${QUANTITY_MAX}.`),
+			}),
+		},
+		async ({ id, brandId, quantity }) => {
+			const changed = await changeOwnedItem(db, userId, id, {
+				brandId,
+				quantity,
+			});
+			return changed.ok
+				? answer({ ownedItem: changed.value })
+				: refusal(ownedItemRefusalText(changed.error));
+		},
+	);
+
+	tool(
+		"delete_owned_item",
+		{
+			title: "Delete an owned item",
+			description: "Deletes an owned item from the closet for good.",
+			annotations: DELETE,
+			inputSchema: z.object({
+				id: z.string().describe("The owned item's id."),
+			}),
+		},
+		async ({ id }) => {
+			const deleted = await deleteOwnedItem(db, userId, id);
+			return deleted.ok
+				? answer({ deleted: deleted.value })
+				: refusal(ownedItemRefusalText(deleted.error));
 		},
 	);
 }

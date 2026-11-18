@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { OWNED_ITEM_LIMIT, QUANTITY_MAX } from "@/closet/owned-item";
 import { COMBINATION_LIMIT } from "@/combinations/combination";
 import {
 	GARMENT_IDS,
@@ -16,6 +17,7 @@ import type { BrandError } from "./brand-store";
 import type { ColourError } from "./colour-store";
 import type { CombinationError } from "./combination-store";
 import type { LookError } from "./look-store";
+import type { OwnedItemError } from "./owned-item-store";
 import type { TagError } from "./tag-store";
 
 // Every refusal an AI app gets names the value it sent and what is allowed,
@@ -131,6 +133,40 @@ export function combinationRefusalText(error: CombinationError): string {
 	}
 }
 
+// The sentence for one bad field of an owned item, with the value sent.
+function ownedItemFieldText(
+	error: Extract<OwnedItemError, { code: "invalid" }>,
+): string {
+	switch (error.field) {
+		case "quantity":
+			return `Quantity is a whole number from 1 to ${QUANTITY_MAX}.`;
+		case "typeId":
+			return `${error.value} is not a type. list_types names the types.`;
+		case "colourId":
+			return `${error.value} is not one of your colours. list_colours names them.`;
+		case "brandId":
+			return `${error.value} is not one of your brands. list_brands names them.`;
+		case "id":
+		case "body":
+			return serverError;
+	}
+}
+
+export function ownedItemRefusalText(error: OwnedItemError): string {
+	switch (error.code) {
+		case "invalid":
+			return ownedItemFieldText(error);
+		case "duplicate":
+			return "You have this item already. Change its number.";
+		case "owned_item_limit":
+			return `You have ${OWNED_ITEM_LIMIT} items. That is the limit. Delete one to add a new one.`;
+		case "not_found":
+			return "No owned item with this id.";
+		case "conflict":
+			return serverError;
+	}
+}
+
 export const serverError = "dressup could not do this. Try again.";
 
 export const tooManyActions = "Too many actions. Wait a minute and try again.";
@@ -154,6 +190,8 @@ export const noColours = "You have no colours yet.";
 export const noCombinations = "You have no combinations yet.";
 
 export const noBrands = "You have no brands yet.";
+
+export const noOwnedItems = "Nothing in your closet yet.";
 
 export const lookLimit = (): string =>
 	`You have ${LOOK_LIMIT} looks, the limit. Delete one first.`;
