@@ -7,35 +7,50 @@ import { useToast } from "@/components/ui/toast";
 import { RequestError } from "@/data/client";
 import type { GarmentId } from "@/dress/garments";
 import type { Colour } from "@/labels/colour";
-import { useCombinations, useSaveCombination } from "./api";
+import {
+	CombinationGone,
+	useChangeCombination,
+	useCombinations,
+	useSaveCombination,
+} from "./api";
 import {
 	COMBINATION_LIMIT,
 	type CombinationId,
 	combinationKey,
 	combinationTitle,
 } from "./combination";
+import { useLeaveGoneCombination } from "./gone";
 
 // The save form: the title, then Save. A combination the account has already,
-// or a full account, turns Save off with a line that says why.
+// or a full account, turns Save off with a line that says why. With changing,
+// it saves the changes to that combination; a change adds no combination, so
+// the limit does not apply.
 export function SaveCombinationDialog({
 	pieces,
 	open,
 	onClose,
+	changing,
 }: {
 	pieces: readonly { typeId: GarmentId; colour: Colour }[];
 	open: boolean;
 	onClose: () => void;
+	changing?: CombinationId;
 }) {
 	// One id for this form, so a Save after a failed Save that did reach the
 	// server gives back the same combination rather than a refused repeat.
-	const [id] = useState(() => crypto.randomUUID() as CombinationId);
+	const [id] = useState(
+		() => changing ?? (crypto.randomUUID() as CombinationId),
+	);
 	const save = useSaveCombination();
+	const change = useChangeCombination();
+	const send = changing ? change : save;
+	const leaveGoneCombination = useLeaveGoneCombination();
 	const combinations = useCombinations();
 	const toast = useToast();
 	const navigate = useNavigate();
 	const sent = pieces.map((p) => ({ typeId: p.typeId, colourId: p.colour.id }));
 	const key = combinationKey(sent, open);
-	const refused = save.error instanceof RequestError ? save.error : null;
+	const refused = send.error instanceof RequestError ? send.error : null;
 	const sameId =
 		combinations.data?.find(
 			(c) =>
@@ -46,13 +61,14 @@ export function SaveCombinationDialog({
 				) === key,
 		)?.id ?? (refused?.code === "duplicate" ? refused.id : null);
 	const full =
-		(combinations.data?.length ?? 0) >= COMBINATION_LIMIT ||
-		refused?.code === "combination_limit";
+		!changing &&
+		((combinations.data?.length ?? 0) >= COMBINATION_LIMIT ||
+			refused?.code === "combination_limit");
 	const alert = sameId
 		? "duplicate"
 		: full
 			? "full"
-			: save.isError
+			: send.isError
 				? "failed"
 				: null;
 	return (
@@ -68,14 +84,27 @@ export function SaveCombinationDialog({
 						onSubmit={(e) => {
 							e.preventDefault();
 							if (alert === "duplicate" || alert === "full") return;
-							save.mutate(
+							send.mutate(
 								{ id, pieces: sent, open },
-								{
-									onSuccess: () => {
-										toast("Saved to Combinations");
-										navigate("/combinations");
-									},
-								},
+								changing
+									? {
+											onSuccess: () => {
+												toast("Changes saved");
+												navigate(`/combinations/${changing}`, {
+													replace: true,
+												});
+											},
+											onError: (error) => {
+												if (error instanceof CombinationGone)
+													leaveGoneCombination();
+											},
+										}
+									: {
+											onSuccess: () => {
+												toast("Saved to Combinations");
+												navigate("/combinations");
+											},
+										},
 							);
 						}}
 					>
@@ -109,10 +138,10 @@ export function SaveCombinationDialog({
 								type="submit"
 								variant="primary"
 								disabled={
-									save.isPending || alert === "duplicate" || alert === "full"
+									send.isPending || alert === "duplicate" || alert === "full"
 								}
 							>
-								Save
+								{changing ? "Save changes" : "Save"}
 							</Button>
 						</div>
 					</form>

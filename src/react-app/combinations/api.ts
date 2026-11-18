@@ -59,3 +59,23 @@ export function useDeleteCombination() {
 		},
 	});
 }
+
+// The changed combination keeps its place, as combinationSaved keeps a
+// combination with the same id.
+export function useChangeCombination() {
+	const userId = cachedUserId();
+	return useMutation({
+		mutationFn: async (combination: CombinationInput) =>
+			(
+				await request("PUT", `/api/combinations/${combination.id}`, {
+					body: combination,
+					answer: combinationAnswer,
+				}).catch(goneAsCombinationGone)
+			).combination,
+		onSuccess: (combination) => after.combinationSaved(userId, combination),
+		onError: (error, combination) => {
+			if (error instanceof CombinationGone)
+				after.combinationGone(userId, combination.id);
+		},
+	});
+}
