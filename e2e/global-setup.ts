@@ -63,6 +63,9 @@ export default async function globalSetup() {
 		stdio: ["ignore", "inherit", "inherit"],
 	});
 	await withTestAuth(async ({ db, helpers, newSessionCookies }) => {
+		// A walk that filled the month would make this run refuse uploads.
+		await db.delete(schema.pictureUploadMonth);
+		await db.delete(schema.pictureStorage);
 		// Delete first, so a second run ends in the same state.
 		await db.delete(schema.user).where(eq(schema.user.id, E2E_USER.id));
 		await helpers.saveUser(helpers.createUser(E2E_USER));

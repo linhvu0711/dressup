@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { after, cachedUserId, goneAsDone, keys, request } from "../data/client";
 import { ownedItemAnswer, ownedItemsAnswer } from "../data/contract";
+import type { PictureId } from "../pictures/picture";
 import type { OwnedItemId } from "./owned-item";
 
 export function useCloset() {
@@ -28,6 +29,7 @@ export function useAddOwnedItem() {
 			colourId: string;
 			brandId: string | null;
 			quantity: number;
+			pictureIds: PictureId[];
 		}) =>
 			(
 				await request("POST", "/api/owned-items", {
@@ -49,6 +51,7 @@ export function useChangeOwnedItem() {
 			id: OwnedItemId;
 			brandId: string | null;
 			quantity: number;
+			pictureIds: PictureId[];
 		}) =>
 			(
 				await request("PUT", `/api/owned-items/${id}`, {
