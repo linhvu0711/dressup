@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { aiAppSchema } from "@/ai-apps/ai-app";
+import { combinationSchema } from "@/combinations/combination";
 import { dressStateSchema } from "@/dress/state";
 import { brandSchema } from "@/labels/brand";
 import { colourSchema } from "@/labels/colour";
@@ -65,6 +66,16 @@ export type BrandsAnswer = z.input<typeof brandsAnswer>;
 export const brandAnswer = z.object({ brand: brandSchema });
 
 export type BrandAnswer = z.input<typeof brandAnswer>;
+
+export const combinationsAnswer = z.object({
+	combinations: z.array(combinationSchema),
+});
+
+export type CombinationsAnswer = z.input<typeof combinationsAnswer>;
+
+export const combinationAnswer = z.object({ combination: combinationSchema });
+
+export type CombinationAnswer = z.input<typeof combinationAnswer>;
 
 export const aiAppsAnswer = z.object({ apps: z.array(aiAppSchema) });
 

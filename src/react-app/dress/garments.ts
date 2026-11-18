@@ -52,6 +52,37 @@ export type JacketId = (typeof JACKET_IDS)[number];
 export const isJacket = (id: GarmentId): id is JacketId =>
 	(JACKET_IDS as readonly GarmentId[]).includes(id);
 
+export const LAYERS = ["bottom", "inner_top", "sweater", "jacket"] as const;
+
+export type Layer = (typeof LAYERS)[number];
+
+export const LAYER_NAMES: Record<Layer, string> = {
+	bottom: "Bottom",
+	inner_top: "Inner top",
+	sweater: "Sweater",
+	jacket: "Jacket",
+};
+
+export const LAYER_OF: Record<GarmentId, Layer> = {
+	tee_s: "inner_top",
+	tee_l: "inner_top",
+	polo_s: "inner_top",
+	polo_l: "inner_top",
+	shirt_s: "inner_top",
+	shirt_l: "inner_top",
+	sweater: "sweater",
+	harrington: "jacket",
+	wool: "jacket",
+	ttee_s: "inner_top",
+	ttee_l: "inner_top",
+	chino_sh: "bottom",
+	chino_p: "bottom",
+	casual_sh: "bottom",
+	casual_p: "bottom",
+	train_sh: "bottom",
+	train_p: "bottom",
+};
+
 export type GarmentLayer = { garment: GarmentId; color: Hex };
 
 const W = "#F3F1EC";

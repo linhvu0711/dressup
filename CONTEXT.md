@@ -1,3 +1,6 @@
+- Type: one kind of clothing in one length. "Short tee" and "long tee" are two types. The app has 17, and the list is fixed.
+- Layer: where a type sits on the body: bottom, inner top, sweater, or jacket. Each type is in exactly one layer.
+- Piece: a type in a colour, such as "Navy long button-up".
 - Garment: one kind of clothing in one length. "Short tee" and "long tee" are two garments. The app has 17, and the list is fixed.
 - Mode: a fixed set of garments worn together, for example "long polo + sweater + chino pants". The app has 23, and the list is fixed.
 - Weather group: Hot, Cool, or Cold. Each mode is in exactly one. "Training" is a fourth tab that shows the two training modes.
