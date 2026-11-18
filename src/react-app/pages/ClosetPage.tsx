@@ -2,6 +2,7 @@ import { Plus } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { useCloset } from "@/closet/api";
 import { ClosetTile } from "@/closet/ClosetTile";
+import { OwnedItemSheet } from "@/closet/OwnedItemSheet";
 import { closetPieces } from "@/closet/owned-item";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
@@ -16,7 +17,7 @@ const PULSE = "animate-placeholder motion-reduce:animate-none";
 // item first.
 export function ClosetPage() {
 	const closet = useCloset();
-	const [, setAdding] = useState(false);
+	const [adding, setAdding] = useState(false);
 	let wall: ReactNode;
 	if (closet.isPending) {
 		wall = (
@@ -88,6 +89,9 @@ export function ClosetPage() {
 				}
 			/>
 			{wall}
+			{adding ? (
+				<OwnedItemSheet mode="add" onClose={() => setAdding(false)} />
+			) : null}
 		</div>
 	);
 }

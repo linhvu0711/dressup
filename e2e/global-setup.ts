@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { eq, like } from "drizzle-orm";
+import { OWNED_ITEM_LIMIT } from "@/closet/owned-item";
 import { COMBINATION_LIMIT } from "@/combinations/combination";
 import { BRAND_LIMIT } from "@/labels/brand";
 import { COLOUR_LIMIT } from "@/labels/colour";
@@ -13,8 +14,10 @@ import {
 } from "../src/worker/colour-store";
 import { schema } from "../src/worker/db";
 import { seedCombinations } from "../src/worker/test/seed-combinations";
+import { seedOwnedItems } from "../src/worker/test/seed-owned-items";
 import {
 	BRANDS_FULL_USER,
+	CLOSET_FULL_USER,
 	COLOURS_EMPTY_USER,
 	COLOURS_FULL_USER,
 	COMBINATIONS_FULL_USER,
@@ -29,6 +32,7 @@ export const COLOURS_FULL_FILE = "e2e/.auth/colours-full.json";
 export const COLOURS_EMPTY_FILE = "e2e/.auth/colours-empty.json";
 export const BRANDS_FULL_FILE = "e2e/.auth/brands-full.json";
 export const COMBINATIONS_FULL_FILE = "e2e/.auth/combinations-full.json";
+export const CLOSET_FULL_FILE = "e2e/.auth/closet-full.json";
 // Each test changes the colours it saves, and tests run in parallel, so
 // each one claims its own fresh account from this pool (e2e/fixtures.ts).
 export const POOL_SIZE = 600;
@@ -152,6 +156,20 @@ export default async function globalSetup() {
 			JSON.stringify({
 				cookies: await helpers.getCookies({
 					userId: COMBINATIONS_FULL_USER.id,
+					domain: "localhost",
+				}),
+				origins: [],
+			}),
+		);
+		// Its owned items and the brands they name go with the user row.
+		await db.delete(schema.user).where(eq(schema.user.id, CLOSET_FULL_USER.id));
+		await helpers.saveUser(helpers.createUser(CLOSET_FULL_USER));
+		await seedOwnedItems(db, CLOSET_FULL_USER.id, OWNED_ITEM_LIMIT);
+		writeFileSync(
+			CLOSET_FULL_FILE,
+			JSON.stringify({
+				cookies: await helpers.getCookies({
+					userId: CLOSET_FULL_USER.id,
 					domain: "localhost",
 				}),
 				origins: [],

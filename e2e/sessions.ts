@@ -32,6 +32,13 @@ export const COMBINATIONS_FULL_USER = {
 	name: "Combinations Full Person",
 };
 
+// Holds 500 owned items, the limit, for the add form's limit test.
+export const CLOSET_FULL_USER = {
+	id: "e2e-closet-full",
+	email: "closet-full@dressup.test",
+	name: "Closet Full Person",
+};
+
 // Has no colours: the starter set was deleted, for the empty list's test.
 export const COLOURS_EMPTY_USER = {
 	id: "e2e-colours-empty",

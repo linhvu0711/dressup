@@ -1,6 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { z } from "zod";
 import type { AiApp } from "@/ai-apps/ai-app";
+import type { OwnedItem } from "@/closet/owned-item";
 import type { Combination, CombinationId } from "@/combinations/combination";
 import { type Brand, type BrandId, byBrandName } from "@/labels/brand";
 import type { Colour, ColourId, ListedColour } from "@/labels/colour";
@@ -157,6 +158,21 @@ export const after = {
 		);
 		refresh(keys.combinations(userId));
 		refresh(keys.colours(userId));
+	},
+	// As lookSaved; a new item also makes its colour in use and counts on its
+	// brand.
+	ownedItemAdded(userId: string | null, item: OwnedItem) {
+		queryClient.setQueryData<OwnedItem[]>(
+			keys.closet(userId),
+			(old) =>
+				old &&
+				(old.some((i) => i.id === item.id)
+					? old.map((i) => (i.id === item.id ? item : i))
+					: [item, ...old]),
+		);
+		refresh(keys.closet(userId));
+		refresh(keys.colours(userId));
+		refresh(keys.brands(userId));
 	},
 	aiAppGone(userId: string | null, id: string) {
 		queryClient.setQueryData<AiApp[]>(keys.aiApps(userId), (old) =>
