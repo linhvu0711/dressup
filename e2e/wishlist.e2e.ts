@@ -1,11 +1,35 @@
 import type { Page } from "@playwright/test";
 import { colourIds } from "./closet-helpers";
 import { expect, test } from "./fixtures";
+import { WISHLIST_FULL_FILE } from "./global-setup";
 import { postShopLink, postWish } from "./wishlist-helpers";
 
 const mainNav = (page: Page) => page.getByRole("navigation", { name: "Main" });
 
 const tiles = (page: Page) => page.locator('[data-slot="wish-tile"]');
+
+const addSheet = (page: Page) =>
+	page.getByRole("dialog", { name: "Add to wishlist" });
+
+// The header's "+", which comes before the empty notice's button.
+const openAddSheet = (page: Page) =>
+	page
+		.getByRole("button", { name: "Add to wishlist", exact: true })
+		.first()
+		.click();
+
+// Picks a type and a colour in the open add sheet.
+async function pickPiece(page: Page, type: string, colour: string) {
+	await addSheet(page).getByRole("button", { name: "Pick a type" }).click();
+	await page
+		.getByRole("dialog", { name: "Pick a type" })
+		.getByRole("button", { name: type, exact: true })
+		.click();
+	await addSheet(page)
+		.getByRole("radiogroup", { name: "Colour" })
+		.getByRole("radio", { name: colour, exact: true })
+		.click();
+}
 
 test("opens the wishlist from the Wishlist tab", async ({ page }) => {
 	// Given: a fresh account on /closet
@@ -118,4 +142,63 @@ test("shows the sign-in screen when the wishlist answers 401", async ({
 	await expect(
 		page.getByRole("button", { name: "Sign in with Google" }),
 	).toBeVisible();
+});
+
+test("shows Nothing on your wishlist yet with a button to the form", async ({
+	page,
+}) => {
+	// Given: a fresh account
+	await page.goto("/wishlist");
+	await expect(
+		page.getByRole("heading", { name: "Nothing on your wishlist yet" }),
+	).toBeVisible();
+	await expect(page.getByText("Add the pieces you want to buy.")).toBeVisible();
+	// When: the empty state's button, the second "Add to wishlist"
+	await page
+		.getByRole("main")
+		.getByRole("button", { name: "Add to wishlist", exact: true })
+		.last()
+		.click();
+	// Then
+	await expect(addSheet(page)).toBeVisible();
+});
+
+test("keeps the form open with Not saved when the save fails", async ({
+	page,
+}) => {
+	// Given: a fresh account; the save answers 500
+	await page.route("**/api/wishes", (route) =>
+		route.request().method() === "POST"
+			? route.fulfill({ status: 500 })
+			: route.continue(),
+	);
+	await page.goto("/wishlist");
+	// When
+	await openAddSheet(page);
+	await pickPiece(page, "Long polo", "Olive");
+	await addSheet(page).getByRole("button", { name: "Save" }).click();
+	// Then
+	await expect(addSheet(page).getByRole("alert")).toHaveText(
+		"Not saved. Try again.",
+	);
+});
+
+test.describe("at the wishlist limit", () => {
+	test.use({ storageState: WISHLIST_FULL_FILE });
+
+	test("turns Save off and shows the limit line at 200 wishes", async ({
+		page,
+	}) => {
+		// Given: the account with 200 wishes
+		// When
+		await page.goto("/wishlist");
+		await openAddSheet(page);
+		// Then
+		await expect(addSheet(page).getByRole("alert")).toHaveText(
+			"You have 200 wishes. That is the limit. Delete one to add a new one.",
+		);
+		await expect(
+			addSheet(page).getByRole("button", { name: "Save" }),
+		).toBeDisabled();
+	});
 });

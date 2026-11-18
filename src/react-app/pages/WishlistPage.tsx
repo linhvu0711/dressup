@@ -1,9 +1,11 @@
-import type { ReactNode } from "react";
+import { Plus } from "lucide-react";
+import { type ReactNode, useState } from "react";
 import { PieceTile } from "@/closet/PieceTile";
 import { pieceName } from "@/combinations/combination";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { useWishlist } from "@/wishlist/api";
+import { WishSheet } from "@/wishlist/WishSheet";
 import { linksLine } from "@/wishlist/wish";
 import { PageHeader } from "../shell/PageHeader";
 
@@ -15,6 +17,7 @@ const PULSE = "animate-placeholder motion-reduce:animate-none";
 // The pieces the account wants to buy, one tile for each wish, newest first.
 export function WishlistPage() {
 	const wishlist = useWishlist();
+	const [adding, setAdding] = useState(false);
 	let wall: ReactNode;
 	if (wishlist.isPending) {
 		wall = (
@@ -46,7 +49,18 @@ export function WishlistPage() {
 			</Notice>
 		);
 	} else if (wishlist.data.length === 0) {
-		wall = <Notice title="Nothing on your wishlist yet">{null}</Notice>;
+		wall = (
+			<Notice title="Nothing on your wishlist yet">
+				<p>Add the pieces you want to buy.</p>
+				<Button
+					variant="primary"
+					className="mt-2"
+					onClick={() => setAdding(true)}
+				>
+					Add to wishlist
+				</Button>
+			</Notice>
+		);
 	} else {
 		wall = (
 			<div data-slot="wish-wall" className={WALL}>
@@ -69,8 +83,22 @@ export function WishlistPage() {
 	}
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
-			<PageHeader title="Wishlist" />
+			<PageHeader
+				title="Wishlist"
+				end={
+					<Button
+						variant="primary"
+						size="icon"
+						aria-label="Add to wishlist"
+						title="Add to wishlist"
+						onClick={() => setAdding(true)}
+					>
+						<Plus size={18} strokeWidth={1.9} aria-hidden />
+					</Button>
+				}
+			/>
 			{wall}
+			{adding ? <WishSheet onClose={() => setAdding(false)} /> : null}
 		</div>
 	);
 }

@@ -39,6 +39,14 @@ export const CLOSET_FULL_USER = {
 	name: "Closet Full Person",
 };
 
+// Holds 200 wishes, the limit, for the add form's limit test; its newest
+// wish holds 10 shop links, the limit, for the shop link limit test.
+export const WISHLIST_FULL_USER = {
+	id: "e2e-wishlist-full",
+	email: "wishlist-full@dressup.test",
+	name: "Wishlist Full Person",
+};
+
 // Has no colours: the starter set was deleted, for the empty list's test.
 export const COLOURS_EMPTY_USER = {
 	id: "e2e-colours-empty",

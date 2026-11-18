@@ -12,6 +12,7 @@ import {
 import type { Colour, ColourId, ListedColour } from "@/labels/colour";
 import type { Look, LookId } from "@/looks/look";
 import type { Tag, TagId } from "@/tags/tag";
+import type { Wish } from "@/wishlist/wish";
 import { type ErrorCode, errorAnswer, meAnswer } from "./contract";
 
 // Every request the web app sends to the worker goes through request(), so
@@ -213,6 +214,19 @@ export const after = {
 		refresh(keys.closet(userId));
 		refresh(keys.colours(userId));
 		refresh(keys.brands(userId));
+	},
+	// As lookSaved; a new wish also makes its colour in use.
+	wishAdded(userId: string | null, wish: Wish) {
+		queryClient.setQueryData<Wish[]>(
+			keys.wishlist(userId),
+			(old) =>
+				old &&
+				(old.some((w) => w.id === wish.id)
+					? old.map((w) => (w.id === wish.id ? wish : w))
+					: [wish, ...old]),
+		);
+		refresh(keys.wishlist(userId));
+		refresh(keys.colours(userId));
 	},
 	aiAppGone(userId: string | null, id: string) {
 		queryClient.setQueryData<AiApp[]>(keys.aiApps(userId), (old) =>
