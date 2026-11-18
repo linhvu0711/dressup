@@ -14,3 +14,10 @@ export const tagSchema = z.object({
 });
 
 export type Tag = z.infer<typeof tagSchema>;
+
+// A tag in the account's list, with how many combinations carry it.
+export const listedTagSchema = tagSchema.extend({
+	combinations: z.number().int().min(0),
+});
+
+export type ListedTag = z.infer<typeof listedTagSchema>;

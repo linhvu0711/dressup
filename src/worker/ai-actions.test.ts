@@ -62,7 +62,7 @@ async function asBob(h: Harness) {
 const tags = async (h: Harness, ai: Session) =>
 	(
 		(await (await send(h, ai.jar, "/api/tags")).json()) as {
-			tags: { id: string; name: string }[];
+			tags: { id: string; name: string; combinations: number }[];
 		}
 	).tags;
 
@@ -907,7 +907,9 @@ describe("tags", () => {
 		// When
 		const { data } = await ai.call("list_tags");
 		// Then
-		expect(data).toEqual({ tags: [{ id: work, name: "Work" }] });
+		expect(data).toEqual({
+			tags: [{ id: work, name: "Work", combinations: 0 }],
+		});
 	});
 
 	test("adds a tag", async () => {
@@ -973,7 +975,7 @@ describe("tags", () => {
 		// Then
 		expect({ isError, tags: await tags(h, ai) }).toEqual({
 			isError: false,
-			tags: [{ id: work, name: "Office" }],
+			tags: [{ id: work, name: "Office", combinations: 0 }],
 		});
 	});
 

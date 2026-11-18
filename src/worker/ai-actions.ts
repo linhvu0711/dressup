@@ -130,7 +130,9 @@ const lookView = (look: Look, tags: Tag[]) => ({
 	modeId: look.modeId,
 	colours: look.colours,
 	open: look.open,
-	tags: tags.filter((t) => look.tags.includes(t.id)),
+	tags: tags
+		.filter((t) => look.tags.includes(t.id))
+		.map(({ id, name }) => ({ id, name })),
 });
 
 const combinationView = (combination: Combination) => ({
@@ -419,7 +421,8 @@ export function registerAiActions(server: McpServer, account: Account) {
 		"list_tags",
 		{
 			title: "List tags",
-			description: "The tags, in the order they were made.",
+			description:
+				"The tags, in the order they were made, each with combinations, the number of combinations that carry it.",
 			annotations: READ,
 			inputSchema: noArgs,
 		},
@@ -449,7 +452,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		"rename_tag",
 		{
 			title: "Rename a tag",
-			description: "Renames a tag. Its looks keep it.",
+			description: "Renames a tag. Its looks and combinations keep it.",
 			annotations: WRITE,
 			inputSchema: z.object({
 				id: z.string().describe("The tag's id."),
@@ -468,7 +471,8 @@ export function registerAiActions(server: McpServer, account: Account) {
 		"delete_tag",
 		{
 			title: "Delete a tag",
-			description: "Deletes a tag and takes it off every look. The looks stay.",
+			description:
+				"Deletes a tag and takes it off every look and combination. The looks and combinations stay.",
 			annotations: DELETE,
 			inputSchema: z.object({ id: z.string().describe("The tag's id.") }),
 		},

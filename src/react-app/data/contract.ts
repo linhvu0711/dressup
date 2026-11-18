@@ -6,7 +6,7 @@ import { dressStateSchema } from "@/dress/state";
 import { brandSchema, listedBrandSchema } from "@/labels/brand";
 import { colourSchema, listedColourSchema } from "@/labels/colour";
 import { lookSchema } from "@/looks/look";
-import { tagSchema } from "@/tags/tag";
+import { listedTagSchema, tagSchema } from "@/tags/tag";
 import { wishSchema } from "@/wishlist/wish";
 
 // The answers the worker sends and the web app reads, so a renamed key or
@@ -51,7 +51,7 @@ export const lookAnswer = z.object({
 
 export type LookAnswer = z.input<typeof lookAnswer>;
 
-export const tagsAnswer = z.object({ tags: z.array(tagSchema) });
+export const tagsAnswer = z.object({ tags: z.array(listedTagSchema) });
 
 export type TagsAnswer = z.input<typeof tagsAnswer>;
 

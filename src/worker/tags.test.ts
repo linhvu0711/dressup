@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { BOB, type Harness, withAccount } from "./test/harness";
 
-type Tag = { id: string; name: string };
+type Tag = { id: string; name: string; combinations: number };
 
 const NAVY = {
 	id: "11111111-1111-4111-8111-111111111111",
@@ -387,6 +387,93 @@ describe("tags and looks", () => {
 			status: res.status,
 			looks: looks.map(({ id, tags }) => ({ id, tags })),
 		}).toEqual({ status: 204, looks: [{ id: NAVY.id, tags: [trip] }] });
+	});
+});
+
+describe("tags and combinations", () => {
+	// The account's colour ids by name, from its first list.
+	const colourIds = async (h: Harness, headers: Headers) => {
+		const { colours } = (await (
+			await send(h, headers, "GET", "/api/colours")
+		).json()) as { colours: { id: string; name: string }[] };
+		return Object.fromEntries(colours.map((c) => [c.name, c.id]));
+	};
+
+	// Khaki Harrington jacket (open) + Black long tee + Navy casual pants.
+	const three = (ids: Record<string, string>, tags: string[]) => ({
+		id: "11111111-1111-4111-8111-111111111111",
+		pieces: [
+			{ typeId: "harrington", colourId: ids.Khaki },
+			{ typeId: "tee_l", colourId: ids.Black },
+			{ typeId: "casual_p", colourId: ids.Navy },
+		],
+		open: true,
+		tags,
+	});
+
+	// White short tee + Grey training shorts.
+	const two = (ids: Record<string, string>, tags: string[]) => ({
+		id: "22222222-2222-4222-8222-222222222222",
+		pieces: [
+			{ typeId: "train_sh", colourId: ids.Grey },
+			{ typeId: "tee_s", colourId: ids.White },
+		],
+		open: false,
+		tags,
+	});
+
+	test("counts the combinations of each tag", async () => {
+		// Given: alice; tags Work, Weekend, Rain; THREE with Work and Weekend,
+		// TWO with Work
+		const { h, headers } = await withAccount();
+		const ids = await colourIds(h, headers);
+		const work = await added(h, headers, "Work");
+		const weekend = await added(h, headers, "Weekend");
+		const rain = await added(h, headers, "Rain");
+		await send(
+			h,
+			headers,
+			"POST",
+			"/api/combinations",
+			three(ids, [work, weekend]),
+		);
+		await send(h, headers, "POST", "/api/combinations", two(ids, [work]));
+		// When
+		const tags = await tagsOf(h, headers);
+		// Then
+		expect(tags).toEqual([
+			{ id: work, name: "Work", combinations: 2 },
+			{ id: weekend, name: "Weekend", combinations: 1 },
+			{ id: rain, name: "Rain", combinations: 0 },
+		]);
+	});
+
+	test("deletes a tag and takes it off its combinations", async () => {
+		// Given: alice; tags Work and Weekend; THREE with both
+		const { h, headers } = await withAccount();
+		const ids = await colourIds(h, headers);
+		const work = await added(h, headers, "Work");
+		const weekend = await added(h, headers, "Weekend");
+		await send(
+			h,
+			headers,
+			"POST",
+			"/api/combinations",
+			three(ids, [work, weekend]),
+		);
+		// When
+		const res = await send(h, headers, "DELETE", `/api/tags/${weekend}`);
+		const { combinations } = (await (
+			await send(h, headers, "GET", "/api/combinations")
+		).json()) as { combinations: { pieces: unknown[]; tags: string[] }[] };
+		// Then
+		expect({
+			status: res.status,
+			combinations: combinations.map((c) => ({
+				pieces: c.pieces.length,
+				tags: c.tags,
+			})),
+		}).toEqual({ status: 204, combinations: [{ pieces: 3, tags: [work] }] });
 	});
 });
 

@@ -11,7 +11,7 @@ import {
 } from "@/labels/brand";
 import type { Colour, ColourId, ListedColour } from "@/labels/colour";
 import type { Look, LookId } from "@/looks/look";
-import type { Tag, TagId } from "@/tags/tag";
+import type { ListedTag, Tag, TagId } from "@/tags/tag";
 import type { Wish } from "@/wishlist/wish";
 import { type ErrorCode, errorAnswer, meAnswer } from "./contract";
 
@@ -73,14 +73,15 @@ export const after = {
 		refresh(keys.looks(userId));
 	},
 	tagAdded(userId: string | null, tag: Tag) {
-		queryClient.setQueryData<Tag[]>(keys.tags(userId), (old) =>
-			old ? [...old, tag] : old,
+		queryClient.setQueryData<ListedTag[]>(keys.tags(userId), (old) =>
+			old ? [...old, { ...tag, combinations: 0 }] : old,
 		);
 	},
-	// The renamed tag keeps its place, as the server keeps its time.
+	// The renamed tag keeps its place, as the server keeps its time, and its
+	// count.
 	tagRenamed(userId: string | null, tag: Tag) {
-		queryClient.setQueryData<Tag[]>(keys.tags(userId), (old) =>
-			old?.map((t) => (t.id === tag.id ? tag : t)),
+		queryClient.setQueryData<ListedTag[]>(keys.tags(userId), (old) =>
+			old?.map((t) => (t.id === tag.id ? { ...t, ...tag } : t)),
 		);
 	},
 	// The server's tags may differ from the cached ones, as after an add
@@ -88,14 +89,15 @@ export const after = {
 	tagsMayDiffer(userId: string | null) {
 		refresh(keys.tags(userId));
 	},
-	// Until the looks load again, the look view and the chips skip a tag the
-	// list no longer holds.
+	// Until the looks and combinations load again, their views and the chips
+	// skip a tag the list no longer holds.
 	tagDeleted(userId: string | null, id: TagId) {
-		queryClient.setQueryData<Tag[]>(keys.tags(userId), (old) =>
+		queryClient.setQueryData<ListedTag[]>(keys.tags(userId), (old) =>
 			old?.filter((t) => t.id !== id),
 		);
 		refresh(keys.tags(userId));
 		refresh(keys.looks(userId));
+		refresh(keys.combinations(userId));
 	},
 	colourAdded(userId: string | null, colour: Colour) {
 		queryClient.setQueryData<ListedColour[]>(keys.colours(userId), (old) =>
@@ -159,7 +161,8 @@ export const after = {
 		refresh(keys.closet(userId));
 		refresh(keys.wishlist(userId));
 	},
-	// As lookSaved; a saved combination also makes its colours in use.
+	// As lookSaved; a saved combination also makes its colours in use, and
+	// moves its tags' counts.
 	combinationSaved(userId: string | null, combination: Combination) {
 		queryClient.setQueryData<Combination[]>(
 			keys.combinations(userId),
@@ -171,14 +174,16 @@ export const after = {
 		);
 		refresh(keys.combinations(userId));
 		refresh(keys.colours(userId));
+		refresh(keys.tags(userId));
 	},
-	// A deleted combination can free its colours.
+	// A deleted combination can free its colours, and moves its tags' counts.
 	combinationGone(userId: string | null, id: CombinationId) {
 		queryClient.setQueryData<Combination[]>(keys.combinations(userId), (old) =>
 			old?.filter((c) => c.id !== id),
 		);
 		refresh(keys.combinations(userId));
 		refresh(keys.colours(userId));
+		refresh(keys.tags(userId));
 	},
 	// As lookSaved; a new item also makes its colour in use and counts on its
 	// brand.
