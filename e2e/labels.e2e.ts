@@ -263,7 +263,7 @@ test("says a colour in a combination is in use and offers no Delete", async ({
 	const dialog = page.getByRole("dialog");
 	await expect(
 		dialog.getByText(
-			"A combination or an item in your closet uses this colour, so you cannot delete it.",
+			"A combination, an item in your closet, or a wish uses this colour, so you cannot delete it.",
 		),
 	).toBeVisible();
 	await expect(dialog.getByRole("button", { name: "Delete" })).toHaveCount(0);
@@ -297,7 +297,7 @@ test("says an item in the closet keeps a colour", async ({ page }) => {
 	const dialog = page.getByRole("dialog");
 	await expect(
 		dialog.getByText(
-			"A combination or an item in your closet uses this colour, so you cannot delete it.",
+			"A combination, an item in your closet, or a wish uses this colour, so you cannot delete it.",
 		),
 	).toBeVisible();
 	await expect(dialog.getByRole("button", { name: "Delete" })).toHaveCount(0);
@@ -326,7 +326,7 @@ test("says a colour is in use when the delete answers colour_in_use", async ({
 	const dialog = page.getByRole("dialog");
 	await expect(
 		dialog.getByText(
-			"A combination or an item in your closet uses this colour, so you cannot delete it.",
+			"A combination, an item in your closet, or a wish uses this colour, so you cannot delete it.",
 		),
 	).toBeVisible();
 	await expect(dialog.getByRole("button", { name: "Delete" })).toHaveCount(0);
@@ -412,4 +412,37 @@ test("shows the sign-in screen when the colours answer 401", async ({
 	await expect(
 		page.getByRole("button", { name: "Sign in with Google" }),
 	).toBeVisible();
+});
+
+test("refuses to delete a colour a wish uses", async ({ page }) => {
+	// Given: a fresh account with an Olive long polo wish and nothing else in
+	// Olive
+	await page.goto("/labels");
+	const res = await page.request.get("/api/colours");
+	const { colours } = (await res.json()) as {
+		colours: { id: string; name: string }[];
+	};
+	const saved = await page.request.post("/api/wishes", {
+		data: {
+			id: crypto.randomUUID(),
+			typeId: "polo_l",
+			colourId: colours.find((c) => c.name === "Olive")?.id,
+		},
+	});
+	expect(saved.status()).toBe(201);
+	await page.goto("/labels");
+	await expect(rows(page)).toHaveCount(13);
+	// When
+	await page.getByRole("button", { name: "Olive #6A6B3C" }).click();
+	await sheet(page, "Edit colour")
+		.getByRole("button", { name: "Delete" })
+		.click();
+	// Then
+	const dialog = page.getByRole("dialog");
+	await expect(
+		dialog.getByText(
+			"A combination, an item in your closet, or a wish uses this colour, so you cannot delete it.",
+		),
+	).toBeVisible();
+	await expect(dialog.getByRole("button", { name: "Delete" })).toHaveCount(0);
 });

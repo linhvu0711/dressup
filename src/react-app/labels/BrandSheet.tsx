@@ -34,7 +34,13 @@ export function BrandSheet({
 	const del = useDeleteBrand();
 	return (
 		<LabelSheet
-			words={{ ...WORDS, confirmText: brandDeleteText(editing?.items ?? 0) }}
+			words={{
+				...WORDS,
+				confirmText: brandDeleteText(
+					editing?.items ?? 0,
+					editing?.shopLinks ?? 0,
+				),
+			}}
 			labels={brands}
 			limit={BRAND_LIMIT}
 			limitCode="brand_limit"

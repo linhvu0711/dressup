@@ -27,11 +27,21 @@ export const listedBrandSchema = brandSchema.extend({
 
 export type ListedBrand = z.infer<typeof listedBrandSchema>;
 
-// What the delete confirm says the delete does to the closet.
-export function brandDeleteText(items: number): string {
-	if (items === 0) return "No item uses it.";
-	if (items === 1) return "1 item loses its brand.";
-	return `${items} items lose their brand.`;
+// What the delete confirm says the delete does to the closet and the shop
+// links.
+export function brandDeleteText(items: number, shopLinks: number): string {
+	if (shopLinks === 0) {
+		if (items === 0) return "No item uses it.";
+		if (items === 1) return "1 item loses its brand.";
+		return `${items} items lose their brand.`;
+	}
+	const links = shopLinks === 1 ? "1 shop link" : `${shopLinks} shop links`;
+	if (items === 0)
+		return shopLinks === 1
+			? `${links} loses its brand.`
+			: `${links} lose their brand.`;
+	const owned = items === 1 ? "1 item" : `${items} items`;
+	return `${owned} and ${links} lose their brand.`;
 }
 
 // The store and the page cache both sort with this one rule, so a brand the
