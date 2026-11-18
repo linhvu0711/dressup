@@ -872,6 +872,26 @@ describe("tags on a combination", () => {
 		});
 	});
 
+	test("writes the tags of a save sent again with other tags", async () => {
+		// Given: alice; tags Work and Weekend; THREE saved with Work, its
+		// answer lost
+		const { h, headers, ids } = await alice();
+		const work = await addTag(h, headers, "Work");
+		const weekend = await addTag(h, headers, "Weekend");
+		const body = three(ids);
+		await post(h, headers, { ...body, tags: [work] });
+		// When: the same save is sent again with Weekend picked instead
+		const again = await post(h, headers, { ...body, tags: [weekend] });
+		const listed = await list(h, headers);
+		// Then
+		expect({
+			status: again.status,
+			answered: ((await again.json()) as { combination: { tags: string[] } })
+				.combination.tags,
+			listed: listed.map((c) => c.tags),
+		}).toEqual({ status: 200, answered: [weekend], listed: [[weekend]] });
+	});
+
 	test("saves a combination's tags once when the same save comes twice", async () => {
 		// Given: alice; tag Work; THREE with it
 		const { h, headers, ids } = await alice();

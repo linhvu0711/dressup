@@ -233,9 +233,31 @@ const tagLinks = (
 		)
 		.onConflictDoNothing();
 
+// The clear and the insert go in one batch, so two writes at once leave one
+// write's tags, never a mix.
+const replaceTags = (
+	db: Db,
+	userId: string,
+	id: string,
+	tags: readonly string[],
+	ours: SQL | undefined,
+) =>
+	[
+		db
+			.delete(combinationTag)
+			.where(
+				and(
+					eq(combinationTag.combinationId, id),
+					eq(combinationTag.userId, userId),
+				),
+			),
+		...(tags.length ? [tagLinks(db, userId, id, tags, ours)] : []),
+	] as const;
+
 // The page makes the id when the save form opens, so a Save sent again after
 // a lost answer gives back the same combination rather than a second one. An
-// id another account holds, or one saved with other pieces, is conflict. The
+// id another account holds, or one saved with other pieces, is conflict. A
+// save sent again writes its tags, since the form may have changed them. The
 // same pieces and jacket state under another id is duplicate, with its id. A
 // new combination past the limit is not saved: combination_limit. The count
 // sits in the insert, so two saves at once cannot both pass it.
@@ -257,8 +279,13 @@ export async function saveCombination(
 		.select({ userId: combination.userId, key: combination.key })
 		.from(combination)
 		.where(eq(combination.id, input.id));
+	const ours = and(
+		eq(combination.id, input.id),
+		eq(combination.userId, userId),
+	);
 	if (before) {
 		if (before.userId !== userId || before.key !== key) return conflict;
+		await db.batch(replaceTags(db, userId, input.id, input.tags, ours));
 		const [same] = await readCombinations(db, userId, input.id);
 		return same
 			? { ok: true, value: { combination: same, created: false } }
@@ -266,10 +293,6 @@ export async function saveCombination(
 	}
 	const held = await keyHolder(db, userId, key);
 	if (held) return { ok: false, error: { code: "duplicate", id: held } };
-	const ours = and(
-		eq(combination.id, input.id),
-		eq(combination.userId, userId),
-	);
 	try {
 		await db.batch([
 			db
@@ -374,22 +397,8 @@ export async function changeCombination(
 				...pieceWrites(db, input.pieces, ours),
 			]
 		: [];
-	// The clear and the insert share the batch, so two tabs leave one tab's
-	// tags, never a mix.
 	const tagStatements = change.tags
-		? [
-				db
-					.delete(combinationTag)
-					.where(
-						and(
-							eq(combinationTag.combinationId, id),
-							eq(combinationTag.userId, userId),
-						),
-					),
-				...(input.tags.length
-					? [tagLinks(db, userId, id, input.tags, ours)]
-					: []),
-			]
+		? replaceTags(db, userId, id, input.tags, ours)
 		: [];
 	const [first, ...rest] = [...pieceStatements, ...tagStatements];
 	if (first) {
