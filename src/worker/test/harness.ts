@@ -9,6 +9,7 @@ import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 import { createApp } from "../app";
 import { type AuthSettings, authOptions, createClientDiscovery } from "../auth";
 import { type Db, schema } from "../db";
+import { MemoryBucket } from "./memory-bucket";
 import { seedCombinations } from "./seed-combinations";
 import { seedOwnedItems } from "./seed-owned-items";
 import { seedShopLinks, seedWishes } from "./seed-wishes";
@@ -67,8 +68,9 @@ export async function makeHarness() {
 		await betterAuth({ ...authOptions(settings), plugins: [testUtils()] })
 			.$context
 	).test;
+	const pictures = new MemoryBucket();
 	// The app never reads DB here: createApp gets the database from getDb.
-	const env = testEnv as unknown as Env;
+	const env = { ...testEnv, PICTURES: pictures } as unknown as Env;
 	// Saves the account and gives the headers of a session signed in as it.
 	const addAccount = async (person: Person) => {
 		await helpers.saveUser(helpers.createUser(person));
@@ -178,6 +180,7 @@ export async function makeHarness() {
 		helpers,
 		settings,
 		db,
+		pictures,
 		addAccount,
 		rows,
 		tables,

@@ -16,7 +16,7 @@ bun run build     # production build
 bun run db:generate       # a SQL migration from the Drizzle schema
 bun run db:migrate:local  # apply the migrations to the local database
 bun run auth:schema       # write the Better Auth tables after its config changes
-bun run deploy            # build, migrate the remote database, then deploy
+bun run deploy            # build, migrate the remote database, make the picture bucket if it is missing, then deploy
 ```
 
 GitHub runs `bun run check`, `bun test`, `bun run build`, and `bun run e2e` on every push to `main` and every pull request (`.github/workflows/ci.yml`).
@@ -41,3 +41,9 @@ Copy `.dev.vars.example` to `.dev.vars` and fill in each value. Wrangler reads `
 - Not set, or any other value: sign-up is open.
 
 On Cloudflare, set it in the dashboard, under the Worker's Settings, in Variables and Secrets, as a plain text variable. `keep_vars` in `wrangler.jsonc` keeps it on each deploy. In dev, put `SIGNUPS_CLOSED=true` in `.dev.vars`.
+
+## Pictures
+
+Pictures live in the R2 bucket `dressup-pictures`, bound as `PICTURES` in `wrangler.jsonc`. `bun run dev`, `bun test`, and `bun run e2e` use a local bucket: dev and e2e keep it under `.wrangler/state`, and the worker tests use a fake in memory. No Cloudflare account is needed.
+
+`bun run deploy` makes the bucket on Cloudflare when it does not exist. If a deploy says the bucket is missing, run `bunx wrangler r2 bucket create dressup-pictures` once.

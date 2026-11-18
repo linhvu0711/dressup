@@ -29,7 +29,9 @@
 			"database_id": "65c584c9-3917-4fe9-8fc5-3394cdd07797",
 			"migrations_dir": "migrations"
 		}
-	]
+	],
+	// Made by wrangler deploy when it does not exist (README "Pictures").
+	"r2_buckets": [{ "binding": "PICTURES", "bucket_name": "dressup-pictures" }]
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement

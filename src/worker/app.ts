@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { type Context, Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { createMiddleware } from "hono/factory";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
@@ -18,6 +19,7 @@ import type {
 	MeAnswer,
 	OwnedItemAnswer,
 	OwnedItemsAnswer,
+	PictureAnswer,
 	TagAnswer,
 	TagsAnswer,
 	WishAnswer,
@@ -26,6 +28,7 @@ import type {
 import { type DressError, dressChangeSchema } from "@/dress/state";
 import { brandIdSchema } from "@/labels/brand";
 import { colourIdSchema } from "@/labels/colour";
+import { PICTURE_BYTES_MAX, pictureIdSchema } from "@/pictures/picture";
 import { tagIdSchema } from "@/tags/tag";
 import { disconnectAiApp, listAiApps } from "./ai-app-store";
 import {
@@ -74,6 +77,7 @@ import {
 	listOwnedItems,
 	type OwnedItemError,
 } from "./owned-item-store";
+import { addPicture, type PictureError, readPicture } from "./picture-store";
 import {
 	addTag,
 	deleteTag,
@@ -242,6 +246,15 @@ function wishRefusal(error: WishError): Refusal {
 			return { status: 409, body: { error: "shop_link_limit" } };
 		case "conflict":
 			return { status: 409, body: { error: "conflict", field: "id" } };
+		case "not_found":
+			return { status: 404, body: { error: "not_found" } };
+	}
+}
+
+function pictureRefusal(error: PictureError): Refusal {
+	switch (error.code) {
+		case "invalid":
+			return { status: 400, body: { error: "invalid", field: error.field } };
 		case "not_found":
 			return { status: 404, body: { error: "not_found" } };
 	}
@@ -634,6 +647,45 @@ export function createApp(getDb: (env: Env) => Db) {
 			return c.json(refused, status);
 		}
 		return c.body(null, 204);
+	});
+
+	app.post(
+		"/pictures",
+		withAuth,
+		requireUser,
+		bodyLimit({
+			maxSize: PICTURE_BYTES_MAX,
+			onError: (c) => c.json({ error: "too_large" } satisfies ErrorAnswer, 413),
+		}),
+		async (c) => {
+			const added = await addPicture(
+				getDb(c.env),
+				c.env.PICTURES,
+				c.var.user.id,
+				await c.req.arrayBuffer(),
+			);
+			if (!added.ok) {
+				const { status, body: refused } = pictureRefusal(added.error);
+				return c.json(refused, status);
+			}
+			return c.json({ picture: added.value } satisfies PictureAnswer, 201);
+		},
+	);
+
+	app.get("/pictures/:id", withAuth, requireUser, async (c) => {
+		const id = pictureIdSchema.safeParse(c.req.param("id"));
+		const read = id.success
+			? await readPicture(getDb(c.env), c.env.PICTURES, c.var.user.id, id.data)
+			: ({ ok: false, error: { code: "not_found" } } as const);
+		if (!read.ok) {
+			const { status, body: refused } = pictureRefusal(read.error);
+			return c.json(refused, status);
+		}
+		const headers = new Headers();
+		read.value.writeHttpMetadata(headers);
+		// A picture never gets new bytes: a new upload is a new id.
+		headers.set("cache-control", "private, max-age=31536000, immutable");
+		return new Response(read.value.body, { headers });
 	});
 
 	app.get("/tags", withAuth, requireUser, async (c) =>

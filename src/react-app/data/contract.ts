@@ -6,6 +6,7 @@ import { dressStateSchema } from "@/dress/state";
 import { brandSchema, listedBrandSchema } from "@/labels/brand";
 import { colourSchema, listedColourSchema } from "@/labels/colour";
 import { lookSchema } from "@/looks/look";
+import { pictureIdSchema } from "@/pictures/picture";
 import { listedTagSchema, tagSchema } from "@/tags/tag";
 import { wishSchema } from "@/wishlist/wish";
 
@@ -28,6 +29,7 @@ export const errorCodes = [
 	"colour_in_use",
 	"wish_limit",
 	"shop_link_limit",
+	"too_large",
 ] as const;
 
 export type ErrorCode = (typeof errorCodes)[number];
@@ -106,6 +108,12 @@ export type WishesAnswer = z.input<typeof wishesAnswer>;
 export const wishAnswer = z.object({ wish: wishSchema });
 
 export type WishAnswer = z.input<typeof wishAnswer>;
+
+export const pictureAnswer = z.object({
+	picture: z.object({ id: pictureIdSchema }),
+});
+
+export type PictureAnswer = z.input<typeof pictureAnswer>;
 
 export const aiAppsAnswer = z.object({ apps: z.array(aiAppSchema) });
 
