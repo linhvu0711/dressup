@@ -51,7 +51,12 @@ import {
 	deleteColour,
 	listColours,
 } from "./colour-store";
-import { listCombinations, saveCombination } from "./combination-store";
+import {
+	changeCombination,
+	deleteCombination,
+	listCombinations,
+	saveCombination,
+} from "./combination-store";
 import type { Db } from "./db";
 import { changeDress, loadDress } from "./dress-store";
 import { changeLook, deleteLook, listLooks, saveLook } from "./look-store";
@@ -140,6 +145,12 @@ const field = {
 		.describe(`The open jackets of the mode: ${JACKET_IDS.join(" or ")}.`),
 	lookName: z.string().describe(`At most ${LOOK_NAME_MAX} characters.`),
 	tags: z.array(z.string()).describe("Tag ids."),
+	pieces: z.array(
+		z.object({
+			typeId: z.string().describe("A type id from list_types, such as tee_l."),
+			colourId: z.string().describe("A colour id from list_colours."),
+		}),
+	),
 };
 
 export function registerAiActions(server: McpServer, account: Account) {
@@ -639,14 +650,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 			description: `Saves a combination of 2 to 4 pieces, at most one for each layer. A piece is a type id from list_types and a colour id from list_colours. An account keeps each combination once and at most ${COMBINATION_LIMIT} combinations.`,
 			annotations: WRITE,
 			inputSchema: z.object({
-				pieces: z.array(
-					z.object({
-						typeId: z
-							.string()
-							.describe("A type id from list_types, such as tee_l."),
-						colourId: z.string().describe("A colour id from list_colours."),
-					}),
-				),
+				pieces: field.pieces,
 				open: z
 					.boolean()
 					.optional()
@@ -665,6 +669,50 @@ export function registerAiActions(server: McpServer, account: Account) {
 			return saved.ok
 				? answer({ combination: combinationView(saved.value.combination) })
 				: refusal(combinationRefusalText(saved.error));
+		},
+	);
+
+	tool(
+		"change_combination",
+		{
+			title: "Change a combination",
+			description:
+				"Changes a saved combination's pieces. The pieces given replace all of its pieces: 2 to 4, at most one for each layer. It keeps its id and its place in the list. open sets the jacket state; left out, it stays.",
+			annotations: WRITE,
+			inputSchema: z.object({
+				id: z.string().describe("The combination's id."),
+				pieces: field.pieces,
+				open: z
+					.boolean()
+					.optional()
+					.describe(
+						"The jacket is open. Only for a combination with a jacket. Left out, the jacket state stays.",
+					),
+			}),
+		},
+		async ({ id, pieces, open }) => {
+			const changed = await changeCombination(db, userId, id, { pieces, open });
+			return changed.ok
+				? answer({ combination: combinationView(changed.value) })
+				: refusal(combinationRefusalText(changed.error));
+		},
+	);
+
+	tool(
+		"delete_combination",
+		{
+			title: "Delete a combination",
+			description: "Deletes a saved combination for good.",
+			annotations: DELETE,
+			inputSchema: z.object({
+				id: z.string().describe("The combination's id."),
+			}),
+		},
+		async ({ id }) => {
+			const deleted = await deleteCombination(db, userId, id);
+			return deleted.ok
+				? answer({ deleted: id })
+				: refusal(combinationRefusalText(deleted.error));
 		},
 	);
 }

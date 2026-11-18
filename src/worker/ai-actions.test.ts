@@ -871,6 +871,8 @@ describe("tags", () => {
 			["list_types", R],
 			["list_combinations", R],
 			["save_combination", W],
+			["change_combination", W],
+			["delete_combination", D],
 		]);
 		expect(listed.every((t) => typeof t.title === "string")).toBe(true);
 	});
@@ -1441,6 +1443,129 @@ describe("combinations", () => {
 			{ typeId: "casual_p", colourId: ids.Navy },
 		],
 		open: true,
+	});
+
+	// White short tee + Grey training shorts.
+	const two = (ids: Record<string, string>) => ({
+		pieces: [
+			{ typeId: "train_sh", colourId: ids.Grey },
+			{ typeId: "tee_s", colourId: ids.White },
+		],
+	});
+
+	// The id of a combination save_combination saved.
+	const savedId = async (ai: Session, body: Record<string, unknown>) =>
+		(
+			(await ai.call("save_combination", body)).data as {
+				combination: Listed;
+			}
+		).combination.id;
+
+	// THREE's pieces with Grey casual pants in place of Navy.
+	const greyPants = (ids: Record<string, string>) => [
+		{ typeId: "harrington", colourId: ids.Khaki },
+		{ typeId: "tee_l", colourId: ids.Black },
+		{ typeId: "casual_p", colourId: ids.Grey },
+	];
+
+	test("changes a combination's pieces", async () => {
+		// Given: THREE saved
+		const { ai } = await withAiSession();
+		const ids = await colourIds(ai);
+		const id = await savedId(ai, three(ids));
+		// When
+		const { isError, data } = await ai.call("change_combination", {
+			id,
+			pieces: greyPants(ids),
+		});
+		// Then
+		const changed = (data as { combination: Listed }).combination;
+		expect({ isError, id: changed.id, title: changed.title }).toEqual({
+			isError: false,
+			id,
+			title:
+				"Khaki Harrington jacket (open) + Black long tee + Grey casual pants",
+		});
+	});
+
+	test("keeps the jacket state when a change leaves open out", async () => {
+		// Given: THREE saved with its jacket open
+		const { ai } = await withAiSession();
+		const ids = await colourIds(ai);
+		const id = await savedId(ai, three(ids));
+		// When
+		const { data } = await ai.call("change_combination", {
+			id,
+			pieces: greyPants(ids),
+		});
+		// Then
+		expect(
+			(data as { combination: Listed & { open: boolean } }).combination.open,
+		).toBe(true);
+	});
+
+	test("refuses a change into a combination the account has", async () => {
+		// Given: THREE and TWO saved
+		const { ai } = await withAiSession();
+		const ids = await colourIds(ai);
+		const threeId = await savedId(ai, three(ids));
+		const twoId = await savedId(ai, two(ids));
+		// When
+		const { isError, text } = await ai.call("change_combination", {
+			id: threeId,
+			pieces: two(ids).pieces,
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: `You have this combination already, with id ${twoId}.`,
+		});
+	});
+
+	test("refuses a change to a combination that is gone", async () => {
+		// Given: THREE saved, then deleted
+		const { ai } = await withAiSession();
+		const ids = await colourIds(ai);
+		const id = await savedId(ai, three(ids));
+		await ai.call("delete_combination", { id });
+		// When
+		const { isError, text } = await ai.call("change_combination", {
+			id,
+			pieces: two(ids).pieces,
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "No combination with this id.",
+		});
+	});
+
+	test("deletes a combination", async () => {
+		// Given: THREE saved
+		const { ai } = await withAiSession();
+		const id = await savedId(ai, three(await colourIds(ai)));
+		// When
+		const { isError } = await ai.call("delete_combination", { id });
+		// Then
+		const listed = await ai.call("list_combinations");
+		expect({ isError, text: listed.text }).toEqual({
+			isError: false,
+			text: "You have no combinations yet.",
+		});
+	});
+
+	test("refuses to delete a combination that is gone", async () => {
+		// Given: THREE saved and deleted
+		const { ai } = await withAiSession();
+		const id = await savedId(ai, three(await colourIds(ai)));
+		await ai.call("delete_combination", { id });
+		// When
+		const { isError, text } = await ai.call("delete_combination", { id });
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "No combination with this id.",
+		});
 	});
 
 	test("lists the types with their layers", async () => {
