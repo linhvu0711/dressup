@@ -443,7 +443,9 @@ test("closes the viewer with Esc and with a click outside", async ({
 	await page.keyboard.press("Escape");
 	const afterEsc = await viewer(page).count();
 	await page.getByRole("button", { name: "Open picture 1 of 2" }).click();
-	await expect(viewer(page)).toBeVisible();
+	// Radix turns clicks on for a dialog opened again a moment after it
+	// shows; a person never clicks that fast, so wait for it as they would.
+	await expect(viewer(page)).toHaveCSS("pointer-events", "auto");
 	await page.mouse.click(8, 8);
 	// Then
 	await expect(viewer(page)).toHaveCount(0);
