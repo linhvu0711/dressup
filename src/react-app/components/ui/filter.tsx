@@ -105,10 +105,9 @@ export function ActiveFilters({
 	if (chips.length === 0) return null;
 	return (
 		<>
-			<div
-				role="group"
+			<fieldset
 				aria-label="Active filters"
-				className="flex flex-none gap-[7px] overflow-x-auto px-4 pt-0.5 pb-1.5 [scrollbar-width:none] wide:px-6"
+				className="flex min-w-0 flex-none gap-[7px] overflow-x-auto px-4 pt-0.5 pb-1.5 [scrollbar-width:none] wide:px-6"
 			>
 				{chips.map((chip) => (
 					<span
@@ -139,7 +138,7 @@ export function ActiveFilters({
 				>
 					Clear all
 				</button>
-			</div>
+			</fieldset>
 			<p
 				data-slot="filter-shown"
 				className="px-4 pb-2 text-[12.5px] text-muted-foreground wide:px-6"
