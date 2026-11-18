@@ -86,8 +86,8 @@ function AllowScreen() {
 			{app.data ? (
 				<p className="max-w-[32ch] text-balance text-[15px] text-muted-foreground">
 					<b className="font-medium text-foreground">{name}</b> wants to see and
-					change your outfit, colours, brands, looks, combinations, closet, and
-					tags.
+					change your outfit, colours, brands, looks, combinations, closet,
+					wishlist, and tags.
 				</p>
 			) : (
 				<div className="flex flex-col items-center gap-2">
