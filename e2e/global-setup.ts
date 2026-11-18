@@ -31,7 +31,7 @@ export const BRANDS_FULL_FILE = "e2e/.auth/brands-full.json";
 export const COMBINATIONS_FULL_FILE = "e2e/.auth/combinations-full.json";
 // Each test changes the colours it saves, and tests run in parallel, so
 // each one claims its own fresh account from this pool (e2e/fixtures.ts).
-export const POOL_SIZE = 400;
+export const POOL_SIZE = 600;
 export const poolFile = (n: number) => `e2e/.auth/pool/${n}.json`;
 export const claimFile = (n: number) => `e2e/.auth/claims/${n}`;
 
