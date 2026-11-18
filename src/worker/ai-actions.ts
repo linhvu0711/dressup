@@ -435,7 +435,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		{
 			title: "List the colours",
 			description:
-				"The account's colours, in the order they were added. A new account starts with 13.",
+				"The account's colours, in the order they were added. A new account starts with 13. A colour with inUse true is in a combination and cannot be deleted.",
 			annotations: READ,
 			inputSchema: noArgs,
 		},

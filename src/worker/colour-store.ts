@@ -1,22 +1,25 @@
-import { and, asc, count, eq, sql } from "drizzle-orm";
+import { and, asc, count, eq, exists, not, sql } from "drizzle-orm";
 import type { Hex } from "@/colour/hex";
 import {
 	COLOUR_LIMIT,
 	type Colour,
 	type ColourId,
 	colourInputSchema,
+	type ListedColour,
 } from "@/labels/colour";
 import { sameLabelName } from "@/labels/name";
 import { type Db, hitsIndex } from "./db";
 import { user } from "./db/auth-schema";
 import { colour, colourSeed } from "./db/colour-schema";
+import { combinationPiece } from "./db/combination-schema";
 import type { Result } from "./result";
 
 export type ColourError =
 	| { code: "invalid"; field: "name" | "hex" }
 	| { code: "duplicate"; name: string }
 	| { code: "colour_limit" }
-	| { code: "not_found" };
+	| { code: "not_found" }
+	| { code: "colour_in_use"; name: string };
 
 export const STARTER_COLOURS: readonly { name: string; hex: Hex }[] = [
 	{ name: "White", hex: "#F4F2ED" },
@@ -69,16 +72,34 @@ async function seedOnce(db: Db, userId: string) {
 // The account's colours in the order they were added. An account with no
 // seed mark gets the starter set first, so accounts made before this table
 // get it too.
-export async function listColours(db: Db, userId: string): Promise<Colour[]> {
+export async function listColours(
+	db: Db,
+	userId: string,
+): Promise<ListedColour[]> {
 	await seedOnce(db, userId);
 	const rows = await db
-		.select({ id: colour.id, name: colour.name, hex: colour.hex })
+		.select({
+			id: colour.id,
+			name: colour.name,
+			hex: colour.hex,
+			inUse: sql<number>`${inUse(db)}`,
+		})
 		.from(colour)
 		.where(eq(colour.userId, userId))
 		// Two adds in one millisecond share created_at; rowid keeps their order.
-		.orderBy(asc(colour.createdAt), asc(sql`rowid`));
-	return rows.map(toColour);
+		.orderBy(asc(colour.createdAt), asc(sql`${colour}.rowid`));
+	return rows.map((row) => ({ ...toColour(row), inUse: row.inUse === 1 }));
 }
+
+// The one check of "a combination wears this colour", for the list and the
+// delete.
+const inUse = (db: Db) =>
+	exists(
+		db
+			.select({ one: sql`1` })
+			.from(combinationPiece)
+			.where(eq(combinationPiece.colourId, colour.id)),
+	);
 
 type ColourInput = { name: string; hex: string };
 
@@ -174,18 +195,28 @@ export async function changeColour(
 	}
 }
 
-// Only the account's own colour goes; not found when the account has no
-// colour with this id.
+// Only the account's own colour goes, and only while no combination wears it
+// (docs/adr/0013-colour-belongs-to-the-account.md); the check sits in the
+// delete, and the piece's key to colour refuses it too.
 export async function deleteColour(
 	db: Db,
 	userId: string,
 	id: string,
 ): Promise<Result<Colour, ColourError>> {
+	const ours = and(eq(colour.id, id), eq(colour.userId, userId));
 	const [row] = await db
 		.delete(colour)
-		.where(and(eq(colour.id, id), eq(colour.userId, userId)))
+		.where(and(ours, not(inUse(db))))
 		.returning({ id: colour.id, name: colour.name, hex: colour.hex });
-	return row
-		? { ok: true, value: toColour(row) }
-		: { ok: false, error: { code: "not_found" } };
+	if (row) return { ok: true, value: toColour(row) };
+	const [kept] = await db
+		.select({ name: colour.name })
+		.from(colour)
+		.where(ours);
+	return {
+		ok: false,
+		error: kept
+			? { code: "colour_in_use", name: kept.name }
+			: { code: "not_found" },
+	};
 }

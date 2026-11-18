@@ -3,7 +3,7 @@ import { aiAppSchema } from "@/ai-apps/ai-app";
 import { combinationSchema } from "@/combinations/combination";
 import { dressStateSchema } from "@/dress/state";
 import { brandSchema } from "@/labels/brand";
-import { colourSchema } from "@/labels/colour";
+import { colourSchema, listedColourSchema } from "@/labels/colour";
 import { lookSchema } from "@/looks/look";
 import { tagSchema } from "@/tags/tag";
 
@@ -22,6 +22,7 @@ export const errorCodes = [
 	"colour_limit",
 	"brand_limit",
 	"combination_limit",
+	"colour_in_use",
 ] as const;
 
 export type ErrorCode = (typeof errorCodes)[number];
@@ -53,7 +54,9 @@ export const tagAnswer = z.object({ tag: tagSchema });
 
 export type TagAnswer = z.input<typeof tagAnswer>;
 
-export const coloursAnswer = z.object({ colours: z.array(colourSchema) });
+export const coloursAnswer = z.object({
+	colours: z.array(listedColourSchema),
+});
 
 export type ColoursAnswer = z.input<typeof coloursAnswer>;
 

@@ -2,7 +2,7 @@ import { QueryClient } from "@tanstack/react-query";
 import type { z } from "zod";
 import type { AiApp } from "@/ai-apps/ai-app";
 import { type Brand, type BrandId, byBrandName } from "@/labels/brand";
-import type { Colour, ColourId } from "@/labels/colour";
+import type { Colour, ColourId, ListedColour } from "@/labels/colour";
 import type { Look, LookId } from "@/looks/look";
 import type { Tag, TagId } from "@/tags/tag";
 import { type ErrorCode, errorAnswer, meAnswer } from "./contract";
@@ -87,14 +87,15 @@ export const after = {
 		refresh(keys.looks(userId));
 	},
 	colourAdded(userId: string | null, colour: Colour) {
-		queryClient.setQueryData<Colour[]>(keys.colours(userId), (old) =>
-			old ? [...old, colour] : old,
+		queryClient.setQueryData<ListedColour[]>(keys.colours(userId), (old) =>
+			old ? [...old, { ...colour, inUse: false }] : old,
 		);
 	},
-	// The changed colour keeps its place, as the server keeps its time.
+	// The changed colour keeps its place, as the server keeps its time, and
+	// its inUse, which a change of name or code leaves as it was.
 	colourChanged(userId: string | null, colour: Colour) {
-		queryClient.setQueryData<Colour[]>(keys.colours(userId), (old) =>
-			old?.map((c) => (c.id === colour.id ? colour : c)),
+		queryClient.setQueryData<ListedColour[]>(keys.colours(userId), (old) =>
+			old?.map((c) => (c.id === colour.id ? { ...c, ...colour } : c)),
 		);
 	},
 	// The server's colours may differ from the cached ones, as after an add

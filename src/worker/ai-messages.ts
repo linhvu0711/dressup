@@ -83,6 +83,8 @@ export function colourRefusalText(error: ColourError): string {
 			return `You have ${COLOUR_LIMIT} colours. That is the limit. Delete one to add a new one.`;
 		case "not_found":
 			return noColour;
+		case "colour_in_use":
+			return `A combination uses ${error.name}, so it stays. A colour that a combination uses cannot be deleted.`;
 	}
 }
 

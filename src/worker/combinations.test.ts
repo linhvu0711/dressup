@@ -412,6 +412,27 @@ describe("combination limit", () => {
 	});
 });
 
+describe("a colour deleted during a save", () => {
+	test("keeps no piece of a colour deleted while the save writes", async () => {
+		// Given: alice; a trigger deletes Navy just before its piece is written,
+		// after the save's colour check passed
+		const { h, headers, ids } = await alice();
+		h.addTrigger(
+			`CREATE TRIGGER drop_navy BEFORE INSERT ON combination_piece WHEN NEW.colour_id = '${ids.Navy}' BEGIN DELETE FROM colour WHERE id = NEW.colour_id; END`,
+		);
+		// When
+		const threw = await saveCombination(h.db, "alice-id", three(ids)).then(
+			() => false,
+			() => true,
+		);
+		// Then
+		expect({ threw, combinations: (await list(h, headers)).length }).toEqual({
+			threw: true,
+			combinations: 0,
+		});
+	});
+});
+
 describe("GET /api/combinations", () => {
 	test("refuses without a session", async () => {
 		// Given: no session

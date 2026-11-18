@@ -201,6 +201,8 @@ function colourRefusal(error: ColourError): Refusal {
 			return { status: 409, body: { error: "duplicate", field: "name" } };
 		case "colour_limit":
 			return { status: 409, body: { error: "colour_limit" } };
+		case "colour_in_use":
+			return { status: 409, body: { error: "colour_in_use" } };
 		case "not_found":
 			return { status: 404, body: { error: "not_found" } };
 	}

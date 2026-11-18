@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import { addBrand } from "./brand-store";
+import { saveCombination } from "./combination-store";
 import { schema } from "./db";
 import {
 	type aiSession,
@@ -1058,7 +1059,7 @@ describe("tags", () => {
 	});
 });
 
-type Colour = { id: string; name: string; hex: string };
+type Colour = { id: string; name: string; hex: string; inUse?: boolean };
 
 const colours = async (h: Harness, ai: Session) =>
 	(
@@ -1156,7 +1157,7 @@ describe("colours", () => {
 		// Then
 		expect({ isError, stored: (await colours(h, ai)).at(-1) }).toEqual({
 			isError: false,
-			stored: { id, name: "Sea", hex: "#2A6F7F" },
+			stored: { id, name: "Sea", hex: "#2A6F7F", inUse: false },
 		});
 	});
 
@@ -1172,6 +1173,31 @@ describe("colours", () => {
 			count: names.length,
 			teal: names.includes("Teal"),
 		}).toEqual({ isError: false, count: 13, teal: false });
+	});
+
+	test("refuses to delete a colour a combination uses", async () => {
+		// Given: the account saved Navy casual pants and a White long tee
+		const { h, ai, userId } = await withAiSession();
+		const listed = await colours(h, ai);
+		const idOf = (name: string) =>
+			listed.find((c) => c.name === name)?.id ?? "";
+		await saveCombination(h.db, userId, {
+			id: "11111111-1111-4111-8111-111111111111",
+			pieces: [
+				{ typeId: "casual_p", colourId: idOf("Navy") },
+				{ typeId: "tee_l", colourId: idOf("White") },
+			],
+			open: false,
+		});
+		// When
+		const { isError, text } = await ai.call("delete_colour", {
+			id: idOf("Navy"),
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "A combination uses Navy, so it stays. A colour that a combination uses cannot be deleted.",
+		});
 	});
 
 	test("refuses to delete a colour that is gone", async () => {
