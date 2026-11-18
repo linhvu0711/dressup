@@ -3,8 +3,12 @@ import { Plus } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import type { Hex } from "@/colour/hex";
 import { Button } from "@/components/ui/button";
+import { ActiveFilters, FilterButton } from "@/components/ui/filter";
 import { Notice } from "@/components/ui/notice";
 import type { GarmentId } from "@/dress/garments";
+import { PieceFilterSheet } from "@/piece-filter/PieceFilterSheet";
+import type { FilterPiece } from "@/piece-filter/piece-filter";
+import { usePieceFilter } from "@/piece-filter/use-piece-filter";
 import type { PieceTab } from "@/shell/piece-link";
 import { PageHeader } from "../shell/PageHeader";
 import { PieceTile } from "./PieceTile";
@@ -20,14 +24,15 @@ type TilePiece = {
 };
 
 // The Closet and the Wishlist are one page: a wall of piece tiles with its
-// loading, failed, and empty states. Each tab brings its list, its tile, its
-// words, and its add sheet.
+// filter and its loading, failed, and empty states. Each tab brings its
+// list, its tile, its words, and its add sheet.
 export function PieceTabPage<D, E extends TilePiece>({
 	title,
 	tab,
 	slot,
 	query,
 	entries,
+	toPiece,
 	tile,
 	failedTitle,
 	empty,
@@ -39,6 +44,7 @@ export function PieceTabPage<D, E extends TilePiece>({
 	slot: "closet" | "wish";
 	query: UseQueryResult<D[]>;
 	entries: (data: D[]) => E[];
+	toPiece: (entry: E) => FilterPiece;
 	tile: (entry: E) => {
 		key: string;
 		label: string;
@@ -51,6 +57,10 @@ export function PieceTabPage<D, E extends TilePiece>({
 	addSheet: (onClose: () => void) => ReactNode;
 }) {
 	const [adding, setAdding] = useState(false);
+	const [filtering, setFiltering] = useState(false);
+	const all = query.data === undefined ? [] : entries(query.data);
+	const pf = usePieceFilter(all, toPiece);
+	const filterable = !query.isPending && !query.isError && all.length > 0;
 	let wall: ReactNode;
 	if (query.isPending) {
 		wall = (
@@ -94,10 +104,20 @@ export function PieceTabPage<D, E extends TilePiece>({
 				</Button>
 			</Notice>
 		);
+	} else if (pf.shown.length === 0) {
+		wall = (
+			<div data-slot="no-match" className="flex flex-1 flex-col">
+				<Notice title="Nothing here">
+					<Button className="mt-2" onClick={pf.clear}>
+						Clear all
+					</Button>
+				</Notice>
+			</div>
+		);
 	} else {
 		wall = (
 			<div data-slot={`${slot}-wall`} className={WALL}>
-				{entries(query.data).map((entry) => {
+				{pf.shown.map((entry) => {
 					const { key, ...shown } = tile(entry);
 					return (
 						<PieceTile
@@ -117,19 +137,42 @@ export function PieceTabPage<D, E extends TilePiece>({
 			<PageHeader
 				title={title}
 				end={
-					<Button
-						variant="primary"
-						size="icon"
-						aria-label={addLabel}
-						title={addLabel}
-						onClick={() => setAdding(true)}
-					>
-						<Plus size={18} strokeWidth={1.9} aria-hidden />
-					</Button>
+					<>
+						{filterable ? (
+							<FilterButton
+								count={pf.count}
+								onClick={() => setFiltering(true)}
+							/>
+						) : null}
+						<Button
+							variant="primary"
+							size="icon"
+							aria-label={addLabel}
+							title={addLabel}
+							onClick={() => setAdding(true)}
+						>
+							<Plus size={18} strokeWidth={1.9} aria-hidden />
+						</Button>
+					</>
 				}
 			/>
+			{filterable ? (
+				<ActiveFilters
+					chips={pf.chips}
+					onClearAll={pf.clear}
+					shown={pf.shownText}
+				/>
+			) : null}
 			{wall}
 			{adding ? addSheet(() => setAdding(false)) : null}
+			{filtering ? (
+				<PieceFilterSheet
+					filter={pf.filter}
+					onChange={pf.set}
+					shownText={pf.shownText}
+					onClose={() => setFiltering(false)}
+				/>
+			) : null}
 		</div>
 	);
 }

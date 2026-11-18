@@ -1,5 +1,6 @@
 import { PieceTabPage } from "@/closet/PieceTabPage";
 import { pieceName } from "@/combinations/combination";
+import { wishPiece } from "@/piece-filter/piece-filter";
 import { useWishlist } from "@/wishlist/api";
 import { WishSheet } from "@/wishlist/WishSheet";
 import { linksLine } from "@/wishlist/wish";
@@ -13,6 +14,7 @@ export function WishlistPage() {
 			slot="wish"
 			query={useWishlist()}
 			entries={(wishes) => wishes}
+			toPiece={wishPiece}
 			tile={(wish) => ({
 				key: wish.id,
 				label: `${pieceName(wish)}, ${linksLine(wish)}`,

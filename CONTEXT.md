@@ -26,8 +26,8 @@
 - Sign-up switch: one on/off environment variable that stops new sign-ups. People with an account can still sign in.
 - Looks page: the wall of saved looks.
 - Labels page: the page with the lists that the account makes once and uses everywhere.
-- Closet: the pieces the account owns, shown as one tile for each piece.
-- Wishlist: the pieces the account wants to buy, shown as one tile for each piece.
+- Closet: the pieces the account owns, shown as one tile for each piece. The user filters it by type, colour, and brand.
+- Wishlist: the pieces the account wants to buy, shown as one tile for each piece. The user filters it by type, colour, and brand.
 - Wish: one wanted piece, with its shop links. A piece has at most one wish. An account holds at most 200.
 - Shop link: one place to buy a wish: a web address with its own brand, name, and price in VND. A wish holds at most 10.
 - Compare view: two to six looks in a row.

@@ -115,7 +115,7 @@ export function ActiveFilters({
 						data-slot="filter-chip"
 						className={cn(
 							CHIP,
-							"border-primary bg-primary pr-1 text-primary-foreground",
+							"border-primary bg-primary pr-1 text-primary-foreground hover:bg-primary",
 						)}
 					>
 						{chip.icon}

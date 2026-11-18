@@ -3,6 +3,7 @@ import { OwnedItemSheet } from "@/closet/OwnedItemSheet";
 import { closetPieces } from "@/closet/owned-item";
 import { PieceTabPage } from "@/closet/PieceTabPage";
 import { pieceName } from "@/combinations/combination";
+import { closetPiece } from "@/piece-filter/piece-filter";
 
 // The pieces the account owns, one tile for each, the piece of the newest
 // item first.
@@ -14,6 +15,7 @@ export function ClosetPage() {
 			slot="closet"
 			query={useCloset()}
 			entries={closetPieces}
+			toPiece={closetPiece}
 			tile={(piece) => ({
 				key: `${piece.typeId}/${piece.colour.id}`,
 				label: `${pieceName(piece)}, ${piece.quantity}`,
