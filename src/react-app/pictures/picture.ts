@@ -12,3 +12,9 @@ export const ACCOUNT_PICTURE_LIMIT = 1_000;
 export const STORAGE_BYTES_STOP = 9_000_000_000;
 
 export const MONTH_UPLOAD_STOP = 900_000;
+
+export const ITEM_PICTURE_LIMIT = 8;
+
+// A draft left by a closed tab goes at the account's next upload once it is
+// this old.
+export const DRAFT_AGE_MS = 86_400_000;

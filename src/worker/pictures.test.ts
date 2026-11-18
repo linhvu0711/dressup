@@ -385,3 +385,96 @@ describe("limits and the storage stop", () => {
 		});
 	});
 });
+
+// An owned item with these pictures: a Navy long button-up, no brand.
+async function addItem(h: Harness, headers: Headers, pictureIds: string[]) {
+	const { colours } = (await (
+		await h.app.request("/api/colours", { headers }, h.env)
+	).json()) as { colours: { id: string; name: string }[] };
+	const navy = colours.find((c) => c.name === "Navy")?.id;
+	const id = crypto.randomUUID();
+	await h.app.request(
+		"/api/owned-items",
+		{
+			method: "POST",
+			headers: {
+				...Object.fromEntries(headers),
+				"content-type": "application/json",
+			},
+			body: JSON.stringify({
+				id,
+				typeId: "shirt_l",
+				colourId: navy,
+				brandId: null,
+				quantity: 1,
+				pictureIds,
+			}),
+		},
+		h.env,
+	);
+	return id;
+}
+
+describe("drafts", () => {
+	afterEach(() => setSystemTime());
+
+	test("deletes a draft picture", async () => {
+		// Given
+		const { h, headers } = await withAccount();
+		const a = await uploadedId(h, headers);
+		// When
+		const deleted = await send(h, headers, "DELETE", `/api/pictures/${a}`);
+		const loaded = await send(h, headers, "GET", `/api/pictures/${a}`);
+		// Then
+		expect({
+			deleted: deleted.status,
+			loaded: loaded.status,
+			keys: h.pictures.keys(),
+		}).toEqual({ deleted: 204, loaded: 404, keys: [] });
+	});
+
+	test("keeps a saved picture on a draft delete", async () => {
+		// Given
+		const { h, headers } = await withAccount();
+		const a = await uploadedId(h, headers);
+		await addItem(h, headers, [a]);
+		// When
+		const refused = await answer(
+			await send(h, headers, "DELETE", `/api/pictures/${a}`),
+		);
+		const loaded = await send(h, headers, "GET", `/api/pictures/${a}`);
+		// Then
+		expect({ refused, loaded: loaded.status }).toEqual({
+			refused: { status: 404, body: { error: "not_found" } },
+			loaded: 200,
+		});
+	});
+
+	test("sweeps drafts older than a day at the next upload", async () => {
+		// Given
+		const { h, headers } = await withAccount();
+		setSystemTime(new Date("2026-11-17T10:00:00Z"));
+		const old = await uploadedId(h, headers);
+		setSystemTime(new Date("2026-11-18T11:00:00Z"));
+		// When
+		const fresh = await uploadedId(h, headers);
+		const loaded = await send(h, headers, "GET", `/api/pictures/${old}`);
+		// Then
+		expect({ loaded: loaded.status, keys: h.pictures.keys() }).toEqual({
+			loaded: 404,
+			keys: [fresh],
+		});
+	});
+
+	test("keeps a draft younger than a day", async () => {
+		// Given
+		const { h, headers } = await withAccount();
+		setSystemTime(new Date("2026-11-17T10:00:00Z"));
+		const old = await uploadedId(h, headers);
+		setSystemTime(new Date("2026-11-18T09:00:00Z"));
+		// When
+		const fresh = await uploadedId(h, headers);
+		// Then
+		expect(h.pictures.keys()).toEqual([old, fresh].sort());
+	});
+});

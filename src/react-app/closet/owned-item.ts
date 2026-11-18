@@ -2,6 +2,7 @@ import { z } from "zod";
 import { GARMENT_IDS } from "@/dress/garments";
 import { brandSchema } from "@/labels/brand";
 import { colourSchema } from "@/labels/colour";
+import { pictureIdSchema } from "@/pictures/picture";
 
 export const OWNED_ITEM_LIMIT = 500;
 
@@ -22,12 +23,16 @@ export const ownedItemInputSchema = z.object({
 	colourId: z.string(),
 	brandId: z.string().nullable(),
 	quantity: quantitySchema,
+	pictureIds: z.array(z.string()).optional(),
 });
 
-// The piece of an owned item never changes; only its brand and quantity do.
+// The piece of an owned item never changes; only its brand, quantity, and
+// pictures do. pictureIds is the whole list; left out keeps the item's
+// pictures, so an AI app that sends none keeps them.
 export const ownedItemChangeSchema = z.object({
 	brandId: z.string().nullable(),
 	quantity: quantitySchema,
+	pictureIds: z.array(z.string()).optional(),
 });
 
 export const ownedItemSchema = z.object({
@@ -36,6 +41,8 @@ export const ownedItemSchema = z.object({
 	colour: colourSchema,
 	brand: brandSchema.nullable(),
 	quantity: quantitySchema,
+	// In the order they were uploaded.
+	pictureIds: z.array(pictureIdSchema),
 });
 
 export type OwnedItem = z.infer<typeof ownedItemSchema>;

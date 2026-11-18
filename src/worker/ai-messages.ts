@@ -15,6 +15,7 @@ import { type DressError, MANNEQUIN_PARTS } from "@/dress/state";
 import { BRAND_LIMIT, BRAND_NAME_MAX } from "@/labels/brand";
 import { COLOUR_LIMIT, COLOUR_NAME_MAX } from "@/labels/colour";
 import { LOOK_LIMIT, LOOK_NAME_MAX, LOOK_TAGS_MAX } from "@/looks/look";
+import { ITEM_PICTURE_LIMIT } from "@/pictures/picture";
 import { TAG_NAME_MAX } from "@/tags/tag";
 import { PRICE_MAX, SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";
 import type { BrandError } from "./brand-store";
@@ -156,6 +157,7 @@ function ownedItemFieldText(
 		case "brandId":
 			return `${error.value} is not one of your brands. list_brands names them.`;
 		case "id":
+		case "pictureIds":
 		case "body":
 			return serverError;
 	}
@@ -169,6 +171,8 @@ export function ownedItemRefusalText(error: OwnedItemError): string {
 			return "You have this item already. Change its number.";
 		case "owned_item_limit":
 			return `You have ${OWNED_ITEM_LIMIT} items. That is the limit. Delete one to add a new one.`;
+		case "picture_limit":
+			return `An owned item has at most ${ITEM_PICTURE_LIMIT} pictures.`;
 		case "not_found":
 			return "No owned item with this id.";
 		case "conflict":

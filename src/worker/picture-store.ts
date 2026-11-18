@@ -1,8 +1,26 @@
-import { and, count, eq, type SQL, sql } from "drizzle-orm";
+import {
+	and,
+	asc,
+	count,
+	eq,
+	inArray,
+	isNotNull,
+	isNull,
+	lt,
+	notInArray,
+	or,
+	type SQL,
+	sql,
+} from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
+import { z } from "zod";
 import {
 	ACCOUNT_PICTURE_LIMIT,
+	DRAFT_AGE_MS,
+	ITEM_PICTURE_LIMIT,
 	MONTH_UPLOAD_STOP,
 	type PictureId,
+	pictureIdSchema,
 	STORAGE_BYTES_STOP,
 } from "@/pictures/picture";
 import type { Db } from "./db";
@@ -14,8 +32,14 @@ import {
 } from "./db/picture-schema";
 import type { Result } from "./result";
 
+// Why the picture list of an owner cannot be saved.
+export type PictureListError =
+	| { code: "invalid"; field: "pictureIds" }
+	| { code: "picture_limit" };
+
 export type PictureError =
 	| { code: "invalid"; field: "body" }
+	| PictureListError
 	| { code: "account_picture_limit" }
 	| { code: "storage_full" }
 	| { code: "not_found" };
@@ -55,6 +79,66 @@ function dropPictures(db: Db, where: SQL | undefined) {
 	] as const;
 }
 
+type Statement = BatchItem<"sqlite">;
+
+// R2 deletes at most 1,000 keys in one call. A failed delete is logged and
+// not thrown: the rows are gone, and the 1 GB under the free amount holds a
+// stray object.
+async function removeObjects(bucket: R2Bucket, ids: string[]) {
+	for (let i = 0; i < ids.length; i += 1000) {
+		try {
+			await bucket.delete(ids.slice(i, i + 1000));
+		} catch (error) {
+			console.error("picture objects were not deleted", error);
+		}
+	}
+}
+
+// One batch, so the owner's write, the pictures' rows, and the stored bytes
+// change all or nothing; then the objects of the rows it deleted go.
+async function runWithPictures(
+	db: Db,
+	bucket: R2Bucket,
+	{
+		before = [],
+		drop,
+		after = [],
+	}: {
+		before?: Statement[];
+		drop: ReturnType<typeof dropPictures>;
+		after?: Statement[];
+	},
+) {
+	const results = (await db.batch([...before, ...drop, ...after] as [
+		Statement,
+		...Statement[],
+	])) as unknown[];
+	const dropped = (results[before.length + 1] as { id: string }[]).map(
+		(row) => row.id,
+	);
+	await removeObjects(bucket, dropped);
+	return {
+		before: results.slice(0, before.length),
+		dropped,
+		after: results.slice(before.length + 2),
+	};
+}
+
+const drafts = (userId: string) =>
+	and(eq(picture.userId, userId), isNull(picture.ownedItemId));
+
+async function sweepDrafts(db: Db, bucket: R2Bucket, userId: string) {
+	await runWithPictures(db, bucket, {
+		drop: dropPictures(
+			db,
+			and(
+				drafts(userId),
+				lt(picture.createdAt, new Date(Date.now() - DRAFT_AGE_MS)),
+			),
+		),
+	});
+}
+
 const pictureCount = (db: Db, userId: string) =>
 	db.select({ n: count() }).from(picture).where(eq(picture.userId, userId));
 
@@ -71,6 +155,7 @@ export async function addPicture(
 	const kind = kindOf(new Uint8Array(bytes));
 	if (kind === null)
 		return { ok: false, error: { code: "invalid", field: "body" } };
+	await sweepDrafts(db, bucket, userId);
 	const id = crypto.randomUUID() as PictureId;
 	const size = bytes.byteLength;
 	const month = new Date().toISOString().slice(0, 7);
@@ -176,4 +261,134 @@ export async function readPicture(
 	return object
 		? { ok: true, value: object }
 		: { ok: false, error: { code: "not_found" } };
+}
+
+// Only a draft goes here; a saved picture goes with its owner's next save.
+export async function deleteDraft(
+	db: Db,
+	bucket: R2Bucket,
+	userId: string,
+	id: string,
+): Promise<Result<PictureId, PictureError>> {
+	const { dropped } = await runWithPictures(db, bucket, {
+		drop: dropPictures(db, and(drafts(userId), eq(picture.id, id))),
+	});
+	return dropped.length > 0
+		? { ok: true, value: id as PictureId }
+		: { ok: false, error: { code: "not_found" } };
+}
+
+// The saved pictures of the account's items, or of one item, each list in
+// the order of upload; drafts never show.
+export async function pictureIdsByItem(
+	db: Db,
+	userId: string,
+	ownedItemId?: string,
+): Promise<Map<string, PictureId[]>> {
+	const rows = await db
+		.select({ id: picture.id, ownedItemId: picture.ownedItemId })
+		.from(picture)
+		.where(
+			and(
+				eq(picture.userId, userId),
+				ownedItemId === undefined
+					? isNotNull(picture.ownedItemId)
+					: eq(picture.ownedItemId, ownedItemId),
+			),
+		)
+		// Two uploads in one millisecond share created_at; rowid keeps their order.
+		.orderBy(asc(picture.createdAt), asc(sql`${picture}.rowid`));
+	const byItem = new Map<string, PictureId[]>();
+	for (const row of rows) {
+		if (row.ownedItemId === null) continue;
+		const ids = byItem.get(row.ownedItemId) ?? [];
+		ids.push(row.id as PictureId);
+		byItem.set(row.ownedItemId, ids);
+	}
+	return byItem;
+}
+
+const pictureIdsSchema = z.array(pictureIdSchema);
+
+// Each id must be the account's draft or this owner's picture.
+async function checkPictureList(
+	db: Db,
+	userId: string,
+	ownedItemId: string,
+	ids: string[],
+): Promise<PictureListError | null> {
+	const invalid = { code: "invalid", field: "pictureIds" } as const;
+	if (
+		!pictureIdsSchema.safeParse(ids).success ||
+		new Set(ids).size !== ids.length
+	)
+		return invalid;
+	if (ids.length > ITEM_PICTURE_LIMIT) return { code: "picture_limit" };
+	if (ids.length === 0) return null;
+	const [held] = await db
+		.select({ n: count() })
+		.from(picture)
+		.where(
+			and(
+				eq(picture.userId, userId),
+				inArray(picture.id, ids),
+				or(isNull(picture.ownedItemId), eq(picture.ownedItemId, ownedItemId)),
+			),
+		);
+	return held?.n === ids.length ? null : invalid;
+}
+
+export type PictureListSave = {
+	userId: string;
+	ownedItemId: string;
+	// The whole list; undefined keeps the owner's pictures.
+	ids: string[] | undefined;
+	// The caller's exists on its own row as the owner write left it, so a
+	// refused or gone owner takes no picture.
+	itemHeld: SQL;
+};
+
+// The owner's write and its picture list in one batch: the owner first, so
+// itemHeld sees it, then the drafts in the list attach, then the owner's
+// pictures left out go, rows and objects; with itemHeld false, neither. It gives back the owner write's
+// result.
+export async function saveWithPictures<T extends Statement>(
+	db: Db,
+	bucket: R2Bucket,
+	{ userId, ownedItemId, ids, itemHeld }: PictureListSave,
+	owner: T,
+): Promise<Result<Awaited<T>, PictureListError>> {
+	if (ids === undefined)
+		return { ok: true, value: (await owner) as Awaited<T> };
+	const refused = await checkPictureList(db, userId, ownedItemId, ids);
+	if (refused) return { ok: false, error: refused };
+	const { before } = await runWithPictures(db, bucket, {
+		before: [
+			owner,
+			db
+				.update(picture)
+				.set({ ownedItemId })
+				.where(
+					and(
+						eq(picture.userId, userId),
+						inArray(picture.id, ids),
+						or(
+							isNull(picture.ownedItemId),
+							eq(picture.ownedItemId, ownedItemId),
+						),
+						itemHeld,
+					),
+				),
+		],
+		drop: dropPictures(
+			db,
+			and(
+				eq(picture.userId, userId),
+				eq(picture.ownedItemId, ownedItemId),
+				notInArray(picture.id, ids),
+				itemHeld,
+			),
+		),
+	});
+	return { ok: true, value: before[0] as Awaited<T> };
 }

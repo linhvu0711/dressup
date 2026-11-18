@@ -83,7 +83,7 @@ import {
 	listWishes,
 } from "./wish-store";
 
-type Account = { db: Db; userId: string };
+type Account = { db: Db; pictures: R2Bucket; userId: string };
 
 const garmentsAndModes = {
 	garments: GARMENT_IDS.map((id) => ({
@@ -180,7 +180,7 @@ const field = {
 };
 
 export function registerAiActions(server: McpServer, account: Account) {
-	const { db, userId } = account;
+	const { db, pictures, userId } = account;
 
 	// The look with its tags named, and a sentence first for each tag left off.
 	async function lookAnswer(changed: { look: Look; tagsLeftOff: string[] }) {
@@ -799,7 +799,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		},
 		async ({ typeId, colourId, brandId = null, quantity }) => {
 			// The server makes the id, as save_combination does.
-			const added = await addOwnedItem(db, userId, {
+			const added = await addOwnedItem(db, pictures, userId, {
 				id: crypto.randomUUID(),
 				typeId,
 				colourId,
@@ -831,7 +831,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 			}),
 		},
 		async ({ id, brandId, quantity }) => {
-			const changed = await changeOwnedItem(db, userId, id, {
+			const changed = await changeOwnedItem(db, pictures, userId, id, {
 				brandId,
 				quantity,
 			});
