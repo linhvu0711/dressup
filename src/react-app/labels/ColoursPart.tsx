@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { PLACEHOLDER } from "@/components/ui/placeholder";
 import { ColourSheet } from "./ColourSheet";
-import type { Colour } from "./colour";
+import type { Colour, ListedColour } from "./colour";
 import { LIST } from "./list";
 
 const SWATCH =
@@ -52,11 +52,11 @@ export function ColoursPart({
 	adding,
 	onAddClose,
 }: {
-	colours: UseQueryResult<Colour[]>;
+	colours: UseQueryResult<ListedColour[]>;
 	adding: boolean;
 	onAddClose: () => void;
 }) {
-	const [editing, setEditing] = useState<Colour | null>(null);
+	const [editing, setEditing] = useState<ListedColour | null>(null);
 	return (
 		<>
 			{colours.isPending ? (

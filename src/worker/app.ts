@@ -9,6 +9,8 @@ import type {
 	BrandsAnswer,
 	ColourAnswer,
 	ColoursAnswer,
+	CombinationAnswer,
+	CombinationsAnswer,
 	DressAnswer,
 	ErrorAnswer,
 	LookAnswer,
@@ -43,6 +45,11 @@ import {
 	deleteColour,
 	listColours,
 } from "./colour-store";
+import {
+	type CombinationError,
+	listCombinations,
+	saveCombination,
+} from "./combination-store";
 import type { Db } from "./db";
 import { user } from "./db/auth-schema";
 import { changeDress, loadDress } from "./dress-store";
@@ -131,6 +138,33 @@ function lookRefusal(error: LookError): Refusal {
 	}
 }
 
+// Only the JSON shape: the Combinations module runs the combination rules.
+const combinationBodySchema = z.object({
+	id: z.string(),
+	pieces: z.array(z.object({ typeId: z.string(), colourId: z.string() })),
+	open: z.boolean(),
+});
+
+function combinationRefusal(error: CombinationError): Refusal {
+	switch (error.code) {
+		case "not_type":
+		case "not_colour":
+		case "pieces_count":
+		case "same_layer":
+		case "invalid":
+			return {
+				status: 400,
+				body: { error: "invalid", field: issueField(error.path) },
+			};
+		case "conflict":
+			return { status: 409, body: { error: "conflict", field: "id" } };
+		case "duplicate":
+			return { status: 409, body: { error: "duplicate", id: error.id } };
+		case "combination_limit":
+			return { status: 409, body: { error: "combination_limit" } };
+	}
+}
+
 const dressRefusals: Record<DressError["code"], Refusal> = {
 	not_in_row: { status: 400, body: { error: "not_in_row", field: "hex" } },
 	last_square: { status: 400, body: { error: "last_square", field: "hex" } },
@@ -167,6 +201,8 @@ function colourRefusal(error: ColourError): Refusal {
 			return { status: 409, body: { error: "duplicate", field: "name" } };
 		case "colour_limit":
 			return { status: 409, body: { error: "colour_limit" } };
+		case "colour_in_use":
+			return { status: 409, body: { error: "colour_in_use" } };
 		case "not_found":
 			return { status: 404, body: { error: "not_found" } };
 	}
@@ -329,6 +365,27 @@ export function createApp(getDb: (env: Env) => Db) {
 			return c.json(refused, status);
 		}
 		return c.body(null, 204);
+	});
+
+	app.get("/combinations", withAuth, requireUser, async (c) =>
+		c.json({
+			combinations: await listCombinations(getDb(c.env), c.var.user.id),
+		} satisfies CombinationsAnswer),
+	);
+
+	app.post("/combinations", withAuth, requireUser, async (c) => {
+		const body = await readBody(c, combinationBodySchema);
+		if ("refused" in body) return body.refused;
+		const saved = await saveCombination(getDb(c.env), c.var.user.id, body.data);
+		if (!saved.ok) {
+			const { status, body: refused } = combinationRefusal(saved.error);
+			return c.json(refused, status);
+		}
+		const { combination, created } = saved.value;
+		return c.json(
+			{ combination } satisfies CombinationAnswer,
+			created ? 201 : 200,
+		);
 	});
 
 	app.get("/tags", withAuth, requireUser, async (c) =>

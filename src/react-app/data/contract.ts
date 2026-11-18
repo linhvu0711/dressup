@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { aiAppSchema } from "@/ai-apps/ai-app";
+import { combinationSchema } from "@/combinations/combination";
 import { dressStateSchema } from "@/dress/state";
 import { brandSchema } from "@/labels/brand";
-import { colourSchema } from "@/labels/colour";
+import { colourSchema, listedColourSchema } from "@/labels/colour";
 import { lookSchema } from "@/looks/look";
 import { tagSchema } from "@/tags/tag";
 
@@ -20,6 +21,8 @@ export const errorCodes = [
 	"duplicate",
 	"colour_limit",
 	"brand_limit",
+	"combination_limit",
+	"colour_in_use",
 ] as const;
 
 export type ErrorCode = (typeof errorCodes)[number];
@@ -27,6 +30,7 @@ export type ErrorCode = (typeof errorCodes)[number];
 export const errorAnswer = z.object({
 	error: z.enum(errorCodes),
 	field: z.string().optional(),
+	id: z.string().optional(),
 });
 
 export type ErrorAnswer = z.input<typeof errorAnswer>;
@@ -50,7 +54,9 @@ export const tagAnswer = z.object({ tag: tagSchema });
 
 export type TagAnswer = z.input<typeof tagAnswer>;
 
-export const coloursAnswer = z.object({ colours: z.array(colourSchema) });
+export const coloursAnswer = z.object({
+	colours: z.array(listedColourSchema),
+});
 
 export type ColoursAnswer = z.input<typeof coloursAnswer>;
 
@@ -65,6 +71,16 @@ export type BrandsAnswer = z.input<typeof brandsAnswer>;
 export const brandAnswer = z.object({ brand: brandSchema });
 
 export type BrandAnswer = z.input<typeof brandAnswer>;
+
+export const combinationsAnswer = z.object({
+	combinations: z.array(combinationSchema),
+});
+
+export type CombinationsAnswer = z.input<typeof combinationsAnswer>;
+
+export const combinationAnswer = z.object({ combination: combinationSchema });
+
+export type CombinationAnswer = z.input<typeof combinationAnswer>;
 
 export const aiAppsAnswer = z.object({ apps: z.array(aiAppSchema) });
 

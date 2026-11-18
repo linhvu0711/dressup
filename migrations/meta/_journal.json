@@ -71,6 +71,13 @@
       "when": 1794966336784,
       "tag": "0009_complete_revanche",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1794973140351,
+      "tag": "0010_condemned_the_watchers",
+      "breakpoints": true
     }
   ]
 }

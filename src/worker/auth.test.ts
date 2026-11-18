@@ -79,6 +79,8 @@ describe("migrations", () => {
 			"colour",
 			"colour_seed",
 			"colour_square",
+			"combination",
+			"combination_piece",
 			"jwks",
 			"look",
 			"look_tag",

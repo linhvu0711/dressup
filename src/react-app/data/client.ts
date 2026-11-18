@@ -1,8 +1,9 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { z } from "zod";
 import type { AiApp } from "@/ai-apps/ai-app";
+import type { Combination } from "@/combinations/combination";
 import { type Brand, type BrandId, byBrandName } from "@/labels/brand";
-import type { Colour, ColourId } from "@/labels/colour";
+import type { Colour, ColourId, ListedColour } from "@/labels/colour";
 import type { Look, LookId } from "@/looks/look";
 import type { Tag, TagId } from "@/tags/tag";
 import { type ErrorCode, errorAnswer, meAnswer } from "./contract";
@@ -19,6 +20,7 @@ export const keys = {
 	colours: (userId: string | null) => ["colours", userId] as const,
 	brands: (userId: string | null) => ["brands", userId] as const,
 	aiApps: (userId: string | null) => ["ai-apps", userId] as const,
+	combinations: (userId: string | null) => ["combinations", userId] as const,
 	addTag: ["tags", "add"] as const,
 	allowApp: (clientId: string) => ["allow-app", clientId] as const,
 };
@@ -87,15 +89,18 @@ export const after = {
 		refresh(keys.looks(userId));
 	},
 	colourAdded(userId: string | null, colour: Colour) {
-		queryClient.setQueryData<Colour[]>(keys.colours(userId), (old) =>
-			old ? [...old, colour] : old,
+		queryClient.setQueryData<ListedColour[]>(keys.colours(userId), (old) =>
+			old ? [...old, { ...colour, inUse: false }] : old,
 		);
 	},
-	// The changed colour keeps its place, as the server keeps its time.
+	// The changed colour keeps its place, as the server keeps its time, and
+	// its inUse, which a change of name or code leaves as it was.
 	colourChanged(userId: string | null, colour: Colour) {
-		queryClient.setQueryData<Colour[]>(keys.colours(userId), (old) =>
-			old?.map((c) => (c.id === colour.id ? colour : c)),
+		queryClient.setQueryData<ListedColour[]>(keys.colours(userId), (old) =>
+			old?.map((c) => (c.id === colour.id ? { ...c, ...colour } : c)),
 		);
+		// A combination shows its colours' names and codes.
+		refresh(keys.combinations(userId));
 	},
 	// The server's colours may differ from the cached ones, as after an add
 	// whose answer was lost, or a change refused for a change made elsewhere.
@@ -131,6 +136,19 @@ export const after = {
 		);
 		refresh(keys.brands(userId));
 	},
+	// As lookSaved; a saved combination also makes its colours in use.
+	combinationSaved(userId: string | null, combination: Combination) {
+		queryClient.setQueryData<Combination[]>(
+			keys.combinations(userId),
+			(old) =>
+				old &&
+				(old.some((c) => c.id === combination.id)
+					? old.map((c) => (c.id === combination.id ? combination : c))
+					: [combination, ...old]),
+		);
+		refresh(keys.combinations(userId));
+		refresh(keys.colours(userId));
+	},
 	aiAppGone(userId: string | null, id: string) {
 		queryClient.setQueryData<AiApp[]>(keys.aiApps(userId), (old) =>
 			old?.filter((app) => app.id !== id),
@@ -140,11 +158,12 @@ export const after = {
 };
 
 // A refused request, with the code its answer names, or null when it names
-// none.
+// none, and the id it names, as a duplicate's.
 export class RequestError extends Error {
 	constructor(
 		readonly status: number,
 		readonly code: ErrorCode | null,
+		readonly id: string | null,
 		what: string,
 	) {
 		super(`${what} answered ${status}`);
@@ -199,6 +218,7 @@ export async function request(
 		throw new RequestError(
 			res.status,
 			body.success ? body.data.error : null,
+			body.success ? (body.data.id ?? null) : null,
 			what,
 		);
 	}

@@ -43,11 +43,21 @@ const NAVY = {
 	open: ["harrington"],
 };
 
-// The account's colours, brands, outfit, mannequin, and one look with one tag,
-// through the routes.
-async function fillAccount(h: Harness, jar: Jar, lookId = NAVY.id) {
+// The account's colours, brands, outfit, mannequin, one look with one tag,
+// and one combination, through the routes.
+async function fillAccount(
+	h: Harness,
+	jar: Jar,
+	lookId = NAVY.id,
+	combinationId = "33333333-3333-4333-8333-333333333333",
+) {
 	expect((await send(h, jar, "/api/dress")).status).toBe(200);
-	expect((await send(h, jar, "/api/colours")).status).toBe(200);
+	const listed = await send(h, jar, "/api/colours");
+	expect(listed.status).toBe(200);
+	const { colours } = (await listed.json()) as {
+		colours: { id: string; name: string }[];
+	};
+	const idOf = (name: string) => colours.find((c) => c.name === name)?.id;
 	const skin = { kind: "mannequin", part: "skin", hex: "#8D5524" };
 	expect((await sendJson(h, jar, "/api/dress/changes", skin)).status).toBe(204);
 	const brand = { name: "Uniqlo" };
@@ -56,6 +66,17 @@ async function fillAccount(h: Harness, jar: Jar, lookId = NAVY.id) {
 	const { tag } = (await added.json()) as { tag: { id: string } };
 	const look = { ...NAVY, id: lookId, tags: [tag.id] };
 	expect((await sendJson(h, jar, "/api/looks", look)).status).toBe(201);
+	const combination = {
+		id: combinationId,
+		pieces: [
+			{ typeId: "casual_p", colourId: idOf("Navy") },
+			{ typeId: "tee_l", colourId: idOf("White") },
+		],
+		open: false,
+	};
+	expect(
+		(await sendJson(h, jar, "/api/combinations", combination)).status,
+	).toBe(201);
 }
 
 // The tables that still hold rows of the account, as [table, count].
@@ -111,7 +132,12 @@ describe("DELETE /api/account", () => {
 		stubOutside({ google: googleUser("bob") });
 		const bob = await googleSignIn(h);
 		const bobId = ((await me(h, bob)).body as { id: string }).id;
-		await fillAccount(h, bob, "22222222-2222-4222-8222-222222222222");
+		await fillAccount(
+			h,
+			bob,
+			"22222222-2222-4222-8222-222222222222",
+			"44444444-4444-4444-8444-444444444444",
+		);
 		const bobBefore = h.accountRows(bobId);
 		// When
 		await deleteAccount(h, alice);
@@ -126,7 +152,7 @@ describe("DELETE /api/account", () => {
 			},
 		}).toEqual({
 			rows: bobBefore,
-			filled: 13,
+			filled: 15,
 			me: { status: 200, email: "bob@example.com" },
 		});
 	});

@@ -233,6 +233,73 @@ test("deletes a colour from the confirm step", async ({ page }) => {
 	expect(await rowNames(page)).not.toContain("Navy #1F3A5F");
 });
 
+test("says a colour in a combination is in use and offers no Delete", async ({
+	page,
+}) => {
+	// Given: a fresh account with a combination of Navy casual pants and a
+	// White long tee, the row "Navy #1F3A5F" open
+	const res = await page.request.get("/api/colours");
+	const { colours } = (await res.json()) as {
+		colours: { id: string; name: string }[];
+	};
+	const id = (name: string) => colours.find((c) => c.name === name)?.id;
+	const saved = await page.request.post("/api/combinations", {
+		data: {
+			id: crypto.randomUUID(),
+			pieces: [
+				{ typeId: "casual_p", colourId: id("Navy") },
+				{ typeId: "tee_l", colourId: id("White") },
+			],
+			open: false,
+		},
+	});
+	expect(saved.status()).toBe(201);
+	await openNavy(page);
+	// When
+	await sheet(page, "Edit colour")
+		.getByRole("button", { name: "Delete" })
+		.click();
+	// Then
+	const dialog = page.getByRole("dialog");
+	await expect(
+		dialog.getByText(
+			"A combination uses this colour, so you cannot delete it.",
+		),
+	).toBeVisible();
+	await expect(dialog.getByRole("button", { name: "Delete" })).toHaveCount(0);
+	await expect(dialog.getByRole("button", { name: "Back" })).toBeVisible();
+});
+
+test("says a colour is in use when the delete answers colour_in_use", async ({
+	page,
+}) => {
+	// Given: a fresh account; the delete answered 409 colour_in_use; the row
+	// "Navy #1F3A5F" open
+	await page.route("**/api/colours/*", (route) =>
+		route.request().method() === "DELETE"
+			? route.fulfill({ status: 409, json: { error: "colour_in_use" } })
+			: route.continue(),
+	);
+	await openNavy(page);
+	// When
+	await sheet(page, "Edit colour")
+		.getByRole("button", { name: "Delete" })
+		.click();
+	await page
+		.getByRole("dialog")
+		.getByRole("button", { name: "Delete" })
+		.click();
+	// Then
+	const dialog = page.getByRole("dialog");
+	await expect(
+		dialog.getByText(
+			"A combination uses this colour, so you cannot delete it.",
+		),
+	).toBeVisible();
+	await expect(dialog.getByRole("button", { name: "Delete" })).toHaveCount(0);
+	await expect(dialog.getByText("Not deleted. Try again.")).toHaveCount(0);
+});
+
 test.describe("an account with no colours", () => {
 	test.use({ storageState: COLOURS_EMPTY_FILE });
 

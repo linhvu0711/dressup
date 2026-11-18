@@ -16,6 +16,9 @@ export type LabelWords = {
 	addLabel: string;
 	confirmTitle: (name: string) => string;
 	confirmText: string;
+	// What the confirm step says in place of confirmText when the label is in
+	// use; a kind with no such rule leaves it out.
+	inUseText?: string;
 	taken: string;
 	full: string;
 	added: string;
@@ -34,6 +37,7 @@ export function LabelSheet<Id extends string>({
 	labels,
 	limit,
 	limitCode,
+	inUseCode,
 	nameMax,
 	editing,
 	extra,
@@ -45,8 +49,10 @@ export function LabelSheet<Id extends string>({
 	labels: readonly { id: Id; name: string }[];
 	limit: number;
 	limitCode: ErrorCode;
+	// The server's refusal to delete a label in use.
+	inUseCode?: ErrorCode;
 	nameMax: number;
-	editing: { id: Id; name: string } | null;
+	editing: { id: Id; name: string; inUse?: boolean } | null;
 	// The kind's fields under the name; Save stays off until they are ready.
 	extra?: { ready: boolean; field: (submit: () => void) => ReactNode };
 	onSave: (name: string) => Promise<unknown>;
@@ -61,6 +67,12 @@ export function LabelSheet<Id extends string>({
 	const del = useMutation({ mutationFn: onDelete });
 	const toast = useToast();
 	const ready = extra?.ready ?? true;
+	// The list can be older than the server, so a refused delete counts too.
+	const inUse =
+		editing?.inUse ||
+		(inUseCode !== undefined &&
+			del.error instanceof RequestError &&
+			del.error.code === inUseCode);
 	// A change adds no label, so the limit never stops it.
 	const full = !editing && labels.length >= limit;
 	const sentProblem = (error: unknown): Problem => {
@@ -192,28 +204,32 @@ export function LabelSheet<Id extends string>({
 					</form>
 					{editing && step === "confirm" ? (
 						<>
-							<p className="text-muted-foreground">{words.confirmText}</p>
-							{del.isError ? (
+							<p className="text-muted-foreground">
+								{inUse ? words.inUseText : words.confirmText}
+							</p>
+							{del.isError && !inUse ? (
 								<p role="alert" className="text-[13px] text-destructive">
 									Not deleted. Try again.
 								</p>
 							) : null}
-							<div className="mt-0.5 flex flex-wrap justify-end gap-2 [&>button]:flex-1 wide:[&>button]:flex-none">
-								<Button
-									variant="destructive"
-									disabled={del.isPending}
-									onClick={() =>
-										del.mutate(editing.id, {
-											onSuccess: () => {
-												toast(words.deleted);
-												onClose();
-											},
-										})
-									}
-								>
-									Delete
-								</Button>
-							</div>
+							{inUse ? null : (
+								<div className="mt-0.5 flex flex-wrap justify-end gap-2 [&>button]:flex-1 wide:[&>button]:flex-none">
+									<Button
+										variant="destructive"
+										disabled={del.isPending}
+										onClick={() =>
+											del.mutate(editing.id, {
+												onSuccess: () => {
+													toast(words.deleted);
+													onClose();
+												},
+											})
+										}
+									>
+										Delete
+									</Button>
+								</div>
+							)}
 						</>
 					) : null}
 				</Dialog.Content>

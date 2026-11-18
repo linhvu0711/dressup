@@ -4,6 +4,7 @@ import * as aiActionSchema from "./ai-action-schema";
 import * as authSchema from "./auth-schema";
 import * as brandSchema from "./brand-schema";
 import * as colourSchema from "./colour-schema";
+import * as combinationSchema from "./combination-schema";
 import * as dressSchema from "./dress-schema";
 import * as lookSchema from "./look-schema";
 import * as tagSchema from "./tag-schema";
@@ -13,6 +14,7 @@ export const schema = {
 	...authSchema,
 	...brandSchema,
 	...colourSchema,
+	...combinationSchema,
 	...dressSchema,
 	...lookSchema,
 	...tagSchema,

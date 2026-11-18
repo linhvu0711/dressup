@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { addColour, listColours } from "./colour-store";
+import { saveCombination } from "./combination-store";
 import { schema } from "./db";
 import { BOB, type Harness, makeHarness, withAccount } from "./test/harness";
 
-type Colour = { id: string; name: string; hex: string };
+type Colour = { id: string; name: string; hex: string; inUse?: boolean };
 
 const send = (
 	{ app, env }: Harness,
@@ -297,7 +298,7 @@ describe("PUT /api/colours/:id", () => {
 		expect({ status: res.status, body: await res.json(), last }).toEqual({
 			status: 200,
 			body: { colour: { id, name: "Sea", hex: "#2A6F7F" } },
-			last: { id, name: "Sea", hex: "#2A6F7F" },
+			last: { id, name: "Sea", hex: "#2A6F7F", inUse: false },
 		});
 	});
 
@@ -345,7 +346,7 @@ describe("PUT /api/colours/:id", () => {
 		}).toEqual({
 			status: 404,
 			body: { error: "not_found" },
-			alice: { id, name: "Teal", hex: "#2A7F7F" },
+			alice: { id, name: "Teal", hex: "#2A7F7F", inUse: false },
 		});
 	});
 
@@ -363,6 +364,56 @@ describe("PUT /api/colours/:id", () => {
 		expect({ status: res.status, body: await res.json() }).toEqual({
 			status: 409,
 			body: { error: "duplicate", field: "name" },
+		});
+	});
+});
+
+// alice with a combination of Navy casual pants and a White long tee.
+async function aliceWithCombination() {
+	const { h, headers } = await aliceWith(0);
+	const ids = Object.fromEntries(
+		(await coloursOf(h, headers)).map((c) => [c.name, c.id]),
+	);
+	await saveCombination(h.db, "alice-id", {
+		id: "11111111-1111-4111-8111-111111111111",
+		pieces: [
+			{ typeId: "casual_p", colourId: ids.Navy },
+			{ typeId: "tee_l", colourId: ids.White },
+		],
+		open: false,
+	});
+	return { h, headers, ids };
+}
+
+describe("colours in use", () => {
+	test("marks the colours a combination uses", async () => {
+		// Given: alice saved Navy casual pants and a White long tee
+		const { h, headers } = await aliceWithCombination();
+		// When
+		const listed = (await (
+			await send(h, headers, "GET", "/api/colours")
+		).json()) as { colours: Colour[] };
+		// Then
+		expect({
+			inUse: listed.colours.filter((c) => c.inUse).map((c) => c.name),
+			free: listed.colours.filter((c) => c.inUse === false).length,
+		}).toEqual({ inUse: ["White", "Navy"], free: 11 });
+	});
+
+	test("refuses to delete a colour a combination uses", async () => {
+		// Given: alice saved Navy casual pants and a White long tee
+		const { h, headers, ids } = await aliceWithCombination();
+		// When
+		const res = await send(h, headers, "DELETE", `/api/colours/${ids.Navy}`);
+		// Then
+		expect({
+			status: res.status,
+			body: await res.json(),
+			names: (await coloursOf(h, headers)).map((c) => `${c.name} ${c.hex}`),
+		}).toEqual({
+			status: 409,
+			body: { error: "colour_in_use" },
+			names: STARTER,
 		});
 	});
 });

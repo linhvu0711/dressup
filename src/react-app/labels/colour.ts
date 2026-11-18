@@ -19,3 +19,9 @@ export const colourInputSchema = z.object({
 export const colourSchema = colourInputSchema.extend({ id: colourIdSchema });
 
 export type Colour = z.infer<typeof colourSchema>;
+
+// A colour in the account's list. inUse: a combination wears it, so it
+// cannot be deleted.
+export const listedColourSchema = colourSchema.extend({ inUse: z.boolean() });
+
+export type ListedColour = z.infer<typeof listedColourSchema>;

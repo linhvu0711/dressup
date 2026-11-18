@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ColourField } from "@/colour/ColourPicker";
 import type { Hex } from "@/colour/hex";
 import { useAddColour, useChangeColour, useDeleteColour } from "./api";
-import { COLOUR_LIMIT, COLOUR_NAME_MAX, type Colour } from "./colour";
+import { COLOUR_LIMIT, COLOUR_NAME_MAX, type ListedColour } from "./colour";
 import { LabelSheet, type LabelWords } from "./LabelSheet";
 
 const START: Hex = "#1F3A5F";
@@ -13,6 +13,7 @@ const WORDS: LabelWords = {
 	addLabel: "Add",
 	confirmTitle: (name) => `Delete the colour "${name}"?`,
 	confirmText: "It goes from your list of colours.",
+	inUseText: "A combination uses this colour, so you cannot delete it.",
 	taken: "You have this colour already.",
 	full: `You have ${COLOUR_LIMIT} colours. That is the limit. Delete one to add a new one.`,
 	added: "Colour added",
@@ -26,8 +27,8 @@ export function ColourSheet({
 	editing,
 	onClose,
 }: {
-	colours: Colour[];
-	editing: Colour | null;
+	colours: ListedColour[];
+	editing: ListedColour | null;
 	onClose: () => void;
 }) {
 	const [hex, setHex] = useState<Hex | null>(editing?.hex ?? START);
@@ -40,6 +41,7 @@ export function ColourSheet({
 			labels={colours}
 			limit={COLOUR_LIMIT}
 			limitCode="colour_limit"
+			inUseCode="colour_in_use"
 			nameMax={COLOUR_NAME_MAX}
 			editing={editing}
 			extra={{

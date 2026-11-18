@@ -1,3 +1,9 @@
+- Type: one kind of clothing in one length. "Short tee" and "long tee" are two types. The app has 17, and the list is fixed.
+- Layer: where a type sits on the body: bottom, inner top, sweater, or jacket. Each type is in exactly one layer.
+- Piece: a type in a colour, such as "Navy long button-up".
+- Combination: 2 to 4 pieces that match well, at most one for each layer, with the jacket state (open or closed). It has no name: its title is its pieces, top layer first. Two combinations with the same pieces and the same jacket state are one combination, and the account keeps it once. An account holds at most 300.
+- Builder: the page where the user picks the pieces of a combination on the mannequin.
+- Combinations page: the wall of saved combinations.
 - Garment: one kind of clothing in one length. "Short tee" and "long tee" are two garments. The app has 17, and the list is fixed.
 - Mode: a fixed set of garments worn together, for example "long polo + sweater + chino pants". The app has 23, and the list is fixed.
 - Weather group: Hot, Cool, or Cold. Each mode is in exactly one. "Training" is a fourth tab that shows the two training modes.
@@ -19,5 +25,5 @@
 - AI app: an outside AI assistant, such as Claude, Claude Code, ChatGPT, or Codex, that acts in an account for its user.
 - Connected AI app: an AI app the user allowed on the Allow page. Settings lists each one. Disconnect stops it at once.
 - Allow page: the dressup page where the user lets one AI app see and change the data in their account.
-- AI action: one thing an AI app does in an account, such as saving a look or picking a colour.
+- AI action: one thing an AI app does in an account, such as saving a combination or adding a colour.
 - AI action limit: 60 AI actions a minute for each account.
