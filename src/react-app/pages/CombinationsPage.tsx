@@ -11,17 +11,22 @@ import type { Combination } from "@/combinations/combination";
 import { DeleteCombinationDialog } from "@/combinations/DeleteCombinationDialog";
 import {
 	type CombinationFilter,
+	filterChips,
 	filterCombinations,
 	filterSize,
+	NO_FILTER,
 	readCombinationFilter,
 	shownText,
 	writeCombinationFilter,
 } from "@/combinations/filter";
 import { Button } from "@/components/ui/button";
-import { FilterButton } from "@/components/ui/filter";
+import { ActiveFilters, FilterButton } from "@/components/ui/filter";
 import { Notice } from "@/components/ui/notice";
 import { useDressState } from "@/dress/DressState";
+import { TypeFigure } from "@/dress/figure/TypeFigure";
 import { OutfitFailed } from "@/dress/OutfitFailed";
+import { useColours } from "@/labels/api";
+import { useTags } from "@/tags/api";
 import { PageHeader } from "../shell/PageHeader";
 
 const WALL =
@@ -37,6 +42,8 @@ export function CombinationsPage() {
 	const { combinationId } = useParams();
 	const combinations = useCombinations();
 	const dress = useDressState();
+	const tags = useTags();
+	const colours = useColours();
 	const [params, setParams] = useSearchParams();
 	const navigate = useNavigate();
 	const filter = readCombinationFilter(params);
@@ -150,6 +157,20 @@ export function CombinationsPage() {
 						</div>
 					}
 				/>
+				{combinations.data?.length ? (
+					<ActiveFilters
+						chips={filterChips(filter, tags.data, colours.data).map((chip) => ({
+							key: chip.key,
+							label: chip.label,
+							icon: chip.typeId ? (
+								<TypeFigure typeId={chip.typeId} />
+							) : undefined,
+							onRemove: () => setFilter(chip.without),
+						}))}
+						onClearAll={() => setFilter(NO_FILTER)}
+						shown={shownText(visible.length)}
+					/>
+				) : null}
 				{wall}
 			</div>
 			{shown ? (

@@ -1,6 +1,8 @@
-import { SlidersHorizontal } from "lucide-react";
+import { cn } from "cn";
+import { SlidersHorizontal, X } from "lucide-react";
 import { type ReactNode, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { CHIP, CHIP_DASHED } from "@/components/ui/chip";
 import { FormSheet } from "@/components/ui/sheet-form";
 
 // The parts of a filter that hold no words of what they filter, so each
@@ -79,5 +81,71 @@ export function FilterSheet({
 				</div>
 			) : null}
 		</FormSheet>
+	);
+}
+
+export type ActiveFilter = {
+	key: string;
+	label: string;
+	icon?: ReactNode;
+	onRemove: () => void;
+};
+
+// The filters that are on, one chip each with a cross, and Clear all last;
+// under them, how many items show.
+export function ActiveFilters({
+	chips,
+	onClearAll,
+	shown,
+}: {
+	chips: ActiveFilter[];
+	onClearAll: () => void;
+	shown: string;
+}) {
+	if (chips.length === 0) return null;
+	return (
+		<>
+			<div
+				role="group"
+				aria-label="Active filters"
+				className="flex flex-none gap-[7px] overflow-x-auto px-4 pt-0.5 pb-1.5 [scrollbar-width:none] wide:px-6"
+			>
+				{chips.map((chip) => (
+					<span
+						key={chip.key}
+						data-slot="filter-chip"
+						className={cn(
+							CHIP,
+							"border-primary bg-primary pr-1 text-primary-foreground",
+						)}
+					>
+						{chip.icon}
+						{chip.label}
+						<button
+							type="button"
+							aria-label={`Remove ${chip.label}`}
+							title={`Remove ${chip.label}`}
+							className="grid size-6 place-items-center rounded-full hover:bg-white/15"
+							onClick={chip.onRemove}
+						>
+							<X size={14} strokeWidth={1.9} aria-hidden />
+						</button>
+					</span>
+				))}
+				<button
+					type="button"
+					className={cn(CHIP, CHIP_DASHED)}
+					onClick={onClearAll}
+				>
+					Clear all
+				</button>
+			</div>
+			<p
+				data-slot="filter-shown"
+				className="px-4 pb-2 text-[12.5px] text-muted-foreground wide:px-6"
+			>
+				{shown}
+			</p>
+		</>
 	);
 }

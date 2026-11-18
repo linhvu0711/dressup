@@ -190,3 +190,34 @@ test("filters the wall by a tag", async ({ page }) => {
 	// Then
 	await expect(titles(page)).toHaveText([FOUR_TITLE]);
 });
+
+test("removes a filter by its chip and every filter by Clear all", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account; the wall filtered by Short tee
+	// and work
+	const { work } = await seedWall(page);
+	await openWall(page, `?piece=tee_s.&tag=${work}`);
+	const chips = page.locator('[data-slot="filter-chip"]');
+	const active = page.getByRole("group", { name: "Active filters" });
+	const badge = page.locator('[data-slot="filter-count"]');
+	const line = page.locator('[data-slot="filter-shown"]');
+	// Then
+	await expect(chips).toHaveText(["Short tee", "work"]);
+	await expect(active.getByRole("button").last()).toHaveText("Clear all");
+	await expect(badge).toHaveText("2");
+	await expect(line).toHaveText("1 combination");
+	// When
+	await page.getByRole("button", { name: "Remove work" }).click();
+	// Then
+	await expect(chips).toHaveText(["Short tee"]);
+	await expect(badge).toHaveText("1");
+	await expect(titles(page)).toHaveCount(2);
+	// When
+	await active.getByRole("button", { name: "Clear all" }).click();
+	// Then
+	await expect(active).toHaveCount(0);
+	await expect(badge).toHaveCount(0);
+	await expect(titles(page)).toHaveCount(3);
+	expect(new URL(page.url()).search).toBe("");
+});
