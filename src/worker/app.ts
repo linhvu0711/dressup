@@ -484,6 +484,7 @@ export function createApp(getDb: (env: Env) => Db) {
 		const changed = await changeCombination(getDb(c.env), c.var.user.id, id, {
 			pieces: body.data.pieces,
 			open: body.data.open,
+			tags: body.data.tags,
 		});
 		if (!changed.ok) {
 			const { status, body: refused } = combinationRefusal(changed.error);

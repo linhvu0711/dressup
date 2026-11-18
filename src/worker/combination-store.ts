@@ -40,10 +40,12 @@ export type CombinationDraft = {
 };
 
 // A change to a saved combination: its pieces, whole. The id comes from the
-// address or the tool call; open left out keeps the stored jacket state.
+// address or the tool call; open left out keeps the stored jacket state, and
+// tags left out keep the stored tags.
 export type CombinationChange = {
 	pieces: { typeId: string; colourId: string }[];
 	open?: boolean;
+	tags?: string[];
 };
 
 export type CombinationError =
@@ -320,7 +322,7 @@ export async function saveCombination(
 // Finds the account's combination by id and swaps its pieces whole, in one
 // batch, so two tabs that change it at once leave one tab's pieces, never a
 // mix. createdAt stays, so it keeps its place on the wall. The same pieces
-// again write nothing. Pieces another of the account's combinations holds
+// again write only the tags, and nothing when tags are left out. Pieces another of the account's combinations holds
 // are duplicate, with its id; the index on (user_id, key) catches two tabs
 // that pass that check at once. A combination deleted while the batch runs
 // gets no pieces and answers not_found.
@@ -341,18 +343,25 @@ export async function changeCombination(
 		id,
 		pieces: change.pieces,
 		open: change.open ?? stored.open,
+		tags: change.tags ?? [],
 	});
 	if (!checked.ok) return { ok: false, error: checked.problem };
 	const input = checked.combination;
 	const notColour = await notYourColour(db, userId, input.pieces);
 	if (notColour) return { ok: false, error: notColour };
+	if (change.tags) {
+		const notTag = await notYourTag(db, userId, input.tags);
+		if (notTag) return { ok: false, error: notTag };
+	}
 	const key = combinationKey(input.pieces, input.open);
-	if (key !== stored.key) {
+	const piecesChange = key !== stored.key;
+	if (piecesChange) {
 		const held = await keyHolder(db, userId, key);
 		if (held && held !== id)
 			return { ok: false, error: { code: "duplicate", id: held } };
-		try {
-			await db.batch([
+	}
+	const pieceStatements = piecesChange
+		? [
 				db.update(combination).set({ key, open: input.open }).where(ours),
 				db
 					.delete(combinationPiece)
@@ -363,7 +372,29 @@ export async function changeCombination(
 						),
 					),
 				...pieceWrites(db, input.pieces, ours),
-			]);
+			]
+		: [];
+	// The clear and the insert share the batch, so two tabs leave one tab's
+	// tags, never a mix.
+	const tagStatements = change.tags
+		? [
+				db
+					.delete(combinationTag)
+					.where(
+						and(
+							eq(combinationTag.combinationId, id),
+							eq(combinationTag.userId, userId),
+						),
+					),
+				...(input.tags.length
+					? [tagLinks(db, userId, id, input.tags, ours)]
+					: []),
+			]
+		: [];
+	const [first, ...rest] = [...pieceStatements, ...tagStatements];
+	if (first) {
+		try {
+			await db.batch([first, ...rest]);
 		} catch (error) {
 			const taken = isKeyTaken(error) && (await keyHolder(db, userId, key));
 			if (!taken) throw error;
