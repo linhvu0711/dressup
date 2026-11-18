@@ -1,5 +1,12 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { after, cachedUserId, goneAsDone, keys, request } from "../data/client";
+import {
+	after,
+	cachedUserId,
+	goneAsDone,
+	keys,
+	RequestError,
+	request,
+} from "../data/client";
 import { colourAnswer, coloursAnswer } from "../data/contract";
 import type { Colour, ColourId } from "./colour";
 
@@ -55,5 +62,10 @@ export function useDeleteColour() {
 		mutationFn: (id: ColourId) =>
 			request("DELETE", `/api/colours/${id}`).catch(goneAsDone),
 		onSuccess: (_, id) => after.colourDeleted(userId, id),
+		// The list did not know a combination uses it.
+		onError: (error) => {
+			if (error instanceof RequestError && error.code === "colour_in_use")
+				after.coloursMayDiffer(userId);
+		},
 	});
 }

@@ -470,3 +470,20 @@ test("keeps the form open with Not saved when the save fails", async ({
 		"Not saved. Try again.",
 	);
 });
+
+test("shows a colour's new name on its combination", async ({ page }) => {
+	// Given: a fresh account with the three-piece combination
+	await page.goto("/labels");
+	await postCombinations(page, three(await colourIds(page)));
+	// When
+	await page.getByRole("button", { name: "Khaki #B8A57C" }).click();
+	const sheet = page.getByRole("dialog", { name: "Edit colour" });
+	await sheet.getByLabel("Name").fill("Sand");
+	await sheet.getByRole("button", { name: "Save", exact: true }).click();
+	await expect(sheet).toHaveCount(0);
+	await mainNav(page).getByRole("link", { name: "Combinations" }).click();
+	// Then
+	await expect(
+		cards(page).first().locator('[data-slot="combination-title"]'),
+	).toHaveText(/^Sand Harrington jacket \(open\)/);
+});
