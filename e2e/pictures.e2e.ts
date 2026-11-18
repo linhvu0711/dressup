@@ -145,6 +145,38 @@ test("keeps the sheet usable and saves after a slow upload", async ({
 	expect(await itemPictureIds(page)).toHaveLength(1);
 });
 
+test("saves nothing when Cancel comes while Save waits for an upload", async ({
+	page,
+}) => {
+	// Given: an item; uploads held; its edit sheet open; one picture picked
+	await openEditSheet(page);
+	const release = await holdUploads(page);
+	await pickFiles(page, addButton(page), [pngFile("front.png")]);
+	await expect(slot(page, 1)).toHaveAttribute("aria-busy", "true");
+	const changes: string[] = [];
+	page.on("request", (r) => {
+		if (r.method() === "PUT" && r.url().includes("/api/owned-items/"))
+			changes.push(r.url());
+	});
+	// When
+	await editSheet(page).getByRole("button", { name: "More" }).click();
+	await editSheet(page).getByRole("button", { name: "Save" }).click();
+	await editSheet(page).getByRole("button", { name: "Cancel" }).click();
+	const dropped = page.waitForResponse(
+		(r) =>
+			r.request().method() === "DELETE" && r.url().includes("/api/pictures/"),
+	);
+	release();
+	await dropped;
+	// Then
+	await page.reload();
+	await expect(
+		page.getByRole("button", { name: "No brand × 1" }),
+	).toBeVisible();
+	expect(changes).toEqual([]);
+	expect(await itemPictureIds(page)).toHaveLength(0);
+});
+
 test("shows Failed and Try again when an upload fails", async ({ page }) => {
 	// Given: an item with one picture; the next upload aborts once
 	const first = await (async () => {

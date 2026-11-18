@@ -149,6 +149,9 @@ export function usePictureSlots(saved: readonly PictureId[]) {
 			for (const s of slots.current)
 				if (s.state === "uploaded" && s.id) void dropDraft(s.id);
 		},
+		get discarded() {
+			return discarded.current;
+		},
 		// The slots plus the picked files that are still shrinking.
 		get taken() {
 			return slots.current.length + shrinking.current;

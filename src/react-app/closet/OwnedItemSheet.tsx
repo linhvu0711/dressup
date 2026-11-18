@@ -136,6 +136,8 @@ export function OwnedItemSheet(
 		setSaving(true);
 		await slots.idle();
 		setSaving(false);
+		// Cancel stays open while the uploads run; once used, nothing is saved.
+		if (slots.discarded) return;
 		const pictureIds = slots.ids();
 		if (editing)
 			update.mutate(
