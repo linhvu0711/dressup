@@ -60,7 +60,10 @@ export function PieceTabPage<D, E extends TilePiece>({
 	const [filtering, setFiltering] = useState(false);
 	const all = query.data === undefined ? [] : entries(query.data);
 	const pf = usePieceFilter(all, toPiece);
-	const filterable = !query.isPending && !query.isError && all.length > 0;
+	// An empty list still shows picks left in the address, so a piece added
+	// later is not hidden by a filter the user cannot see.
+	const filterable =
+		!query.isPending && !query.isError && (all.length > 0 || pf.count > 0);
 	let wall: ReactNode;
 	if (query.isPending) {
 		wall = (
