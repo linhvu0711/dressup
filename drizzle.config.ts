@@ -12,6 +12,7 @@ export default defineConfig({
 		"./src/worker/db/look-schema.ts",
 		"./src/worker/db/owned-item-schema.ts",
 		"./src/worker/db/tag-schema.ts",
+		"./src/worker/db/wish-schema.ts",
 	],
 	out: "./migrations",
 });

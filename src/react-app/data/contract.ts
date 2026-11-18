@@ -7,6 +7,7 @@ import { brandSchema, listedBrandSchema } from "@/labels/brand";
 import { colourSchema, listedColourSchema } from "@/labels/colour";
 import { lookSchema } from "@/looks/look";
 import { tagSchema } from "@/tags/tag";
+import { wishSchema } from "@/wishlist/wish";
 
 // The answers the worker sends and the web app reads, so a renamed key or
 // code breaks the check on both sides. Zod only: the worker compiles this.
@@ -25,6 +26,8 @@ export const errorCodes = [
 	"combination_limit",
 	"owned_item_limit",
 	"colour_in_use",
+	"wish_limit",
+	"shop_link_limit",
 ] as const;
 
 export type ErrorCode = (typeof errorCodes)[number];
@@ -95,6 +98,14 @@ export type OwnedItemsAnswer = z.input<typeof ownedItemsAnswer>;
 export const ownedItemAnswer = z.object({ ownedItem: ownedItemSchema });
 
 export type OwnedItemAnswer = z.input<typeof ownedItemAnswer>;
+
+export const wishesAnswer = z.object({ wishes: z.array(wishSchema) });
+
+export type WishesAnswer = z.input<typeof wishesAnswer>;
+
+export const wishAnswer = z.object({ wish: wishSchema });
+
+export type WishAnswer = z.input<typeof wishAnswer>;
 
 export const aiAppsAnswer = z.object({ apps: z.array(aiAppSchema) });
 

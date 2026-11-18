@@ -22,6 +22,14 @@ export type ColourError =
 	| { code: "not_found" }
 	| { code: "colour_in_use"; name: string };
 
+// The account's colour with this id, as a subquery: a write puts it in its
+// own WHERE, so a colour deleted at the same time stops the write.
+export const colourOf = (db: Db, userId: string, colourId: string) =>
+	db
+		.select({ one: sql`1` })
+		.from(colour)
+		.where(and(eq(colour.id, colourId), eq(colour.userId, userId)));
+
 export const STARTER_COLOURS: readonly { name: string; hex: Hex }[] = [
 	{ name: "White", hex: "#F4F2ED" },
 	{ name: "Black", hex: "#1B1B1F" },

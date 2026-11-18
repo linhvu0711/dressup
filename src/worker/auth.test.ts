@@ -99,6 +99,7 @@ describe("migrations", () => {
 			"tag",
 			"user",
 			"verification",
+			"wish",
 		]);
 	});
 });

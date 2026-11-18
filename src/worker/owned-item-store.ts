@@ -11,6 +11,7 @@ import type { Hex } from "@/colour/hex";
 import type { GarmentId } from "@/dress/garments";
 import type { BrandId } from "@/labels/brand";
 import type { ColourId } from "@/labels/colour";
+import { colourOf } from "./colour-store";
 import type { Db } from "./db";
 import { user } from "./db/auth-schema";
 import { brand } from "./db/brand-schema";
@@ -105,12 +106,6 @@ function invalid(
 			: undefined;
 	return { ok: false, error: { code: "invalid", field: key, value } };
 }
-
-const colourOf = (db: Db, userId: string, colourId: string) =>
-	db
-		.select({ one: sql`1` })
-		.from(colour)
-		.where(and(eq(colour.id, colourId), eq(colour.userId, userId)));
 
 const brandOf = (db: Db, userId: string, brandId: string) =>
 	db
