@@ -447,4 +447,22 @@ describe("outfit store", () => {
 			loads: 4,
 		});
 	});
+
+	test("fails again after three more tries when a load again fails", async () => {
+		// Given: a store whose first load failed three times, and three more
+		// failed loads to come
+		const memory = createMemoryOutfitServer();
+		memory.answerNextLoads("failed", 6);
+		const { store } = setup(memory);
+		store.account("u1");
+		await until(() => store.view().status === "failed");
+		// When
+		store.loadAgain();
+		await until(() => store.view().status !== "loading");
+		// Then
+		expect({ status: store.view().status, loads: memory.loads }).toEqual({
+			status: "failed",
+			loads: 6,
+		});
+	});
 });
