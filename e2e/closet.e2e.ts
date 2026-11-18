@@ -365,3 +365,31 @@ test("deletes the last item of a piece and the tile leaves", async ({
 	await expect(tiles(page)).toHaveCount(1);
 	await expect(tiles(page)).toHaveAccessibleName("White short tee, 1");
 });
+
+test("shows Could not load your brands and loads them on Retry", async ({
+	page,
+}) => {
+	// Given: a fresh account with Zara; the first GET /api/brands answered
+	// 500, the next passed on
+	await page.goto("/");
+	await postBrand(page, "Zara");
+	let failed = false;
+	await page.route("**/api/brands", (route) => {
+		if (failed || route.request().method() !== "GET") return route.continue();
+		failed = true;
+		return route.fulfill({ status: 500 });
+	});
+	await page.goto("/closet");
+	await openAddSheet(page);
+	// When
+	await addSheet(page).getByRole("button", { name: "No brand" }).click();
+	const brandStep = page.getByRole("dialog", { name: "Pick a brand" });
+	await expect(brandStep.getByRole("alert")).toHaveText(
+		"Could not load your brands",
+	);
+	await brandStep.getByRole("button", { name: "Retry" }).click();
+	// Then
+	await expect(
+		brandStep.getByRole("button", { name: "Zara", exact: true }),
+	).toBeVisible();
+});

@@ -301,9 +301,29 @@ export function OwnedItemSheet(
 							))}
 						</div>
 					) : null}
-					{step === "brands" ? (
+					{step === "brands" && brands.isPending ? (
+						<div className="flex flex-col gap-2">
+							{Array.from({ length: 3 }, (_, i) => (
+								<span
+									// biome-ignore lint/suspicious/noArrayIndexKey: the rows are all alike and never move.
+									key={i}
+									data-slot="brand-skeleton"
+									className="h-11 rounded-[12px] bg-muted animate-placeholder motion-reduce:animate-none"
+								/>
+							))}
+						</div>
+					) : null}
+					{step === "brands" && brands.isError ? (
+						<div className="flex items-center gap-3">
+							<p role="alert" className="text-[13px] text-destructive">
+								Could not load your brands
+							</p>
+							<Button onClick={() => void brands.refetch()}>Retry</Button>
+						</div>
+					) : null}
+					{step === "brands" && brands.isSuccess ? (
 						<div className="flex flex-col">
-							{[{ id: null, name: "No brand" }, ...(brands.data ?? [])].map(
+							{[{ id: null, name: "No brand" }, ...brands.data].map(
 								(option) => (
 									<button
 										key={option.id ?? "none"}
