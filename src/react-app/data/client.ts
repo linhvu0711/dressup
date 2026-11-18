@@ -228,6 +228,25 @@ export const after = {
 		refresh(keys.wishlist(userId));
 		refresh(keys.colours(userId));
 	},
+	// A shop link write answers its whole wish. A link's brand counts on the
+	// brand list.
+	wishChanged(userId: string | null, wish: Wish) {
+		queryClient.setQueryData<Wish[]>(keys.wishlist(userId), (old) =>
+			old?.map((w) => (w.id === wish.id ? wish : w)),
+		);
+		refresh(keys.wishlist(userId));
+		refresh(keys.brands(userId));
+	},
+	shopLinkDeleted(userId: string | null, id: string) {
+		queryClient.setQueryData<Wish[]>(keys.wishlist(userId), (old) =>
+			old?.map((w) => ({
+				...w,
+				shopLinks: w.shopLinks.filter((link) => link.id !== id),
+			})),
+		);
+		refresh(keys.wishlist(userId));
+		refresh(keys.brands(userId));
+	},
 	aiAppGone(userId: string | null, id: string) {
 		queryClient.setQueryData<AiApp[]>(keys.aiApps(userId), (old) =>
 			old?.filter((app) => app.id !== id),

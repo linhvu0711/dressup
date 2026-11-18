@@ -2,11 +2,12 @@ import { ChevronRight, Minus, Plus } from "lucide-react";
 import { useRef, useState } from "react";
 import { pieceName } from "@/combinations/combination";
 import { Button } from "@/components/ui/button";
-import { Field, FormSheet, LIST_ROW, ROW } from "@/components/ui/sheet-form";
+import { Field, FormSheet, ROW } from "@/components/ui/sheet-form";
 import { useToast } from "@/components/ui/toast";
 import { RequestError } from "@/data/client";
 import { TypeFigure } from "@/dress/figure/TypeFigure";
 import type { GarmentId } from "@/dress/garments";
+import { BrandOptions } from "@/labels/BrandOptions";
 import type { BrandId } from "@/labels/brand";
 import { useBrands } from "@/labels/brand-api";
 import { ColourSwatches } from "@/labels/ColourSwatches";
@@ -251,42 +252,14 @@ export function OwnedItemSheet(
 					}}
 				/>
 			) : null}
-			{step === "brands" && brands.isPending ? (
-				<div className="flex flex-col gap-2">
-					{Array.from({ length: 3 }, (_, i) => (
-						<span
-							// biome-ignore lint/suspicious/noArrayIndexKey: the rows are all alike and never move.
-							key={i}
-							data-slot="brand-skeleton"
-							className="h-11 rounded-[12px] bg-muted animate-placeholder motion-reduce:animate-none"
-						/>
-					))}
-				</div>
-			) : null}
-			{step === "brands" && brands.isError ? (
-				<div className="flex items-center gap-3">
-					<p role="alert" className="text-[13px] text-destructive">
-						Could not load your brands
-					</p>
-					<Button onClick={() => void brands.refetch()}>Retry</Button>
-				</div>
-			) : null}
-			{step === "brands" && brands.isSuccess ? (
-				<div className="flex flex-col">
-					{[{ id: null, name: "No brand" }, ...brands.data].map((option) => (
-						<button
-							key={option.id ?? "none"}
-							type="button"
-							className={LIST_ROW}
-							onClick={() => {
-								change(setBrandId)(option.id);
-								back();
-							}}
-						>
-							{option.name}
-						</button>
-					))}
-				</div>
+			{step === "brands" ? (
+				<BrandOptions
+					brands={brands}
+					onPick={(option) => {
+						change(setBrandId)(option);
+						back();
+					}}
+				/>
 			) : null}
 			{editing && step === "confirm" ? (
 				<>

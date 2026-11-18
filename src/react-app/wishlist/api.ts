@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { after, cachedUserId, keys, request } from "../data/client";
+import { after, cachedUserId, goneAsDone, keys, request } from "../data/client";
 import { wishAnswer, wishesAnswer } from "../data/contract";
-import type { WishId } from "./wish";
+import type { ShopLinkId, WishId } from "./wish";
 
 export function useWishlist() {
 	const userId = cachedUserId();
@@ -30,5 +30,55 @@ export function useAddWish() {
 				})
 			).wish,
 		onSuccess: (wish) => after.wishAdded(userId, wish),
+	});
+}
+
+type ShopLinkFields = {
+	url: string;
+	brandId: string | null;
+	name: string;
+	price: number | null;
+};
+
+export function useAddShopLink() {
+	const userId = cachedUserId();
+	return useMutation({
+		mutationFn: async ({
+			wishId,
+			...link
+		}: ShopLinkFields & { wishId: WishId; id: ShopLinkId }) =>
+			(
+				await request("POST", `/api/wishes/${wishId}/shop-links`, {
+					body: link,
+					answer: wishAnswer,
+				})
+			).wish,
+		onSuccess: (wish) => after.wishChanged(userId, wish),
+	});
+}
+
+export function useChangeShopLink() {
+	const userId = cachedUserId();
+	return useMutation({
+		mutationFn: async ({
+			id,
+			...change
+		}: ShopLinkFields & { id: ShopLinkId }) =>
+			(
+				await request("PUT", `/api/shop-links/${id}`, {
+					body: change,
+					answer: wishAnswer,
+				})
+			).wish,
+		onSuccess: (wish) => after.wishChanged(userId, wish),
+	});
+}
+
+export function useDeleteShopLink() {
+	const userId = cachedUserId();
+	return useMutation({
+		mutationFn: (id: ShopLinkId) =>
+			request("DELETE", `/api/shop-links/${id}`).catch(goneAsDone),
+		onSuccess: (_, id) => after.shopLinkDeleted(userId, id),
 	});
 }

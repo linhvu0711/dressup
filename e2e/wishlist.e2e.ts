@@ -378,14 +378,187 @@ test("sends a piece page with no item and no wish back to the wishlist", async (
 	const ids = await colourIds(page);
 	const wish = await postWish(page, { typeId: "polo_l", colourId: ids.Olive });
 	await page.goto("/wishlist");
-	// When: the tile; the wish deleted elsewhere; the page in view again
+	// When: the tile; the wish deleted elsewhere
 	await page.getByRole("link", { name: /^Olive long polo,/ }).click();
 	await expect(page).toHaveURL(`/piece/polo_l/${ids.Olive}`);
 	await page.request.delete(`/api/wishes/${wish}`);
-	// The tab comes back into view, so the page loads its lists again.
-	await page.evaluate(() =>
-		document.dispatchEvent(new Event("visibilitychange")),
-	);
+	// Then: once the tab comes back into view, the page loads its lists again
+	// and goes back. A load still running when the tab comes back is joined,
+	// not sent again, so the tab comes back until a load sees the delete.
+	await expect(async () => {
+		await page.evaluate(() =>
+			document.dispatchEvent(new Event("visibilitychange", { bubbles: true })),
+		);
+		await expect(page).toHaveURL("/wishlist", { timeout: 1000 });
+	}).toPass();
+});
+
+const linkSheet = (page: Page, name = "Add a shop link") =>
+	page.getByRole("dialog", { name });
+
+// A fresh account with a Charcoal wool jacket wish, on its piece page.
+async function onJacketPage(page: Page) {
+	await page.goto("/");
+	const ids = await colourIds(page);
+	const wish = await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
+	await page.goto(`/piece/wool/${ids.Charcoal}`);
+	await expect(
+		page.getByRole("heading", { name: "On your wishlist" }),
+	).toBeVisible();
+	return { ids, wish };
+}
+
+const ZARA = "https://www.zara.com/vn/en/wool-blend-jacket.html";
+
+test("adds a shop link from the sheet", async ({ page }) => {
+	// Given
+	await onJacketPage(page);
+	// When
+	await page.getByRole("button", { name: "Add a shop link" }).click();
+	await linkSheet(page).getByRole("textbox", { name: "Address" }).fill(ZARA);
+	await linkSheet(page)
+		.getByRole("textbox", { name: "Name" })
+		.fill("Wool blend jacket");
+	await linkSheet(page)
+		.getByRole("textbox", { name: "Price in ₫" })
+		.pressSequentially("2990000");
+	await linkSheet(page).getByRole("button", { name: "Save" }).click();
 	// Then
-	await expect(page).toHaveURL("/wishlist");
+	await expect(page.locator('[data-slot="toast"]')).toHaveText(
+		"Shop link added",
+	);
+	expect(await cards(page).first().locator("p, a").allInnerTexts()).toEqual([
+		"zara.com",
+		"Wool blend jacket",
+		"2.990.000 ₫",
+		"zara.com",
+	]);
+});
+
+test("shows dots in the price as it is typed", async ({ page }) => {
+	// Given: the sheet open
+	await onJacketPage(page);
+	await page.getByRole("button", { name: "Add a shop link" }).click();
+	// When
+	const price = linkSheet(page).getByRole("textbox", { name: "Price in ₫" });
+	await price.pressSequentially("2990000");
+	// Then
+	await expect(price).toHaveValue("2.990.000");
+});
+
+test("refuses an address without http and a link with no name", async ({
+	page,
+}) => {
+	// Given: the sheet open, the name Shirt
+	await onJacketPage(page);
+	await page.getByRole("button", { name: "Add a shop link" }).click();
+	const sheet = linkSheet(page);
+	await sheet.getByRole("textbox", { name: "Name" }).fill("Shirt");
+	// When
+	await sheet.getByRole("textbox", { name: "Address" }).fill("zara.com/shirt");
+	await sheet.getByRole("button", { name: "Save" }).click();
+	// Then
+	await expect(sheet.getByRole("alert")).toHaveText(
+		"Enter a web address that starts with https://.",
+	);
+	// When
+	await sheet
+		.getByRole("textbox", { name: "Address" })
+		.fill("https://zara.com/shirt");
+	await sheet.getByRole("textbox", { name: "Name" }).fill("");
+	await sheet.getByRole("button", { name: "Save" }).click();
+	// Then
+	await expect(sheet.getByRole("alert")).toHaveText("Enter a name.");
+	await expect(sheet).toBeVisible();
+});
+
+// The jacket page with the Zara link at 2.990.000.
+async function onJacketWithLink(page: Page) {
+	await page.goto("/");
+	const ids = await colourIds(page);
+	const wish = await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
+	await postShopLink(page, wish, {
+		url: ZARA,
+		brandId: null,
+		name: "Wool blend jacket",
+		price: 2990000,
+	});
+	await page.goto(`/piece/wool/${ids.Charcoal}`);
+}
+
+test("changes a shop link", async ({ page }) => {
+	// Given
+	await onJacketWithLink(page);
+	// When
+	await page.getByRole("button", { name: "Change shop link" }).click();
+	const sheet = linkSheet(page, "Edit shop link");
+	await sheet.getByRole("textbox", { name: "Price in ₫" }).fill("2490000");
+	await sheet.getByRole("button", { name: "Save" }).click();
+	// Then
+	await expect(page.locator('[data-slot="toast"]')).toHaveText("Changes saved");
+	await expect(cards(page).first()).toContainText("2.490.000 ₫");
+});
+
+test("deletes a shop link after its confirm", async ({ page }) => {
+	// Given
+	await onJacketWithLink(page);
+	// When
+	await page.getByRole("button", { name: "Change shop link" }).click();
+	await linkSheet(page, "Edit shop link")
+		.getByRole("button", { name: "Delete" })
+		.click();
+	const confirm = linkSheet(page, "Delete this shop link?");
+	// Then
+	await expect(confirm).toBeVisible();
+	// When
+	await confirm.getByRole("button", { name: "Delete" }).click();
+	// Then
+	await expect(page.locator('[data-slot="toast"]')).toHaveText(
+		"Shop link deleted",
+	);
+	await expect(page.getByText("No shop link yet.")).toBeVisible();
+});
+
+test("turns Add a shop link off at 10 links", async ({ page }) => {
+	// Given: a fresh account with a wish holding 10 links
+	await page.goto("/");
+	const ids = await colourIds(page);
+	const wish = await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
+	for (let i = 1; i <= 10; i++)
+		await postShopLink(page, wish, {
+			url: `https://shop.example/${i}`,
+			brandId: null,
+			name: `Link ${i}`,
+			price: null,
+		});
+	// When
+	await page.goto(`/piece/wool/${ids.Charcoal}`);
+	// Then
+	await expect(
+		page.getByRole("button", { name: "Add a shop link" }),
+	).toBeDisabled();
+	await expect(
+		page.getByText("10 shop links is the limit for one wish."),
+	).toBeVisible();
+});
+
+test("keeps the shop link sheet open with Not saved when the save fails", async ({
+	page,
+}) => {
+	// Given: the save answers 500
+	await page.route("**/api/wishes/*/shop-links", (route) =>
+		route.fulfill({ status: 500 }),
+	);
+	await onJacketPage(page);
+	// When
+	await page.getByRole("button", { name: "Add a shop link" }).click();
+	await linkSheet(page).getByRole("textbox", { name: "Address" }).fill(ZARA);
+	await linkSheet(page)
+		.getByRole("textbox", { name: "Name" })
+		.fill("Wool blend jacket");
+	await linkSheet(page).getByRole("button", { name: "Save" }).click();
+	// Then
+	await expect(linkSheet(page).getByRole("alert")).toHaveText(
+		"Not saved. Try again.",
+	);
 });

@@ -1,9 +1,12 @@
 import { ExternalLink, Pencil, Plus } from "lucide-react";
-import { useId } from "react";
+import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { ShopLinkSheet } from "./ShopLinkSheet";
 import {
 	isWebAddress,
 	priceText,
+	SHOP_LINK_LIMIT,
+	type ShopLink,
 	shopLinkHost,
 	shopName,
 	type Wish,
@@ -13,17 +16,25 @@ import {
 // the wish, oldest first. Only an http or https address becomes a link.
 export function WishlistPart({ wish }: { wish: Wish }) {
 	const title = useId();
+	// The sheet: a new link, or the link it changes.
+	const [sheet, setSheet] = useState<ShopLink | "add" | null>(null);
+	const full = wish.shopLinks.length >= SHOP_LINK_LIMIT;
 	return (
 		<section aria-labelledby={title} className="flex flex-col gap-2">
 			<div className="flex items-center gap-3">
 				<h2 id={title} className="min-w-0 flex-1 text-[22px]">
 					On your wishlist
 				</h2>
-				<Button>
+				<Button disabled={full} onClick={() => setSheet("add")}>
 					<Plus size={16} strokeWidth={1.9} aria-hidden />
 					Add a shop link
 				</Button>
 			</div>
+			{full ? (
+				<p className="text-[13px] text-muted-foreground">
+					{SHOP_LINK_LIMIT} shop links is the limit for one wish.
+				</p>
+			) : null}
 			{wish.shopLinks.length === 0 ? (
 				<p className="text-[14px] text-muted-foreground">No shop link yet.</p>
 			) : (
@@ -65,6 +76,7 @@ export function WishlistPart({ wish }: { wish: Wish }) {
 								size="icon"
 								aria-label="Change shop link"
 								title="Change shop link"
+								onClick={() => setSheet(link)}
 							>
 								<Pencil size={16} strokeWidth={1.9} aria-hidden />
 							</Button>
@@ -72,6 +84,19 @@ export function WishlistPart({ wish }: { wish: Wish }) {
 					))}
 				</ul>
 			)}
+			{sheet === "add" ? (
+				<ShopLinkSheet
+					mode="add"
+					wishId={wish.id}
+					onClose={() => setSheet(null)}
+				/>
+			) : sheet ? (
+				<ShopLinkSheet
+					mode="edit"
+					link={sheet}
+					onClose={() => setSheet(null)}
+				/>
+			) : null}
 		</section>
 	);
 }
