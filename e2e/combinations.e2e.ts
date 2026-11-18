@@ -185,3 +185,141 @@ test("shows the sign-in screen when the combinations answer 401", async ({
 		page.getByRole("button", { name: "Sign in with Google" }),
 	).toBeVisible();
 });
+
+const stage = (page: Page) => page.locator('[data-slot="build-stage"]');
+
+const typeChip = (page: Page, name: string) =>
+	page
+		.getByRole("radiogroup", { name: "Type" })
+		.getByRole("radio", { name, exact: true });
+
+const swatch = (page: Page, name: string) =>
+	page
+		.getByRole("radiogroup", { name: "Colour" })
+		.getByRole("radio", { name, exact: true });
+
+// Picks a type in a layer, then a colour.
+async function pick(page: Page, layer: string, type: string, colour: string) {
+	await page.getByRole("tab", { name: layer, exact: true }).click();
+	await typeChip(page, type).click();
+	await swatch(page, colour).click();
+}
+
+test("opens the builder from the header +", async ({ page }) => {
+	// Given: both projects, a fresh account, /combinations open
+	await page.goto("/combinations");
+	// When
+	await page.getByRole("link", { name: "New combination" }).click();
+	// Then
+	await expect(page).toHaveURL("/build");
+	await expect(
+		page.getByRole("heading", { name: "New combination" }),
+	).toBeVisible();
+	await expect(page.getByRole("tab")).toHaveText([
+		"Bottom",
+		"Inner top",
+		"Sweater",
+		"Jacket",
+	]);
+	const chips = page
+		.getByRole("radiogroup", { name: "Type" })
+		.getByRole("radio");
+	await expect(chips).toHaveText([
+		"None",
+		"Chino shorts",
+		"Chino pants",
+		"Casual shorts",
+		"Casual pants",
+		"Training shorts",
+		"Training pants",
+	]);
+	for (let i = 1; i < 7; i++)
+		await expect(chips.nth(i).locator("svg")).toHaveCount(1);
+	await expect(page.getByRole("radiogroup", { name: "Colour" })).toHaveCount(0);
+});
+
+test("wears pale blank pieces with no bottom and no top", async ({ page }) => {
+	// Given: both projects, a fresh account
+	// When
+	await page.goto("/build");
+	// Then
+	await expect(
+		stage(page).locator('[data-garment="casual_p"] [fill="#E2DED7"]').first(),
+	).toBeAttached();
+	await expect(
+		stage(page).locator('[data-garment="tee_s"] [fill="#E2DED7"]').first(),
+	).toBeAttached();
+	await expect(page.getByRole("button", { name: "Save" })).toBeDisabled();
+});
+
+test("puts a picked piece on the mannequin at once", async ({ page }) => {
+	// Given: both projects, /build
+	await page.goto("/build");
+	// When
+	await typeChip(page, "Casual pants").click();
+	await swatch(page, "Navy").click();
+	// Then
+	await expect(
+		stage(page).locator('[data-garment="casual_p"] [fill="#1F3A5F"]').first(),
+	).toBeAttached();
+	await expect(
+		stage(page).locator('[data-garment="casual_p"] [fill="#E2DED7"]'),
+	).toHaveCount(0);
+});
+
+test("replaces a piece in the same layer and takes it off", async ({
+	page,
+}) => {
+	// Given: both projects, /build, Navy casual pants picked
+	await page.goto("/build");
+	await typeChip(page, "Casual pants").click();
+	await swatch(page, "Navy").click();
+	// When
+	await typeChip(page, "Chino pants").click();
+	// Then
+	await expect(
+		stage(page).locator('[data-garment="chino_p"] [fill="#1F3A5F"]').first(),
+	).toBeAttached();
+	await expect(stage(page).locator('[data-garment="casual_p"]')).toHaveCount(0);
+	// When
+	await typeChip(page, "None").click();
+	// Then
+	await expect(
+		stage(page).locator('[data-garment="casual_p"] [fill="#E2DED7"]').first(),
+	).toBeAttached();
+	await expect(stage(page).locator('[data-garment="chino_p"]')).toHaveCount(0);
+});
+
+test("starts a jacket open and closes it", async ({ page }) => {
+	// Given: both projects, /build, the Jacket tab
+	await page.goto("/build");
+	await page.getByRole("tab", { name: "Jacket" }).click();
+	// When
+	await typeChip(page, "Harrington jacket").click();
+	// Then
+	const front = page.getByRole("radiogroup", { name: "Jacket front" });
+	await expect(
+		stage(page).locator('[data-garment="harrington"]'),
+	).toHaveAttribute("data-front", "open");
+	await expect(front.getByRole("radio", { name: "Open" })).toBeChecked();
+	// When
+	await front.getByRole("radio", { name: "Closed" }).click();
+	// Then
+	await expect(
+		stage(page).locator('[data-garment="harrington"]'),
+	).toHaveAttribute("data-front", "closed");
+});
+
+test("turns Save on at 2 pieces", async ({ page }) => {
+	// Given: both projects, /build
+	await page.goto("/build");
+	const save = page.getByRole("button", { name: "Save" });
+	// When
+	await typeChip(page, "Casual pants").click();
+	// Then
+	await expect(save).toBeDisabled();
+	// When
+	await pick(page, "Inner top", "Long tee", "Black");
+	// Then
+	await expect(save).toBeEnabled();
+});

@@ -1,5 +1,6 @@
 import { createBrowserRouter } from "react-router";
 import { AllowPage } from "./pages/AllowPage";
+import { BuildPage } from "./pages/BuildPage";
 import { CombinationsPage } from "./pages/CombinationsPage";
 import { ComparePage } from "./pages/ComparePage";
 import { DressPage } from "./pages/DressPage";
@@ -21,6 +22,7 @@ export const router = createBrowserRouter([
 			{ path: "settings", element: <SettingsPage /> },
 			{ path: "combinations", element: <CombinationsPage /> },
 			{ path: "combinations/:combinationId", element: <CombinationsPage /> },
+			{ path: "build", element: <BuildPage /> },
 			{ path: "labels", element: <LabelsPage /> },
 			{ path: "*", element: <NotFoundPage /> },
 		],

@@ -42,6 +42,18 @@ describe("Mannequin", () => {
 		expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
 	});
 
+	test("points each url at an id in the figure", () => {
+		// Given: a figure with no garments: its floor, shadows, body, and head
+		const markup = renderToStaticMarkup(<Mannequin {...STARTER_MANNEQUIN} />);
+		// When
+		const ids = new Set(
+			[...markup.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]),
+		);
+		const used = [...markup.matchAll(/url\(#([^)]+)\)/g)].map((m) => m[1]);
+		// Then
+		expect(used.filter((id) => !ids.has(id))).toEqual([]);
+	});
+
 	test.each(GARMENT_IDS.map((id) => [id]))(
 		"draws each garment in the given colour (%s)",
 		(id) => {
