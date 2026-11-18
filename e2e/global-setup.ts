@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { eq, like } from "drizzle-orm";
+import { COMBINATION_LIMIT } from "@/combinations/combination";
 import { BRAND_LIMIT } from "@/labels/brand";
 import { COLOUR_LIMIT } from "@/labels/colour";
 import { LOOK_LIMIT } from "@/looks/look";
@@ -11,10 +12,12 @@ import {
 	listColours,
 } from "../src/worker/colour-store";
 import { schema } from "../src/worker/db";
+import { seedCombinations } from "../src/worker/test/seed-combinations";
 import {
 	BRANDS_FULL_USER,
 	COLOURS_EMPTY_USER,
 	COLOURS_FULL_USER,
+	COMBINATIONS_FULL_USER,
 	E2E_USER,
 	LIMIT_USER,
 	withTestAuth,
@@ -25,6 +28,7 @@ export const LIMIT_FILE = "e2e/.auth/limit.json";
 export const COLOURS_FULL_FILE = "e2e/.auth/colours-full.json";
 export const COLOURS_EMPTY_FILE = "e2e/.auth/colours-empty.json";
 export const BRANDS_FULL_FILE = "e2e/.auth/brands-full.json";
+export const COMBINATIONS_FULL_FILE = "e2e/.auth/combinations-full.json";
 // Each test changes the colours it saves, and tests run in parallel, so
 // each one claims its own fresh account from this pool (e2e/fixtures.ts).
 export const POOL_SIZE = 400;
@@ -132,6 +136,22 @@ export default async function globalSetup() {
 			JSON.stringify({
 				cookies: await helpers.getCookies({
 					userId: BRANDS_FULL_USER.id,
+					domain: "localhost",
+				}),
+				origins: [],
+			}),
+		);
+		// Its combinations go with the user row.
+		await db
+			.delete(schema.user)
+			.where(eq(schema.user.id, COMBINATIONS_FULL_USER.id));
+		await helpers.saveUser(helpers.createUser(COMBINATIONS_FULL_USER));
+		await seedCombinations(db, COMBINATIONS_FULL_USER.id, COMBINATION_LIMIT);
+		writeFileSync(
+			COMBINATIONS_FULL_FILE,
+			JSON.stringify({
+				cookies: await helpers.getCookies({
+					userId: COMBINATIONS_FULL_USER.id,
 					domain: "localhost",
 				}),
 				origins: [],

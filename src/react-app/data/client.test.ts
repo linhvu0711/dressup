@@ -63,8 +63,13 @@ test("keeps no data of the account after sign-out", async () => {
 
 test("takes a delete answered not found as done", () => {
 	// Given
-	const notFound = new RequestError(404, "not_found", "DELETE /api/colours/x");
-	const failed = new RequestError(500, null, "DELETE /api/colours/x");
+	const notFound = new RequestError(
+		404,
+		"not_found",
+		null,
+		"DELETE /api/colours/x",
+	);
+	const failed = new RequestError(500, null, null, "DELETE /api/colours/x");
 	const outcome = (error: unknown) => {
 		try {
 			goneAsDone(error);

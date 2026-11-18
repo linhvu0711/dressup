@@ -4,6 +4,7 @@ import { ToggleGroup } from "radix-ui";
 import { useState } from "react";
 import { Link } from "react-router";
 import { CombinationFigure } from "@/combinations/CombinationFigure";
+import { SaveCombinationDialog } from "@/combinations/SaveCombinationDialog";
 import { Button } from "@/components/ui/button";
 import { CHIP } from "@/components/ui/chip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -37,11 +38,12 @@ export function BuildPage() {
 	const [picks, setPicks] = useState<Picks>({});
 	const [open, setOpen] = useState(true);
 	const [layer, setLayer] = useState<Layer>("bottom");
+	const [saving, setSaving] = useState(false);
 	const list = colours.data ?? [];
 	const pieces = LAYERS.flatMap((l) => {
 		const p = picks[l];
 		const colour = p && list.find((c) => c.id === p.colourId);
-		return p && colour ? [{ typeId: p.typeId, hex: colour.hex }] : [];
+		return p && colour ? [{ typeId: p.typeId, colour }] : [];
 	});
 	const picked = picks[layer];
 	const enough = pieces.length >= 2;
@@ -74,7 +76,11 @@ export function BuildPage() {
 					</Button>
 				}
 				end={
-					<Button variant="primary" disabled={!enough}>
+					<Button
+						variant="primary"
+						disabled={!enough}
+						onClick={() => setSaving(true)}
+					>
 						Save
 					</Button>
 				}
@@ -91,7 +97,10 @@ export function BuildPage() {
 				>
 					<Stage className="min-h-0 flex-1 rounded-b-[24px] wide:rounded-[26px]">
 						<CombinationFigure
-							pieces={pieces}
+							pieces={pieces.map((p) => ({
+								typeId: p.typeId,
+								hex: p.colour.hex,
+							}))}
 							open={open}
 							label="Mannequin in the combination"
 						/>
@@ -187,6 +196,13 @@ export function BuildPage() {
 					</TabsContent>
 				</Tabs>
 			</div>
+			{saving ? (
+				<SaveCombinationDialog
+					pieces={pieces}
+					open={open}
+					onClose={() => setSaving(false)}
+				/>
+			) : null}
 		</div>
 	);
 }

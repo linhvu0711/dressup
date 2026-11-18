@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
+import { COMBINATIONS_FULL_FILE } from "./global-setup";
 
 const LONG_TITLE =
 	"Khaki Harrington jacket (open) + Black long tee + Navy casual pants";
@@ -322,4 +323,150 @@ test("turns Save on at 2 pieces", async ({ page }) => {
 	await pick(page, "Inner top", "Long tee", "Black");
 	// Then
 	await expect(save).toBeEnabled();
+});
+
+const saveDialog = (page: Page) =>
+	page.getByRole("dialog", { name: "Save combination" });
+
+const LIMIT_TEXT =
+	"You have 300 combinations. That is the limit. Delete one to save a new one.";
+
+// The three pieces of THREE, picked in the builder.
+async function pickThree(page: Page) {
+	await pick(page, "Bottom", "Casual pants", "Navy");
+	await pick(page, "Inner top", "Long tee", "Black");
+	await pick(page, "Jacket", "Harrington jacket", "Khaki");
+}
+
+// Navy casual pants and a Black long tee, then Save in the header.
+async function pickTwoAndOpenSave(page: Page) {
+	await page.goto("/build");
+	await pick(page, "Bottom", "Casual pants", "Navy");
+	await pick(page, "Inner top", "Long tee", "Black");
+	await page.getByRole("button", { name: "Save" }).click();
+}
+
+test("saves a combination and opens the wall", async ({ page }) => {
+	// Given: both projects, a fresh account, /build
+	await page.goto("/build");
+	// When
+	await pickThree(page);
+	await page.getByRole("button", { name: "Save" }).click();
+	// Then
+	await expect(saveDialog(page)).toContainText(LONG_TITLE);
+	// When
+	await saveDialog(page).getByRole("button", { name: "Save" }).click();
+	// Then
+	await expect(page).toHaveURL("/combinations");
+	await expect(page.locator('[data-slot="toast"]')).toHaveText(
+		"Saved to Combinations",
+	);
+	await expect(page.locator('[data-slot="combination-title"]')).toHaveText([
+		LONG_TITLE,
+	]);
+});
+
+test("says the account has this combination and opens it", async ({ page }) => {
+	// Given: both projects, a fresh account with THREE saved
+	await page.goto("/build");
+	const saved = three(await colourIds(page));
+	await postCombinations(page, saved);
+	await page.reload();
+	// When
+	await pickThree(page);
+	await page.getByRole("button", { name: "Save" }).click();
+	// Then
+	await expect(saveDialog(page).getByRole("alert")).toHaveText(
+		"You have this combination already.",
+	);
+	await expect(
+		saveDialog(page).getByRole("button", { name: "Save" }),
+	).toBeDisabled();
+	// When
+	await saveDialog(page).getByRole("link", { name: "Open it" }).click();
+	// Then
+	await expect(page).toHaveURL(`/combinations/${saved.id}`);
+	await expect(cards(page).first()).toHaveAttribute("aria-current", "true");
+});
+
+test("shows the duplicate hint when the save answers duplicate", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account; the save answers duplicate
+	const other = crypto.randomUUID();
+	await page.route("**/api/combinations", (route) =>
+		route.request().method() === "POST"
+			? route.fulfill({
+					status: 409,
+					json: { error: "duplicate", id: other },
+				})
+			: route.continue(),
+	);
+	// When
+	await pickTwoAndOpenSave(page);
+	await saveDialog(page).getByRole("button", { name: "Save" }).click();
+	// Then
+	await expect(saveDialog(page).getByRole("alert")).toHaveText(
+		"You have this combination already.",
+	);
+	await expect(
+		saveDialog(page).getByRole("link", { name: "Open it" }),
+	).toHaveAttribute("href", `/combinations/${other}`);
+});
+
+test.describe("at the combination limit", () => {
+	test.use({ storageState: COMBINATIONS_FULL_FILE });
+
+	test("turns Save off and shows the limit hint at 300 combinations", async ({
+		page,
+	}) => {
+		// Given: both projects, the account with 300 combinations
+		// When
+		await pickTwoAndOpenSave(page);
+		// Then
+		await expect(saveDialog(page).getByRole("alert")).toHaveText(LIMIT_TEXT);
+		await expect(
+			saveDialog(page).getByRole("button", { name: "Save" }),
+		).toBeDisabled();
+		await expect(
+			saveDialog(page).getByRole("button", { name: "Cancel" }),
+		).toBeEnabled();
+	});
+});
+
+test("shows the limit hint when the save answers combination_limit", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account; the save answers the limit
+	await page.route("**/api/combinations", (route) =>
+		route.request().method() === "POST"
+			? route.fulfill({ status: 409, json: { error: "combination_limit" } })
+			: route.continue(),
+	);
+	// When
+	await pickTwoAndOpenSave(page);
+	await saveDialog(page).getByRole("button", { name: "Save" }).click();
+	// Then
+	await expect(saveDialog(page).getByRole("alert")).toHaveText(LIMIT_TEXT);
+	await expect(
+		saveDialog(page).getByRole("button", { name: "Save" }),
+	).toBeDisabled();
+});
+
+test("keeps the form open with Not saved when the save fails", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account; the save answers 500
+	await page.route("**/api/combinations", (route) =>
+		route.request().method() === "POST"
+			? route.fulfill({ status: 500 })
+			: route.continue(),
+	);
+	// When
+	await pickTwoAndOpenSave(page);
+	await saveDialog(page).getByRole("button", { name: "Save" }).click();
+	// Then
+	await expect(saveDialog(page).getByRole("alert")).toHaveText(
+		"Not saved. Try again.",
+	);
 });

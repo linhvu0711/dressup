@@ -25,6 +25,13 @@ export const COLOURS_FULL_USER = {
 	name: "Colours Full Person",
 };
 
+// Holds 300 combinations, the limit, for the save form's limit test.
+export const COMBINATIONS_FULL_USER = {
+	id: "e2e-combinations-full",
+	email: "combinations-full@dressup.test",
+	name: "Combinations Full Person",
+};
+
 // Has no colours: the starter set was deleted, for the empty list's test.
 export const COLOURS_EMPTY_USER = {
 	id: "e2e-colours-empty",

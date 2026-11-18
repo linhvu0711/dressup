@@ -158,11 +158,12 @@ export const after = {
 };
 
 // A refused request, with the code its answer names, or null when it names
-// none.
+// none, and the id it names, as a duplicate's.
 export class RequestError extends Error {
 	constructor(
 		readonly status: number,
 		readonly code: ErrorCode | null,
+		readonly id: string | null,
 		what: string,
 	) {
 		super(`${what} answered ${status}`);
@@ -217,6 +218,7 @@ export async function request(
 		throw new RequestError(
 			res.status,
 			body.success ? body.data.error : null,
+			body.success ? (body.data.id ?? null) : null,
 			what,
 		);
 	}
