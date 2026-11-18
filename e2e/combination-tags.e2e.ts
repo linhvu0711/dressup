@@ -82,6 +82,48 @@ test("puts two new tags on a combination in the save form", async ({
 	expect(stored.map((c) => c.tags)).toEqual([[ids("work"), ids("weekend")]]);
 });
 
+test("keeps a new tag when the tag list read before it lands after it", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account, /build with two pieces picked;
+	// the first GET of the tags is held until a tag is stored, then answers
+	// the empty list it read before
+	let stored: () => void = () => {};
+	const tagStored = new Promise<void>((done) => {
+		stored = done;
+	});
+	page.on("response", (res) => {
+		if (res.request().method() === "POST" && res.url().endsWith("/api/tags"))
+			stored();
+	});
+	let first = true;
+	await page.route("**/api/tags", async (route) => {
+		if (route.request().method() !== "GET" || !first) return route.continue();
+		first = false;
+		await tagStored;
+		await route.fulfill({ json: { tags: [] } }).catch(() => {});
+	});
+	await page.goto("/build");
+	await pick(page, "Bottom", "Casual pants", "Navy");
+	await pick(page, "Inner top", "Long tee", "Black");
+	// When
+	await page.getByRole("button", { name: "Save" }).click();
+	await saveDialog(page).getByRole("button", { name: "+ New tag" }).click();
+	await saveDialog(page).getByRole("textbox", { name: "New tag" }).fill("work");
+	await page.keyboard.press("Enter");
+	// Then
+	await expect(
+		saveDialog(page).getByRole("button", { name: "work", exact: true }),
+	).toHaveAttribute("aria-pressed", "true");
+	// When
+	await saveDialog(page).getByRole("button", { name: "Save" }).click();
+	// Then
+	await expect(page).toHaveURL("/combinations");
+	expect((await storedCombinations(page)).map((c) => c.tags.length)).toEqual([
+		1,
+	]);
+});
+
 test("shows the tags as pills on the combination page", async ({ page }) => {
 	// Given: both projects, a fresh account, THREE with work and weekend
 	const { id } = await threeWithWorkAndWeekend(page);

@@ -35,9 +35,13 @@ export const keys = {
 };
 
 const refresh = (queryKey: readonly unknown[]) => {
+	// A list with no data yet keeps a load already under way, and that load
+	// may have read the server before this change: drop it, then load again.
 	// Not returned: a returned promise holds the caller's callbacks, such as
 	// the save form's close, until the list has loaded again.
-	void queryClient.invalidateQueries({ queryKey });
+	void queryClient
+		.cancelQueries({ queryKey })
+		.then(() => queryClient.invalidateQueries({ queryKey }));
 };
 
 // What each change does to the cache. Each rule takes the account the hook
