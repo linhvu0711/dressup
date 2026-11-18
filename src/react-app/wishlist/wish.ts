@@ -77,3 +77,63 @@ export const wishSchema = z.object({
 });
 
 export type Wish = z.infer<typeof wishSchema>;
+
+export const isWebAddress = (url: string): boolean =>
+	webAddressSchema.safeParse(url).success;
+
+// The shop's host without a leading "www.", or null when the address does not
+// parse or has no host.
+export function shopLinkHost(url: string): string | null {
+	if (!URL.canParse(url)) return null;
+	const { hostname } = new URL(url);
+	return hostname === "" ? null : hostname.replace(/^www\./, "");
+}
+
+// What a shop link is called on the page: its brand, else its host, else
+// the address as text.
+export const shopName = (link: ShopLink): string =>
+	link.brand?.name ?? shopLinkHost(link.url) ?? link.url;
+
+// Dots as vi-VN writes them, with a plain space before ₫: the currency style
+// puts a no-break space there.
+const digits = new Intl.NumberFormat("vi-VN");
+
+export const priceText = (price: number): string => `${digits.format(price)} ₫`;
+
+const PRICE_DIGITS = String(PRICE_MAX).length;
+
+// A price as the user types it: digits only, no leading zero, at most the
+// digits of the highest price, shown with dots.
+export function typedPrice(text: string): {
+	value: number | null;
+	shown: string;
+} {
+	const kept = text
+		.replace(/\D/g, "")
+		.replace(/^0+/, "")
+		.slice(0, PRICE_DIGITS);
+	if (kept === "") return { value: null, shown: "" };
+	const value = Number(kept);
+	return { value, shown: digits.format(value) };
+}
+
+// The second line of a wish's tile: how many links, and the lowest price
+// when any link has one.
+export function linksLine(wish: Wish): string {
+	const n = wish.shopLinks.length;
+	if (n === 0) return "No link yet";
+	const count = n === 1 ? "1 link" : `${n} links`;
+	const prices = wish.shopLinks.flatMap((link) =>
+		link.price === null ? [] : [link.price],
+	);
+	return prices.length === 0
+		? count
+		: `${count} · from ${priceText(Math.min(...prices))}`;
+}
+
+// What the remove confirm says goes with the wish.
+export function removeWishText(shopLinks: number): string {
+	if (shopLinks === 0) return "It has no shop link.";
+	if (shopLinks === 1) return "Its 1 shop link goes with it.";
+	return `Its ${shopLinks} shop links go with it.`;
+}
