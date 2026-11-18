@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useId } from "react";
 import { Navigate, useLocation, useParams } from "react-router";
 import { useCloset } from "@/closet/api";
 import { ClosetPart } from "@/closet/ClosetPart";
@@ -33,28 +33,19 @@ export function PiecePage() {
 		(w) => w.typeId === typeId && w.colour.id === colourId,
 	);
 	const piece = owned ?? wish;
+	// A list that answered once keeps its data through a failed reload, so
+	// only a list with no data at all counts as failed.
+	const closetFailed = closet.isError && !closet.data;
+	const wishlistFailed = wishlist.isError && !wishlist.data;
+	const retry = () => {
+		if (closetFailed) void closet.refetch();
+		if (wishlistFailed) void wishlist.refetch();
+	};
 	// A typed address, or the piece gone from both lists since.
 	if (closet.data && wishlist.data && !piece)
 		return <Navigate to={from} replace />;
 	let body: ReactNode;
-	if (closet.isError && !piece)
-		body = (
-			<Notice title="Could not load your closet">
-				<Button className="mt-2" onClick={() => void closet.refetch()}>
-					Retry
-				</Button>
-			</Notice>
-		);
-	else if (wishlist.isError && !piece)
-		body = (
-			<Notice title="Could not load your wishlist">
-				<Button className="mt-2" onClick={() => void wishlist.refetch()}>
-					Retry
-				</Button>
-			</Notice>
-		);
-	else if (!piece) body = <span className={`${PICTURE} ${PLACEHOLDER}`} />;
-	else
+	if (piece)
 		body = (
 			<>
 				<span className={`${PICTURE} bg-[#D3CFC9]`}>
@@ -64,9 +55,32 @@ export function PiecePage() {
 						className="absolute inset-[10%] size-[80%]"
 					/>
 				</span>
-				{owned ? <ClosetPart items={owned.items} /> : null}
-				{wish ? <WishlistPart wish={wish} /> : null}
+				{owned ? (
+					<ClosetPart items={owned.items} />
+				) : closetFailed ? (
+					<PartError title="In your closet" onRetry={retry}>
+						Could not load your closet.
+					</PartError>
+				) : null}
+				{wish ? (
+					<WishlistPart wish={wish} />
+				) : wishlistFailed ? (
+					<PartError title="On your wishlist" onRetry={retry}>
+						Could not load your wishlist.
+					</PartError>
+				) : null}
 			</>
+		);
+	// The piece may be in the list still loading, so a failure waits for it.
+	else if (closet.isPending || wishlist.isPending)
+		body = <span className={`${PICTURE} ${PLACEHOLDER}`} />;
+	else
+		body = (
+			<Notice title={failedTitle(closetFailed, wishlistFailed)}>
+				<Button className="mt-2" onClick={retry}>
+					Retry
+				</Button>
+			</Notice>
 		);
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
@@ -78,5 +92,34 @@ export function PiecePage() {
 				{body}
 			</div>
 		</div>
+	);
+}
+
+function failedTitle(closet: boolean, wishlist: boolean) {
+	if (closet && wishlist) return "Could not load your closet and wishlist";
+	return closet ? "Could not load your closet" : "Could not load your wishlist";
+}
+
+// A part of the page whose list failed while the other list holds the piece.
+function PartError({
+	title,
+	onRetry,
+	children,
+}: {
+	title: string;
+	onRetry: () => void;
+	children: ReactNode;
+}) {
+	const id = useId();
+	return (
+		<section aria-labelledby={id} className="flex flex-col items-start gap-2">
+			<h2 id={id} className="text-[22px]">
+				{title}
+			</h2>
+			<p role="alert" className="text-[13px] text-destructive">
+				{children}
+			</p>
+			<Button onClick={onRetry}>Retry</Button>
+		</section>
 	);
 }

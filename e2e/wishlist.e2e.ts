@@ -344,11 +344,9 @@ test("shows an address that is not http as text", async ({ page }) => {
 	await expect(card.locator("a")).toHaveCount(0);
 });
 
-test("shows the closet part and the wishlist part for a piece in both", async ({
-	page,
-}) => {
-	// Given: a fresh account with a Charcoal wool jacket in the closet and on
-	// the wishlist
+// A fresh account with a Charcoal wool jacket in the closet and on the
+// wishlist; returns the jacket's piece page.
+async function pieceInBoth(page: Page) {
 	await page.goto("/");
 	const ids = await colourIds(page);
 	await page.request.post("/api/owned-items", {
@@ -361,8 +359,73 @@ test("shows the closet part and the wishlist part for a piece in both", async ({
 		},
 	});
 	await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
+	return `/piece/wool/${ids.Charcoal}`;
+}
+
+test("shows the closet part and the wishlist part for a piece in both", async ({
+	page,
+}) => {
+	// Given: the jacket in both lists
+	const piece = await pieceInBoth(page);
 	// When
-	await page.goto(`/piece/wool/${ids.Charcoal}`);
+	await page.goto(piece);
+	// Then
+	await expect(page.getByRole("heading", { level: 2 })).toHaveText([
+		"In your closet",
+		"On your wishlist",
+	]);
+});
+
+// Answers the first GET of the address 500 and passes on the rest.
+async function failFirstLoad(page: Page, address: string) {
+	let failed = false;
+	await page.route(address, (route) => {
+		if (failed || route.request().method() !== "GET") return route.continue();
+		failed = true;
+		return route.fulfill({ status: 500 });
+	});
+}
+
+test("shows the wishlist part's failed load on the piece page and loads it on Retry", async ({
+	page,
+}) => {
+	// Given: the jacket in both lists; the first load of the wishlist fails
+	const piece = await pieceInBoth(page);
+	await failFirstLoad(page, "**/api/wishes");
+	// When
+	await page.goto(piece);
+	// Then: the closet part, and the wishlist part says it failed
+	await expect(page.getByRole("heading", { level: 2 })).toHaveText([
+		"In your closet",
+		"On your wishlist",
+	]);
+	await expect(page.getByRole("alert")).toHaveText(
+		"Could not load your wishlist.",
+	);
+	// When
+	await page.getByRole("button", { name: "Retry" }).click();
+	// Then
+	await expect(page.getByRole("alert")).toHaveCount(0);
+	await expect(page.getByText("No shop link yet.")).toBeVisible();
+});
+
+test("shows Could not load your closet and wishlist when both fail on the piece page", async ({
+	page,
+}) => {
+	// Given: the jacket in both lists; the first load of each list fails
+	const piece = await pieceInBoth(page);
+	await failFirstLoad(page, "**/api/owned-items");
+	await failFirstLoad(page, "**/api/wishes");
+	// When
+	await page.goto(piece);
+	// Then
+	await expect(
+		page.getByRole("heading", {
+			name: "Could not load your closet and wishlist",
+		}),
+	).toBeVisible();
+	// When: one Retry loads both
+	await page.getByRole("button", { name: "Retry" }).click();
 	// Then
 	await expect(page.getByRole("heading", { level: 2 })).toHaveText([
 		"In your closet",
