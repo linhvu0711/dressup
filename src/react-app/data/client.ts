@@ -3,7 +3,12 @@ import type { z } from "zod";
 import type { AiApp } from "@/ai-apps/ai-app";
 import type { OwnedItem } from "@/closet/owned-item";
 import type { Combination, CombinationId } from "@/combinations/combination";
-import { type Brand, type BrandId, byBrandName } from "@/labels/brand";
+import {
+	type Brand,
+	type BrandId,
+	byBrandName,
+	type ListedBrand,
+} from "@/labels/brand";
 import type { Colour, ColourId, ListedColour } from "@/labels/colour";
 import type { Look, LookId } from "@/looks/look";
 import type { Tag, TagId } from "@/tags/tag";
@@ -117,8 +122,8 @@ export const after = {
 	},
 	// The list is A to Z, so an added brand goes in its place.
 	brandAdded(userId: string | null, brand: Brand) {
-		queryClient.setQueryData<Brand[]>(keys.brands(userId), (old) =>
-			old ? [...old, brand].sort(byBrandName) : old,
+		queryClient.setQueryData<ListedBrand[]>(keys.brands(userId), (old) =>
+			old ? [...old, { ...brand, items: 0 }].sort(byBrandName) : old,
 		);
 	},
 	// The server's brands may differ from the cached ones, as after an add
@@ -126,17 +131,24 @@ export const after = {
 	brandsMayDiffer(userId: string | null) {
 		refresh(keys.brands(userId));
 	},
-	// A new name can move the brand in the A to Z list.
+	// A new name can move the brand in the A to Z list; its count of items
+	// stays, as a rename leaves it.
 	brandChanged(userId: string | null, brand: Brand) {
-		queryClient.setQueryData<Brand[]>(keys.brands(userId), (old) =>
-			old?.map((b) => (b.id === brand.id ? brand : b)).sort(byBrandName),
+		queryClient.setQueryData<ListedBrand[]>(keys.brands(userId), (old) =>
+			old
+				?.map((b) => (b.id === brand.id ? { ...b, ...brand } : b))
+				.sort(byBrandName),
 		);
+		// The closet shows its items' brand names.
+		refresh(keys.closet(userId));
 	},
 	brandDeleted(userId: string | null, id: BrandId) {
-		queryClient.setQueryData<Brand[]>(keys.brands(userId), (old) =>
+		queryClient.setQueryData<ListedBrand[]>(keys.brands(userId), (old) =>
 			old?.filter((b) => b.id !== id),
 		);
 		refresh(keys.brands(userId));
+		// Its items now have no brand.
+		refresh(keys.closet(userId));
 	},
 	// As lookSaved; a saved combination also makes its colours in use.
 	combinationSaved(userId: string | null, combination: Combination) {
