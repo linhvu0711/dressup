@@ -1,11 +1,13 @@
 import { cn } from "cn";
 import { Plus } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { Link, useParams } from "react-router";
 import { useCombinations } from "@/combinations/api";
 import { CombinationCard } from "@/combinations/CombinationCard";
 import { CombinationsFailed } from "@/combinations/CombinationsFailed";
 import { CombinationView } from "@/combinations/CombinationView";
+import type { Combination } from "@/combinations/combination";
+import { DeleteCombinationDialog } from "@/combinations/DeleteCombinationDialog";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { useDressState } from "@/dress/DressState";
@@ -27,6 +29,9 @@ export function CombinationsPage() {
 	const dress = useDressState();
 	const shown = combinations.data?.find((c) => c.id === combinationId);
 	const open = shown !== undefined;
+	// The confirm lives here, not in the view: the view goes when the list
+	// drops the deleted combination, and the confirm must still say so.
+	const [deleting, setDeleting] = useState<Combination | null>(null);
 	let wall: ReactNode;
 	if (combinations.isPending) {
 		wall = (
@@ -114,8 +119,17 @@ export function CombinationsPage() {
 					aria-label="Open combination"
 					className="flex min-h-0 flex-1 flex-col wide:border-border wide:border-l"
 				>
-					<CombinationView combination={shown} onDelete={() => {}} />
+					<CombinationView
+						combination={shown}
+						onDelete={() => setDeleting(shown)}
+					/>
 				</aside>
+			) : null}
+			{deleting ? (
+				<DeleteCombinationDialog
+					combination={deleting}
+					onClose={() => setDeleting(null)}
+				/>
 			) : null}
 		</div>
 	);

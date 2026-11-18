@@ -452,6 +452,86 @@ test("shows the sign-in screen when a combination's address answers 401", async 
 	).toBeVisible();
 });
 
+const confirm = (page: Page) =>
+	page.getByRole("alertdialog", { name: "Delete this combination?" });
+
+const titles = (page: Page) => page.locator('[data-slot="combination-title"]');
+
+// THREE, then TWO saved; THREE's own page open.
+async function threeOpenBesideTwo(page: Page) {
+	await page.goto("/");
+	const ids = await colourIds(page);
+	const first = three(ids);
+	const second = two(ids);
+	await postCombinations(page, first, second);
+	await page.goto(`/combinations/${first.id}`);
+	await expect(viewTitle(page)).toHaveText(LONG_TITLE);
+	return { first, second };
+}
+
+test("deletes a combination", async ({ page }) => {
+	// Given: both projects, THREE then TWO saved; THREE open
+	await threeOpenBesideTwo(page);
+	// When
+	await page.getByRole("button", { name: "Delete this combination" }).click();
+	await expect(confirm(page)).toContainText(
+		`"${LONG_TITLE}" goes away for good. Your colours stay.`,
+	);
+	await confirm(page).getByRole("button", { name: "Delete" }).click();
+	// Then
+	await expect(toast(page)).toHaveText("Combination deleted");
+	await expect(page).toHaveURL("/combinations");
+	await expect(titles(page)).toHaveText([
+		"White short tee + Grey training shorts",
+	]);
+});
+
+test("keeps the combination on Cancel", async ({ page }) => {
+	// Given: both projects, THREE then TWO saved; THREE open
+	await threeOpenBesideTwo(page);
+	// When
+	await page.getByRole("button", { name: "Delete this combination" }).click();
+	await confirm(page).getByRole("button", { name: "Cancel" }).click();
+	// Then
+	await expect(confirm(page)).toHaveCount(0);
+	await expect(viewTitle(page)).toHaveText(LONG_TITLE);
+	await expect(toast(page)).toHaveCount(0);
+});
+
+test("keeps the combination when the delete fails", async ({ page }) => {
+	// Given: both projects, THREE open; a DELETE answers 500
+	await threeOpenBesideTwo(page);
+	await page.route("**/api/combinations/*", (route) =>
+		route.request().method() === "DELETE"
+			? route.fulfill({ status: 500 })
+			: route.continue(),
+	);
+	// When
+	await page.getByRole("button", { name: "Delete this combination" }).click();
+	await confirm(page).getByRole("button", { name: "Delete" }).click();
+	// Then
+	await expect(toast(page)).toHaveText("Not deleted. Try again.");
+	await expect(confirm(page)).toHaveCount(0);
+	await expect(viewTitle(page)).toHaveText(LONG_TITLE);
+});
+
+test("shows the wall when the combination to delete is gone", async ({
+	page,
+}) => {
+	// Given: both projects, THREE open; then a second device deletes it
+	const { first } = await threeOpenBesideTwo(page);
+	await page.request.delete(`/api/combinations/${first.id}`);
+	// When
+	await page.getByRole("button", { name: "Delete this combination" }).click();
+	await confirm(page).getByRole("button", { name: "Delete" }).click();
+	// Then
+	await expect(toast(page)).toHaveText("This combination is gone");
+	await expect(page).toHaveURL("/combinations");
+	await expect(titles(page)).toHaveText([
+		"White short tee + Grey training shorts",
+	]);
+});
+
 const stage = (page: Page) => page.locator('[data-slot="build-stage"]');
 
 const typeChip = (page: Page, name: string) =>
