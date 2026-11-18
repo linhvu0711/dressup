@@ -106,8 +106,9 @@ export const after = {
 		queryClient.setQueryData<ListedColour[]>(keys.colours(userId), (old) =>
 			old?.map((c) => (c.id === colour.id ? { ...c, ...colour } : c)),
 		);
-		// A combination shows its colours' names and codes.
+		// A combination and an owned item show their colours' names and codes.
 		refresh(keys.combinations(userId));
+		refresh(keys.closet(userId));
 	},
 	// The server's colours may differ from the cached ones, as after an add
 	// whose answer was lost, or a change refused for a change made elsewhere.
