@@ -1,7 +1,13 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { after, cachedUserId, keys, request } from "../data/client";
+import {
+	after,
+	cachedUserId,
+	keys,
+	RequestError,
+	request,
+} from "../data/client";
 import { colourAnswer, coloursAnswer } from "../data/contract";
-import type { Colour } from "./colour";
+import type { Colour, ColourId } from "./colour";
 
 export function useColours() {
 	const userId = cachedUserId();
@@ -46,5 +52,20 @@ export function useChangeColour() {
 		// A colour gone on another device, or a name taken there, shows on the
 		// next load.
 		onError: () => after.coloursMayDiffer(userId),
+	});
+}
+
+// Not found: deleted on another device already, which is what was asked.
+const goneAsDone = (error: unknown) => {
+	if (!(error instanceof RequestError && error.code === "not_found"))
+		throw error;
+};
+
+export function useDeleteColour() {
+	const userId = cachedUserId();
+	return useMutation({
+		mutationFn: (id: ColourId) =>
+			request("DELETE", `/api/colours/${id}`).catch(goneAsDone),
+		onSuccess: (_, id) => after.colourDeleted(userId, id),
 	});
 }

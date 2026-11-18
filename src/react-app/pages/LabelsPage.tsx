@@ -1,6 +1,7 @@
 import { ChevronRight, Plus } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Notice } from "@/components/ui/notice";
 import { useColours } from "@/labels/api";
 import { ColourSheet } from "@/labels/ColourSheet";
 import type { Colour } from "@/labels/colour";
@@ -69,7 +70,13 @@ export function LabelsPage() {
 					</Button>
 				}
 			/>
-			{colours.data ? (
+			{colours.data?.length === 0 ? (
+				<Notice title="No colours yet">
+					<p className="max-w-[30ch] text-muted-foreground">
+						Tap + to add your first colour.
+					</p>
+				</Notice>
+			) : colours.data ? (
 				<ul data-slot="colour-list" className={LIST}>
 					{colours.data.map((colour) => (
 						<ColourRow

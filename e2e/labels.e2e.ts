@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { COLOURS_FULL_FILE } from "./global-setup";
+import { COLOURS_EMPTY_FILE, COLOURS_FULL_FILE } from "./global-setup";
 
 const STARTER = [
 	"White #F4F2ED",
@@ -180,4 +180,73 @@ test("changes a colour's name and code", async ({ page }) => {
 	// Then
 	await expect(page.locator('[data-slot="toast"]')).toHaveText("Changes saved");
 	await expect(rows(page).nth(2)).toHaveAccessibleName("Ink #22304A");
+});
+
+async function openNavy(page: Page) {
+	await page.goto("/labels");
+	await expect(rows(page)).toHaveCount(13);
+	await page.getByRole("button", { name: "Navy #1F3A5F" }).click();
+}
+
+test("swaps the form to the confirm step and back", async ({ page }) => {
+	// Given: a fresh account, the row "Navy #1F3A5F" open
+	await openNavy(page);
+	// When
+	await sheet(page, "Edit colour")
+		.getByRole("button", { name: "Delete" })
+		.click();
+	const confirm = {
+		dialogs: await page.getByRole("dialog").count(),
+		title: await page.getByRole("dialog").getByRole("heading").textContent(),
+	};
+	await page.getByRole("button", { name: "Back" }).click();
+	// Then
+	expect({
+		confirm,
+		dialogs: await page.getByRole("dialog").count(),
+		title: await page.getByRole("dialog").getByRole("heading").textContent(),
+		name: await nameBox(page).inputValue(),
+	}).toEqual({
+		confirm: { dialogs: 1, title: 'Delete the colour "Navy"?' },
+		dialogs: 1,
+		title: "Edit colour",
+		name: "Navy",
+	});
+});
+
+test("deletes a colour from the confirm step", async ({ page }) => {
+	// Given: a fresh account, the row "Navy #1F3A5F" open
+	await openNavy(page);
+	// When
+	await sheet(page, "Edit colour")
+		.getByRole("button", { name: "Delete" })
+		.click();
+	await page
+		.getByRole("dialog")
+		.getByRole("button", { name: "Delete" })
+		.click();
+	// Then
+	await expect(page.locator('[data-slot="toast"]')).toHaveText(
+		"Colour deleted",
+	);
+	await expect(rows(page)).toHaveCount(12);
+	expect(await rowNames(page)).not.toContain("Navy #1F3A5F");
+});
+
+test.describe("an account with no colours", () => {
+	test.use({ storageState: COLOURS_EMPTY_FILE });
+
+	test("shows No colours yet for an emptied list", async ({ page }) => {
+		// Given: the account whose colours were all deleted
+		// When
+		await page.goto("/labels");
+		// Then
+		await expect(
+			page.getByRole("heading", { name: "No colours yet" }),
+		).toBeVisible();
+		await expect(
+			page.getByText("Tap + to add your first colour."),
+		).toBeVisible();
+		await expect(rows(page)).toHaveCount(0);
+	});
 });

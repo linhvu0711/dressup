@@ -3,6 +3,7 @@ import { Scale, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { Button } from "@/components/ui/button";
+import { Notice } from "@/components/ui/notice";
 import { useToast } from "@/components/ui/toast";
 import { useLooks } from "@/looks/api";
 import { COMPARE_MAX, COMPARE_MIN } from "@/looks/compare";
@@ -27,15 +28,6 @@ const WALL =
 const NOTE = "font-sans text-[13px] text-muted-foreground";
 
 const PULSE = "animate-placeholder motion-reduce:animate-none";
-
-function Notice({ title, children }: { title: string; children: ReactNode }) {
-	return (
-		<div className="flex flex-1 flex-col items-center justify-center gap-2.5 px-6 py-10 text-center">
-			<h2 className="text-[28px]">{title}</h2>
-			{children}
-		</div>
-	);
-}
 
 // From 900 px the right part shows the opened look, or the newest before one
 // opens. With no look to open it is left out, so a notice sits in the middle

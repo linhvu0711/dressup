@@ -1,3 +1,4 @@
+import { ArrowLeft } from "lucide-react";
 import { Dialog } from "radix-ui";
 import { useRef, useState } from "react";
 import { ColourField } from "@/colour/ColourPicker";
@@ -6,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
 import { RequestError } from "@/data/client";
-import { useAddColour, useChangeColour } from "./api";
+import { useAddColour, useChangeColour, useDeleteColour } from "./api";
 import {
 	COLOUR_LIMIT,
 	COLOUR_NAME_MAX,
@@ -38,7 +39,8 @@ function sentProblem(error: unknown): Problem {
 }
 
 // The form to add a colour, or to change the one it is given: a name and
-// the colour field.
+// the colour field. Delete swaps the same sheet to its confirm step; the form
+// stays mounted behind it, so Back finds the typed values.
 export function ColourSheet({
 	colours,
 	editing,
@@ -51,10 +53,12 @@ export function ColourSheet({
 	const [name, setName] = useState(editing?.name ?? "");
 	const [hex, setHex] = useState<Hex | null>(editing?.hex ?? START);
 	const [checked, setChecked] = useState<Problem | null>(null);
+	const [step, setStep] = useState<"form" | "confirm">("form");
 	const box = useRef<HTMLInputElement>(null);
 	const add = useAddColour();
 	const change = useChangeColour();
 	const save = editing ? change : add;
+	const del = useDeleteColour();
 	const toast = useToast();
 	// A change adds no colour, so the limit never stops it.
 	const full = !editing && colours.length >= COLOUR_LIMIT;
@@ -102,11 +106,32 @@ export function ColourSheet({
 					}}
 					className={SHEET}
 				>
-					<Dialog.Title className="text-[25px] leading-tight">
-						{editing ? "Edit colour" : "Add a colour"}
-					</Dialog.Title>
+					{editing && step === "confirm" ? (
+						<div className="flex items-center gap-3">
+							<Button
+								variant="icon"
+								size="icon"
+								aria-label="Back"
+								title="Back"
+								onClick={() => {
+									setStep("form");
+									del.reset();
+								}}
+							>
+								<ArrowLeft size={18} strokeWidth={1.9} aria-hidden />
+							</Button>
+							<Dialog.Title className="min-w-0 text-[25px] leading-tight">
+								Delete the colour "{editing.name}"?
+							</Dialog.Title>
+						</div>
+					) : (
+						<Dialog.Title className="text-[25px] leading-tight">
+							{editing ? "Edit colour" : "Add a colour"}
+						</Dialog.Title>
+					)}
 					<form
-						className="flex flex-col gap-4"
+						hidden={step === "confirm"}
+						className="flex flex-col gap-4 [&[hidden]]:hidden"
 						onSubmit={(e) => {
 							e.preventDefault();
 							submit(hex);
@@ -144,6 +169,15 @@ export function ColourSheet({
 							</p>
 						) : null}
 						<div className="mt-0.5 flex flex-wrap justify-end gap-2 [&>button]:flex-1 wide:[&>button]:flex-none">
+							{editing ? (
+								<Button
+									type="button"
+									variant="destructive"
+									onClick={() => setStep("confirm")}
+								>
+									Delete
+								</Button>
+							) : null}
 							<Button type="button" onClick={onClose}>
 								Cancel
 							</Button>
@@ -156,6 +190,34 @@ export function ColourSheet({
 							</Button>
 						</div>
 					</form>
+					{editing && step === "confirm" ? (
+						<>
+							<p className="text-muted-foreground">
+								It goes from your list of colours.
+							</p>
+							{del.isError ? (
+								<p role="alert" className="text-[13px] text-destructive">
+									Not deleted. Try again.
+								</p>
+							) : null}
+							<div className="mt-0.5 flex flex-wrap justify-end gap-2 [&>button]:flex-1 wide:[&>button]:flex-none">
+								<Button
+									variant="destructive"
+									disabled={del.isPending}
+									onClick={() =>
+										del.mutate(editing.id, {
+											onSuccess: () => {
+												toast("Colour deleted");
+												onClose();
+											},
+										})
+									}
+								>
+									Delete
+								</Button>
+							</div>
+						</>
+					) : null}
 				</Dialog.Content>
 			</Dialog.Portal>
 		</Dialog.Root>
