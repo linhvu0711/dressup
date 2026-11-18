@@ -23,6 +23,7 @@ export const router = createBrowserRouter([
 			{ path: "combinations", element: <CombinationsPage /> },
 			{ path: "combinations/:combinationId", element: <CombinationsPage /> },
 			{ path: "build", element: <BuildPage /> },
+			{ path: "build/:combinationId", element: <BuildPage /> },
 			{ path: "labels", element: <LabelsPage /> },
 			{ path: "*", element: <NotFoundPage /> },
 		],

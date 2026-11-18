@@ -1,8 +1,13 @@
+import { cn } from "cn";
 import { Plus } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { Link, useParams } from "react-router";
 import { useCombinations } from "@/combinations/api";
 import { CombinationCard } from "@/combinations/CombinationCard";
+import { CombinationsFailed } from "@/combinations/CombinationsFailed";
+import { CombinationView } from "@/combinations/CombinationView";
+import type { Combination } from "@/combinations/combination";
+import { DeleteCombinationDialog } from "@/combinations/DeleteCombinationDialog";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { useDressState } from "@/dress/DressState";
@@ -15,11 +20,18 @@ const WALL =
 const PULSE = "animate-placeholder motion-reduce:animate-none";
 
 // The wall of saved combinations, newest first. The address may name one,
-// as "Open it" does after a refused repeat: that card is marked.
+// which opens beside the wall from 900 px and as its own page under it, with
+// its card marked. An id the list does not have shows the wall, as a look's
+// does.
 export function CombinationsPage() {
 	const { combinationId } = useParams();
 	const combinations = useCombinations();
 	const dress = useDressState();
+	const shown = combinations.data?.find((c) => c.id === combinationId);
+	const open = shown !== undefined;
+	// The confirm lives here, not in the view: the view goes when the list
+	// drops the deleted combination, and the confirm must still say so.
+	const [deleting, setDeleting] = useState<Combination | null>(null);
 	let wall: ReactNode;
 	if (combinations.isPending) {
 		wall = (
@@ -43,13 +55,7 @@ export function CombinationsPage() {
 		);
 	} else if (combinations.isError) {
 		// Checked before the data: a failed refetch keeps the old list.
-		wall = (
-			<Notice title="Could not load your combinations">
-				<Button className="mt-2" onClick={() => void combinations.refetch()}>
-					Retry
-				</Button>
-			</Notice>
-		);
+		wall = <CombinationsFailed onRetry={() => void combinations.refetch()} />;
 	} else if (combinations.data.length === 0) {
 		wall = (
 			<Notice title="No combinations yet">
@@ -78,22 +84,53 @@ export function CombinationsPage() {
 		);
 	}
 	return (
-		<div className="flex min-h-0 flex-1 flex-col">
-			<PageHeader
-				title="Combinations"
-				end={
-					<Button asChild variant="primary" size="icon">
-						<Link
-							to="/build"
-							aria-label="New combination"
-							title="New combination"
-						>
-							<Plus size={18} strokeWidth={1.9} aria-hidden />
-						</Link>
-					</Button>
-				}
-			/>
-			{wall}
+		<div
+			className={cn(
+				"flex min-h-0 flex-1 flex-col",
+				open &&
+					"wide:grid wide:grid-cols-[minmax(0,1fr)_420px] wide:grid-rows-[minmax(0,1fr)]",
+			)}
+		>
+			<div
+				className={cn(
+					"relative flex min-h-0 flex-1 flex-col",
+					open && "hidden wide:flex",
+				)}
+			>
+				<PageHeader
+					title="Combinations"
+					end={
+						<Button asChild variant="primary" size="icon">
+							<Link
+								to="/build"
+								aria-label="New combination"
+								title="New combination"
+							>
+								<Plus size={18} strokeWidth={1.9} aria-hidden />
+							</Link>
+						</Button>
+					}
+				/>
+				{wall}
+			</div>
+			{shown ? (
+				<aside
+					data-slot="combination-panel"
+					aria-label="Open combination"
+					className="flex min-h-0 flex-1 flex-col wide:border-border wide:border-l"
+				>
+					<CombinationView
+						combination={shown}
+						onDelete={() => setDeleting(shown)}
+					/>
+				</aside>
+			) : null}
+			{deleting ? (
+				<DeleteCombinationDialog
+					combination={deleting}
+					onClose={() => setDeleting(null)}
+				/>
+			) : null}
 		</div>
 	);
 }

@@ -1,9 +1,10 @@
-import { and, asc, count, desc, eq, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, type SQL, sql } from "drizzle-orm";
 import type { Hex } from "@/colour/hex";
 import {
 	COMBINATION_LIMIT,
 	type Combination,
 	type CombinationId,
+	type CombinationInput,
 	type CombinationProblem,
 	checkCombination,
 	combinationKey,
@@ -24,11 +25,19 @@ export type CombinationDraft = {
 	open: boolean;
 };
 
+// A change to a saved combination: its pieces, whole. The id comes from the
+// address or the tool call; open left out keeps the stored jacket state.
+export type CombinationChange = {
+	pieces: { typeId: string; colourId: string }[];
+	open?: boolean;
+};
+
 export type CombinationError =
 	| CombinationProblem
 	| { code: "conflict" }
 	| { code: "duplicate"; id: CombinationId }
-	| { code: "combination_limit" };
+	| { code: "combination_limit" }
+	| { code: "not_found" };
 
 export type SavedCombination = { combination: Combination; created: boolean };
 
@@ -102,6 +111,50 @@ const isKeyTaken = (error: unknown): boolean =>
 	(error.message.includes("combination.user_id, combination.key") ||
 		isKeyTaken(error.cause));
 
+// The first piece whose colour is not one of the account's, as the problem.
+async function notYourColour(
+	db: Db,
+	userId: string,
+	pieces: CombinationInput["pieces"],
+): Promise<CombinationProblem | null> {
+	const colourIds = new Set<string>(
+		(await listColours(db, userId)).map((c) => c.id),
+	);
+	const i = pieces.findIndex((p) => !colourIds.has(p.colourId));
+	return i === -1
+		? null
+		: {
+				code: "not_colour",
+				path: ["pieces", i, "colourId"],
+				value: pieces[i].colourId,
+			};
+}
+
+// One insert for each piece, written only while the combination is the
+// account's (ours), so a combination deleted meanwhile gets no pieces.
+const pieceWrites = (
+	db: Db,
+	pieces: CombinationInput["pieces"],
+	ours: SQL | undefined,
+) =>
+	pieces.map((piece) =>
+		db
+			.insert(combinationPiece)
+			.select(
+				db
+					.select({
+						combinationId: combination.id,
+						userId: combination.userId,
+						layer: sql<string>`${LAYER_OF[piece.typeId]}`.as("layer"),
+						typeId: sql<string>`${piece.typeId}`.as("type_id"),
+						colourId: sql<string>`${piece.colourId}`.as("colour_id"),
+					})
+					.from(combination)
+					.where(ours),
+			)
+			.onConflictDoNothing(),
+	);
+
 // The page makes the id when the save form opens, so a Save sent again after
 // a lost answer gives back the same combination rather than a second one. An
 // id another account holds, or one saved with other pieces, is conflict. The
@@ -116,19 +169,8 @@ export async function saveCombination(
 	const checked = checkCombination(draft);
 	if (!checked.ok) return { ok: false, error: checked.problem };
 	const input = checked.combination;
-	const colourIds = new Set<string>(
-		(await listColours(db, userId)).map((c) => c.id),
-	);
-	const notColour = input.pieces.findIndex((p) => !colourIds.has(p.colourId));
-	if (notColour !== -1)
-		return {
-			ok: false,
-			error: {
-				code: "not_colour",
-				path: ["pieces", notColour, "colourId"],
-				value: input.pieces[notColour].colourId,
-			},
-		};
+	const notColour = await notYourColour(db, userId, input.pieces);
+	if (notColour) return { ok: false, error: notColour };
 	const key = combinationKey(input.pieces, input.open);
 	const conflict = { ok: false, error: { code: "conflict" } } as const;
 	const [before] = await db
@@ -178,23 +220,7 @@ export async function saveCombination(
 						),
 				)
 				.onConflictDoNothing({ target: combination.id }),
-			...input.pieces.map((piece) =>
-				db
-					.insert(combinationPiece)
-					.select(
-						db
-							.select({
-								combinationId: combination.id,
-								userId: combination.userId,
-								layer: sql<string>`${LAYER_OF[piece.typeId]}`.as("layer"),
-								typeId: sql<string>`${piece.typeId}`.as("type_id"),
-								colourId: sql<string>`${piece.colourId}`.as("colour_id"),
-							})
-							.from(combination)
-							.where(ours),
-					)
-					.onConflictDoNothing(),
-			),
+			...pieceWrites(db, input.pieces, ours),
 		]);
 	} catch (error) {
 		const taken = isKeyTaken(error) && (await keyHolder(db, userId, key));
@@ -208,4 +234,77 @@ export async function saveCombination(
 		.from(combination)
 		.where(eq(combination.id, input.id));
 	return taken ? conflict : { ok: false, error: { code: "combination_limit" } };
+}
+
+// Finds the account's combination by id and swaps its pieces whole, in one
+// batch, so two tabs that change it at once leave one tab's pieces, never a
+// mix. createdAt stays, so it keeps its place on the wall. The same pieces
+// again write nothing. Pieces another of the account's combinations holds
+// are duplicate, with its id; the index on (user_id, key) catches two tabs
+// that pass that check at once. A combination deleted while the batch runs
+// gets no pieces and answers not_found.
+export async function changeCombination(
+	db: Db,
+	userId: string,
+	id: string,
+	change: CombinationChange,
+): Promise<Result<Combination, CombinationError>> {
+	const ours = and(eq(combination.id, id), eq(combination.userId, userId));
+	const notFound = { ok: false, error: { code: "not_found" } } as const;
+	const [stored] = await db
+		.select({ key: combination.key, open: combination.open })
+		.from(combination)
+		.where(ours);
+	if (!stored) return notFound;
+	const checked = checkCombination({
+		id,
+		pieces: change.pieces,
+		open: change.open ?? stored.open,
+	});
+	if (!checked.ok) return { ok: false, error: checked.problem };
+	const input = checked.combination;
+	const notColour = await notYourColour(db, userId, input.pieces);
+	if (notColour) return { ok: false, error: notColour };
+	const key = combinationKey(input.pieces, input.open);
+	if (key !== stored.key) {
+		const held = await keyHolder(db, userId, key);
+		if (held && held !== id)
+			return { ok: false, error: { code: "duplicate", id: held } };
+		try {
+			await db.batch([
+				db.update(combination).set({ key, open: input.open }).where(ours),
+				db
+					.delete(combinationPiece)
+					.where(
+						and(
+							eq(combinationPiece.combinationId, id),
+							eq(combinationPiece.userId, userId),
+						),
+					),
+				...pieceWrites(db, input.pieces, ours),
+			]);
+		} catch (error) {
+			const taken = isKeyTaken(error) && (await keyHolder(db, userId, key));
+			if (!taken) throw error;
+			return { ok: false, error: { code: "duplicate", id: taken } };
+		}
+	}
+	const [changed] = await readCombinations(db, userId, id);
+	return changed ? { ok: true, value: changed } : notFound;
+}
+
+// Only the account's own combination goes, with its pieces (the key's
+// cascade); not_found when there is none to delete.
+export async function deleteCombination(
+	db: Db,
+	userId: string,
+	id: string,
+): Promise<Result<CombinationId, CombinationError>> {
+	const [row] = await db
+		.delete(combination)
+		.where(and(eq(combination.id, id), eq(combination.userId, userId)))
+		.returning({ id: combination.id });
+	return row
+		? { ok: true, value: row.id as CombinationId }
+		: { ok: false, error: { code: "not_found" } };
 }

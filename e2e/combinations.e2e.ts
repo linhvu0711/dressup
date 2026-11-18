@@ -277,6 +277,287 @@ test("shows the sign-in screen when the combinations answer 401", async ({
 	).toBeVisible();
 });
 
+const toast = (page: Page) => page.locator('[data-slot="toast"]');
+
+const view = (page: Page) => page.locator('[data-slot="combination-view"]');
+
+const viewTitle = (page: Page) => view(page).locator("h2");
+
+// THREE saved, then the address of its own page.
+async function savedThree(page: Page) {
+	await page.goto("/");
+	const saved = three(await colourIds(page));
+	await postCombinations(page, saved);
+	return saved;
+}
+
+test("opens a combination as a page under 900 px and beside the wall from 900 px", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account with THREE saved, /combinations
+	const saved = await savedThree(page);
+	await page.goto("/combinations");
+	const wall = page.locator('[data-slot="combination-wall"]');
+	// When
+	await cards(page).first().click();
+	// Then
+	await expect(page).toHaveURL(`/combinations/${saved.id}`);
+	await expect(
+		page.getByRole("link", { name: "Change this combination" }),
+	).toHaveAttribute("href", `/build/${saved.id}`);
+	await expect(
+		page.getByRole("button", { name: "Delete this combination" }),
+	).toBeVisible();
+	if (isPhone(page)) {
+		await expect(page.getByRole("link", { name: "Back" })).toBeVisible();
+		await expect(wall).toBeHidden();
+		await page.getByRole("link", { name: "Back" }).click();
+		await expect(page).toHaveURL("/combinations");
+		await expect(wall).toBeVisible();
+	} else {
+		await expect(wall).toBeVisible();
+		await expect(cards(page).first()).toHaveAttribute("aria-current", "true");
+		await expect(page.getByRole("link", { name: "Back" })).toBeHidden();
+		// Beside the wall the head row sits under the stage.
+		const [h, s] = [
+			await viewTitle(page).boundingBox(),
+			await view(page).locator('[data-surface="wall"]').boundingBox(),
+		];
+		expect(h && s && s.y + s.height <= h.y).toBe(true);
+	}
+});
+
+test("shows the mannequin, the whole title, and a line for each piece", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account with THREE saved
+	const saved = await savedThree(page);
+	// When
+	await page.goto(`/combinations/${saved.id}`);
+	// Then
+	await expect(viewTitle(page)).toHaveText(LONG_TITLE);
+	const box = await viewTitle(page).evaluate((el) => ({
+		lines: el.clientHeight / Number.parseFloat(getComputedStyle(el).lineHeight),
+		cut: el.scrollWidth > el.clientWidth,
+		wider:
+			document.documentElement.scrollWidth >
+			document.documentElement.clientWidth,
+	}));
+	expect({
+		wraps: isPhone(page) ? box.lines > 1.5 : true,
+		cut: box.cut,
+		wider: box.wider,
+	}).toEqual({ wraps: true, cut: false, wider: false });
+	await expect(page.getByRole("img", { name: LONG_TITLE })).toBeVisible();
+	await expect(page.locator('[data-slot="piece-line"]')).toHaveText([
+		"Khaki Harrington jacket · open#B8A57C",
+		"Black long tee#1B1B1F",
+		"Navy casual pants#1F3A5F",
+	]);
+});
+
+test.describe("copy", () => {
+	test.use({ permissions: ["clipboard-read", "clipboard-write"] });
+
+	test("copies a colour code and shows the toast", async ({ page }) => {
+		// Given: both projects, a fresh account with THREE saved and open
+		const saved = await savedThree(page);
+		await page.goto(`/combinations/${saved.id}`);
+		// When
+		await view(page).getByRole("button", { name: "Copy #1F3A5F" }).click();
+		// Then
+		await expect(toast(page)).toHaveText("#1F3A5F copied");
+		expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+			"#1F3A5F",
+		);
+	});
+});
+
+test("shows the wall for a link to a combination it does not have", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account with THREE saved
+	await savedThree(page);
+	// When
+	await page.goto("/combinations/00000000-0000-4000-8000-000000000000");
+	// Then
+	await expect(cards(page)).toHaveCount(1);
+	await expect(cards(page).first()).toBeVisible();
+	await expect(view(page)).toHaveCount(0);
+	await expect(toast(page)).toHaveCount(0);
+});
+
+test("shows skeleton cards while a combination's address loads", async ({
+	page,
+}) => {
+	// Given: both projects, THREE saved; GET /api/combinations held until the
+	// test lets it go
+	const saved = await savedThree(page);
+	let release = () => {};
+	const held = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	await page.route("**/api/combinations", async (route) => {
+		await held;
+		await route.continue();
+	});
+	// When
+	await page.goto(`/combinations/${saved.id}`);
+	// Then
+	const skeletons = page.locator('[data-slot="combination-skeleton"]');
+	await expect(skeletons).toHaveCount(6);
+	await expect(skeletons.first()).toBeVisible();
+	release();
+	await expect(skeletons).toHaveCount(0);
+	await expect(viewTitle(page)).toHaveText(LONG_TITLE);
+});
+
+test("shows Could not load your combinations for a combination's address", async ({
+	page,
+}) => {
+	// Given: both projects, THREE saved; the first GET /api/combinations
+	// answers 500
+	const saved = await savedThree(page);
+	let failed = false;
+	await page.route("**/api/combinations", (route) => {
+		if (failed) return route.continue();
+		failed = true;
+		return route.fulfill({ status: 500 });
+	});
+	// When
+	await page.goto(`/combinations/${saved.id}`);
+	// Then
+	await expect(
+		page.getByRole("heading", { name: "Could not load your combinations" }),
+	).toBeVisible();
+	await page.getByRole("button", { name: "Retry" }).click();
+	await expect(viewTitle(page)).toHaveText(LONG_TITLE);
+});
+
+test("says Could not load your outfit on a combination's page and loads on Try again", async ({
+	page,
+}) => {
+	// Given: both projects, THREE saved, GET /api/dress answers 500 until the
+	// retry
+	const first = three(await colourIds(page));
+	await postCombinations(page, first);
+	await failDress(page);
+	// When
+	await page.goto(`/combinations/${first.id}`);
+	// Then
+	// The page tries the first load 3 times, 1 s and 2 s apart, before it
+	// says so.
+	await expect(view(page).getByRole("alert")).toHaveText(
+		"Could not load your outfit.",
+		{ timeout: 10_000 },
+	);
+	await expect(viewTitle(page)).toHaveText(LONG_TITLE);
+	await page.unroute("/api/dress");
+	// When
+	await view(page).getByRole("button", { name: "Try again" }).click();
+	// Then
+	await expect(view(page).getByRole("img", { name: LONG_TITLE })).toBeVisible();
+	await expect(view(page).getByRole("alert")).toHaveCount(0);
+});
+
+test("shows the sign-in screen when a combination's address answers 401", async ({
+	page,
+}) => {
+	// Given: both projects, / open; then the session is gone for the session
+	// check and for the combinations
+	await page.goto("/");
+	await expect(mainNav(page)).toBeVisible();
+	const noSession = { status: 401, json: { error: "unauthorized" } };
+	await page.route("/api/me", (route) => route.fulfill(noSession));
+	await page.route("**/api/combinations", (route) => route.fulfill(noSession));
+	// When
+	await page.goto("/combinations/00000000-0000-4000-8000-000000000000");
+	// Then
+	await expect(
+		page.getByRole("button", { name: "Sign in with Google" }),
+	).toBeVisible();
+});
+
+const confirm = (page: Page) =>
+	page.getByRole("alertdialog", { name: "Delete this combination?" });
+
+const titles = (page: Page) => page.locator('[data-slot="combination-title"]');
+
+// THREE, then TWO saved; THREE's own page open.
+async function threeOpenBesideTwo(page: Page) {
+	await page.goto("/");
+	const ids = await colourIds(page);
+	const first = three(ids);
+	const second = two(ids);
+	await postCombinations(page, first, second);
+	await page.goto(`/combinations/${first.id}`);
+	await expect(viewTitle(page)).toHaveText(LONG_TITLE);
+	return { first, second };
+}
+
+test("deletes a combination", async ({ page }) => {
+	// Given: both projects, THREE then TWO saved; THREE open
+	await threeOpenBesideTwo(page);
+	// When
+	await page.getByRole("button", { name: "Delete this combination" }).click();
+	await expect(confirm(page)).toContainText(
+		`"${LONG_TITLE}" goes away for good. Your colours stay.`,
+	);
+	await confirm(page).getByRole("button", { name: "Delete" }).click();
+	// Then
+	await expect(toast(page)).toHaveText("Combination deleted");
+	await expect(page).toHaveURL("/combinations");
+	await expect(titles(page)).toHaveText([
+		"White short tee + Grey training shorts",
+	]);
+});
+
+test("keeps the combination on Cancel", async ({ page }) => {
+	// Given: both projects, THREE then TWO saved; THREE open
+	await threeOpenBesideTwo(page);
+	// When
+	await page.getByRole("button", { name: "Delete this combination" }).click();
+	await confirm(page).getByRole("button", { name: "Cancel" }).click();
+	// Then
+	await expect(confirm(page)).toHaveCount(0);
+	await expect(viewTitle(page)).toHaveText(LONG_TITLE);
+	await expect(toast(page)).toHaveCount(0);
+});
+
+test("keeps the combination when the delete fails", async ({ page }) => {
+	// Given: both projects, THREE open; a DELETE answers 500
+	await threeOpenBesideTwo(page);
+	await page.route("**/api/combinations/*", (route) =>
+		route.request().method() === "DELETE"
+			? route.fulfill({ status: 500 })
+			: route.continue(),
+	);
+	// When
+	await page.getByRole("button", { name: "Delete this combination" }).click();
+	await confirm(page).getByRole("button", { name: "Delete" }).click();
+	// Then
+	await expect(toast(page)).toHaveText("Not deleted. Try again.");
+	await expect(confirm(page)).toHaveCount(0);
+	await expect(viewTitle(page)).toHaveText(LONG_TITLE);
+});
+
+test("shows the wall when the combination to delete is gone", async ({
+	page,
+}) => {
+	// Given: both projects, THREE open; then a second device deletes it
+	const { first } = await threeOpenBesideTwo(page);
+	await page.request.delete(`/api/combinations/${first.id}`);
+	// When
+	await page.getByRole("button", { name: "Delete this combination" }).click();
+	await confirm(page).getByRole("button", { name: "Delete" }).click();
+	// Then
+	await expect(toast(page)).toHaveText("This combination is gone");
+	await expect(page).toHaveURL("/combinations");
+	await expect(titles(page)).toHaveText([
+		"White short tee + Grey training shorts",
+	]);
+});
+
 const stage = (page: Page) => page.locator('[data-slot="build-stage"]');
 
 const typeChip = (page: Page, name: string) =>
@@ -618,4 +899,203 @@ test("shows a colour's new name on its combination", async ({ page }) => {
 	await expect(
 		cards(page).first().locator('[data-slot="combination-title"]'),
 	).toHaveText(/^Sand Harrington jacket \(open\)/);
+});
+
+// The account's combinations as the API lists them.
+async function stored(page: Page) {
+	const res = await page.request.get("/api/combinations");
+	return (
+		(await res.json()) as {
+			combinations: {
+				id: string;
+				pieces: { typeId: string; colour: { name: string } }[];
+			}[];
+		}
+	).combinations;
+}
+
+const changeButton = (page: Page) =>
+	page.getByRole("link", { name: "Change this combination" });
+
+test("changes a combination in the builder", async ({ page }) => {
+	// Given: both projects, THREE then TWO saved; THREE open
+	const { first, second } = await threeOpenBesideTwo(page);
+	// When
+	await changeButton(page).click();
+	// Then
+	await expect(page).toHaveURL(`/build/${first.id}`);
+	await expect(
+		page.getByRole("heading", { name: "Change combination" }),
+	).toBeVisible();
+	await expect(
+		stage(page).locator('[data-garment="harrington"]'),
+	).toHaveAttribute("data-front", "open");
+	await expect(
+		stage(page).locator('[data-garment="casual_p"] [fill="#1F3A5F"]').first(),
+	).toBeAttached();
+	// When
+	await pick(page, "Bottom", "Casual pants", "Grey");
+	await page.getByRole("button", { name: "Save" }).click();
+	// Then
+	await expect(
+		saveDialog(page).getByRole("button", { name: "Save changes" }),
+	).toBeVisible();
+	// When
+	await saveDialog(page).getByRole("button", { name: "Save changes" }).click();
+	// Then
+	await expect(toast(page)).toHaveText("Changes saved");
+	await expect(page).toHaveURL(`/combinations/${first.id}`);
+	await expect(viewTitle(page)).toHaveText(
+		"Khaki Harrington jacket (open) + Black long tee + Grey casual pants",
+	);
+	expect((await stored(page)).map((c) => c.id)).toEqual([second.id, first.id]);
+});
+
+test("keeps the saved pieces in the builder when the colours do not load", async ({
+	page,
+}) => {
+	// Given: both projects, THREE then TWO saved; THREE open; the colours
+	// answer 500, so the builder has no colour list of its own
+	await threeOpenBesideTwo(page);
+	await page.route("**/api/colours", (route) =>
+		route.request().method() === "GET"
+			? route.fulfill({ status: 500 })
+			: route.fallback(),
+	);
+	// When
+	await changeButton(page).click();
+	// Then
+	await expect(
+		stage(page).locator('[data-garment="casual_p"] [fill="#1F3A5F"]').first(),
+	).toBeAttached();
+	await expect(page.getByText("Pick 2 pieces or more")).toHaveCount(0);
+	await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
+});
+
+test("refuses a change into a combination the account has", async ({
+	page,
+}) => {
+	// Given: both projects, THREE then TWO saved; THREE open
+	const { second } = await threeOpenBesideTwo(page);
+	// When
+	await changeButton(page).click();
+	await page.getByRole("tab", { name: "Jacket", exact: true }).click();
+	await typeChip(page, "None").click();
+	await pick(page, "Bottom", "Training shorts", "Grey");
+	await pick(page, "Inner top", "Short tee", "White");
+	await page.getByRole("button", { name: "Save" }).click();
+	// Then
+	await expect(saveDialog(page).getByRole("alert")).toHaveText(
+		"You have this combination already.",
+	);
+	await expect(
+		saveDialog(page).getByRole("button", { name: "Save changes" }),
+	).toBeDisabled();
+	await expect(
+		saveDialog(page).getByRole("link", { name: "Open it" }),
+	).toHaveAttribute("href", `/combinations/${second.id}`);
+});
+
+test("shows the duplicate hint when the change answers duplicate", async ({
+	page,
+}) => {
+	// Given: both projects, THREE saved and open; a PUT answers duplicate
+	const saved = await savedThree(page);
+	const other = crypto.randomUUID();
+	await page.route("**/api/combinations/*", (route) =>
+		route.request().method() === "PUT"
+			? route.fulfill({ status: 409, json: { error: "duplicate", id: other } })
+			: route.continue(),
+	);
+	await page.goto(`/combinations/${saved.id}`);
+	// When
+	await changeButton(page).click();
+	await pick(page, "Bottom", "Casual pants", "Grey");
+	await page.getByRole("button", { name: "Save" }).click();
+	await saveDialog(page).getByRole("button", { name: "Save changes" }).click();
+	// Then
+	await expect(saveDialog(page).getByRole("alert")).toHaveText(
+		"You have this combination already.",
+	);
+	await expect(
+		saveDialog(page).getByRole("link", { name: "Open it" }),
+	).toHaveAttribute("href", `/combinations/${other}`);
+});
+
+test("leaves the combination as it was when the builder closes", async ({
+	page,
+}) => {
+	// Given: both projects, THREE then TWO saved; THREE open
+	const { first } = await threeOpenBesideTwo(page);
+	// When
+	await changeButton(page).click();
+	await pick(page, "Bottom", "Casual pants", "Grey");
+	await page.getByRole("link", { name: "Close" }).click();
+	// Then
+	await expect(page).toHaveURL(`/combinations/${first.id}`);
+	await expect(viewTitle(page)).toHaveText(LONG_TITLE);
+	const kept = (await stored(page)).find((c) => c.id === first.id);
+	expect(kept?.pieces.map((p) => [p.typeId, p.colour.name])).toEqual([
+		["casual_p", "Navy"],
+		["tee_l", "Black"],
+		["harrington", "Khaki"],
+	]);
+});
+
+test("shows the wall when the changed combination is gone", async ({
+	page,
+}) => {
+	// Given: both projects, THREE then TWO saved; the builder open on THREE;
+	// a second device deletes it just before the change reaches the server.
+	// A delete before the save form opens would send the builder to the wall
+	// on the form's list refetch, with no change to send.
+	const { first } = await threeOpenBesideTwo(page);
+	await changeButton(page).click();
+	await expect(
+		page.getByRole("heading", { name: "Change combination" }),
+	).toBeVisible();
+	await page.route(`**/api/combinations/${first.id}`, async (route) => {
+		if (route.request().method() === "PUT")
+			await page.request.delete(`/api/combinations/${first.id}`);
+		await route.continue();
+	});
+	// When
+	await pick(page, "Bottom", "Casual pants", "Grey");
+	await page.getByRole("button", { name: "Save" }).click();
+	await saveDialog(page).getByRole("button", { name: "Save changes" }).click();
+	// Then
+	await expect(toast(page)).toHaveText("This combination is gone");
+	await expect(page).toHaveURL("/combinations");
+	await expect(titles(page)).toHaveText([
+		"White short tee + Grey training shorts",
+	]);
+});
+
+test("says Could not load your combinations in the builder and loads on Retry", async ({
+	page,
+}) => {
+	// Given: both projects, THREE saved; the first GET /api/combinations
+	// answers 500
+	const saved = await savedThree(page);
+	let failed = false;
+	await page.route("**/api/combinations", (route) => {
+		if (failed) return route.continue();
+		failed = true;
+		return route.fulfill({ status: 500 });
+	});
+	// When
+	await page.goto(`/build/${saved.id}`);
+	// Then
+	await expect(
+		page.getByRole("heading", { name: "Could not load your combinations" }),
+	).toBeVisible();
+	// When
+	await page.getByRole("button", { name: "Retry" }).click();
+	// Then
+	await expect(
+		page.getByRole("heading", { name: "Change combination" }),
+	).toBeVisible();
+	await expect(
+		stage(page).locator('[data-garment="harrington"]'),
+	).toHaveAttribute("data-front", "open");
 });

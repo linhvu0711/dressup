@@ -1,14 +1,18 @@
 import { cn } from "cn";
 import { X } from "lucide-react";
 import { ToggleGroup } from "radix-ui";
-import { useState } from "react";
-import { Link } from "react-router";
+import { type ReactNode, useState } from "react";
+import { Link, Navigate, useParams } from "react-router";
+import { useCombinations } from "@/combinations/api";
 import { CombinationFigure } from "@/combinations/CombinationFigure";
+import { CombinationsFailed } from "@/combinations/CombinationsFailed";
+import type { Combination } from "@/combinations/combination";
 import { SaveCombinationDialog } from "@/combinations/SaveCombinationDialog";
 import { Button } from "@/components/ui/button";
 import { CHIP } from "@/components/ui/chip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDressState } from "@/dress/DressState";
+import { MannequinPlaceholder } from "@/dress/figure/MannequinPlaceholder";
 import { TypeFigure } from "@/dress/figure/TypeFigure";
 import {
 	GARMENT_IDS,
@@ -22,7 +26,7 @@ import {
 import { OutfitFailed } from "@/dress/OutfitFailed";
 import { Stage } from "@/dress/Stage";
 import { useColours } from "@/labels/api";
-import type { ColourId } from "@/labels/colour";
+import type { Colour, ColourId } from "@/labels/colour";
 import { PageHeader } from "../shell/PageHeader";
 
 type Picks = Partial<Record<Layer, { typeId: GarmentId; colourId: ColourId }>>;
@@ -33,19 +37,85 @@ const NONE = "none";
 
 const PULSE = "animate-placeholder motion-reduce:animate-none";
 
-// The builder: the mannequin on top, the picker below it (beside it from
-// 900 px). A pick shows on the mannequin at once; nothing is saved until Save.
+// The builder at /build makes a new combination; at /build/<id> it changes a
+// saved one, its pieces loaded. The combination found in the list is checked
+// first: a failed refetch keeps the old list, and must not drop the picks.
 export function BuildPage() {
+	const { combinationId } = useParams();
+	const combinations = useCombinations();
+	if (combinationId === undefined) return <Builder />;
+	const found = combinations.data?.find((c) => c.id === combinationId);
+	if (found) return <Builder key={found.id} combination={found} />;
+	if (combinations.isError)
+		return (
+			<ChangeShell id={combinationId}>
+				<CombinationsFailed onRetry={() => void combinations.refetch()} />
+			</ChangeShell>
+		);
+	if (combinations.isPending)
+		return (
+			<ChangeShell id={combinationId}>
+				<Stage className="mx-3 min-h-0 flex-[0_0_46%] rounded-[24px] wide:mx-6">
+					<MannequinPlaceholder />
+				</Stage>
+			</ChangeShell>
+		);
+	return <Navigate to="/combinations" replace />;
+}
+
+// The header of the builder in change mode, before the combination is in.
+function ChangeShell({ id, children }: { id: string; children: ReactNode }) {
+	return (
+		<div className="flex min-h-0 flex-1 flex-col">
+			<PageHeader title="Change combination" start={<Close to={id} />} />
+			{children}
+		</div>
+	);
+}
+
+function Close({ to }: { to?: string }) {
+	const href = to === undefined ? "/combinations" : `/combinations/${to}`;
+	return (
+		<Button asChild variant="icon" size="icon">
+			<Link to={href} aria-label="Close" title="Close">
+				<X size={18} strokeWidth={1.9} aria-hidden />
+			</Link>
+		</Button>
+	);
+}
+
+const picksOf = (combination: Combination | undefined): Picks =>
+	Object.fromEntries(
+		(combination?.pieces ?? []).map((p) => [
+			p.layer,
+			{ typeId: p.typeId, colourId: p.colour.id },
+		]),
+	);
+
+// The mannequin on top, the picker below it (beside it from 900 px). A pick
+// shows on the mannequin at once; nothing is saved until Save. With no jacket
+// the jacket front starts open, as for a new combination.
+function Builder({ combination }: { combination?: Combination }) {
 	const dress = useDressState();
 	const colours = useColours();
-	const [picks, setPicks] = useState<Picks>({});
-	const [open, setOpen] = useState(true);
+	const [picks, setPicks] = useState<Picks>(() => picksOf(combination));
+	const [open, setOpen] = useState(() =>
+		combination?.pieces.some((p) => p.layer === "jacket")
+			? combination.open
+			: true,
+	);
 	const [layer, setLayer] = useState<Layer>("bottom");
 	const [saving, setSaving] = useState(false);
 	const list = colours.data ?? [];
+	// The saved pieces carry their own colours, so a change shows them while
+	// the account's colour list loads, or after it failed.
+	const known: readonly Colour[] = [
+		...list,
+		...(combination?.pieces.map((p) => p.colour) ?? []),
+	];
 	const pieces = LAYERS.flatMap((l) => {
 		const p = picks[l];
-		const colour = p && list.find((c) => c.id === p.colourId);
+		const colour = p && known.find((c) => c.id === p.colourId);
 		return p && colour ? [{ typeId: p.typeId, colour }] : [];
 	});
 	const picked = picks[layer];
@@ -66,18 +136,12 @@ export function BuildPage() {
 		if (picked) setPicks({ ...picks, [layer]: { ...picked, colourId } });
 	}
 	const colourOf = (l: Layer) =>
-		list.find((c) => c.id === picks[l]?.colourId)?.hex;
+		known.find((c) => c.id === picks[l]?.colourId)?.hex;
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
 			<PageHeader
-				title="New combination"
-				start={
-					<Button asChild variant="icon" size="icon">
-						<Link to="/combinations" aria-label="Close" title="Close">
-							<X size={18} strokeWidth={1.9} aria-hidden />
-						</Link>
-					</Button>
-				}
+				title={combination ? "Change combination" : "New combination"}
+				start={<Close to={combination?.id} />}
 				end={
 					<Button
 						variant="primary"
@@ -213,6 +277,7 @@ export function BuildPage() {
 				<SaveCombinationDialog
 					pieces={pieces}
 					open={open}
+					changing={combination?.id}
 					onClose={() => setSaving(false)}
 				/>
 			) : null}

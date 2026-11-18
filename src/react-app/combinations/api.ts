@@ -1,7 +1,13 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { after, cachedUserId, keys, request } from "../data/client";
+import {
+	after,
+	cachedUserId,
+	keys,
+	RequestError,
+	request,
+} from "../data/client";
 import { combinationAnswer, combinationsAnswer } from "../data/contract";
-import type { CombinationInput } from "./combination";
+import type { CombinationId, CombinationInput } from "./combination";
 
 export function useCombinations() {
 	const userId = cachedUserId();
@@ -30,5 +36,46 @@ export function useSaveCombination() {
 				})
 			).combination,
 		onSuccess: (combination) => after.combinationSaved(userId, combination),
+	});
+}
+
+// The server no longer has the combination: deleted on another device.
+export class CombinationGone extends Error {}
+
+const goneAsCombinationGone = (error: unknown): never => {
+	if (error instanceof RequestError && error.code === "not_found")
+		throw new CombinationGone();
+	throw error;
+};
+
+export function useDeleteCombination() {
+	const userId = cachedUserId();
+	return useMutation({
+		mutationFn: (id: CombinationId) =>
+			request("DELETE", `/api/combinations/${id}`).catch(goneAsCombinationGone),
+		onSuccess: (_, id) => after.combinationGone(userId, id),
+		onError: (error, id) => {
+			if (error instanceof CombinationGone) after.combinationGone(userId, id);
+		},
+	});
+}
+
+// The changed combination keeps its place, as combinationSaved keeps a
+// combination with the same id.
+export function useChangeCombination() {
+	const userId = cachedUserId();
+	return useMutation({
+		mutationFn: async (combination: CombinationInput) =>
+			(
+				await request("PUT", `/api/combinations/${combination.id}`, {
+					body: combination,
+					answer: combinationAnswer,
+				}).catch(goneAsCombinationGone)
+			).combination,
+		onSuccess: (combination) => after.combinationSaved(userId, combination),
+		onError: (error, combination) => {
+			if (error instanceof CombinationGone)
+				after.combinationGone(userId, combination.id);
+		},
 	});
 }
