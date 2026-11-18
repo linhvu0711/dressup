@@ -109,7 +109,7 @@ export function BuildPage() {
 				<Tabs
 					value={layer}
 					onValueChange={(value) => setLayer(value as Layer)}
-					className="min-h-0 flex-1 gap-4 overflow-auto px-4 pt-4 pb-8 wide:px-6 wide:pt-0"
+					className="min-h-0 flex-1 gap-3 px-4 pt-3 wide:px-6 wide:pt-0"
 				>
 					<TabsList aria-label="Layer">
 						{LAYERS.map((l) => (
@@ -125,7 +125,13 @@ export function BuildPage() {
 							</TabsTrigger>
 						))}
 					</TabsList>
-					<TabsContent value={layer} className="flex flex-col gap-4">
+					{/* Only the picker scrolls, so the layer tabs stay in view. Its
+					    margin puts the scrollbar at the column edge, and its padding
+					    keeps the picked swatch's outline from being cut. */}
+					<TabsContent
+						value={layer}
+						className="-mx-4 flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-4 pt-1 pb-8 wide:-mx-6 wide:px-6"
+					>
 						<div className="flex flex-col gap-2">
 							<span className={LABEL}>Type</span>
 							<ToggleGroup.Root

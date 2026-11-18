@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
 import { COMBINATIONS_FULL_FILE } from "./global-setup";
+import { isPhone } from "./looks-helpers";
 
 const LONG_TITLE =
 	"Khaki Harrington jacket (open) + Black long tee + Navy casual pants";
@@ -309,6 +310,26 @@ test("starts a jacket open and closes it", async ({ page }) => {
 	await expect(
 		stage(page).locator('[data-garment="harrington"]'),
 	).toHaveAttribute("data-front", "closed");
+});
+
+test("keeps the layer tabs in view when the picker scrolls", async ({
+	page,
+}) => {
+	test.skip(!isPhone(page), "phone layout only");
+	// Given: phone, /build, an inner top picked, so the picker is taller than
+	// its space
+	await page.goto("/build");
+	await page.getByRole("tab", { name: "Inner top", exact: true }).click();
+	await typeChip(page, "Long tee").click();
+	const panel = page.getByRole("tabpanel");
+	// When
+	await panel.evaluate((el) => el.scrollTo(0, el.scrollHeight));
+	// Then
+	expect(await panel.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+	await expect(page.getByRole("tablist", { name: "Layer" })).toBeInViewport({
+		ratio: 1,
+	});
+	await expect(swatch(page, "Mustard")).toBeInViewport();
 });
 
 test("turns Save on at 2 pieces", async ({ page }) => {
