@@ -720,7 +720,7 @@ function trainShorts(c: Hex) {
 	);
 }
 
-export const GARMENT_DRAWINGS: Record<
+export const TYPE_DRAWINGS: Record<
 	TypeId,
 	(c: Hex, open: boolean) => ReactNode
 > = {

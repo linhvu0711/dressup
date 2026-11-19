@@ -67,9 +67,9 @@ test("draws the pieces bottom layer first", () => {
 	const layers = wornLayers(pieces);
 	// Then
 	expect(layers).toEqual([
-		{ garment: "casual_p", color: "#1F3A5F" },
-		{ garment: "tee_l", color: "#1B1B1F" },
-		{ garment: "harrington", color: "#B8A57C" },
+		{ typeId: "casual_p", color: "#1F3A5F" },
+		{ typeId: "tee_l", color: "#1B1B1F" },
+		{ typeId: "harrington", color: "#B8A57C" },
 	]);
 });
 
@@ -79,8 +79,8 @@ test("wears a pale blank bottom and top with no pieces", () => {
 	const layers = wornLayers([]);
 	// Then
 	expect(layers).toEqual([
-		{ garment: "casual_p", color: "#E2DED7" },
-		{ garment: "tee_s", color: "#E2DED7" },
+		{ typeId: "casual_p", color: "#E2DED7" },
+		{ typeId: "tee_s", color: "#E2DED7" },
 	]);
 });
 
@@ -91,8 +91,8 @@ test("wears no blank top under a sweater", () => {
 	const layers = wornLayers(pieces);
 	// Then
 	expect(layers).toEqual([
-		{ garment: "casual_p", color: "#E2DED7" },
-		{ garment: "sweater", color: "#6E1F2F" },
+		{ typeId: "casual_p", color: "#E2DED7" },
+		{ typeId: "sweater", color: "#6E1F2F" },
 	]);
 });
 

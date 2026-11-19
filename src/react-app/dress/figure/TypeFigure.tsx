@@ -1,7 +1,7 @@
 import type { Hex } from "@/colour/hex";
 import type { TypeId } from "@/dress/clothing-types";
 import { FigureSvg, Stretch } from "@/dress/figure/frame";
-import { GARMENT_DRAWINGS } from "@/dress/figure/type-drawings";
+import { TYPE_DRAWINGS } from "@/dress/figure/type-drawings";
 import { STARTER_MANNEQUIN } from "@/mannequin/mannequin";
 
 // Square crops of the figure, each just around the drawn part, so the small
@@ -52,7 +52,7 @@ export function TypeFigure({
 			decorative
 			className={className}
 		>
-			<Stretch>{GARMENT_DRAWINGS[typeId](hex, true)}</Stretch>
+			<Stretch>{TYPE_DRAWINGS[typeId](hex, true)}</Stretch>
 		</FigureSvg>
 	);
 }

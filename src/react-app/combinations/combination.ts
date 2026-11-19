@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-	type GarmentLayer,
+	type FigureLayer,
 	type Hex,
 	LAYER_OF,
 	LAYERS,
@@ -220,17 +220,15 @@ export const BLANK: Hex = "#E2DED7";
 // sweater.
 export function wornLayers(
 	pieces: readonly { typeId: TypeId; hex: Hex }[],
-): GarmentLayer[] {
-	const worn: GarmentLayer[] = byLayer(pieces).map((p) => ({
-		garment: p.typeId,
+): FigureLayer[] {
+	const worn: FigureLayer[] = byLayer(pieces).map((p) => ({
+		typeId: p.typeId,
 		color: p.hex,
 	}));
-	const blank = (garment: TypeId): GarmentLayer[] => [
-		{ garment, color: BLANK },
-	];
-	const bottom = worn.filter((l) => LAYER_OF[l.garment] === "bottom");
-	const above = worn.filter((l) => LAYER_OF[l.garment] !== "bottom");
-	const hasTop = above.some((l) => LAYER_OF[l.garment] !== "jacket");
+	const blank = (typeId: TypeId): FigureLayer[] => [{ typeId, color: BLANK }];
+	const bottom = worn.filter((l) => LAYER_OF[l.typeId] === "bottom");
+	const above = worn.filter((l) => LAYER_OF[l.typeId] !== "bottom");
+	const hasTop = above.some((l) => LAYER_OF[l.typeId] !== "jacket");
 	return [
 		...(bottom.length > 0 ? bottom : blank("casual_p")),
 		...(hasTop ? [] : blank("tee_s")),

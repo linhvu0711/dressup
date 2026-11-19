@@ -92,4 +92,4 @@ export const LAYER_OF: Record<TypeId, Layer> = {
 	train_p: "bottom",
 };
 
-export type GarmentLayer = { garment: TypeId; color: Hex };
+export type FigureLayer = { typeId: TypeId; color: Hex };
