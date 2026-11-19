@@ -102,3 +102,25 @@ test("stops at 8 pictures on one shop link", async ({ page }) => {
 		sheet.getByText("8 pictures is the limit for one item."),
 	).toBeVisible();
 });
+
+const strip = (page: Page, name: string) =>
+	page.getByRole("list", { name: `Pictures of ${name}` });
+
+test("shows each shop link's pictures as a strip and opens the viewer", async ({
+	page,
+}) => {
+	// Given
+	await onJacketPage(page, [{ pictures: 2 }, { pictures: 0 }]);
+	// When
+	await expect(strip(page, "cos.com").getByRole("button")).toHaveCount(2);
+	const strips = {
+		cos: await strip(page, "cos.com").getByRole("button").count(),
+		zara: await strip(page, "zara.com").count(),
+	};
+	await page.getByRole("button", { name: "Open picture 1 of 2" }).click();
+	// Then
+	expect(strips).toEqual({ cos: 2, zara: 0 });
+	await expect(
+		page.getByRole("dialog", { name: "Picture 1 of 2" }),
+	).toBeVisible();
+});
