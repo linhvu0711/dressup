@@ -11,7 +11,7 @@ import { TypeFigure } from "@/dress/figure/TypeFigure";
 import { useWishlist } from "@/wishlist/api";
 import { WishlistPart } from "@/wishlist/WishlistPart";
 import { BackLink, PageHeader } from "../shell/PageHeader";
-import { tabBeforePiece } from "../shell/piece-link";
+import { addressBeforePiece } from "../shell/piece-link";
 
 const PICTURE =
 	"relative block aspect-square w-full max-w-[280px] overflow-hidden rounded-[14px]";
@@ -21,7 +21,7 @@ const PICTURE =
 export function PiecePage() {
 	const { typeId, colourId } = useParams();
 	const location = useLocation();
-	const from = tabBeforePiece(location.state);
+	const back = addressBeforePiece(location.state);
 	const closet = useCloset();
 	const wishlist = useWishlist();
 	const owned = closet.data
@@ -43,7 +43,7 @@ export function PiecePage() {
 	};
 	// A typed address, or the piece gone from both lists since.
 	if (closet.data && wishlist.data && !piece)
-		return <Navigate to={from} replace />;
+		return <Navigate to={back} replace />;
 	let body: ReactNode;
 	if (piece)
 		body = (
@@ -85,7 +85,7 @@ export function PiecePage() {
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
 			<PageHeader
-				start={<BackLink to={from} />}
+				start={<BackLink to={back} />}
 				title={piece ? pieceName(piece) : ""}
 			/>
 			<div className="flex min-h-0 flex-1 flex-col gap-6 overflow-auto px-4 pt-1 pb-24 wide:mx-auto wide:w-full wide:max-w-[540px]">

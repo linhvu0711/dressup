@@ -3,7 +3,7 @@ import type { Hex } from "@/colour/hex";
 import { pieceName } from "@/combinations/combination";
 import { TypeFigure } from "@/dress/figure/TypeFigure";
 import type { GarmentId } from "@/dress/garments";
-import { type PieceTab, pieceLink } from "@/shell/piece-link";
+import { type PieceTab, usePieceLink } from "@/shell/piece-link";
 
 // One tile of a wall of pieces: the piece drawn in its colour, an optional
 // badge on the picture, its name, and an optional second line. Each text
@@ -23,9 +23,10 @@ export function PieceTile({
 	badge?: number;
 	line?: string;
 }) {
+	const linkTo = usePieceLink(from);
 	return (
 		<Link
-			{...pieceLink(piece, from)}
+			{...linkTo(piece)}
 			data-slot={slot}
 			aria-label={label}
 			className="flex min-w-0 flex-col gap-[7px]"

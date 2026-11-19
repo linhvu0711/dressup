@@ -370,14 +370,13 @@ test("deletes the last item of a piece and the tile leaves", async ({
 test("shows Could not load your brands and loads them on Retry", async ({
 	page,
 }) => {
-	// Given: a fresh account with Zara; the first GET /api/brands answered
-	// 500, the next passed on
+	// Given: a fresh account with Zara; each GET /api/brands answered 500
+	// until Retry, since the closet page loads the brands too
 	await page.goto("/");
 	await postBrand(page, "Zara");
-	let failed = false;
+	let failing = true;
 	await page.route("**/api/brands", (route) => {
-		if (failed || route.request().method() !== "GET") return route.continue();
-		failed = true;
+		if (!failing || route.request().method() !== "GET") return route.continue();
 		return route.fulfill({ status: 500 });
 	});
 	await page.goto("/closet");
@@ -388,6 +387,7 @@ test("shows Could not load your brands and loads them on Retry", async ({
 	await expect(brandStep.getByRole("alert")).toHaveText(
 		"Could not load your brands",
 	);
+	failing = false;
 	await brandStep.getByRole("button", { name: "Retry" }).click();
 	// Then
 	await expect(
