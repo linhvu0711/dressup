@@ -1,9 +1,10 @@
 import { Check, ChevronRight } from "lucide-react";
 import { ToggleGroup } from "radix-ui";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { CHIP } from "@/components/ui/chip";
-import { FormSheet, LABEL, LIST_ROW, ROW } from "@/components/ui/sheet-form";
+import { FilterSheet } from "@/components/ui/filter";
+import { LABEL, LIST_ROW, ROW } from "@/components/ui/sheet-form";
 import { TypeFigure } from "@/dress/figure/TypeFigure";
 import {
 	GARMENT_IDS,
@@ -33,7 +34,6 @@ export function PieceFilterSheet({
 	onClose: () => void;
 }) {
 	const [typesOpen, setTypesOpen] = useState(false);
-	const first = useRef<HTMLButtonElement>(null);
 	const brands = useBrands();
 	const typeValues = [
 		...filter.layers.map((l) => `layer:${l}`),
@@ -47,11 +47,11 @@ export function PieceFilterSheet({
 				: GARMENT_IDS.filter((t) => t === type || filter.types.includes(t)),
 		});
 	return (
-		<FormSheet
-			title="Filter"
+		<FilterSheet
 			step={typesOpen ? "Pick a type" : null}
 			onBack={() => setTypesOpen(false)}
-			focus={first}
+			shown={shownText}
+			onClearAll={() => onChange(NO_FILTER)}
 			onClose={onClose}
 		>
 			<div
@@ -73,10 +73,9 @@ export function PieceFilterSheet({
 						}
 						className="flex flex-wrap gap-[7px]"
 					>
-						{LAYERS.map((layer: Layer, i) => (
+						{LAYERS.map((layer: Layer) => (
 							<ToggleGroup.Item
 								key={layer}
-								ref={i === 0 ? first : undefined}
 								value={`layer:${layer}`}
 								className={CHIP}
 							>
@@ -117,14 +116,6 @@ export function PieceFilterSheet({
 						onPicksChange={(picks) => onChange({ ...filter, brands: picks })}
 					/>
 				</div>
-				<div className="mt-0.5 flex gap-2">
-					<Button className="flex-1" onClick={() => onChange(NO_FILTER)}>
-						Clear all
-					</Button>
-					<Button variant="primary" className="flex-1" onClick={onClose}>
-						Show {shownText}
-					</Button>
-				</div>
 			</div>
 			{typesOpen ? (
 				<div className="flex flex-col gap-3">
@@ -155,7 +146,7 @@ export function PieceFilterSheet({
 					))}
 				</div>
 			) : null}
-		</FormSheet>
+		</FilterSheet>
 	);
 }
 
