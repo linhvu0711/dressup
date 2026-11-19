@@ -104,11 +104,16 @@
 		font: 14px / 1.45 var(--font-sans);
 		-webkit-font-smoothing: antialiased;
 	}
-	/* iPhone Safari zooms in on a field with text under 16px. */
+	/* iPhone and iPad Safari zoom in on a field with text under 16px. A
+	   phone in landscape and an iPad can be wider than wide, so a touch
+	   screen gets 16px at any width. */
 	input,
 	select,
 	textarea {
 		@variant max-wide {
+			font-size: 16px;
+		}
+		@variant pointer-coarse {
 			font-size: 16px;
 		}
 	}

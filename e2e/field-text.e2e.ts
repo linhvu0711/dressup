@@ -52,6 +52,22 @@ test("keeps the brand Name box text at 14px on a laptop", async ({ page }) => {
 	expect(await fontSize(name)).toBe("14px");
 });
 
+test.describe("on a wide touch screen", () => {
+	test.use({ hasTouch: true });
+
+	test("shows the brand Name box text at 16px on a wide touch screen", async ({
+		page,
+	}) => {
+		test.skip(isPhone(page), "laptop width only");
+		// Given: the laptop width with a touch screen, as an iPhone Pro Max in
+		// landscape or an iPad, a fresh account
+		// When
+		const name = await openBrandSheet(page);
+		// Then
+		expect(await fontSize(name)).toBe("16px");
+	});
+});
+
 test("keeps pinch zoom allowed in the viewport tag", async ({ page }) => {
 	// Given: either project, a fresh account
 	// When
