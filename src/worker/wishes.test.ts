@@ -766,4 +766,56 @@ describe("shop link pictures", () => {
 			pictureIds: link?.pictureIds,
 		}).toEqual({ status: 200, price: 2490000, pictureIds: [a] });
 	});
+
+	// LINK_ID holds a and b, OTHER_LINK_ID holds c.
+	async function twoLinksWithPictures() {
+		const { h, headers } = await aliceWithWish();
+		const [a, b, c] = await uploads(h, headers, 3);
+		await postLink(h, headers, FIRST_ID, {
+			...zaraLink(null),
+			pictureIds: [a, b],
+		});
+		await postLink(h, headers, FIRST_ID, {
+			...zaraLink(null),
+			id: OTHER_LINK_ID,
+			pictureIds: [c],
+		});
+		return { h, headers, a, b, c };
+	}
+
+	test("deletes a shop link with its pictures, from the bucket too", async () => {
+		// Given
+		const { h, headers, a, c } = await twoLinksWithPictures();
+		// When
+		const res = await send(h, headers, "DELETE", `/api/shop-links/${LINK_ID}`);
+		const loaded = await send(h, headers, "GET", `/api/pictures/${a}`);
+		// Then
+		expect({
+			status: res.status,
+			keys: h.pictures.keys(),
+			loaded: loaded.status,
+		}).toEqual({ status: 204, keys: [c], loaded: 404 });
+	});
+
+	test("deletes a wish with the pictures of its links, from the bucket too", async () => {
+		// Given: plus an owned item holding d
+		const { h, headers } = await twoLinksWithPictures();
+		const [d] = await uploads(h, headers, 1);
+		const ids = await colourIds(h, headers);
+		await send(h, headers, "POST", "/api/owned-items", {
+			id: SECOND_ID,
+			typeId: "shirt_l",
+			colourId: ids.Navy,
+			brandId: null,
+			quantity: 1,
+			pictureIds: [d],
+		});
+		// When
+		const res = await send(h, headers, "DELETE", `/api/wishes/${FIRST_ID}`);
+		// Then
+		expect({ status: res.status, keys: h.pictures.keys() }).toEqual({
+			status: 204,
+			keys: [d],
+		});
+	});
 });

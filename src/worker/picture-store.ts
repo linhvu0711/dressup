@@ -30,6 +30,7 @@ import {
 	pictureStorage,
 	pictureUploadMonth,
 } from "./db/picture-schema";
+import { shopLink } from "./db/wish-schema";
 import type { Result } from "./result";
 
 // Why the picture list of an owner cannot be saved.
@@ -60,6 +61,16 @@ const ownedBy = (owner: PictureOwner) => ({
 });
 
 const isDraft = and(isNull(picture.ownedItemId), isNull(picture.shopLinkId));
+
+// The pictures of every shop link of one wish.
+const ofWish = (db: Db, wishId: string) =>
+	inArray(
+		picture.shopLinkId,
+		db
+			.select({ id: shopLink.id })
+			.from(shopLink)
+			.where(eq(shopLink.wishId, wishId)),
+	);
 
 type PictureKind = "image/jpeg" | "image/png" | "image/webp";
 
@@ -434,7 +445,7 @@ export async function saveWithPictures<T extends Statement>(
 export async function deleteWithPictures<T extends Statement>(
 	db: Db,
 	bucket: R2Bucket,
-	scope: { userId: string; ownedItemId?: string },
+	scope: { userId: string; owner?: PictureOwner | { wishId: string } },
 	ownerDelete: T,
 ): Promise<Awaited<T>> {
 	const { after } = await runWithPictures(db, bucket, {
@@ -442,9 +453,11 @@ export async function deleteWithPictures<T extends Statement>(
 			db,
 			and(
 				eq(picture.userId, scope.userId),
-				scope.ownedItemId === undefined
+				scope.owner === undefined
 					? undefined
-					: eq(picture.ownedItemId, scope.ownedItemId),
+					: "wishId" in scope.owner
+						? ofWish(db, scope.owner.wishId)
+						: ownerIs(scope.owner),
 			),
 		),
 		after: [ownerDelete],

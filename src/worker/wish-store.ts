@@ -22,6 +22,7 @@ import { brand } from "./db/brand-schema";
 import { colour } from "./db/colour-schema";
 import { shopLink, wish } from "./db/wish-schema";
 import {
+	deleteWithPictures,
 	type PictureListError,
 	pictureIdsBy,
 	saveWithPictures,
@@ -286,13 +287,19 @@ export async function addWish(
 // with this id.
 export async function deleteWish(
 	db: Db,
+	bucket: R2Bucket,
 	userId: string,
 	id: string,
 ): Promise<Result<WishId, WishError>> {
-	const [row] = await db
-		.delete(wish)
-		.where(and(eq(wish.id, id), eq(wish.userId, userId)))
-		.returning({ id: wish.id });
+	const [row] = await deleteWithPictures(
+		db,
+		bucket,
+		{ userId, owner: { wishId: id } },
+		db
+			.delete(wish)
+			.where(and(eq(wish.id, id), eq(wish.userId, userId)))
+			.returning({ id: wish.id }),
+	);
 	return row
 		? { ok: true, value: row.id as WishId }
 		: { ok: false, error: { code: "not_found" } };
@@ -496,13 +503,19 @@ export async function changeShopLink(
 // with this id.
 export async function deleteShopLink(
 	db: Db,
+	bucket: R2Bucket,
 	userId: string,
 	id: string,
 ): Promise<Result<ShopLinkId, WishError>> {
-	const [row] = await db
-		.delete(shopLink)
-		.where(and(eq(shopLink.id, id), eq(shopLink.userId, userId)))
-		.returning({ id: shopLink.id });
+	const [row] = await deleteWithPictures(
+		db,
+		bucket,
+		{ userId, owner: { shopLinkId: id } },
+		db
+			.delete(shopLink)
+			.where(and(eq(shopLink.id, id), eq(shopLink.userId, userId)))
+			.returning({ id: shopLink.id }),
+	);
 	return row
 		? { ok: true, value: row.id as ShopLinkId }
 		: { ok: false, error: { code: "not_found" } };

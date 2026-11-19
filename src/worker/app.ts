@@ -549,6 +549,7 @@ export function createApp(getDb: (env: Env) => Db) {
 	app.delete("/shop-links/:id", withAuth, requireUser, async (c) => {
 		const deleted = await deleteShopLink(
 			getDb(c.env),
+			c.env.PICTURES,
 			c.var.user.id,
 			c.req.param("id"),
 		);
@@ -562,6 +563,7 @@ export function createApp(getDb: (env: Env) => Db) {
 	app.delete("/wishes/:id", withAuth, requireUser, async (c) => {
 		const deleted = await deleteWish(
 			getDb(c.env),
+			c.env.PICTURES,
 			c.var.user.id,
 			c.req.param("id"),
 		);

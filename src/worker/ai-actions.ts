@@ -745,7 +745,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 			inputSchema: z.object({ id: z.string().describe("The wish's id.") }),
 		},
 		async ({ id }) => {
-			const deleted = await deleteWish(db, userId, id);
+			const deleted = await deleteWish(db, pictures, userId, id);
 			return deleted.ok
 				? answer({ deleted: deleted.value })
 				: refusal(wishRefusalText(deleted.error, "wish"));
@@ -830,7 +830,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 			}),
 		},
 		async ({ id }) => {
-			const deleted = await deleteShopLink(db, userId, id);
+			const deleted = await deleteShopLink(db, pictures, userId, id);
 			return deleted.ok
 				? answer({ deleted: deleted.value })
 				: refusal(wishRefusalText(deleted.error, "shop link"));

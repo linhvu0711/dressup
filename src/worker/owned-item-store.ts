@@ -383,7 +383,7 @@ export async function deleteOwnedItem(
 	const [row] = await deleteWithPictures(
 		db,
 		bucket,
-		{ userId, ownedItemId: id },
+		{ userId, owner: { ownedItemId: id } },
 		db
 			.delete(ownedItem)
 			.where(and(eq(ownedItem.id, id), eq(ownedItem.userId, userId)))
