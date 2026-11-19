@@ -82,3 +82,22 @@ test("shows the colour sheet boxes text at 16px on a phone", async ({
 		]),
 	).toEqual(["16px", "16px"]);
 });
+
+test("shows the Quantity box text at 16px on a phone", async ({ page }) => {
+	test.skip(!isPhone(page), PHONE_ONLY);
+	// Given: the phone project, a fresh account
+	// When
+	await page.goto("/closet");
+	await page
+		.getByRole("button", { name: "Add to closet", exact: true })
+		.first()
+		.click();
+	// Then
+	expect(
+		await fontSize(
+			page
+				.getByRole("dialog", { name: "Add to closet" })
+				.getByRole("textbox", { name: "Quantity" }),
+		),
+	).toBe("16px");
+});
