@@ -2501,4 +2501,19 @@ describe("wishes", () => {
 			text: "nope is not one of your brands. list_brands names them.",
 		});
 	});
+
+	test("refuses an empty brand id in a filter", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		await filterWishes(ai);
+		// When
+		const { isError, text } = await ai.call("list_wishes", {
+			brandIds: ["", "nope"],
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: " is not one of your brands. list_brands names them.",
+		});
+	});
 });

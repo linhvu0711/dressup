@@ -267,7 +267,8 @@ export function registerAiActions(server: McpServer, account: Account) {
 			const bad = brandIds.find(
 				(id) => id !== null && !brands.some((b) => b.id === id),
 			);
-			if (bad) return { ok: false, text: notYourBrand(bad) };
+			if (bad !== undefined && bad !== null)
+				return { ok: false, text: notYourBrand(bad) };
 		}
 		return {
 			ok: true,
