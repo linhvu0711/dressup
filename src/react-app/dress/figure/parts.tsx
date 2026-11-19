@@ -199,7 +199,7 @@ export function Btn({
 
 type PieceOptions = { grain?: false | number; stroke?: string };
 
-// One garment piece: flat exact colour, shading clipped to the shape, fabric
+// One piece of a drawing: flat exact colour, shading clipped to the shape, fabric
 // grain, and a soft edge.
 export function Piece({
 	d,
@@ -367,7 +367,7 @@ export function Defs() {
 	);
 }
 
-// Short factory names keep the garment drawings compact.
+// Short factory names keep the type drawings compact.
 export const f = (...nodes: ReactNode[]) =>
 	createElement(Fragment, null, ...nodes);
 export const sh = (d: string, op?: number, b?: number) => (

@@ -43,7 +43,7 @@ export function FigureSvg({
 	);
 }
 
-// The body and its garments are drawn narrow and stretched wide here.
+// The body and the clothes on it are drawn narrow and stretched wide here.
 export function Stretch({ children }: { children: ReactNode }) {
 	return <g transform="matrix(1.12 0 0 1 -24 0)">{children}</g>;
 }

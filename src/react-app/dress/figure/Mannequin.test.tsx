@@ -43,7 +43,7 @@ describe("Mannequin", () => {
 	});
 
 	test("points each url at an id in the figure", () => {
-		// Given: a figure with no garments: its floor, shadows, body, and head
+		// Given: a figure with no clothes: its floor, shadows, body, and head
 		const markup = renderToStaticMarkup(<Mannequin {...STARTER_MANNEQUIN} />);
 		// When
 		const ids = new Set(
@@ -57,7 +57,7 @@ describe("Mannequin", () => {
 	test.each(TYPE_IDS.map((id) => [id]))(
 		"draws each type in the given colour (%s)",
 		(id) => {
-			// Given: one garment in the test colour
+			// Given: one type in the test colour
 			// When
 			const markup = renderToStaticMarkup(
 				<Mannequin
