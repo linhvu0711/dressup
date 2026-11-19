@@ -19,7 +19,11 @@ import {
 	checkCombination,
 	combinationKey,
 } from "@/combinations/combination";
-import { checkPieceRows, filterCombinations } from "@/combinations/filter";
+import {
+	checkPieceRows,
+	filterCombinations,
+	type OwnChoice,
+} from "@/combinations/filter";
 import { LAYER_OF, LAYERS } from "@/dress/clothing-types";
 import type { ColourId } from "@/labels/colour";
 import type { TagId } from "@/tags/tag";
@@ -127,13 +131,18 @@ async function readCombinations(
 export const listCombinations = (db: Db, userId: string) =>
 	readCombinations(db, userId);
 
-// The combinations that match every piece row and carry every tag, newest
-// first. A type, colour, or tag the account does not have is refused, as a
-// save refuses it.
+// The combinations that match every piece row, carry every tag, and pass
+// Pieces I own, newest first. A type, colour, or tag the account does not
+// have is refused, as a save refuses it.
 export async function findCombinations(
 	db: Db,
 	userId: string,
-	filter: { pieces: { typeId?: string; colourId?: string }[]; tags: string[] },
+	filter: {
+		pieces: { typeId?: string; colourId?: string }[];
+		tags: string[];
+		own: OwnChoice;
+	},
+	owned: ReadonlySet<string>,
 ): Promise<Result<Combination[], CombinationProblem>> {
 	const checked = checkPieceRows(filter.pieces);
 	if (!checked.ok) return { ok: false, error: checked.problem };
@@ -143,10 +152,11 @@ export async function findCombinations(
 	if (notTag) return { ok: false, error: notTag };
 	return {
 		ok: true,
-		value: filterCombinations(await readCombinations(db, userId), {
-			pieces: checked.rows,
-			tags: filter.tags as TagId[],
-		}),
+		value: filterCombinations(
+			await readCombinations(db, userId),
+			{ pieces: checked.rows, tags: filter.tags as TagId[], own: filter.own },
+			owned,
+		),
 	};
 }
 

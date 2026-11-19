@@ -1142,6 +1142,87 @@ describe("combinations", () => {
 		]);
 	});
 
+	test("lists only the combinations whose pieces the closet has all of with own all", async () => {
+		// Given: TWO, then THREE; the closet has both pieces of TWO
+		const { ai } = await withAiSession();
+		const ids = await colourIds(ai);
+		await savedId(ai, two(ids));
+		await savedId(ai, three(ids));
+		await ai.call("add_owned_item", {
+			typeId: "train_sh",
+			colourId: ids.Grey,
+			quantity: 1,
+		});
+		await ai.call("add_owned_item", {
+			typeId: "tee_s",
+			colourId: ids.White,
+			quantity: 1,
+		});
+		// When
+		const { isError, data } = await ai.call("list_combinations", {
+			own: "all",
+		});
+		// Then
+		expect({
+			isError,
+			titles: (data as { combinations: Listed[] }).combinations.map(
+				(c) => c.title,
+			),
+		}).toEqual({
+			isError: false,
+			titles: ["White short tee + Grey training shorts"],
+		});
+	});
+
+	test("lists the combinations with a piece the closet lacks with own not_all", async () => {
+		// Given: TWO, then THREE; the closet has both pieces of TWO
+		const { ai } = await withAiSession();
+		const ids = await colourIds(ai);
+		await savedId(ai, two(ids));
+		await savedId(ai, three(ids));
+		await ai.call("add_owned_item", {
+			typeId: "train_sh",
+			colourId: ids.Grey,
+			quantity: 1,
+		});
+		await ai.call("add_owned_item", {
+			typeId: "tee_s",
+			colourId: ids.White,
+			quantity: 1,
+		});
+		// When
+		const { isError, data } = await ai.call("list_combinations", {
+			own: "not_all",
+		});
+		// Then
+		expect({
+			isError,
+			titles: (data as { combinations: Listed[] }).combinations.map(
+				(c) => c.title,
+			),
+		}).toEqual({
+			isError: false,
+			titles: [
+				"Khaki Harrington jacket (open) + Black long tee + Navy casual pants",
+			],
+		});
+	});
+
+	test("says no combination matches when own all finds none", async () => {
+		// Given: TWO, and nothing in the closet
+		const { ai } = await withAiSession();
+		await savedId(ai, two(await colourIds(ai)));
+		// When
+		const { isError, text } = await ai.call("list_combinations", {
+			own: "all",
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: false,
+			text: "No combination matches these filters.",
+		});
+	});
+
 	test("refuses a type in a filter that is not a type", async () => {
 		// Given
 		const { ai } = await withAiSession();

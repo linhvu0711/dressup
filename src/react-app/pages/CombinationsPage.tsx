@@ -2,6 +2,7 @@ import { cn } from "cn";
 import { Plus } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { useCloset } from "@/closet/api";
 import { useCombinations } from "@/combinations/api";
 import { CombinationCard } from "@/combinations/CombinationCard";
 import { CombinationFilterSheet } from "@/combinations/CombinationFilterSheet";
@@ -20,6 +21,7 @@ import {
 	shownText,
 	writeCombinationFilter,
 } from "@/combinations/filter";
+import { pieceKeys } from "@/combinations/marks";
 import { useWallAddress, wallAddress } from "@/combinations/wall-address";
 import { Button } from "@/components/ui/button";
 import { ActiveFilters, FilterButton } from "@/components/ui/filter";
@@ -44,6 +46,8 @@ export function CombinationsPage() {
 	const { combinationId } = useParams();
 	const combinations = useCombinations();
 	const mannequin = useMannequin();
+	const closet = useCloset();
+	const owned = pieceKeys(closet.data ?? []);
 	const tags = useTags();
 	const colours = useColours();
 	const [params, setParams] = useSearchParams();
@@ -55,7 +59,7 @@ export function CombinationsPage() {
 		colours.data,
 	);
 	const visible = combinations.data
-		? filterCombinations(combinations.data, filter)
+		? filterCombinations(combinations.data, filter, owned)
 		: [];
 	const [filtering, setFiltering] = useState(false);
 	// An empty wall shows no filter, so it keeps none in its address: the
@@ -73,7 +77,7 @@ export function CombinationsPage() {
 		const hidden =
 			combinationId !== undefined &&
 			combinations.data !== undefined &&
-			!filterCombinations(combinations.data, next).some(
+			!filterCombinations(combinations.data, next, owned).some(
 				(c) => c.id === combinationId,
 			);
 		if (hidden) navigate(wallAddress(next), { replace: true });
