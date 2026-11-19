@@ -4,6 +4,7 @@ import { Dialog } from "radix-ui";
 import { type ReactNode, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
+import { INPUT } from "@/components/ui/sheet-form";
 import { useToast } from "@/components/ui/toast";
 import { isNameTaken, RequestError } from "@/data/client";
 import type { ErrorCode } from "@/data/contract";
@@ -171,7 +172,7 @@ export function LabelSheet<Id extends string>({
 								}}
 								maxLength={nameMax}
 								autoComplete="off"
-								className="h-10 min-w-0 rounded-[12px] border border-input bg-card px-3 text-[14px] outline-none focus-visible:border-ring"
+								className={INPUT}
 							/>
 						</div>
 						{extra?.field(submit)}

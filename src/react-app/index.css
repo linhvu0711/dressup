@@ -104,6 +104,14 @@
 		font: 14px / 1.45 var(--font-sans);
 		-webkit-font-smoothing: antialiased;
 	}
+	/* iPhone Safari zooms in on a field with text under 16px. */
+	input,
+	select,
+	textarea {
+		@variant max-wide {
+			font-size: 16px;
+		}
+	}
 	h1,
 	h2,
 	h3 {

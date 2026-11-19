@@ -9,6 +9,9 @@ export const LABEL = "font-medium text-[12.5px] text-muted-foreground";
 export const ROW =
 	"flex h-11 min-w-0 items-center gap-2 rounded-[12px] border border-input bg-card px-3 text-left text-[14px] outline-none focus-visible:border-ring";
 
+export const INPUT =
+	"h-10 min-w-0 rounded-[12px] border border-input bg-card px-3 outline-none focus-visible:border-ring";
+
 export const LIST_ROW =
 	"flex h-11 min-w-0 items-center gap-2.5 rounded-[12px] px-2 text-left text-[14px] hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring";
 
