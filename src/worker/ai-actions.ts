@@ -121,7 +121,6 @@ const wishView = (wish: Wish) => ({
 const combinationView = (combination: Combination, tags: Tag[]) => ({
 	id: combination.id,
 	title: combinationTitle(combination),
-	open: combination.open,
 	pieces: combination.pieces.map((p) => ({
 		layer: p.layer,
 		typeId: p.typeId,
@@ -466,7 +465,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		{
 			title: "List the combinations",
 			description:
-				"The account's saved combinations, newest first, each with its title, its pieces, whether its jacket is open, and its tags. pieces and tags narrow the list: a combination must match every piece row and carry every tag.",
+				"The account's saved combinations, newest first, each with its title, its pieces, and its tags. pieces and tags narrow the list: a combination must match every piece row and carry every tag.",
 			annotations: READ,
 			inputSchema: z.object({
 				pieces: z
@@ -517,21 +516,14 @@ export function registerAiActions(server: McpServer, account: Account) {
 			annotations: WRITE,
 			inputSchema: z.object({
 				pieces: field.pieces,
-				open: z
-					.boolean()
-					.optional()
-					.describe(
-						"The jacket is open. Only for a combination with a jacket.",
-					),
 				tags: field.tags.optional(),
 			}),
 		},
-		async ({ pieces, open = false, tags = [] }) => {
+		async ({ pieces, tags = [] }) => {
 			// The server makes the id, so a save sent twice makes two combinations.
 			const saved = await saveCombination(db, userId, {
 				id: crypto.randomUUID(),
 				pieces,
-				open,
 				tags,
 			});
 			if (!saved.ok) return refusal(combinationRefusalText(saved.error));
@@ -549,24 +541,17 @@ export function registerAiActions(server: McpServer, account: Account) {
 		{
 			title: "Change a combination",
 			description:
-				"Changes a saved combination's pieces. The pieces given replace all of its pieces: 2 to 4, at most one for each layer. It keeps its id and its place in the list. open sets the jacket state; left out, it stays. tags given replace its tags; left out, they stay.",
+				"Changes a saved combination's pieces. The pieces given replace all of its pieces: 2 to 4, at most one for each layer. It keeps its id and its place in the list. tags given replace its tags; left out, they stay.",
 			annotations: WRITE,
 			inputSchema: z.object({
 				id: z.string().describe("The combination's id."),
 				pieces: field.pieces,
-				open: z
-					.boolean()
-					.optional()
-					.describe(
-						"The jacket is open. Only for a combination with a jacket. Left out, the jacket state stays.",
-					),
 				tags: field.tags.optional(),
 			}),
 		},
-		async ({ id, pieces, open, tags }) => {
+		async ({ id, pieces, tags }) => {
 			const changed = await changeCombination(db, userId, id, {
 				pieces,
-				open,
 				tags,
 			});
 			if (!changed.ok) return refusal(combinationRefusalText(changed.error));

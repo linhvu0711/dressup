@@ -11,9 +11,8 @@ import type { Layer, TypeId } from "../../react-app/dress/clothing-types";
 import { user } from "./auth-schema";
 import { colour } from "./colour-schema";
 
-// A saved combination. key is its pieces and jacket state as text, so the
-// index refuses a second combination with the same identity, even from two
-// saves at once.
+// A saved combination. key is its pieces as text, so the index refuses a
+// second combination of the same pieces, even from two saves at once.
 export const combination = sqliteTable(
 	"combination",
 	{
@@ -22,7 +21,6 @@ export const combination = sqliteTable(
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
 		key: text("key").notNull(),
-		open: integer("open", { mode: "boolean" }).notNull(),
 		createdAt: integer("created_at", { mode: "timestamp_ms" })
 			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
 			.notNull(),

@@ -46,8 +46,7 @@ export async function seedCombinations(db: Db, userId: string, n: number) {
 			chunk.map(({ id, pieces }) => ({
 				id,
 				userId,
-				key: combinationKey(pieces, false),
-				open: false,
+				key: combinationKey(pieces),
 			})),
 		);
 		await db.insert(combinationPiece).values(

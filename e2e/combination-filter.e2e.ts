@@ -5,7 +5,7 @@ import { expect, test } from "./fixtures";
 const FOUR_TITLE = "White short tee + Navy chino pants";
 const TWO_TITLE = "White short tee + Grey training shorts";
 const THREE_TITLE =
-	"Khaki Harrington jacket (open) + Black long tee + Navy casual pants";
+	"Khaki Harrington jacket + Black long tee + Navy casual pants";
 
 const titles = (page: Page) => page.locator('[data-slot="combination-title"]');
 
@@ -37,7 +37,6 @@ async function seedWall(page: Page) {
 				{ typeId: "chino_p", colourId: ids.Navy },
 				{ typeId: "tee_s", colourId: ids.White },
 			],
-			open: false,
 			tags: [work, weekend],
 		},
 	);

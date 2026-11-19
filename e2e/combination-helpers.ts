@@ -13,7 +13,7 @@ export async function colourIds(page: Page): Promise<Record<string, string>> {
 
 // Every e2e account shares one database, so each saved combination gets its
 // own id.
-// Khaki Harrington jacket (open) + Black long tee + Navy casual pants.
+// Khaki Harrington jacket + Black long tee + Navy casual pants.
 export const three = (ids: Record<string, string>) => ({
 	id: crypto.randomUUID(),
 	pieces: [
@@ -21,7 +21,6 @@ export const three = (ids: Record<string, string>) => ({
 		{ typeId: "tee_l", colourId: ids.Black },
 		{ typeId: "casual_p", colourId: ids.Navy },
 	],
-	open: true,
 });
 
 // White short tee + Grey training shorts.
@@ -31,7 +30,6 @@ export const two = (ids: Record<string, string>) => ({
 		{ typeId: "train_sh", colourId: ids.Grey },
 		{ typeId: "tee_s", colourId: ids.White },
 	],
-	open: false,
 });
 
 export async function postCombinations(page: Page, ...bodies: unknown[]) {

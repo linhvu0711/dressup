@@ -33,12 +33,10 @@ import { useWallAddress } from "./wall-address";
 // the limit does not apply.
 export function SaveCombinationDialog({
 	pieces,
-	open,
 	onClose,
 	changing,
 }: {
 	pieces: readonly { typeId: TypeId; colour: Colour }[];
-	open: boolean;
 	onClose: () => void;
 	changing?: Combination;
 }) {
@@ -60,7 +58,7 @@ export function SaveCombinationDialog({
 	const navigate = useNavigate();
 	const address = useWallAddress();
 	const sent = pieces.map((p) => ({ typeId: p.typeId, colourId: p.colour.id }));
-	const key = combinationKey(sent, open);
+	const key = combinationKey(sent);
 	const refused = send.error instanceof RequestError ? send.error : null;
 	const sameId =
 		combinations.data?.find(
@@ -68,7 +66,6 @@ export function SaveCombinationDialog({
 				c.id !== id &&
 				combinationKey(
 					c.pieces.map((p) => ({ typeId: p.typeId, colourId: p.colour.id })),
-					c.open,
 				) === key,
 		)?.id ?? (refused?.code === "duplicate" ? refused.id : null);
 	const full =
@@ -99,7 +96,6 @@ export function SaveCombinationDialog({
 								{
 									id,
 									pieces: sent,
-									open,
 									// A tag deleted meanwhile is not sent. Tags not loaded send the
 									// picks as they are, so Save changes keeps the stored ones.
 									tags: listed.data
@@ -129,7 +125,7 @@ export function SaveCombinationDialog({
 						}}
 					>
 						<p className="text-[17px] leading-snug">
-							{combinationTitle({ pieces, open })}
+							{combinationTitle({ pieces })}
 						</p>
 						<TagPicker picked={tags} onChange={setTags} />
 						{sameId ? (

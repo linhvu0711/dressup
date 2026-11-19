@@ -1,7 +1,7 @@
 - Type: one kind of clothing in one length. "Short tee" and "long tee" are two types. The app has 17, and the list is fixed.
 - Layer: where a type sits on the body: bottom, inner top, sweater, or jacket. Each type is in exactly one layer.
 - Piece: a type in a colour, such as "Navy long button-up".
-- Combination: 2 to 4 pieces that match well, at most one for each layer, with the jacket state (open or closed). It has no name: its title is its pieces, top layer first. Two combinations with the same pieces and the same jacket state are one combination, and the account keeps it once. An account holds at most 300.
+- Combination: 2 to 4 pieces that match well, at most one for each layer. It has no name: its title is its pieces, top layer first. Two combinations with the same pieces are one combination, and the account keeps it once. An account holds at most 300. A jacket in it is always drawn open.
 - Builder: the page where the user picks the pieces of a combination on the mannequin, for a new combination or to change a saved one.
 - Combinations page: the wall of saved combinations. The user filters it by pieces and by tags.
 - Combination page: one saved combination: the mannequin, the title, and a line for each piece with its colour. From 900 px it sits beside the Combinations page.

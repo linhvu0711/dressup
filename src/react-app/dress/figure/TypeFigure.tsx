@@ -32,7 +32,7 @@ const VIEW_BOX: Record<TypeId, string> = {
 };
 
 // One type alone, grey unless a colour is given, as a small picture for its
-// chip or a tile. A jacket alone is drawn open, with no switch (#91).
+// chip or a tile.
 export function TypeFigure({
 	typeId,
 	hex = "#8C8A84",
@@ -52,7 +52,7 @@ export function TypeFigure({
 			decorative
 			className={className}
 		>
-			<Stretch>{TYPE_DRAWINGS[typeId](hex, true)}</Stretch>
+			<Stretch>{TYPE_DRAWINGS[typeId](hex)}</Stretch>
 		</FigureSvg>
 	);
 }

@@ -250,7 +250,6 @@ test("says a colour in a combination is in use and offers no Delete", async ({
 				{ typeId: "casual_p", colourId: id("Navy") },
 				{ typeId: "tee_l", colourId: id("White") },
 			],
-			open: false,
 		},
 	});
 	expect(saved.status()).toBe(201);

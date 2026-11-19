@@ -9,11 +9,11 @@ test("draws a jacket alone open", () => {
 		<TypeFigure typeId="harrington" hex="#C9B38C" />,
 	);
 	const wool = renderToStaticMarkup(<TypeFigure typeId="wool" hex="#C9B38C" />);
-	// Then: neither holds the closed front of its jacket
+	// Then: the Harrington facing and the wool lapel show only when open
 	expect({
-		harringtonClosed: harrington.includes(
-			"M 184 158 L 216 158 L 216 397 L 184 397 Z",
+		harringtonFacing: harrington.includes(
+			"M 181 176 L 186 176 L 186 397 L 183 397 Z",
 		),
-		woolClosed: wool.includes("M 184.5 162 L 215.5 162 L 215.5 453"),
-	}).toEqual({ harringtonClosed: false, woolClosed: false });
+		woolLapel: wool.includes("M 175 147 L 153 166 L 165 226 L 187 210"),
+	}).toEqual({ harringtonFacing: true, woolLapel: true });
 });

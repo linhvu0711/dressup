@@ -94,17 +94,11 @@ const picksOf = (combination: Combination | undefined): Picks =>
 	);
 
 // The mannequin on top, the picker below it (beside it from 900 px). A pick
-// shows on the mannequin at once; nothing is saved until Save. With no jacket
-// the jacket front starts open, as for a new combination.
+// shows on the mannequin at once; nothing is saved until Save.
 function Builder({ combination }: { combination?: Combination }) {
 	const mannequin = useMannequin();
 	const colours = useColours();
 	const [picks, setPicks] = useState<Picks>(() => picksOf(combination));
-	const [open, setOpen] = useState(() =>
-		combination?.pieces.some((p) => p.layer === "jacket")
-			? combination.open
-			: true,
-	);
 	const [layer, setLayer] = useState<Layer>("bottom");
 	const [saving, setSaving] = useState(false);
 	const list = colours.data ?? [];
@@ -172,7 +166,6 @@ function Builder({ combination }: { combination?: Combination }) {
 									typeId: p.typeId,
 									hex: p.colour.hex,
 								}))}
-								open={open}
 								label="Mannequin in the combination"
 							/>
 						)}
@@ -233,35 +226,7 @@ function Builder({ combination }: { combination?: Combination }) {
 							</ToggleGroup.Root>
 						</div>
 						<div className="flex flex-col gap-2">
-							<div className="flex items-center gap-3">
-								<span className={LABEL}>Colour</span>
-								{layer === "jacket" && picked ? (
-									<ToggleGroup.Root
-										type="single"
-										aria-label="Jacket front"
-										value={open ? "open" : "closed"}
-										onValueChange={(value) => {
-											if (value) setOpen(value === "open");
-										}}
-										className="ml-auto flex flex-none gap-0.5 rounded-full bg-muted p-[3px]"
-									>
-										{(
-											[
-												["closed", "Closed"],
-												["open", "Open"],
-											] as const
-										).map(([value, label]) => (
-											<ToggleGroup.Item
-												key={value}
-												value={value}
-												className="h-7 rounded-full px-3 font-medium text-muted-foreground text-xs transition-[background-color,color] duration-150 focus-visible:outline-2 focus-visible:outline-ring data-[state=on]:bg-card data-[state=on]:text-foreground data-[state=on]:shadow-[0_1px_3px_rgba(40,32,20,.16)]"
-											>
-												{label}
-											</ToggleGroup.Item>
-										))}
-									</ToggleGroup.Root>
-								) : null}
-							</div>
+							<span className={LABEL}>Colour</span>
 							{colours.isSuccess && !picked ? (
 								<p className="text-[13px] text-muted-foreground">
 									Pick a type to choose its colour.
@@ -279,7 +244,6 @@ function Builder({ combination }: { combination?: Combination }) {
 			{saving ? (
 				<SaveCombinationDialog
 					pieces={pieces}
-					open={open}
 					changing={combination}
 					onClose={() => setSaving(false)}
 				/>

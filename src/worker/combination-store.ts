@@ -36,16 +36,13 @@ import { listTags } from "./tag-store";
 export type CombinationDraft = {
 	id: string;
 	pieces: { typeId: string; colourId: string }[];
-	open: boolean;
 	tags?: string[];
 };
 
 // A change to a saved combination: its pieces, whole. The id comes from the
-// address or the tool call; open left out keeps the stored jacket state, and
-// tags left out keep the stored tags.
+// address or the tool call; tags left out keep the stored tags.
 export type CombinationChange = {
 	pieces: { typeId: string; colourId: string }[];
-	open?: boolean;
 	tags?: string[];
 };
 
@@ -66,7 +63,7 @@ async function readCombinations(
 ): Promise<Combination[]> {
 	const [rows, pieces, tags] = await db.batch([
 		db
-			.select({ id: combination.id, open: combination.open })
+			.select({ id: combination.id })
 			.from(combination)
 			.where(
 				and(
@@ -113,7 +110,6 @@ async function readCombinations(
 	]);
 	return rows.map((row) => ({
 		id: row.id as CombinationId,
-		open: row.open,
 		pieces: pieces
 			.filter((p) => p.combinationId === row.id)
 			.sort((a, b) => LAYERS.indexOf(a.layer) - LAYERS.indexOf(b.layer))
@@ -285,7 +281,7 @@ const replaceTags = (
 // a lost answer gives back the same combination rather than a second one. An
 // id another account holds, or one saved with other pieces, is conflict. A
 // save sent again writes its tags, since the form may have changed them. The
-// same pieces and jacket state under another id is duplicate, with its id. A
+// same pieces under another id is duplicate, with its id. A
 // new combination past the limit is not saved: combination_limit. The count
 // sits in the insert, so two saves at once cannot both pass it.
 export async function saveCombination(
@@ -300,7 +296,7 @@ export async function saveCombination(
 	if (notColour) return { ok: false, error: notColour };
 	const notTag = await notYourTag(db, userId, input.tags);
 	if (notTag) return { ok: false, error: notTag };
-	const key = combinationKey(input.pieces, input.open);
+	const key = combinationKey(input.pieces);
 	const conflict = { ok: false, error: { code: "conflict" } } as const;
 	const [before] = await db
 		.select({ userId: combination.userId, key: combination.key })
@@ -330,7 +326,6 @@ export async function saveCombination(
 							id: sql<string>`${input.id}`.as("id"),
 							userId: user.id,
 							key: sql<string>`${key}`.as("key"),
-							open: sql<number>`${input.open ? 1 : 0}`.as("open"),
 							createdAt:
 								sql<number>`(cast(unixepoch('subsecond') * 1000 as integer))`.as(
 									"created_at",
@@ -385,14 +380,13 @@ export async function changeCombination(
 	const ours = and(eq(combination.id, id), eq(combination.userId, userId));
 	const notFound = { ok: false, error: { code: "not_found" } } as const;
 	const [stored] = await db
-		.select({ key: combination.key, open: combination.open })
+		.select({ key: combination.key })
 		.from(combination)
 		.where(ours);
 	if (!stored) return notFound;
 	const checked = checkCombination({
 		id,
 		pieces: change.pieces,
-		open: change.open ?? stored.open,
 		tags: change.tags ?? [],
 	});
 	if (!checked.ok) return { ok: false, error: checked.problem };
@@ -403,7 +397,7 @@ export async function changeCombination(
 		const notTag = await notYourTag(db, userId, input.tags);
 		if (notTag) return { ok: false, error: notTag };
 	}
-	const key = combinationKey(input.pieces, input.open);
+	const key = combinationKey(input.pieces);
 	const piecesChange = key !== stored.key;
 	if (piecesChange) {
 		const held = await keyHolder(db, userId, key);
@@ -412,7 +406,7 @@ export async function changeCombination(
 	}
 	const pieceStatements = piecesChange
 		? [
-				db.update(combination).set({ key, open: input.open }).where(ours),
+				db.update(combination).set({ key }).where(ours),
 				db
 					.delete(combinationPiece)
 					.where(
