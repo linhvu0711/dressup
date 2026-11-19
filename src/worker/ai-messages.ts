@@ -105,8 +105,9 @@ function ownedItemFieldText(
 			return notYourColour(error.value);
 		case "brandId":
 			return notYourBrand(error.value);
-		case "id":
 		case "pictureIds":
+			return "pictureIds holds an id that is not your upload or a picture of this item. list_owned_items names the item's pictures; get_upload_address gives a new upload.";
+		case "id":
 		case "body":
 			return serverError;
 	}

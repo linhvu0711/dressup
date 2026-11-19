@@ -1314,7 +1314,7 @@ describe("owned items", () => {
 		expect(h.pictures.keys()).toEqual([]);
 	});
 
-	test("lists the number of pictures of each item and no picture data", async () => {
+	test("lists the picture ids of each item in upload order", async () => {
 		// Given
 		const { h, ai } = await withAiSession();
 		const a = await uploadPicture(h, ai);
@@ -1323,12 +1323,9 @@ describe("owned items", () => {
 		// When
 		const { data } = await ai.call("list_owned_items");
 		// Then
-		const [item] = (data as { ownedItems: Record<string, unknown>[] })
+		const [item] = (data as { ownedItems: { pictureIds: string[] }[] })
 			.ownedItems;
-		expect({
-			pictureCount: item.pictureCount,
-			hasPictureIds: "pictureIds" in item,
-		}).toEqual({ pictureCount: 2, hasPictureIds: false });
+		expect(item.pictureIds).toEqual([a, b]);
 	});
 
 	test("says there is no such owned item", async () => {
@@ -1562,7 +1559,7 @@ describe("wishes", () => {
 				colour: { name: string };
 				brand: unknown;
 				quantity: number;
-				pictureCount: number;
+				pictureIds: string[];
 			};
 		};
 		expect({
@@ -1572,7 +1569,7 @@ describe("wishes", () => {
 				colour: ownedItem.colour.name,
 				brand: ownedItem.brand,
 				quantity: ownedItem.quantity,
-				pictureCount: ownedItem.pictureCount,
+				pictures: ownedItem.pictureIds.length,
 			},
 			pictureIds: "pictureIds" in ownedItem,
 			wishes: (listed.data as { wishes: Listed[] }).wishes,
@@ -1583,7 +1580,7 @@ describe("wishes", () => {
 				colour: "Navy",
 				brand: null,
 				quantity: 1,
-				pictureCount: 1,
+				pictures: 1,
 			},
 			pictureIds: "pictureIds" in ownedItem,
 			wishes: [],

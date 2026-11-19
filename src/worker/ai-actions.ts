@@ -4,11 +4,7 @@ import type {
 	ToolAnnotations,
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import {
-	OWNED_ITEM_LIMIT,
-	type OwnedItem,
-	QUANTITY_MAX,
-} from "@/closet/owned-item";
+import { OWNED_ITEM_LIMIT, QUANTITY_MAX } from "@/closet/owned-item";
 import {
 	COMBINATION_LIMIT,
 	COMBINATION_TAGS_MAX,
@@ -18,6 +14,7 @@ import {
 import { LAYER_OF, TYPE_IDS, TYPE_NAMES } from "@/dress/clothing-types";
 import { BRAND_LIMIT, BRAND_NAME_MAX, type BrandId } from "@/labels/brand";
 import { COLOUR_LIMIT, COLOUR_NAME_MAX, type ColourId } from "@/labels/colour";
+import { ITEM_PICTURE_LIMIT } from "@/pictures/picture";
 import {
 	filterSize,
 	matchesPieceFilter,
@@ -112,12 +109,6 @@ const answer = (
 	structuredContent: data,
 });
 
-// AI apps cannot add or read pictures, so an item shows only how many it has.
-const ownedItemView = ({ pictureIds, ...item }: OwnedItem) => ({
-	...item,
-	pictureCount: pictureIds.length,
-});
-
 // AI apps cannot add or read pictures, so a shop link shows only how many it
 // has.
 const wishView = (wish: Wish) => ({
@@ -166,6 +157,14 @@ const field = {
 			colourId: z.string().describe("A colour id from list_colours."),
 		}),
 	),
+	// Loose strings on purpose, as add_owned_item: a list of 9 must reach the
+	// store to get a sentence.
+	pictureIds: z
+		.array(z.string())
+		.optional()
+		.describe(
+			`The whole picture list, at most ${ITEM_PICTURE_LIMIT}, in order: ids that an upload address answered and ids the item has now. An id left out is deleted for good. Leave pictureIds out to keep the pictures as they are.`,
+		),
 };
 
 // Loose strings on purpose, as the add tools: a type or an id that is not one
@@ -593,7 +592,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		"list_owned_items",
 		{
 			title: "List the closet",
-			description: `The account's owned items, newest first. An owned item is one brand of one piece (a type in a colour) with a quantity of 1 to ${QUANTITY_MAX}. An account holds at most ${OWNED_ITEM_LIMIT}. Each item has pictureCount, the number of its pictures. AI apps cannot add or read pictures. ${filterRule}`,
+			description: `The account's owned items, newest first. An owned item is one brand of one piece (a type in a colour) with a quantity of 1 to ${QUANTITY_MAX}. An account holds at most ${OWNED_ITEM_LIMIT}. Each item has pictureIds, its pictures in upload order. ${filterRule}`,
 			annotations: READ,
 			inputSchema: pieceFilterArgs,
 		},
@@ -603,8 +602,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 			const ownedItems = (await listOwnedItems(db, userId)).filter((item) =>
 				matchesPieceFilter(picked.filter, ownedItemPiece(item)),
 			);
-			if (ownedItems.length > 0)
-				return answer({ ownedItems: ownedItems.map(ownedItemView) });
+			if (ownedItems.length > 0) return answer({ ownedItems });
 			return answer(
 				{ ownedItems },
 				filterSize(picked.filter) > 0 ? noOwnedItemMatch : noOwnedItems,
@@ -633,9 +631,10 @@ export function registerAiActions(server: McpServer, account: Account) {
 				quantity: z
 					.number()
 					.describe(`How many the account owns, 1 to ${QUANTITY_MAX}.`),
+				pictureIds: field.pictureIds,
 			}),
 		},
-		async ({ typeId, colourId, brandId = null, quantity }) => {
+		async ({ typeId, colourId, brandId = null, quantity, pictureIds }) => {
 			// The server makes the id, as save_combination does.
 			const added = await addOwnedItem(db, pictures, userId, {
 				id: crypto.randomUUID(),
@@ -643,9 +642,10 @@ export function registerAiActions(server: McpServer, account: Account) {
 				colourId,
 				brandId,
 				quantity,
+				pictureIds,
 			});
 			return added.ok
-				? answer({ ownedItem: ownedItemView(added.value.ownedItem) })
+				? answer({ ownedItem: added.value.ownedItem })
 				: refusal(ownedItemRefusalText(added.error));
 		},
 	);
@@ -666,15 +666,17 @@ export function registerAiActions(server: McpServer, account: Account) {
 				quantity: z
 					.number()
 					.describe(`How many the account owns, 1 to ${QUANTITY_MAX}.`),
+				pictureIds: field.pictureIds,
 			}),
 		},
-		async ({ id, brandId, quantity }) => {
+		async ({ id, brandId, quantity, pictureIds }) => {
 			const changed = await changeOwnedItem(db, pictures, userId, id, {
 				brandId,
 				quantity,
+				pictureIds,
 			});
 			return changed.ok
-				? answer({ ownedItem: ownedItemView(changed.value) })
+				? answer({ ownedItem: changed.value })
 				: refusal(ownedItemRefusalText(changed.error));
 		},
 	);
@@ -858,7 +860,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		async ({ id }) => {
 			const bought = await buyShopLink(db, pictures, userId, id);
 			return bought.ok
-				? answer({ ownedItem: ownedItemView(bought.value.ownedItem) })
+				? answer({ ownedItem: bought.value.ownedItem })
 				: refusal(boughtRefusalText(bought.error));
 		},
 	);

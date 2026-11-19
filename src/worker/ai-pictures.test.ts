@@ -19,6 +19,8 @@ const bytes = (head: number[], length: number) => {
 
 const JPEG = bytes([0xff, 0xd8, 0xff, 0xe0], 100);
 
+const NO_SUCH_ID = "5b1f2c3d-0000-4000-8000-000000000000";
+
 const GONE = {
 	error: "address_gone",
 	message:
@@ -225,5 +227,123 @@ describe("upload address", () => {
 			claimed: results.filter((r) => r !== null),
 			addresses: (await h.rows(schema.uploadAddress)).length,
 		}).toEqual({ claimed: [userId], addresses: 0 });
+	});
+});
+
+// A Navy long button-up, no brand, two of them.
+const shirt = async (ai: Session) => {
+	const { data } = await ai.call("list_colours");
+	const navy = (
+		data as { colours: { id: string; name: string }[] }
+	).colours.find((c) => c.name === "Navy");
+	return { typeId: "shirt_l", colourId: navy?.id, quantity: 2 };
+};
+
+type Item = { id: string; quantity: number; pictureIds: string[] };
+
+const uploads = async (h: Harness, ai: Session, n: number) => {
+	const ids: string[] = [];
+	for (let i = 0; i < n; i++)
+		ids.push(await uploadByAddress(h, await addressOf(ai)));
+	return ids;
+};
+
+describe("owned item pictures", () => {
+	test("adds an owned item with a picture sent by address", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		const [a] = await uploads(h, ai, 1);
+		const args = await shirt(ai);
+		// When
+		await ai.call("add_owned_item", { ...args, pictureIds: [a] });
+		const { data } = await ai.call("list_owned_items");
+		// Then
+		const [item] = (data as { ownedItems: Item[] }).ownedItems;
+		expect(item.pictureIds).toEqual([a]);
+	});
+
+	test("deletes a picture left out of an owned item's list", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		const [a, b] = await uploads(h, ai, 2);
+		const added = await ai.call("add_owned_item", {
+			...(await shirt(ai)),
+			pictureIds: [a, b],
+		});
+		const { id } = (added.data as { ownedItem: Item }).ownedItem;
+		// When
+		const { data } = await ai.call("change_owned_item", {
+			id,
+			brandId: null,
+			quantity: 2,
+			pictureIds: [b],
+		});
+		// Then
+		expect({
+			pictureIds: (data as { ownedItem: Item }).ownedItem.pictureIds,
+			keys: h.pictures.keys(),
+		}).toEqual({ pictureIds: [b], keys: [b] });
+	});
+
+	test("keeps an owned item's pictures when pictureIds is left out", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		const [a] = await uploads(h, ai, 1);
+		const added = await ai.call("add_owned_item", {
+			...(await shirt(ai)),
+			pictureIds: [a],
+		});
+		const { id } = (added.data as { ownedItem: Item }).ownedItem;
+		// When
+		const { data } = await ai.call("change_owned_item", {
+			id,
+			brandId: null,
+			quantity: 3,
+		});
+		// Then
+		const { quantity, pictureIds } = (data as { ownedItem: Item }).ownedItem;
+		expect({ quantity, pictureIds, keys: h.pictures.keys() }).toEqual({
+			quantity: 3,
+			pictureIds: [a],
+			keys: [a],
+		});
+	});
+
+	test("refuses 9 pictures on an owned item as a sentence", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		const nine = await uploads(h, ai, 9);
+		const args = await shirt(ai);
+		// When
+		const { isError, text } = await ai.call("add_owned_item", {
+			...args,
+			pictureIds: nine,
+		});
+		// Then
+		expect({
+			isError,
+			text,
+			items: await h.rows(schema.ownedItem),
+		}).toEqual({
+			isError: true,
+			text: "An owned item has at most 8 pictures.",
+			items: [],
+		});
+	});
+
+	test("refuses a picture id that is not the account's on an owned item", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		const args = await shirt(ai);
+		// When
+		const { isError, text } = await ai.call("add_owned_item", {
+			...args,
+			pictureIds: [NO_SUCH_ID],
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "pictureIds holds an id that is not your upload or a picture of this item. list_owned_items names the item's pictures; get_upload_address gives a new upload.",
+		});
 	});
 });
