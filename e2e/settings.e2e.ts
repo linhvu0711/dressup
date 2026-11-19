@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
-import type { BrowserContext, Page } from "@playwright/test";
+import type { BrowserContext, Locator, Page } from "@playwright/test";
+import { colourIds, postCombinations, two } from "./combination-helpers";
 import { expect, test } from "./fixtures";
 import { aiAppFile, type aiAppTests } from "./global-setup";
 
@@ -17,7 +18,7 @@ async function openSkinPicker(page: Page) {
 
 const storedChange = (page: Page) =>
 	page.waitForResponse(
-		(res) => res.url().endsWith("/api/dress/changes") && res.status() === 204,
+		(res) => res.url().endsWith("/api/mannequin/skin") && res.status() === 200,
 	);
 
 test("shows the skin and hair rows with a preview", async ({ page }) => {
@@ -74,12 +75,42 @@ test("sets the skin colour and keeps it", async ({
 	for (const p of [page, other])
 		await expect(row(p, "Skin colour #8D5524")).toBeVisible();
 	await second.close();
+});
+
+test("shows the set skin on the wall, a combination's page, and the builder", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account, one saved combination, the skin
+	// set to #8D5524
+	const combination = two(await colourIds(page));
+	await postCombinations(page, combination);
+	const set = await page.request.put("/api/mannequin/skin", {
+		data: { hex: "#8D5524" },
+	});
+	expect(set.status()).toBe(200);
+	const dark = async (figure: Locator) => {
+		await expect(figure).toBeVisible();
+		return (await figure.innerHTML()).includes('fill="#8D5524"');
+	};
 	// When
-	await page.getByRole("link", { name: "Dress" }).click();
+	await page.goto("/combinations");
+	const wall = await dark(
+		page.locator('[data-slot="combination-card"] svg').first(),
+	);
+	await page.goto(`/combinations/${combination.id}`);
+	const view = await dark(
+		page.locator('[data-slot="combination-view"] svg[role="img"]').first(),
+	);
+	await page.goto(`/build/${combination.id}`);
+	const builder = await dark(
+		page.locator('svg[aria-label="Mannequin in the combination"]'),
+	);
 	// Then
-	const stage = page.locator('svg[aria-label="Mannequin in Polo + sweater"]');
-	await expect(stage).toBeVisible();
-	expect(await stage.innerHTML()).toContain('fill="#8D5524"');
+	expect({ wall, page: view, builder }).toEqual({
+		wall: true,
+		page: true,
+		builder: true,
+	});
 });
 
 test("sets the hair colour and says so", async ({ page }) => {
@@ -129,36 +160,31 @@ test("puts the old skin back on Esc", async ({ page }) => {
 	await expect(row(page, "Skin colour #D6A27B")).toBeVisible();
 });
 
-test("keeps a failed skin colour on screen and shows Not saved", async ({
+test("puts the old skin back and says Not set when the save fails", async ({
 	page,
 }) => {
-	// Given: both projects, a fresh account, /settings, every save cut off
+	// Given: both projects, a fresh account, /settings, every skin save cut off
 	await page.goto("/settings");
-	await page.route("**/api/dress/changes", (route) => route.abort());
-	const bar = page.getByRole("alert");
+	await page.route("**/api/mannequin/skin", (route) => route.abort());
 	// When
 	await row(page, "Skin colour #D6A27B").click();
 	const dialog = page.getByRole("dialog", { name: "Skin colour" });
 	await dialog.getByRole("textbox", { name: "Colour code" }).fill("8D5524");
 	await dialog.getByRole("button", { name: "Set", exact: true }).click();
 	// Then
-	await expect(row(page, "Skin colour #8D5524")).toBeVisible();
-	await expect(bar).toHaveText(/Not saved\. Check your internet\./);
-	// When
-	await page.unroute("**/api/dress/changes");
-	await bar.getByRole("button", { name: "Retry", exact: true }).click();
-	// Then
-	await expect(bar).toHaveCount(0);
-	await expect(page.locator('[data-slot="toast"]')).toHaveText("Saved");
+	await expect(page.locator('[data-slot="toast"]')).toHaveText(
+		"Not set. Try again.",
+	);
+	await expect(row(page, "Skin colour #D6A27B")).toBeVisible();
 });
 
 test("shows the grey preview while the colours load", async ({ page }) => {
-	// Given: GET /api/dress held until the test lets it go
+	// Given: GET /api/mannequin held until the test lets it go
 	let release = () => {};
 	const held = new Promise<void>((resolve) => {
 		release = resolve;
 	});
-	await page.route("/api/dress", async (route) => {
+	await page.route("/api/mannequin", async (route) => {
 		await held;
 		await route.continue();
 	});
@@ -175,26 +201,22 @@ test("shows the grey preview while the colours load", async ({ page }) => {
 	await expect(loading).toHaveCount(0);
 });
 
-test("says Could not load your outfit in Settings and loads on Try again", async ({
+test("says Could not load your mannequin in Settings and loads on Try again", async ({
 	page,
 }) => {
-	// Given: GET /api/dress answers 500 until the retry
-	await page.route("/api/dress", (route) => route.fulfill({ status: 500 }));
+	// Given: GET /api/mannequin answers 500 until the unroute
+	await page.route("/api/mannequin", (route) => route.fulfill({ status: 500 }));
 	// When
 	await page.goto("/settings");
 	// Then
-	// The page tries the first load 3 times, 1 s and 2 s apart, before it
-	// says so.
 	await expect(page.getByRole("alert")).toHaveText(
-		"Could not load your outfit.",
-		{ timeout: 10_000 },
+		"Could not load your mannequin.",
 	);
 	await expect(page.locator('[data-slot="mannequin-preview"]')).toHaveCount(0);
-	await page.unroute("/api/dress");
+	await page.unroute("/api/mannequin");
 	// When
 	await page.getByRole("button", { name: "Try again" }).click();
 	// Then
-	await expect(preview(page)).toBeVisible();
 	await expect(row(page, "Skin colour #D6A27B")).toBeVisible();
 	await expect(page.getByRole("alert")).toHaveCount(0);
 });

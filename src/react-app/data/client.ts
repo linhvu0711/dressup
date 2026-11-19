@@ -11,6 +11,7 @@ import {
 } from "@/labels/brand";
 import type { Colour, ColourId, ListedColour } from "@/labels/colour";
 import type { Look, LookId } from "@/looks/look";
+import type { Mannequin } from "@/mannequin/mannequin";
 import type { ListedTag, Tag, TagId } from "@/tags/tag";
 import type { Wish } from "@/wishlist/wish";
 import { type ErrorCode, errorAnswer, meAnswer } from "./contract";
@@ -30,6 +31,7 @@ export const keys = {
 	combinations: (userId: string | null) => ["combinations", userId] as const,
 	closet: (userId: string | null) => ["closet", userId] as const,
 	wishlist: (userId: string | null) => ["wishlist", userId] as const,
+	mannequin: (userId: string | null) => ["mannequin", userId] as const,
 	addTag: ["tags", "add"] as const,
 	allowApp: (clientId: string) => ["allow-app", clientId] as const,
 };
@@ -146,6 +148,9 @@ export const after = {
 	},
 	// A new name can move the brand in the A to Z list; its count of items
 	// stays, as a rename leaves it.
+	mannequinSet(userId: string | null, mannequin: Mannequin) {
+		queryClient.setQueryData<Mannequin>(keys.mannequin(userId), mannequin);
+	},
 	brandChanged(userId: string | null, brand: Brand) {
 		queryClient.setQueryData<ListedBrand[]>(keys.brands(userId), (old) =>
 			old

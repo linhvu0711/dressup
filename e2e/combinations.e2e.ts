@@ -140,28 +140,30 @@ test("shows Could not load your combinations and loads on Retry", async ({
 	).toBeVisible();
 });
 
-const failDress = (page: Page) =>
-	page.route("/api/dress", (route) => route.fulfill({ status: 500 }));
+const failMannequin = (page: Page) =>
+	page.route("/api/mannequin", (route) => route.fulfill({ status: 500 }));
 
-test("says Could not load your outfit on the wall and loads on Try again", async ({
+// The answer of the first GET /api/mannequin, so a test reads the page after
+// the mannequin failed, not before.
+const mannequinAnswered = (page: Page) =>
+	page.waitForResponse((res) => res.url().endsWith("/api/mannequin"));
+
+test("says Could not load your mannequin on the wall and loads on Try again", async ({
 	page,
 }) => {
-	// Given: both projects, two saved combinations, GET /api/dress answers 500
+	// Given: both projects, two saved combinations, GET /api/mannequin answers 500
 	// until the retry
 	const ids = await colourIds(page);
 	await postCombinations(page, three(ids), two(ids));
-	await failDress(page);
+	await failMannequin(page);
 	// When
 	await page.goto("/combinations");
 	// Then
-	// The page tries the first load 3 times, 1 s and 2 s apart, before it
-	// says so.
 	await expect(page.getByRole("alert")).toHaveText(
-		"Could not load your outfit.",
-		{ timeout: 10_000 },
+		"Could not load your mannequin.",
 	);
 	await expect(cards(page)).toHaveCount(0);
-	await page.unroute("/api/dress");
+	await page.unroute("/api/mannequin");
 	// When
 	await page.getByRole("button", { name: "Try again" }).click();
 	// Then
@@ -169,53 +171,53 @@ test("says Could not load your outfit on the wall and loads on Try again", async
 	await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
-test("shows No combinations yet when the outfit fails and nothing is saved", async ({
+test("shows No combinations yet when the mannequin fails and nothing is saved", async ({
 	page,
 }) => {
-	// Given: both projects, no combinations, GET /api/dress answers 500
-	await failDress(page);
+	// Given: both projects, no combinations, GET /api/mannequin answers 500
+	await failMannequin(page);
 	// When
+	const answered = mannequinAnswered(page);
 	await page.goto("/combinations");
-	// Past the 3 tries, 1 s and 2 s apart.
-	await page.waitForTimeout(4_000);
+	await answered;
 	// Then
 	await expect(
 		page.getByRole("heading", { name: "No combinations yet" }),
 	).toBeVisible();
-	await expect(page.getByText("Could not load your outfit.")).toHaveCount(0);
+	await expect(page.getByText("Could not load your mannequin.")).toHaveCount(0);
 });
 
-test("shows Could not load your combinations when the outfit fails too", async ({
+test("shows Could not load your combinations when the mannequin fails too", async ({
 	page,
 }) => {
-	// Given: both projects, GET /api/dress and GET /api/combinations answer 500
-	await failDress(page);
+	// Given: both projects, GET /api/mannequin and GET /api/combinations answer 500
+	await failMannequin(page);
 	await page.route("**/api/combinations", (route) =>
 		route.fulfill({ status: 500 }),
 	);
 	// When
+	const answered = mannequinAnswered(page);
 	await page.goto("/combinations");
-	// Past the 3 tries, 1 s and 2 s apart.
-	await page.waitForTimeout(4_000);
+	await answered;
 	// Then
 	await expect(
 		page.getByRole("heading", { name: "Could not load your combinations" }),
 	).toBeVisible();
 	await expect(page.getByRole("button", { name: "Retry" })).toBeVisible();
-	await expect(page.getByText("Could not load your outfit.")).toHaveCount(0);
+	await expect(page.getByText("Could not load your mannequin.")).toHaveCount(0);
 });
 
-test("shows grey cards and no alert while the outfit loads", async ({
+test("shows grey cards and no alert while the mannequin loads", async ({
 	page,
 }) => {
-	// Given: both projects, one saved combination, GET /api/dress held until
+	// Given: both projects, one saved combination, GET /api/mannequin held until
 	// the test lets it go
 	await postCombinations(page, two(await colourIds(page)));
 	let release = () => {};
 	const held = new Promise<void>((resolve) => {
 		release = resolve;
 	});
-	await page.route("/api/dress", async (route) => {
+	await page.route("/api/mannequin", async (route) => {
 		await held;
 		await route.continue();
 	});
@@ -404,25 +406,22 @@ test("shows Could not load your combinations for a combination's address", async
 	await expect(viewTitle(page)).toHaveText(LONG_TITLE);
 });
 
-test("says Could not load your outfit on a combination's page and loads on Try again", async ({
+test("says Could not load your mannequin on a combination's page and loads on Try again", async ({
 	page,
 }) => {
-	// Given: both projects, THREE saved, GET /api/dress answers 500 until the
+	// Given: both projects, THREE saved, GET /api/mannequin answers 500 until the
 	// retry
 	const first = three(await colourIds(page));
 	await postCombinations(page, first);
-	await failDress(page);
+	await failMannequin(page);
 	// When
 	await page.goto(`/combinations/${first.id}`);
 	// Then
-	// The page tries the first load 3 times, 1 s and 2 s apart, before it
-	// says so.
 	await expect(view(page).getByRole("alert")).toHaveText(
-		"Could not load your outfit.",
-		{ timeout: 10_000 },
+		"Could not load your mannequin.",
 	);
 	await expect(viewTitle(page)).toHaveText(LONG_TITLE);
-	await page.unroute("/api/dress");
+	await page.unroute("/api/mannequin");
 	// When
 	await view(page).getByRole("button", { name: "Try again" }).click();
 	// Then
@@ -655,19 +654,16 @@ test("keeps the layer tabs in view when the picker scrolls", async ({
 	await expect(swatch(page, "Mustard")).toBeInViewport();
 });
 
-test("says Could not load your outfit in the builder and loads on Try again", async ({
+test("says Could not load your mannequin in the builder and loads on Try again", async ({
 	page,
 }) => {
-	// Given: both projects, GET /api/dress answers 500 until the retry
-	await page.route("/api/dress", (route) => route.fulfill({ status: 500 }));
+	// Given: both projects, GET /api/mannequin answers 500 until the retry
+	await failMannequin(page);
 	await page.goto("/build");
-	// The page tries the first load 3 times, 1 s and 2 s apart, before it
-	// says so.
 	await expect(stage(page).getByRole("alert")).toHaveText(
-		"Could not load your outfit.",
-		{ timeout: 10_000 },
+		"Could not load your mannequin.",
 	);
-	await page.unroute("/api/dress");
+	await page.unroute("/api/mannequin");
 	// When
 	await stage(page).getByRole("button", { name: "Try again" }).click();
 	// Then

@@ -11,7 +11,6 @@ import { useWallAddress } from "@/combinations/wall-address";
 import { Button } from "@/components/ui/button";
 import { CHIP } from "@/components/ui/chip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useDressState } from "@/dress/DressState";
 import { MannequinPlaceholder } from "@/dress/figure/MannequinPlaceholder";
 import { TypeFigure } from "@/dress/figure/TypeFigure";
 import {
@@ -23,11 +22,12 @@ import {
 	LAYERS,
 	type Layer,
 } from "@/dress/garments";
-import { OutfitFailed } from "@/dress/OutfitFailed";
 import { Stage } from "@/dress/Stage";
 import { useColours } from "@/labels/api";
 import { ColourSwatches } from "@/labels/ColourSwatches";
 import type { Colour, ColourId } from "@/labels/colour";
+import { useMannequin } from "@/mannequin/api";
+import { MannequinFailed } from "@/mannequin/MannequinFailed";
 import { PageHeader } from "../shell/PageHeader";
 
 type Picks = Partial<Record<Layer, { typeId: GarmentId; colourId: ColourId }>>;
@@ -97,7 +97,7 @@ const picksOf = (combination: Combination | undefined): Picks =>
 // shows on the mannequin at once; nothing is saved until Save. With no jacket
 // the jacket front starts open, as for a new combination.
 function Builder({ combination }: { combination?: Combination }) {
-	const dress = useDressState();
+	const mannequin = useMannequin();
 	const colours = useColours();
 	const [picks, setPicks] = useState<Picks>(() => picksOf(combination));
 	const [open, setOpen] = useState(() =>
@@ -164,8 +164,8 @@ function Builder({ combination }: { combination?: Combination }) {
 					className="flex min-h-0 flex-[0_0_46%] flex-col wide:mx-6 wide:mb-4 wide:flex-1"
 				>
 					<Stage className="min-h-0 flex-1 rounded-b-[24px] wide:rounded-[26px]">
-						{dress.status === "failed" ? (
-							<OutfitFailed onLoadAgain={dress.loadAgain} />
+						{mannequin.isError ? (
+							<MannequinFailed onLoadAgain={() => mannequin.refetch()} />
 						) : (
 							<CombinationFigure
 								pieces={pieces.map((p) => ({
