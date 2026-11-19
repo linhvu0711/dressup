@@ -1,6 +1,6 @@
 import { cn } from "cn";
 import { Plus } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useCombinations } from "@/combinations/api";
 import { CombinationCard } from "@/combinations/CombinationCard";
@@ -58,6 +58,14 @@ export function CombinationsPage() {
 		? filterCombinations(combinations.data, filter)
 		: [];
 	const [filtering, setFiltering] = useState(false);
+	// An empty wall shows no filter, so it keeps none in its address: the
+	// builder carries the address along, and the next save would come back to
+	// a wall filtered by something the user cannot see.
+	const empty = combinations.data?.length === 0;
+	const addressed = params.toString() !== "";
+	useEffect(() => {
+		if (empty && addressed) setParams("", { replace: true });
+	}, [empty, addressed, setParams]);
 	// Each pick replaces the address, so Back leaves the page, not one pick. A
 	// filter that hides the open combination closes it, as a look's chip does.
 	function setFilter(next: CombinationFilter) {

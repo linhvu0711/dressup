@@ -312,3 +312,17 @@ test("keeps the filter when a combination opens, on Back, and after the builder"
 	await expect(chips).toHaveText(["Short tee"]);
 	await expect(titles(page)).toHaveCount(2);
 });
+
+test("drops the filter from the address of an empty wall", async ({ page }) => {
+	// Given: both projects, a fresh account with no combination
+	// When
+	await page.goto("/combinations?piece=tee_s.");
+	// Then
+	await expect(
+		page.getByRole("heading", { name: "No combinations yet" }),
+	).toBeVisible();
+	await expect(page).toHaveURL(/\/combinations$/);
+	await expect(
+		page.getByRole("link", { name: "Build a combination" }),
+	).toHaveAttribute("href", "/build");
+});
