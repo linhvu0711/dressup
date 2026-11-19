@@ -659,7 +659,7 @@ describe("combinations", () => {
 		);
 	}
 
-	// Khaki Harrington jacket (open) + Black long tee + Navy casual pants.
+	// Khaki Harrington jacket + Black long tee + Navy casual pants.
 	const three = (ids: Record<string, string>) => ({
 		pieces: [
 			{ typeId: "harrington", colourId: ids.Khaki },
@@ -707,8 +707,7 @@ describe("combinations", () => {
 		expect({ isError, id: changed.id, title: changed.title }).toEqual({
 			isError: false,
 			id,
-			title:
-				"Khaki Harrington jacket (open) + Black long tee + Grey casual pants",
+			title: "Khaki Harrington jacket + Black long tee + Grey casual pants",
 		});
 	});
 
@@ -858,9 +857,7 @@ describe("combinations", () => {
 			),
 		}).toEqual({
 			isError: false,
-			titles: [
-				"Khaki Harrington jacket (open) + Black long tee + Navy casual pants",
-			],
+			titles: ["Khaki Harrington jacket + Black long tee + Navy casual pants"],
 		});
 	});
 

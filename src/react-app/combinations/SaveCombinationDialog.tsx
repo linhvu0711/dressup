@@ -129,7 +129,7 @@ export function SaveCombinationDialog({
 						}}
 					>
 						<p className="text-[17px] leading-snug">
-							{combinationTitle({ pieces, open })}
+							{combinationTitle({ pieces })}
 						</p>
 						<TagPicker picked={tags} onChange={setTags} />
 						{sameId ? (

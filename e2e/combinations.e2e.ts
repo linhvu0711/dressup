@@ -13,7 +13,7 @@ import { expect, test } from "./fixtures";
 import { COMBINATIONS_FULL_FILE } from "./global-setup";
 
 const LONG_TITLE =
-	"Khaki Harrington jacket (open) + Black long tee + Navy casual pants";
+	"Khaki Harrington jacket + Black long tee + Navy casual pants";
 
 const cards = (page: Page) => page.locator('[data-slot="combination-card"]');
 
@@ -320,7 +320,7 @@ test("shows the mannequin, the whole title, and a line for each piece", async ({
 	}).toEqual({ wraps: true, cut: false, wider: false });
 	await expect(page.getByRole("img", { name: LONG_TITLE })).toBeVisible();
 	await expect(page.locator('[data-slot="piece-line"]')).toHaveText([
-		"Khaki Harrington jacket · open#B8A57C",
+		"Khaki Harrington jacket#B8A57C",
 		"Black long tee#1B1B1F",
 		"Navy casual pants#1F3A5F",
 	]);
@@ -824,7 +824,7 @@ test("shows a colour's new name on its combination", async ({ page }) => {
 	// Then
 	await expect(
 		cards(page).first().locator('[data-slot="combination-title"]'),
-	).toHaveText(/^Sand Harrington jacket \(open\)/);
+	).toHaveText(/^Sand Harrington jacket \+/);
 });
 
 // The account's combinations as the API lists them.
@@ -872,7 +872,7 @@ test("changes a combination in the builder", async ({ page }) => {
 	await expect(toast(page)).toHaveText("Changes saved");
 	await expect(page).toHaveURL(`/combinations/${first.id}`);
 	await expect(viewTitle(page)).toHaveText(
-		"Khaki Harrington jacket (open) + Black long tee + Grey casual pants",
+		"Khaki Harrington jacket + Black long tee + Grey casual pants",
 	);
 	expect((await stored(page)).map((c) => c.id)).toEqual([second.id, first.id]);
 });

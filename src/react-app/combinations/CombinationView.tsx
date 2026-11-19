@@ -2,7 +2,6 @@ import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
-import { LAYER_OF } from "@/dress/clothing-types";
 import { Stage } from "@/dress/Stage";
 import { useMannequin } from "@/mannequin/api";
 import { MannequinFailed } from "@/mannequin/MannequinFailed";
@@ -104,14 +103,7 @@ export function CombinationView({
 							className="size-7 flex-none rounded-md border border-border"
 							style={{ background: p.colour.hex }}
 						/>
-						<span>
-							{pieceName(p)}
-							{LAYER_OF[p.typeId] === "jacket" ? (
-								<span className="text-muted-foreground">
-									{combination.open ? " · open" : " · closed"}
-								</span>
-							) : null}
-						</span>
+						<span>{pieceName(p)}</span>
 						<span className="flex-1" />
 						<button
 							type="button"

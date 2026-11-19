@@ -363,7 +363,7 @@ describe("tags and combinations", () => {
 		return Object.fromEntries(colours.map((c) => [c.name, c.id]));
 	};
 
-	// Khaki Harrington jacket (open) + Black long tee + Navy casual pants.
+	// Khaki Harrington jacket + Black long tee + Navy casual pants.
 	const three = (ids: Record<string, string>, tags: string[]) => ({
 		id: "11111111-1111-4111-8111-111111111111",
 		pieces: [

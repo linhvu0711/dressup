@@ -195,19 +195,12 @@ export function pieceName(piece: {
 	return `${piece.colour.name} ${typeWord(piece.typeId)}`;
 }
 
-// The pieces, top layer first, as "Khaki Harrington jacket (open) + Black long
+// The pieces, top layer first, as "Khaki Harrington jacket + Black long
 // tee + Navy casual pants".
 export function combinationTitle(combination: {
 	pieces: readonly { typeId: TypeId; colour: { name: string } }[];
-	open: boolean;
 }): string {
-	return topFirst(combination.pieces)
-		.map((p) => {
-			const open =
-				combination.open && LAYER_OF[p.typeId] === "jacket" ? " (open)" : "";
-			return `${pieceName(p)}${open}`;
-		})
-		.join(" + ");
+	return topFirst(combination.pieces).map(pieceName).join(" + ");
 }
 
 // The pale piece the mannequin wears in place of a missing bottom or top: the

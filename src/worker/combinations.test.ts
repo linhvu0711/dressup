@@ -65,7 +65,7 @@ const list = async (h: Harness, headers: Headers) =>
 const FIRST_ID = "11111111-1111-4111-8111-111111111111";
 const SECOND_ID = "22222222-2222-4222-8222-222222222222";
 
-// Khaki Harrington jacket (open) + Black long tee + Navy casual pants.
+// Khaki Harrington jacket + Black long tee + Navy casual pants.
 const three = (ids: Ids) => ({
 	id: FIRST_ID,
 	pieces: [

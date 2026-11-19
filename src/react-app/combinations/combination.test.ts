@@ -27,32 +27,17 @@ const piece = (
 });
 
 test("names a combination top layer first", () => {
-	// Given: Navy casual pants, a Black long tee, an open Khaki Harrington
+	// Given: Navy casual pants, a Black long tee, a Khaki Harrington jacket
 	const pieces = [
 		piece("casual_p", "Navy"),
 		piece("tee_l", "Black"),
 		piece("harrington", "Khaki"),
 	];
 	// When
-	const title = combinationTitle({ pieces, open: true });
+	const title = combinationTitle({ pieces });
 	// Then
 	expect(title).toBe(
-		"Khaki Harrington jacket (open) + Black long tee + Navy casual pants",
-	);
-});
-
-test("names a closed jacket with no mark", () => {
-	// Given: a Burgundy sweater, a Brown wool jacket, a Navy long button-up
-	const pieces = [
-		piece("sweater", "Burgundy"),
-		piece("wool", "Brown"),
-		piece("shirt_l", "Navy"),
-	];
-	// When
-	const title = combinationTitle({ pieces, open: false });
-	// Then
-	expect(title).toBe(
-		"Brown wool jacket + Burgundy sweater + Navy long button-up",
+		"Khaki Harrington jacket + Black long tee + Navy casual pants",
 	);
 });
 

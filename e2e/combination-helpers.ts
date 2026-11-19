@@ -13,7 +13,7 @@ export async function colourIds(page: Page): Promise<Record<string, string>> {
 
 // Every e2e account shares one database, so each saved combination gets its
 // own id.
-// Khaki Harrington jacket (open) + Black long tee + Navy casual pants.
+// Khaki Harrington jacket + Black long tee + Navy casual pants.
 export const three = (ids: Record<string, string>) => ({
 	id: crypto.randomUUID(),
 	pieces: [
