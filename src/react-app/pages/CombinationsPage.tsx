@@ -46,8 +46,6 @@ export function CombinationsPage() {
 	const { combinationId } = useParams();
 	const combinations = useCombinations();
 	const mannequin = useMannequin();
-	const closet = useCloset();
-	const owned = closet.data && pieceKeys(closet.data);
 	const tags = useTags();
 	const colours = useColours();
 	const [params, setParams] = useSearchParams();
@@ -58,6 +56,11 @@ export function CombinationsPage() {
 		tags.data,
 		colours.data,
 	);
+	// The wall opens the app, and Any never reads the closet, so the closet
+	// loads only for Pieces I own.
+	const waitsForCloset = filter.own !== "any";
+	const closet = useCloset({ enabled: waitsForCloset });
+	const owned = closet.data && pieceKeys(closet.data);
 	// With no closet every combination would look Not all, so Pieces I own
 	// matches nothing until the closet is in: undefined, not an empty list.
 	// Any never waits.
@@ -91,7 +94,6 @@ export function CombinationsPage() {
 	// The confirm lives here, not in the view: the view goes when the list
 	// drops the deleted combination, and the confirm must still say so.
 	const [deleting, setDeleting] = useState<Combination | null>(null);
-	const waitsForCloset = filter.own !== "any";
 	let wall: ReactNode;
 	if (combinations.isPending || (waitsForCloset && closet.isPending)) {
 		wall = (
