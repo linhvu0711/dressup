@@ -8,6 +8,8 @@ export type PieceRef = { typeId: TypeId; colour: { id: ColourId } };
 
 export const pieceKey = (p: PieceRef) => `${p.typeId}/${p.colour.id}`;
 
+export const NO_PIECES: ReadonlySet<string> = new Set();
+
 export const pieceKeys = (pieces: readonly PieceRef[]): ReadonlySet<string> =>
 	new Set(pieces.map(pieceKey));
 

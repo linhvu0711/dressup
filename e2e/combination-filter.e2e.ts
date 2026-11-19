@@ -470,3 +470,31 @@ test("says Could not load your closet when Pieces I own has no closet", async ({
 	// Then
 	await expect(page.getByText("Could not load your closet")).toBeVisible();
 });
+
+test("counts no combination for Pieces I own until the closet is in", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account with THREE and TWO, TWO owned;
+	// the closet answers only when let go
+	await seedOwned(page);
+	let letGo = () => {};
+	const held = new Promise<void>((resolve) => {
+		letGo = resolve;
+	});
+	await page.route("**/api/owned-items", async (route) => {
+		await held;
+		await route.continue();
+	});
+	await page.goto("/combinations?own=all");
+	await expect(
+		page.locator('[data-slot="combination-skeleton"]').first(),
+	).toBeVisible();
+	await expect(page.locator('[data-slot="filter-shown"]')).toHaveCount(0);
+	// When
+	letGo();
+	// Then
+	await expect(page.locator('[data-slot="filter-shown"]')).toHaveText(
+		"1 combination",
+	);
+	await expect(titles(page)).toHaveText([TWO_TITLE]);
+});

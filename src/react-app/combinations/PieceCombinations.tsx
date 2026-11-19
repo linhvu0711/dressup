@@ -5,14 +5,11 @@ import { PartError } from "@/components/ui/part-error";
 import { useCombinations } from "./api";
 import { CombinationCard } from "./CombinationCard";
 import { type CombinationFilter, filterCombinations } from "./filter";
-import type { PieceRef } from "./marks";
+import { NO_PIECES, type PieceRef } from "./marks";
 import { wallAddress } from "./wall-address";
 
 // The part shows one row of cards, as the piece page's picture does.
 const SHOWN = 4;
-
-// Any never reads what the account owns, so the part needs no closet.
-const NO_PIECES: ReadonlySet<string> = new Set();
 
 // The piece page's part for the combinations that hold the piece, newest
 // first, with See all to the wall filtered by the piece. A piece in no
@@ -36,6 +33,7 @@ export function PieceCombinations({ piece }: { piece: PieceRef }) {
 		tags: [],
 		own: "any",
 	};
+	// Any never reads what the account owns, so the part needs no closet.
 	const held = filterCombinations(combinations.data, filter, NO_PIECES);
 	if (held.length === 0) return null;
 	return (

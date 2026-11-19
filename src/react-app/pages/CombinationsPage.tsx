@@ -21,7 +21,7 @@ import {
 	shownText,
 	writeCombinationFilter,
 } from "@/combinations/filter";
-import { pieceKeys } from "@/combinations/marks";
+import { NO_PIECES, pieceKeys } from "@/combinations/marks";
 import { useWallAddress, wallAddress } from "@/combinations/wall-address";
 import { Button } from "@/components/ui/button";
 import { ActiveFilters, FilterButton } from "@/components/ui/filter";
@@ -47,7 +47,7 @@ export function CombinationsPage() {
 	const combinations = useCombinations();
 	const mannequin = useMannequin();
 	const closet = useCloset();
-	const owned = pieceKeys(closet.data ?? []);
+	const owned = closet.data && pieceKeys(closet.data);
 	const tags = useTags();
 	const colours = useColours();
 	const [params, setParams] = useSearchParams();
@@ -58,9 +58,15 @@ export function CombinationsPage() {
 		tags.data,
 		colours.data,
 	);
-	const visible = combinations.data
-		? filterCombinations(combinations.data, filter, owned)
-		: [];
+	// With no closet every combination would look Not all, so Pieces I own
+	// matches nothing until the closet is in: undefined, not an empty list.
+	// Any never waits.
+	const matching = (f: CombinationFilter) =>
+		combinations.data && (f.own === "any" || owned)
+			? filterCombinations(combinations.data, f, owned ?? NO_PIECES)
+			: undefined;
+	const matched = matching(filter);
+	const visible = matched ?? [];
 	const [filtering, setFiltering] = useState(false);
 	// An empty wall shows no filter, so it keeps none in its address: the
 	// builder carries the address along, and the next save would come back to
@@ -76,10 +82,7 @@ export function CombinationsPage() {
 		const search = writeCombinationFilter(next).toString();
 		const hidden =
 			combinationId !== undefined &&
-			combinations.data !== undefined &&
-			!filterCombinations(combinations.data, next, owned).some(
-				(c) => c.id === combinationId,
-			);
+			matching(next)?.every((c) => c.id !== combinationId) === true;
 		if (hidden) navigate(wallAddress(next), { replace: true });
 		else setParams(search, { replace: true });
 	}
@@ -88,8 +91,6 @@ export function CombinationsPage() {
 	// The confirm lives here, not in the view: the view goes when the list
 	// drops the deleted combination, and the confirm must still say so.
 	const [deleting, setDeleting] = useState<Combination | null>(null);
-	// With no closet every combination would look Not all, so Pieces I own
-	// waits for it. Any never does.
 	const waitsForCloset = filter.own !== "any";
 	let wall: ReactNode;
 	if (combinations.isPending || (waitsForCloset && closet.isPending)) {
@@ -197,7 +198,7 @@ export function CombinationsPage() {
 						</div>
 					}
 				/>
-				{combinations.data?.length ? (
+				{combinations.data?.length && matched ? (
 					<ActiveFilters
 						chips={filterChips(filter, tags.data, colours.data).map((chip) => ({
 							key: chip.key,
@@ -208,7 +209,7 @@ export function CombinationsPage() {
 							onRemove: () => setFilter(chip.without),
 						}))}
 						onClearAll={() => setFilter(NO_FILTER)}
-						shown={shownText(visible.length)}
+						shown={shownText(matched.length)}
 					/>
 				) : null}
 				{wall}
@@ -229,7 +230,7 @@ export function CombinationsPage() {
 				<CombinationFilterSheet
 					filter={filter}
 					onChange={setFilter}
-					shown={shownText(visible.length)}
+					shown={matched ? shownText(matched.length) : "combinations"}
 					onClose={() => setFiltering(false)}
 				/>
 			) : null}
