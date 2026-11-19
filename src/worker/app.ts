@@ -64,6 +64,8 @@ import { loadMannequin, setMannequinColour } from "./mannequin-store";
 import { mcpRoute } from "./mcp";
 import {
 	addOwnedItem,
+	type BoughtError,
+	buyShopLink,
 	changeOwnedItem,
 	deleteOwnedItem,
 	listOwnedItems,
@@ -186,6 +188,19 @@ function ownedItemRefusal(error: OwnedItemError): Refusal {
 			return { status: 409, body: { error: "conflict", field: "id" } };
 		case "not_found":
 			return { status: 404, body: { error: "not_found" } };
+	}
+}
+
+function boughtRefusal(error: BoughtError): Refusal {
+	switch (error.code) {
+		case "not_found":
+			return { status: 404, body: { error: "not_found" } };
+		case "owned_item_limit":
+			return { status: 409, body: { error: "owned_item_limit" } };
+		case "quantity_limit":
+			return { status: 409, body: { error: "quantity_limit" } };
+		case "conflict":
+			return { status: 409, body: { error: "conflict", field: "id" } };
 	}
 }
 
@@ -488,6 +503,21 @@ export function createApp(getDb: (env: Env) => Db) {
 			return c.json(refused, status);
 		}
 		return c.body(null, 204);
+	});
+
+	app.post("/shop-links/:id/bought", withAuth, requireUser, async (c) => {
+		const bought = await buyShopLink(
+			getDb(c.env),
+			c.env.PICTURES,
+			c.var.user.id,
+			c.req.param("id"),
+		);
+		if (!bought.ok) {
+			const { status, body: refused } = boughtRefusal(bought.error);
+			return c.json(refused, status);
+		}
+		const { ownedItem, created } = bought.value;
+		return c.json({ ownedItem } satisfies OwnedItemAnswer, created ? 201 : 200);
 	});
 
 	app.get("/wishes", withAuth, requireUser, async (c) =>

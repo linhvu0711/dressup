@@ -27,6 +27,7 @@ export const errorCodes = [
 	"shop_link_limit",
 	"too_large",
 	"picture_limit",
+	"quantity_limit",
 	"account_picture_limit",
 	"storage_full",
 ] as const;

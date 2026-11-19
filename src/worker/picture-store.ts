@@ -464,3 +464,51 @@ export async function deleteWithPictures<T extends Statement>(
 	});
 	return after[0] as Awaited<T>;
 }
+
+// The Bought batch. The item write runs first, so held sees it; then the
+// link's oldest pictures move to the item while it has room, before the
+// drop, so the kept ones stay; the wish delete runs last, once no picture
+// points at its links. The objects go only after the batch commits, so a
+// failure deletes no object, and no row is left with no object. It gives
+// back the item write's result.
+export async function buyWithPictures<T extends Statement>(
+	db: Db,
+	bucket: R2Bucket,
+	{
+		userId,
+		shopLinkId,
+		wishId,
+		ownedItemId,
+		held,
+	}: {
+		userId: string;
+		shopLinkId: string;
+		wishId: string;
+		ownedItemId: string;
+		held: SQL;
+	},
+	ownerWrite: T,
+	wishDelete: Statement,
+): Promise<Awaited<T>> {
+	const { before } = await runWithPictures(db, bucket, {
+		before: [
+			ownerWrite,
+			db
+				.update(picture)
+				.set(ownedBy({ ownedItemId }))
+				.where(
+					and(
+						eq(picture.userId, userId),
+						sql`${picture.id} in (select ${picture.id} from ${picture} where ${picture.shopLinkId} = ${shopLinkId} order by ${picture.createdAt}, rowid limit max(0, ${ITEM_PICTURE_LIMIT} - (select count(*) from ${picture} where ${picture.ownedItemId} = ${ownedItemId})))`,
+						held,
+					),
+				),
+		],
+		drop: dropPictures(
+			db,
+			and(eq(picture.userId, userId), ofWish(db, wishId), held),
+		),
+		after: [wishDelete],
+	});
+	return before[0] as Awaited<T>;
+}
