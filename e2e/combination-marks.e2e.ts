@@ -95,3 +95,56 @@ test("shows Own after an owned item is added, with no reload", async ({
 	);
 	expect(await windowStayed(page)).toBe(true);
 });
+
+test("opens the piece page from a piece with a mark", async ({ page }) => {
+	// Given: both projects, the four pieces above, the combination open
+	const { id, ids } = await markedFour(page);
+	await page.goto(`/combinations/${id}`);
+	// When
+	await line(page, "Black long tee").getByRole("link").click();
+	// Then
+	await expect(page).toHaveURL(`/piece/tee_l/${ids.Black}`);
+});
+
+test("makes no link of a piece with no mark", async ({ page }) => {
+	// Given: both projects, the four pieces above, the combination open
+	const { id } = await markedFour(page);
+	await page.goto(`/combinations/${id}`);
+	await expect(lines(page)).toHaveCount(4);
+	// When
+	const links = line(page, "Navy casual pants").getByRole("link");
+	// Then
+	await expect(links).toHaveCount(0);
+});
+
+test("goes back to the combination from its piece page", async ({ page }) => {
+	// Given: both projects, the four pieces above, the Black long tee's piece
+	// page opened from the combination
+	const { id } = await markedFour(page);
+	await page.goto(`/combinations/${id}`);
+	await line(page, "Black long tee").getByRole("link").click();
+	// When
+	await page.getByRole("link", { name: "Back" }).click();
+	// Then
+	await expect(page).toHaveURL(`/combinations/${id}`);
+});
+
+test("drops Want after the wish is removed, with no reload", async ({
+	page,
+}) => {
+	// Given: both projects, the four pieces above, the combination open
+	const { id } = await markedFour(page);
+	await page.goto(`/combinations/${id}`);
+	await markWindow(page);
+	// When: the Grey sweater, wanted only, leaves the wishlist
+	await line(page, "Grey sweater").getByRole("link").click();
+	await page.getByRole("button", { name: "Remove from wishlist" }).click();
+	await page
+		.getByRole("alertdialog", { name: "Remove from wishlist?" })
+		.getByRole("button", { name: "Remove" })
+		.click();
+	// Then
+	await expect(page).toHaveURL(`/combinations/${id}`);
+	await expect(line(page, "Grey sweater")).toHaveText("Grey sweater#8C8A84");
+	expect(await windowStayed(page)).toBe(true);
+});

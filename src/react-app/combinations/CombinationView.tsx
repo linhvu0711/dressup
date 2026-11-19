@@ -1,4 +1,4 @@
-import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { Link } from "react-router";
 import { useCloset } from "@/closet/api";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,7 @@ import { useToast } from "@/components/ui/toast";
 import { Stage } from "@/dress/Stage";
 import { useMannequin } from "@/mannequin/api";
 import { MannequinFailed } from "@/mannequin/MannequinFailed";
+import { usePieceLink } from "@/shell/piece-link";
 import { useTags } from "@/tags/api";
 import { useWishlist } from "@/wishlist/api";
 import { CombinationFigure } from "./CombinationFigure";
@@ -35,6 +36,7 @@ export function CombinationView({
 	const toast = useToast();
 	const address = useWallAddress();
 	const mannequin = useMannequin();
+	const linkTo = usePieceLink(`/combinations/${combination.id}`);
 	const title = combinationTitle(combination);
 	// In the tag list's order; a tag deleted on another device is skipped.
 	const tags =
@@ -107,35 +109,56 @@ export function CombinationView({
 				) : null}
 				{topFirst(combination.pieces).map((p) => {
 					const mark = markOf(holdings, p);
-					return (
-						<div
-							key={p.layer}
-							data-slot="piece-line"
-							className="flex items-center gap-3 border-border border-b py-[9px] text-[14px] last:border-b-0"
-						>
+					const piece = (
+						<>
 							<span
 								className="size-7 flex-none rounded-md border border-border"
 								style={{ background: p.colour.hex }}
 							/>
 							<span>{pieceName(p)}</span>
 							<span className="flex-1" />
+						</>
+					);
+					return (
+						<div
+							key={p.layer}
+							data-slot="piece-line"
+							className="flex items-center gap-3 border-border border-b py-[9px] text-[14px] last:border-b-0"
+						>
+							{/* A piece with no mark is in neither list, so it has no piece
+							page to open. The copy button stays outside the link: a
+							button inside a link is not valid HTML. */}
 							{mark.own || mark.want ? (
-								<span className="flex flex-none gap-1.5">
-									{mark.own ? (
-										<span data-slot="piece-mark" className={MARK}>
-											Own
-										</span>
-									) : null}
-									{mark.want ? (
-										<span
-											data-slot="piece-mark"
-											className={`${MARK} border border-border border-dashed bg-transparent`}
-										>
-											Want
-										</span>
-									) : null}
-								</span>
-							) : null}
+								<Link
+									{...linkTo(p)}
+									className="flex min-w-0 flex-1 items-center gap-3"
+								>
+									{piece}
+									<span className="flex flex-none gap-1.5">
+										{mark.own ? (
+											<span data-slot="piece-mark" className={MARK}>
+												Own
+											</span>
+										) : null}
+										{mark.want ? (
+											<span
+												data-slot="piece-mark"
+												className={`${MARK} border border-border border-dashed bg-transparent`}
+											>
+												Want
+											</span>
+										) : null}
+									</span>
+									<ChevronRight
+										size={16}
+										strokeWidth={1.9}
+										className="flex-none text-muted-foreground"
+										aria-hidden
+									/>
+								</Link>
+							) : (
+								piece
+							)}
 							<button
 								type="button"
 								aria-label={`Copy ${p.colour.hex}`}
