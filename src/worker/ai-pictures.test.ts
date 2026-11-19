@@ -18,6 +18,7 @@ const bytes = (head: number[], length: number) => {
 };
 
 const JPEG = bytes([0xff, 0xd8, 0xff, 0xe0], 100);
+const PDF = bytes([...new TextEncoder().encode("%PDF-1.7")], 100);
 
 const NO_SUCH_ID = "5b1f2c3d-0000-4000-8000-000000000000";
 
@@ -418,6 +419,103 @@ describe("shop link pictures", () => {
 			isError: true,
 			text: "A shop link has at most 8 pictures.",
 			links: [],
+		});
+	});
+});
+
+describe("refusals at the address", () => {
+	test("refuses a file that is not a picture", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		const address = await addressOf(ai);
+		// When
+		const refused = await answer(await postTo(h, address, PDF));
+		// Then
+		expect({ ...refused, keys: h.pictures.keys() }).toEqual({
+			status: 415,
+			body: {
+				error: "not_an_image",
+				message:
+					"This file is not a JPEG, PNG, or WebP picture. Send one of these to a new upload address.",
+			},
+			keys: [],
+		});
+	});
+
+	test("refuses a picture over 1 MB", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		const address = await addressOf(ai);
+		// When
+		const refused = await answer(
+			await postTo(h, address, bytes([0xff, 0xd8, 0xff, 0xe0], 1_048_577)),
+		);
+		// Then
+		expect({ ...refused, keys: h.pictures.keys() }).toEqual({
+			status: 413,
+			body: {
+				error: "too_large",
+				message:
+					"This picture is over 1 MB. Shrink it to 1 MB or less and send it to a new upload address.",
+			},
+			keys: [],
+		});
+	});
+
+	test("refuses picture 1,001 of the account", async () => {
+		// Given
+		const { h, ai, userId } = await withAiSession();
+		const address = await addressOf(ai);
+		await h.seedPictures(userId, 1000);
+		// When
+		const refused = await answer(await postTo(h, address));
+		// Then
+		expect({ ...refused, keys: h.pictures.keys() }).toEqual({
+			status: 409,
+			body: {
+				error: "account_picture_limit",
+				message:
+					"You have 1,000 pictures. That is the limit. Take pictures off an owned item or a shop link to add new ones.",
+			},
+			keys: [],
+		});
+	});
+
+	test("refuses an upload at the storage stop", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		const address = await addressOf(ai);
+		await h.addAccount(BOB);
+		await h.seedPictures("bob-id", 1, 8_999_999_950);
+		// When
+		const refused = await answer(await postTo(h, address));
+		// Then
+		expect({ ...refused, keys: h.pictures.keys() }).toEqual({
+			status: 507,
+			body: {
+				error: "storage_full",
+				message: "Picture storage is full. No new pictures for now.",
+			},
+			keys: [],
+		});
+	});
+
+	test("keeps nothing when the bucket write fails", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		const address = await addressOf(ai);
+		h.pictures.failPuts = true;
+		// When
+		const refused = await answer(await postTo(h, address));
+		// Then
+		expect({ ...refused, rows: await h.rows(schema.picture) }).toEqual({
+			status: 500,
+			body: {
+				error: "not_stored",
+				message:
+					"dressup could not store the picture and kept nothing. Try again with a new upload address.",
+			},
+			rows: [],
 		});
 	});
 });

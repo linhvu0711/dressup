@@ -30,7 +30,14 @@ import { mannequinPartSchema } from "@/mannequin/mannequin";
 import { PICTURE_BYTES_MAX, pictureIdSchema } from "@/pictures/picture";
 import { tagIdSchema } from "@/tags/tag";
 import { disconnectAiApp, listAiApps } from "./ai-app-store";
-import { addressGone } from "./ai-messages";
+import {
+	accountPictureLimit,
+	addressGone,
+	notAPicture,
+	notStored,
+	storageFull,
+	tooLargeUpload,
+} from "./ai-messages";
 import {
 	type Auth,
 	type AuthEnvSettings,
@@ -239,6 +246,34 @@ function wishRefusal(error: WishError): Refusal {
 			return { status: 409, body: { error: "conflict", field: "id" } };
 		case "not_found":
 			return { status: 404, body: { error: "not_found" } };
+	}
+}
+
+// An AI app reads the code and the model reads the sentence; every refusal
+// spends the address, so each sentence says to use a new one.
+function uploadRefusal(error: PictureError): {
+	status: ContentfulStatusCode;
+	body: { error: string; message: string };
+} {
+	switch (error.code) {
+		case "invalid":
+			return {
+				status: 415,
+				body: { error: "not_an_image", message: notAPicture },
+			};
+		case "account_picture_limit":
+			return {
+				status: 409,
+				body: { error: "account_picture_limit", message: accountPictureLimit },
+			};
+		case "storage_full":
+			return {
+				status: 507,
+				body: { error: "storage_full", message: storageFull },
+			};
+		case "not_found":
+		case "picture_limit":
+			return { status: 500, body: { error: "not_stored", message: notStored } };
 	}
 }
 
@@ -678,20 +713,28 @@ export function createApp(getDb: (env: Env) => Db) {
 		claimAddress,
 		bodyLimit({
 			maxSize: PICTURE_BYTES_MAX,
-			onError: (c) => c.json({ error: "too_large" } satisfies ErrorAnswer, 413),
+			onError: (c) =>
+				c.json({ error: "too_large", message: tooLargeUpload }, 413),
 		}),
 		async (c) => {
-			const added = await addPicture(
-				getDb(c.env),
-				c.env.PICTURES,
-				c.var.uploaderId,
-				await c.req.arrayBuffer(),
-			);
-			if (!added.ok) {
-				const { status, body: refused } = pictureRefusal(added.error);
-				return c.json(refused, status);
+			// Read outside the try, so bodyLimit sees a body that runs over.
+			const bytes = await c.req.arrayBuffer();
+			try {
+				const added = await addPicture(
+					getDb(c.env),
+					c.env.PICTURES,
+					c.var.uploaderId,
+					bytes,
+				);
+				if (!added.ok) {
+					const { status, body } = uploadRefusal(added.error);
+					return c.json(body, status);
+				}
+				return c.json({ pictureId: added.value.id }, 201);
+			} catch {
+				// addPicture takes its row and count back before it throws.
+				return c.json({ error: "not_stored", message: notStored }, 500);
 			}
-			return c.json({ pictureId: added.value.id }, 201);
 		},
 	);
 
