@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { BetterAuthOptions } from "better-auth";
 import { getTableName, is } from "drizzle-orm";
-import { SQLiteTable } from "drizzle-orm/sqlite-core";
+import { getTableConfig, SQLiteTable } from "drizzle-orm/sqlite-core";
 import { createApp } from "./app";
 import { type Auth, authOptions, createAuthCache } from "./auth";
 import { schema } from "./db";
@@ -82,6 +82,30 @@ describe("migrations", () => {
 			notInMigrations: schemaTables.filter((name) => !made.includes(name)),
 			notInSchema: made.filter((name) => !schemaTables.includes(name)),
 		}).toEqual({ notInMigrations: [], notInSchema: [] });
+	});
+
+	// Two branches can each pass on their own and still lose a column once
+	// merged: SQLite changes some columns by copying the table, and the copy one
+	// branch made does not know the column the other branch added.
+	test("makes every schema column, and only those, from the migrations", async () => {
+		// Given: the database the migrations make, and the Drizzle schema
+		const h = await makeHarness();
+		// When
+		const differences = Object.values(schema)
+			.filter((value) => is(value, SQLiteTable))
+			.map((table) => {
+				const name = getTableName(table);
+				const made = h.columns(name);
+				const inSchema = getTableConfig(table).columns.map((c) => c.name);
+				return {
+					table: name,
+					notInMigrations: inSchema.filter((c) => !made.includes(c)),
+					notInSchema: made.filter((c) => !inSchema.includes(c)),
+				};
+			})
+			.filter((t) => t.notInMigrations.length + t.notInSchema.length > 0);
+		// Then
+		expect(differences).toEqual([]);
 	});
 });
 
