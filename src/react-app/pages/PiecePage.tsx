@@ -1,11 +1,13 @@
-import { type ReactNode, useId } from "react";
+import type { ReactNode } from "react";
 import { Navigate, useLocation, useParams } from "react-router";
 import { useCloset } from "@/closet/api";
 import { ClosetPart } from "@/closet/ClosetPart";
 import { closetPieces } from "@/closet/owned-item";
 import { pieceName } from "@/combinations/combination";
+import { PieceCombinations } from "@/combinations/PieceCombinations";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
+import { PartError } from "@/components/ui/part-error";
 import { PLACEHOLDER } from "@/components/ui/placeholder";
 import { TypeFigure } from "@/dress/figure/TypeFigure";
 import { useWishlist } from "@/wishlist/api";
@@ -17,7 +19,8 @@ const PICTURE =
 	"relative block aspect-square w-full max-w-[280px] overflow-hidden rounded-[14px]";
 
 // One piece and everything the account holds about it, one part under
-// another: the closet's items, then the wish with its shop links.
+// another: the closet's items, the wish with its shop links, then the
+// combinations that hold it.
 export function PiecePage() {
 	const { typeId, colourId } = useParams();
 	const location = useLocation();
@@ -69,6 +72,7 @@ export function PiecePage() {
 						Could not load your wishlist.
 					</PartError>
 				) : null}
+				<PieceCombinations piece={piece} />
 			</>
 		);
 	// The piece may be in the list still loading, so a failure waits for it.
@@ -98,28 +102,4 @@ export function PiecePage() {
 function failedTitle(closet: boolean, wishlist: boolean) {
 	if (closet && wishlist) return "Could not load your closet and wishlist";
 	return closet ? "Could not load your closet" : "Could not load your wishlist";
-}
-
-// A part of the page whose list failed while the other list holds the piece.
-function PartError({
-	title,
-	onRetry,
-	children,
-}: {
-	title: string;
-	onRetry: () => void;
-	children: ReactNode;
-}) {
-	const id = useId();
-	return (
-		<section aria-labelledby={id} className="flex flex-col items-start gap-2">
-			<h2 id={id} className="text-[22px]">
-				{title}
-			</h2>
-			<p role="alert" className="text-[13px] text-destructive">
-				{children}
-			</p>
-			<Button onClick={onRetry}>Retry</Button>
-		</section>
-	);
 }
