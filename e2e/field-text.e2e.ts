@@ -1,5 +1,5 @@
 import type { Locator, Page } from "@playwright/test";
-import { colourIds, isPhone } from "./combination-helpers";
+import { colourIds, isPhone, pick } from "./combination-helpers";
 import { expect, test } from "./fixtures";
 import { postWish } from "./wishlist-helpers";
 
@@ -121,4 +121,21 @@ test("shows the shop link boxes text at 16px on a phone", async ({ page }) => {
 			sheet.getByRole("textbox", { name: "Price in ₫" }),
 		]),
 	).toEqual(["16px", "16px", "16px"]);
+});
+
+test("shows the New tag box text at 16px on a phone", async ({ page }) => {
+	test.skip(!isPhone(page), PHONE_ONLY);
+	// Given: the phone project, a fresh account, the save dialog open on
+	// Navy casual pants and Black long tee
+	await page.goto("/build");
+	await pick(page, "Bottom", "Casual pants", "Navy");
+	await pick(page, "Inner top", "Long tee", "Black");
+	await page.getByRole("button", { name: "Save" }).click();
+	const dialog = page.getByRole("dialog", { name: "Save combination" });
+	// When
+	await dialog.getByRole("button", { name: "+ New tag" }).click();
+	// Then
+	expect(await fontSize(dialog.getByRole("textbox", { name: "New tag" }))).toBe(
+		"16px",
+	);
 });
