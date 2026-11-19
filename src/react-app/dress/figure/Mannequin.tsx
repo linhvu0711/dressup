@@ -1,9 +1,4 @@
-import {
-	type FigureLayer,
-	type Hex,
-	isJacket,
-	type JacketId,
-} from "@/dress/clothing-types";
+import type { FigureLayer, Hex } from "@/dress/clothing-types";
 import { BodySkin, Head, Shoes } from "@/dress/figure/body";
 import { FigureSvg, Stretch } from "@/dress/figure/frame";
 import { useUrl } from "@/dress/figure/parts";
@@ -11,7 +6,6 @@ import { TYPE_DRAWINGS } from "@/dress/figure/type-drawings";
 
 export function Mannequin({
 	layers = [],
-	openJackets = [],
 	skin,
 	hair,
 	viewBox = "0 10 400 800",
@@ -20,7 +14,6 @@ export function Mannequin({
 	decorative = false,
 }: {
 	layers?: readonly FigureLayer[];
-	openJackets?: readonly JacketId[];
 	skin: Hex;
 	hair: Hex;
 	viewBox?: string;
@@ -42,20 +35,11 @@ export function Mannequin({
 			<Stretch>
 				<BodySkin />
 				<Shoes />
-				{layers.map(({ typeId, color }) => {
-					const open = isJacket(typeId) && openJackets.includes(typeId);
-					return (
-						<g
-							key={typeId}
-							data-type-id={typeId}
-							data-front={
-								isJacket(typeId) ? (open ? "open" : "closed") : undefined
-							}
-						>
-							{TYPE_DRAWINGS[typeId](color, open)}
-						</g>
-					);
-				})}
+				{layers.map(({ typeId, color }) => (
+					<g key={typeId} data-type-id={typeId}>
+						{TYPE_DRAWINGS[typeId](color)}
+					</g>
+				))}
 			</Stretch>
 			<g transform="translate(200 150) scale(1.04) translate(-200 -150)">
 				<Head />

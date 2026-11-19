@@ -41,7 +41,6 @@ export function CombinationCard({
 						typeId: p.typeId,
 						hex: p.colour.hex,
 					}))}
-					open={combination.open}
 					viewBox={VIEW_BOX}
 					lite
 				/>

@@ -373,7 +373,7 @@ const H_BAND = "M 134 395 L 186 396 L 186 420 L 136 419 Z";
 const H_COLLAR =
 	"M 173 145 C 167 150, 163 158, 163 167 C 170 172, 178 175, 188 176 L 188 156 C 182 154, 177 151, 173 145 Z";
 
-function harrington(c: Hex, open: boolean) {
+function harrington(c: Hex) {
 	return layer(
 		f(
 			both(
@@ -415,37 +415,14 @@ function harrington(c: Hex, open: boolean) {
 					),
 				),
 			),
-			open
-				? both(
-						// the facing turns back at the open edge
-						piece(
-							"M 181 176 L 186 176 L 186 397 L 183 397 Z",
-							c,
-							sh("M 181 176 L 186 176 L 186 397 L 183 397 Z", 0.3, 1),
-						),
-					)
-				: f(
-						piece(
-							"M 184 158 L 216 158 L 216 397 L 184 397 Z",
-							c,
-							f(cyl(118, 150, 164, 290, 0.7), fabric("twill")),
-						),
-						piece(
-							"M 184 396 L 216 396 L 216 420 L 184 420 Z",
-							c,
-							f(fabric("rib", 0.55), cyl(134, 395, 132, 25, 0.8)),
-						),
-						// concealed zip: a quiet seam
-						ln("M 200 162 L 200 419", 0.38, 0.9),
-						// throat tab
-						piece(
-							"M 183 153 L 213 153 C 216 153, 216 161, 213 161 L 183 161 Z",
-							c,
-							fabric("twill"),
-						),
-						btn(190, 157, 2.1),
-						btn(207, 157, 2.1),
-					),
+			both(
+				// the facing turns back at the open edge
+				piece(
+					"M 181 176 L 186 176 L 186 397 L 183 397 Z",
+					c,
+					sh("M 181 176 L 186 176 L 186 397 L 183 397 Z", 0.3, 1),
+				),
+			),
 			both(
 				arm(
 					f(
@@ -479,14 +456,12 @@ function harrington(c: Hex, open: boolean) {
 
 const W_SL =
 	"M 123 166 C 103 171, 91 194, 90 222 C 89 252, 86 282, 83 308 C 79 334, 77 362, 77 392 L 78 426 L 124 430 C 126 400, 130 370, 133 342 C 135 324, 137 312, 140 296 C 143 272, 145 248, 145 222 C 140 208, 133 188, 123 166 Z";
-// Open: the fronts part in a V under the collar. Closed: they run up to the neck.
+// The fronts part in a V under the collar.
 const W_PN_OPEN =
 	"M 172 156 L 116 169 C 122 192, 128 210, 132 226 C 130 280, 129 340, 129 390 L 128 448 C 148 452, 170 453, 186 452 L 186 238 C 185 218, 181 196, 172 156 Z";
-const W_PN_CLOSED =
-	"M 172 156 L 116 169 C 122 192, 128 210, 132 226 C 130 280, 129 340, 129 390 L 128 448 C 148 452, 170 453, 186 452 L 186 164 C 181 161, 177 158, 172 156 Z";
 const W_BUTTONS = [226, 278, 330, 382, 434];
 
-function wool(c: Hex, open: boolean) {
+function wool(c: Hex) {
 	const wo = { grain: 0.26 };
 	const cloth = () => fabric("knit", 0.32);
 	return layer(
@@ -494,7 +469,7 @@ function wool(c: Hex, open: boolean) {
 			both(
 				f(
 					piece(
-						open ? W_PN_OPEN : W_PN_CLOSED,
+						W_PN_OPEN,
 						c,
 						f(
 							cyl(116, 150, 152, 300, 0.7),
@@ -529,53 +504,29 @@ function wool(c: Hex, open: boolean) {
 					ln("M 147 364 L 152 410", 0.22, 0.8),
 				),
 			),
-			open
-				? f(
-						both(
-							f(
-								piece(
-									"M 175 147 L 153 166 L 165 226 L 187 210 C 183 190, 179 168, 175 147 Z",
-									c,
-									f(
-										cloth(),
-										hl("M 156 168 L 167 220 L 162 222 L 152 170 Z", 0.1, 2),
-										sh("M 177 156 L 188 206 L 183 210 L 173 160 Z", 0.12, 2),
-									),
-									wo,
-								),
-								piece(
-									"M 186 212 L 189 214 L 189 452 L 186 452 Z",
-									c,
-									sh("M 186 212 L 189 214 L 189 452 L 186 452 Z", 0.35, 1),
-								),
-							),
-						),
-						...W_BUTTONS.map((y) => btn(220, y, 3.1, HORN)),
-						...W_BUTTONS.map((y) => ln(`M 172 ${y} L 179 ${y}`, 0.4, 1.3)),
-					)
-				: f(
+			f(
+				both(
+					f(
 						piece(
-							"M 184.5 162 L 215.5 162 L 215.5 453 C 206 453.6, 194 453.6, 184.5 453 Z",
+							"M 175 147 L 153 166 L 165 226 L 187 210 C 183 190, 179 168, 175 147 Z",
 							c,
-							f(cyl(116, 150, 168, 300, 0.7), cloth()),
+							f(
+								cloth(),
+								hl("M 156 168 L 167 220 L 162 222 L 152 170 Z", 0.1, 2),
+								sh("M 177 156 L 188 206 L 183 210 L 173 160 Z", 0.12, 2),
+							),
 							wo,
 						),
-						ln("M 208 168 L 208 452", 0.32, 0.9),
-						// buttoned point collar that meets under the chin
-						both(
-							piece(
-								"M 177 144 C 170 152, 165 161, 162 171 L 181 222 L 200 197 C 191 183, 184 165, 177 144 Z",
-								c,
-								f(
-									cloth(),
-									hl("M 165 168 L 182 214 L 178 217 L 162 172 Z", 0.12, 2),
-									sh("M 180 152 L 200 194 L 196 199 L 176 158 Z", 0.12, 2),
-								),
-								wo,
-							),
+						piece(
+							"M 186 212 L 189 214 L 189 452 L 186 452 Z",
+							c,
+							sh("M 186 212 L 189 214 L 189 452 L 186 452 Z", 0.35, 1),
 						),
-						...W_BUTTONS.map((y) => btn(200, y, 3.1, HORN)),
 					),
+				),
+				...W_BUTTONS.map((y) => btn(220, y, 3.1, HORN)),
+				...W_BUTTONS.map((y) => ln(`M 172 ${y} L 179 ${y}`, 0.4, 1.3)),
+			),
 			both(
 				arm(
 					f(
@@ -720,10 +671,7 @@ function trainShorts(c: Hex) {
 	);
 }
 
-export const TYPE_DRAWINGS: Record<
-	TypeId,
-	(c: Hex, open: boolean) => ReactNode
-> = {
+export const TYPE_DRAWINGS: Record<TypeId, (c: Hex) => ReactNode> = {
 	tee_s: (c) => tee(c, false),
 	tee_l: (c) => tee(c, true),
 	polo_s: (c) => polo(c, false),

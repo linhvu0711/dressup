@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { type JacketId, TYPE_IDS } from "@/dress/clothing-types";
+import { TYPE_IDS } from "@/dress/clothing-types";
 import { Mannequin } from "@/dress/figure/Mannequin";
 import { STARTER_MANNEQUIN } from "@/mannequin/mannequin";
 
@@ -71,39 +71,29 @@ describe("Mannequin", () => {
 		},
 	);
 
-	test("draws a jacket closed unless it is named open", () => {
+	test("draws every jacket open", () => {
 		// Given: a Harrington jacket in #C9B38C and a wool jacket in #A8865C,
-		// each closed and open
+		// each the only layer
 		// When
-		const draw = (typeId: JacketId, color: `#${string}`, open: boolean) =>
-			renderToStaticMarkup(
-				<Mannequin
-					{...STARTER_MANNEQUIN}
-					layers={[{ typeId, color }]}
-					openJackets={open ? [typeId] : []}
-				/>,
-			);
-		const harrington = [
-			draw("harrington", "#C9B38C", false),
-			draw("harrington", "#C9B38C", true),
-		];
-		const wool = [
-			draw("wool", "#A8865C", false),
-			draw("wool", "#A8865C", true),
-		];
-		// Then
-		expect(harrington[0]).toContain('data-front="closed"');
-		expect(harrington[0]).toContain(
-			"M 184 158 L 216 158 L 216 397 L 184 397 Z",
+		const harrington = renderToStaticMarkup(
+			<Mannequin
+				{...STARTER_MANNEQUIN}
+				layers={[{ typeId: "harrington", color: "#C9B38C" }]}
+			/>,
 		);
-		expect(harrington[1]).toContain('data-front="open"');
-		expect(harrington[1]).not.toContain(
-			"M 184 158 L 216 158 L 216 397 L 184 397 Z",
+		const wool = renderToStaticMarkup(
+			<Mannequin
+				{...STARTER_MANNEQUIN}
+				layers={[{ typeId: "wool", color: "#A8865C" }]}
+			/>,
 		);
-		expect(wool[0]).toContain('data-front="closed"');
-		expect(wool[0]).toContain("M 184.5 162 L 215.5 162 L 215.5 453");
-		expect(wool[1]).toContain('data-front="open"');
-		expect(wool[1]).not.toContain("M 184.5 162 L 215.5 162 L 215.5 453");
+		// Then: the Harrington facing and the wool lapel show only when open
+		expect({
+			harringtonFacing: harrington.includes(
+				"M 181 176 L 186 176 L 186 397 L 183 397 Z",
+			),
+			woolLapel: wool.includes("M 175 147 L 153 166 L 165 226 L 187 210"),
+		}).toEqual({ harringtonFacing: true, woolLapel: true });
 	});
 
 	test("paints the layers in the given order", () => {

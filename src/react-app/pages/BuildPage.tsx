@@ -172,7 +172,6 @@ function Builder({ combination }: { combination?: Combination }) {
 									typeId: p.typeId,
 									hex: p.colour.hex,
 								}))}
-								open={open}
 								label="Mannequin in the combination"
 							/>
 						)}

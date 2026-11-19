@@ -45,13 +45,6 @@ export const TYPE_NAMES: Record<TypeId, string> = {
 	train_p: "Training pants",
 };
 
-export const JACKET_IDS = ["harrington", "wool"] as const;
-
-export type JacketId = (typeof JACKET_IDS)[number];
-
-export const isJacket = (id: TypeId): id is JacketId =>
-	(JACKET_IDS as readonly TypeId[]).includes(id);
-
 export const LAYERS = ["bottom", "inner_top", "sweater", "jacket"] as const;
 
 export type Layer = (typeof LAYERS)[number];

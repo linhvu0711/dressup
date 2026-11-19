@@ -611,26 +611,6 @@ test("replaces a piece in the same layer and takes it off", async ({
 	await expect(stage(page).locator('[data-type-id="chino_p"]')).toHaveCount(0);
 });
 
-test("starts a jacket open and closes it", async ({ page }) => {
-	// Given: both projects, /build, the Jacket tab
-	await page.goto("/build");
-	await page.getByRole("tab", { name: "Jacket" }).click();
-	// When
-	await typeChip(page, "Harrington jacket").click();
-	// Then
-	const front = page.getByRole("radiogroup", { name: "Jacket front" });
-	await expect(
-		stage(page).locator('[data-type-id="harrington"]'),
-	).toHaveAttribute("data-front", "open");
-	await expect(front.getByRole("radio", { name: "Open" })).toBeChecked();
-	// When
-	await front.getByRole("radio", { name: "Closed" }).click();
-	// Then
-	await expect(
-		stage(page).locator('[data-type-id="harrington"]'),
-	).toHaveAttribute("data-front", "closed");
-});
-
 test("keeps the layer tabs in view when the picker scrolls", async ({
 	page,
 }) => {
@@ -875,7 +855,7 @@ test("changes a combination in the builder", async ({ page }) => {
 	).toBeVisible();
 	await expect(
 		stage(page).locator('[data-type-id="harrington"]'),
-	).toHaveAttribute("data-front", "open");
+	).toBeAttached();
 	await expect(
 		stage(page).locator('[data-type-id="casual_p"] [fill="#1F3A5F"]').first(),
 	).toBeAttached();
@@ -1043,5 +1023,5 @@ test("says Could not load your combinations in the builder and loads on Retry", 
 	).toBeVisible();
 	await expect(
 		stage(page).locator('[data-type-id="harrington"]'),
-	).toHaveAttribute("data-front", "open");
+	).toBeAttached();
 });

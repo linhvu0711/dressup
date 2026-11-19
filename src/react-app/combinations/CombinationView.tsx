@@ -73,7 +73,6 @@ export function CombinationView({
 							typeId: p.typeId,
 							hex: p.colour.hex,
 						}))}
-						open={combination.open}
 						label={title}
 					/>
 				)}
