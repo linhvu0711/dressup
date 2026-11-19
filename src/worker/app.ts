@@ -64,6 +64,8 @@ import { loadMannequin, setMannequinColour } from "./mannequin-store";
 import { mcpRoute } from "./mcp";
 import {
 	addOwnedItem,
+	type BoughtError,
+	buyShopLink,
 	changeOwnedItem,
 	deleteOwnedItem,
 	listOwnedItems,
@@ -189,6 +191,19 @@ function ownedItemRefusal(error: OwnedItemError): Refusal {
 	}
 }
 
+function boughtRefusal(error: BoughtError): Refusal {
+	switch (error.code) {
+		case "not_found":
+			return { status: 404, body: { error: "not_found" } };
+		case "owned_item_limit":
+			return { status: 409, body: { error: "owned_item_limit" } };
+		case "quantity_limit":
+			return { status: 409, body: { error: "quantity_limit" } };
+		case "conflict":
+			return { status: 409, body: { error: "conflict", field: "id" } };
+	}
+}
+
 // Only the JSON shape: the Wishlist module runs the wish rules.
 const wishBodySchema = z.object({
 	id: z.string(),
@@ -201,6 +216,7 @@ const shopLinkBodySchema = z.object({
 	brandId: z.string().nullable(),
 	name: z.string(),
 	price: z.number().nullable(),
+	pictureIds: z.array(z.string()).optional(),
 });
 
 function wishRefusal(error: WishError): Refusal {
@@ -213,6 +229,8 @@ function wishRefusal(error: WishError): Refusal {
 			return { status: 409, body: { error: "wish_limit" } };
 		case "shop_link_limit":
 			return { status: 409, body: { error: "shop_link_limit" } };
+		case "picture_limit":
+			return { status: 409, body: { error: "picture_limit" } };
 		case "conflict":
 			return { status: 409, body: { error: "conflict", field: "id" } };
 		case "not_found":
@@ -487,6 +505,21 @@ export function createApp(getDb: (env: Env) => Db) {
 		return c.body(null, 204);
 	});
 
+	app.post("/shop-links/:id/bought", withAuth, requireUser, async (c) => {
+		const bought = await buyShopLink(
+			getDb(c.env),
+			c.env.PICTURES,
+			c.var.user.id,
+			c.req.param("id"),
+		);
+		if (!bought.ok) {
+			const { status, body: refused } = boughtRefusal(bought.error);
+			return c.json(refused, status);
+		}
+		const { ownedItem, created } = bought.value;
+		return c.json({ ownedItem } satisfies OwnedItemAnswer, created ? 201 : 200);
+	});
+
 	app.get("/wishes", withAuth, requireUser, async (c) =>
 		c.json({
 			wishes: await listWishes(getDb(c.env), c.var.user.id),
@@ -513,6 +546,7 @@ export function createApp(getDb: (env: Env) => Db) {
 		if ("refused" in body) return body.refused;
 		const added = await addShopLink(
 			getDb(c.env),
+			c.env.PICTURES,
 			c.var.user.id,
 			c.req.param("id"),
 			body.data,
@@ -530,6 +564,7 @@ export function createApp(getDb: (env: Env) => Db) {
 		if ("refused" in body) return body.refused;
 		const changed = await changeShopLink(
 			getDb(c.env),
+			c.env.PICTURES,
 			c.var.user.id,
 			c.req.param("id"),
 			body.data,
@@ -544,6 +579,7 @@ export function createApp(getDb: (env: Env) => Db) {
 	app.delete("/shop-links/:id", withAuth, requireUser, async (c) => {
 		const deleted = await deleteShopLink(
 			getDb(c.env),
+			c.env.PICTURES,
 			c.var.user.id,
 			c.req.param("id"),
 		);
@@ -557,6 +593,7 @@ export function createApp(getDb: (env: Env) => Db) {
 	app.delete("/wishes/:id", withAuth, requireUser, async (c) => {
 		const deleted = await deleteWish(
 			getDb(c.env),
+			c.env.PICTURES,
 			c.var.user.id,
 			c.req.param("id"),
 		);

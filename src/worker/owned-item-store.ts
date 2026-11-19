@@ -1,4 +1,15 @@
-import { and, count, desc, eq, exists, ne, notExists, sql } from "drizzle-orm";
+import {
+	and,
+	asc,
+	count,
+	desc,
+	eq,
+	exists,
+	ne,
+	notExists,
+	type SQL,
+	sql,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import {
 	OWNED_ITEM_LIMIT,
@@ -6,6 +17,7 @@ import {
 	type OwnedItemId,
 	ownedItemChangeSchema,
 	ownedItemInputSchema,
+	QUANTITY_MAX,
 } from "@/closet/owned-item";
 import type { Hex } from "@/colour/hex";
 import type { TypeId } from "@/dress/clothing-types";
@@ -18,10 +30,12 @@ import { user } from "./db/auth-schema";
 import { brand } from "./db/brand-schema";
 import { colour } from "./db/colour-schema";
 import { ownedItem } from "./db/owned-item-schema";
+import { shopLink, wish } from "./db/wish-schema";
 import {
+	buyWithPictures,
 	deleteWithPictures,
 	type PictureListError,
-	pictureIdsByItem,
+	pictureIdsBy,
 	saveWithPictures,
 } from "./picture-store";
 import type { Result } from "./result";
@@ -75,7 +89,7 @@ async function readOwnedItems(
 		)
 		// Two adds in one millisecond share created_at; rowid keeps their order.
 		.orderBy(desc(ownedItem.createdAt), desc(sql`${ownedItem}.rowid`));
-	const pictures = await pictureIdsByItem(db, userId, id);
+	const pictures = await pictureIdsBy(db, userId, "ownedItemId", id);
 	return rows.map((row) => ({
 		id: row.id as OwnedItemId,
 		typeId: row.typeId,
@@ -140,6 +154,56 @@ const listRefusal = (
 				error: { code: "invalid", field: "pictureIds", value: ids },
 			};
 
+// The one insert of an owned item. The colour, the brand, the limit, and
+// the duplicate rule sit in the insert itself, so two writes at once cannot
+// both pass them; `also` adds the caller's own guard.
+function insertItem(
+	db: Db,
+	userId: string,
+	item: Piece & { id: string; quantity: number },
+	also?: SQL,
+) {
+	return db
+		.insert(ownedItem)
+		.select(
+			db
+				.select({
+					id: sql<string>`${item.id}`.as("id"),
+					userId: user.id,
+					typeId: sql<string>`${item.typeId}`.as("type_id"),
+					colourId: sql<string>`${item.colourId}`.as("colour_id"),
+					brandId: sql<string | null>`${item.brandId}`.as("brand_id"),
+					quantity: sql<number>`${item.quantity}`.as("quantity"),
+					createdAt:
+						sql<number>`(cast(unixepoch('subsecond') * 1000 as integer))`.as(
+							"created_at",
+						),
+				})
+				.from(user)
+				.where(
+					and(
+						eq(user.id, userId),
+						exists(colourOf(db, userId, item.colourId)),
+						item.brandId === null
+							? undefined
+							: exists(brandOf(db, userId, item.brandId)),
+						sql`(${db
+							.select({ n: count() })
+							.from(ownedItem)
+							.where(eq(ownedItem.userId, userId))}) < ${OWNED_ITEM_LIMIT}`,
+						notExists(
+							db
+								.select({ one: sql`1` })
+								.from(ownedItem)
+								.where(samePiece(userId, item)),
+						),
+						also,
+					),
+				),
+		)
+		.onConflictDoNothing({ target: ownedItem.id });
+}
+
 // Why a write that the guards stopped did not happen, in the order a person
 // would fix it. `otherThan` is the item a change writes, which holds its own
 // piece and brand.
@@ -188,7 +252,7 @@ export async function addOwnedItem(
 	// a conflict or a refused insert attaches none.
 	const pictures = {
 		userId,
-		ownedItemId: input.id,
+		owner: { ownedItemId: input.id },
 		ids: input.pictureIds,
 		itemHeld: exists(
 			db
@@ -232,44 +296,7 @@ export async function addOwnedItem(
 		db,
 		bucket,
 		pictures,
-		db
-			.insert(ownedItem)
-			.select(
-				db
-					.select({
-						id: sql<string>`${input.id}`.as("id"),
-						userId: user.id,
-						typeId: sql<string>`${input.typeId}`.as("type_id"),
-						colourId: sql<string>`${input.colourId}`.as("colour_id"),
-						brandId: sql<string | null>`${input.brandId}`.as("brand_id"),
-						quantity: sql<number>`${input.quantity}`.as("quantity"),
-						createdAt:
-							sql<number>`(cast(unixepoch('subsecond') * 1000 as integer))`.as(
-								"created_at",
-							),
-					})
-					.from(user)
-					.where(
-						and(
-							eq(user.id, userId),
-							exists(colourOf(db, userId, input.colourId)),
-							input.brandId === null
-								? undefined
-								: exists(brandOf(db, userId, input.brandId)),
-							sql`(${db
-								.select({ n: count() })
-								.from(ownedItem)
-								.where(eq(ownedItem.userId, userId))}) < ${OWNED_ITEM_LIMIT}`,
-							notExists(
-								db
-									.select({ one: sql`1` })
-									.from(ownedItem)
-									.where(samePiece(userId, input)),
-							),
-						),
-					),
-			)
-			.onConflictDoNothing({ target: ownedItem.id }),
+		insertItem(db, userId, input),
 	);
 	if (!saved.ok) return listRefusal(saved.error, input.pictureIds);
 	const [added] = await readOwnedItems(db, userId, input.id);
@@ -306,7 +333,7 @@ export async function changeOwnedItem(
 		bucket,
 		{
 			userId,
-			ownedItemId: id,
+			owner: { ownedItemId: id },
 			ids: pictureIds,
 			// The brand is the new one only when the update wrote, since it runs
 			// first in the batch; a refused change attaches and drops nothing.
@@ -383,7 +410,7 @@ export async function deleteOwnedItem(
 	const [row] = await deleteWithPictures(
 		db,
 		bucket,
-		{ userId, ownedItemId: id },
+		{ userId, owner: { ownedItemId: id } },
 		db
 			.delete(ownedItem)
 			.where(and(eq(ownedItem.id, id), eq(ownedItem.userId, userId)))
@@ -392,4 +419,122 @@ export async function deleteOwnedItem(
 	return row
 		? { ok: true, value: row.id as OwnedItemId }
 		: { ok: false, error: { code: "not_found" } };
+}
+
+export type BoughtError =
+	| { code: "not_found" }
+	| { code: "owned_item_limit" }
+	| { code: "quantity_limit" }
+	| { code: "conflict" };
+
+// Bought: the link becomes an owned item of its wish's piece with its brand
+// and pictures, or adds 1 to the item of that piece and brand, and the wish
+// goes with its other links. Every write is guarded by the link and the item
+// as they were read, so a link or an item changed since writes nothing.
+export async function buyShopLink(
+	db: Db,
+	bucket: R2Bucket,
+	userId: string,
+	shopLinkId: string,
+): Promise<Result<AddedOwnedItem, BoughtError>> {
+	const [link] = await db
+		.select({
+			wishId: wish.id,
+			typeId: wish.typeId,
+			colourId: wish.colourId,
+			brandId: shopLink.brandId,
+		})
+		.from(shopLink)
+		.innerJoin(wish, eq(wish.id, shopLink.wishId))
+		.where(and(eq(shopLink.id, shopLinkId), eq(shopLink.userId, userId)));
+	if (!link) return { ok: false, error: { code: "not_found" } };
+	const { wishId, ...piece } = link;
+	const linkHeld = exists(
+		db
+			.select({ one: sql`1` })
+			.from(shopLink)
+			.where(
+				and(
+					eq(shopLink.id, shopLinkId),
+					eq(shopLink.userId, userId),
+					eq(shopLink.wishId, wishId),
+					sql`${shopLink.brandId} is ${piece.brandId}`,
+				),
+			),
+	);
+	const wishDelete = (held: SQL) =>
+		db
+			.delete(wish)
+			.where(and(eq(wish.id, wishId), eq(wish.userId, userId), held));
+	const [found] = await db
+		.select({ id: ownedItem.id, quantity: ownedItem.quantity })
+		.from(ownedItem)
+		.where(samePiece(userId, piece))
+		.orderBy(asc(ownedItem.createdAt), asc(sql`rowid`))
+		.limit(1);
+	if (found && found.quantity >= QUANTITY_MAX) {
+		return { ok: false, error: { code: "quantity_limit" } };
+	}
+	const id = found?.id ?? crypto.randomUUID();
+	const written = found
+		? and(eq(ownedItem.id, id), eq(ownedItem.quantity, found.quantity + 1))
+		: eq(ownedItem.id, id);
+	const held = sql`${linkHeld} and ${exists(
+		db.select({ one: sql`1` }).from(ownedItem).where(written),
+	)}`;
+	const ownerWrite = found
+		? db
+				.update(ownedItem)
+				.set({ quantity: found.quantity + 1 })
+				.where(
+					and(
+						eq(ownedItem.id, id),
+						eq(ownedItem.userId, userId),
+						eq(ownedItem.quantity, found.quantity),
+						linkHeld,
+					),
+				)
+				.returning({ id: ownedItem.id })
+		: insertItem(db, userId, { id, ...piece, quantity: 1 }, linkHeld).returning(
+				{ id: ownedItem.id },
+			);
+	const [row] = await buyWithPictures(
+		db,
+		bucket,
+		{ userId, shopLinkId, wishId, ownedItemId: id, held },
+		ownerWrite,
+		wishDelete(held),
+	);
+	if (row) {
+		const [bought] = await readOwnedItems(db, userId, id);
+		if (bought) {
+			return { ok: true, value: { ownedItem: bought, created: !found } };
+		}
+	}
+	return {
+		ok: false,
+		error: await refusedBuy(db, userId, shopLinkId, !found),
+	};
+}
+
+// Why a Bought that the guards stopped did not happen.
+async function refusedBuy(
+	db: Db,
+	userId: string,
+	shopLinkId: string,
+	inserted: boolean,
+): Promise<BoughtError> {
+	const [link] = await db
+		.select({ id: shopLink.id })
+		.from(shopLink)
+		.where(and(eq(shopLink.id, shopLinkId), eq(shopLink.userId, userId)));
+	if (!link) return { code: "not_found" };
+	if (!inserted) return { code: "conflict" };
+	const [held] = await db
+		.select({ n: count() })
+		.from(ownedItem)
+		.where(eq(ownedItem.userId, userId));
+	return (held?.n ?? 0) >= OWNED_ITEM_LIMIT
+		? { code: "owned_item_limit" }
+		: { code: "conflict" };
 }

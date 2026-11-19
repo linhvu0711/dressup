@@ -74,8 +74,6 @@ export function OwnedItemSheet(
 	);
 	const [quantity, setQuantity] = useState(String(editing?.quantity ?? 1));
 	const slots = usePictureSlots(editing?.pictureIds ?? []);
-	// Save waits for the uploads that run, then sends the list.
-	const [saving, setSaving] = useState(false);
 	const first = useRef<HTMLButtonElement>(null);
 	const closet = useCloset();
 	const brands = useBrands();
@@ -129,14 +127,10 @@ export function OwnedItemSheet(
 		onClose();
 	};
 	const save = async () => {
-		if (!typeId || !colourId || full || sent.isPending || saving) return;
+		if (!typeId || !colourId || full || sent.isPending || slots.saving) return;
 		const n = Math.max(1, count);
-		setSaving(true);
-		await slots.idle();
-		setSaving(false);
-		// Cancel stays open while the uploads run; once used, nothing is saved.
-		if (slots.discarded) return;
-		const pictureIds = slots.ids();
+		const pictureIds = await slots.settle();
+		if (pictureIds === null) return;
 		if (editing)
 			update.mutate(
 				{ id, brandId, quantity: n, pictureIds },
@@ -257,7 +251,9 @@ export function OwnedItemSheet(
 					<Button
 						type="submit"
 						variant="primary"
-						disabled={!typeId || !colourId || full || sent.isPending || saving}
+						disabled={
+							!typeId || !colourId || full || sent.isPending || slots.saving
+						}
 					>
 						Save
 					</Button>

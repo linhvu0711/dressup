@@ -22,6 +22,7 @@ export async function postShopLink(
 		brandId: string | null;
 		name: string;
 		price: number | null;
+		pictureIds?: string[];
 	},
 ): Promise<string> {
 	const id = crypto.randomUUID();

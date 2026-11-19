@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { after, cachedUserId, goneAsDone, keys, request } from "../data/client";
-import { wishAnswer, wishesAnswer } from "../data/contract";
+import { ownedItemAnswer, wishAnswer, wishesAnswer } from "../data/contract";
 import type { ShopLinkId, WishId } from "./wish";
 
 export function useWishlist() {
@@ -38,6 +38,7 @@ type ShopLinkFields = {
 	brandId: string | null;
 	name: string;
 	price: number | null;
+	pictureIds: string[];
 };
 
 export function useAddShopLink() {
@@ -89,5 +90,18 @@ export function useDeleteWish() {
 		mutationFn: (id: WishId) =>
 			request("DELETE", `/api/wishes/${id}`).catch(goneAsDone),
 		onSuccess: (_, id) => after.wishDeleted(userId, id),
+	});
+}
+
+export function useMarkBought(wishId: WishId) {
+	const userId = cachedUserId();
+	return useMutation({
+		mutationFn: async (id: ShopLinkId) =>
+			(
+				await request("POST", `/api/shop-links/${id}/bought`, {
+					answer: ownedItemAnswer,
+				})
+			).ownedItem,
+		onSuccess: (item) => after.shopLinkBought(userId, item, wishId),
 	});
 }

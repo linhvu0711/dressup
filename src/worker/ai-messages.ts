@@ -13,7 +13,7 @@ import { PRICE_MAX, SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";
 import type { BrandError } from "./brand-store";
 import type { ColourError } from "./colour-store";
 import type { CombinationError } from "./combination-store";
-import type { OwnedItemError } from "./owned-item-store";
+import type { BoughtError, OwnedItemError } from "./owned-item-store";
 import type { TagError } from "./tag-store";
 import type { WishError } from "./wish-store";
 
@@ -128,6 +128,19 @@ export function ownedItemRefusalText(error: OwnedItemError): string {
 	}
 }
 
+export function boughtRefusalText(error: BoughtError): string {
+	switch (error.code) {
+		case "not_found":
+			return "No shop link with this id.";
+		case "owned_item_limit":
+			return `You have ${OWNED_ITEM_LIMIT} items. That is the limit. Delete one to add a new one.`;
+		case "quantity_limit":
+			return `You have ${QUANTITY_MAX} of this item. That is the limit.`;
+		case "conflict":
+			return serverError;
+	}
+}
+
 // The sentence for one bad field of a wish or a shop link, with the value
 // sent.
 function wishFieldText(error: Extract<WishError, { code: "invalid" }>): string {
@@ -145,6 +158,7 @@ function wishFieldText(error: Extract<WishError, { code: "invalid" }>): string {
 		case "brandId":
 			return notYourBrand(error.value);
 		case "id":
+		case "pictureIds":
 		case "body":
 			return serverError;
 	}
@@ -165,6 +179,8 @@ export function wishRefusalText(
 			return `You have ${WISH_LIMIT} wishes. That is the limit. Delete one to add a new one.`;
 		case "shop_link_limit":
 			return `${SHOP_LINK_LIMIT} shop links is the limit for one wish.`;
+		case "picture_limit":
+			return `A shop link has at most ${ITEM_PICTURE_LIMIT} pictures.`;
 		case "not_found":
 			return `No ${subject} with this id.`;
 		case "conflict":

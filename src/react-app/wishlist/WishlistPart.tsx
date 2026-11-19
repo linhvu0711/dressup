@@ -1,6 +1,8 @@
 import { ExternalLink, Pencil, Plus } from "lucide-react";
 import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { PictureStrip } from "@/pictures/PictureStrip";
+import { BoughtDialog } from "./BoughtDialog";
 import { RemoveWishDialog } from "./RemoveWishDialog";
 import { ShopLinkSheet } from "./ShopLinkSheet";
 import {
@@ -20,6 +22,7 @@ export function WishlistPart({ wish }: { wish: Wish }) {
 	// The sheet: a new link, or the link it changes.
 	const [sheet, setSheet] = useState<ShopLink | "add" | null>(null);
 	const [removing, setRemoving] = useState(false);
+	const [buying, setBuying] = useState<ShopLink | null>(null);
 	const full = wish.shopLinks.length >= SHOP_LINK_LIMIT;
 	return (
 		<section aria-labelledby={title} className="flex flex-col gap-2">
@@ -46,41 +49,51 @@ export function WishlistPart({ wish }: { wish: Wish }) {
 							key={link.id}
 							data-slot="shop-link"
 							aria-label={link.name}
-							className="flex min-w-0 items-start gap-3 rounded-[14px] border border-border p-3.5"
+							className="flex min-w-0 flex-col gap-2 rounded-[14px] border border-border p-3.5"
 						>
-							<div className="flex min-w-0 flex-1 flex-col gap-0.5">
-								<p className="truncate text-[12.5px] text-muted-foreground">
-									{shopName(link)}
-								</p>
-								<p className="text-[14px]">{link.name}</p>
-								{link.price === null ? null : (
-									<p className="font-medium text-[14px]">
-										{priceText(link.price)}
+							<PictureStrip ids={link.pictureIds} brand={shopName(link)} />
+							<div className="flex min-w-0 items-start gap-3">
+								<div className="flex min-w-0 flex-1 flex-col gap-0.5">
+									<p className="truncate text-[12.5px] text-muted-foreground">
+										{shopName(link)}
 									</p>
-								)}
-								{isWebAddress(link.url) ? (
-									<a
-										href={link.url}
-										target="_blank"
-										rel="noopener noreferrer"
-										data-slot="shop-address"
-										className="flex min-w-0 items-center gap-1 text-[13px] underline-offset-2 hover:underline"
-									>
-										<span className="truncate">{shopLinkHost(link.url)}</span>
-										<ExternalLink size={14} className="flex-none" aria-hidden />
-									</a>
-								) : (
-									<p className="truncate text-[13px]">{link.url}</p>
-								)}
+									<p className="text-[14px]">{link.name}</p>
+									{link.price === null ? null : (
+										<p className="font-medium text-[14px]">
+											{priceText(link.price)}
+										</p>
+									)}
+									{isWebAddress(link.url) ? (
+										<a
+											href={link.url}
+											target="_blank"
+											rel="noopener noreferrer"
+											data-slot="shop-address"
+											className="flex min-w-0 items-center gap-1 text-[13px] underline-offset-2 hover:underline"
+										>
+											<span className="truncate">{shopLinkHost(link.url)}</span>
+											<ExternalLink
+												size={14}
+												className="flex-none"
+												aria-hidden
+											/>
+										</a>
+									) : (
+										<p className="truncate text-[13px]">{link.url}</p>
+									)}
+								</div>
+								<Button
+									variant="icon"
+									size="icon"
+									aria-label="Change shop link"
+									title="Change shop link"
+									onClick={() => setSheet(link)}
+								>
+									<Pencil size={16} strokeWidth={1.9} aria-hidden />
+								</Button>
 							</div>
-							<Button
-								variant="icon"
-								size="icon"
-								aria-label="Change shop link"
-								title="Change shop link"
-								onClick={() => setSheet(link)}
-							>
-								<Pencil size={16} strokeWidth={1.9} aria-hidden />
+							<Button className="self-end" onClick={() => setBuying(link)}>
+								Bought
 							</Button>
 						</li>
 					))}
@@ -93,6 +106,13 @@ export function WishlistPart({ wish }: { wish: Wish }) {
 			>
 				Remove from wishlist
 			</Button>
+			{buying ? (
+				<BoughtDialog
+					link={buying}
+					wishId={wish.id}
+					onClose={() => setBuying(null)}
+				/>
+			) : null}
 			{removing ? (
 				<RemoveWishDialog wish={wish} onClose={() => setRemoving(false)} />
 			) : null}

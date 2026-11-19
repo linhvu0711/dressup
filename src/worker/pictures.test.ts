@@ -253,6 +253,20 @@ describe("limits and the storage stop", () => {
 		});
 	});
 
+	test("refuses picture 1,001 when one is on a shop link", async () => {
+		// Given
+		const { h, headers } = await withAccount();
+		await h.seedPictures("alice-id", 999);
+		await addLinks(h, headers, [[await uploadedId(h, headers)]]);
+		// When
+		const refused = await answer(await upload(h, headers));
+		// Then
+		expect(refused).toEqual({
+			status: 409,
+			body: { error: "account_picture_limit" },
+		});
+	});
+
 	test("stops uploads when all pictures reach 9 GB", async () => {
 		// Given
 		const { h, headers } = await withAccount();
@@ -428,6 +442,51 @@ async function addItem(h: Harness, headers: Headers, pictureIds: string[]) {
 	return id;
 }
 
+// A Navy wool jacket wish with one shop link for each list of pictures.
+async function addLinks(h: Harness, headers: Headers, lists: string[][]) {
+	const { colours } = (await (
+		await h.app.request("/api/colours", { headers }, h.env)
+	).json()) as { colours: { id: string; name: string }[] };
+	const navy = colours.find((c) => c.name === "Navy")?.id;
+	const json = {
+		...Object.fromEntries(headers),
+		"content-type": "application/json",
+	};
+	const wishId = crypto.randomUUID();
+	await h.app.request(
+		"/api/wishes",
+		{
+			method: "POST",
+			headers: json,
+			body: JSON.stringify({ id: wishId, typeId: "wool", colourId: navy }),
+		},
+		h.env,
+	);
+	const linkIds: string[] = [];
+	for (const pictureIds of lists) {
+		const id = crypto.randomUUID();
+		const res = await h.app.request(
+			`/api/wishes/${wishId}/shop-links`,
+			{
+				method: "POST",
+				headers: json,
+				body: JSON.stringify({
+					id,
+					url: "https://cos.com/jacket",
+					brandId: null,
+					name: "Wool jacket",
+					price: null,
+					pictureIds,
+				}),
+			},
+			h.env,
+		);
+		expect(res.status).toBe(201);
+		linkIds.push(id);
+	}
+	return { wishId, linkIds };
+}
+
 describe("drafts", () => {
 	afterEach(() => setSystemTime());
 
@@ -479,6 +538,23 @@ describe("drafts", () => {
 		});
 	});
 
+	test("keeps a shop link's picture older than a day at the next upload", async () => {
+		// Given
+		const { h, headers } = await withAccount();
+		setSystemTime(new Date("2026-11-17T10:00:00Z"));
+		const old = await uploadedId(h, headers);
+		await addLinks(h, headers, [[old]]);
+		setSystemTime(new Date("2026-11-18T11:00:00Z"));
+		// When
+		const fresh = await uploadedId(h, headers);
+		const loaded = await send(h, headers, "GET", `/api/pictures/${old}`);
+		// Then
+		expect({ loaded: loaded.status, keys: h.pictures.keys() }).toEqual({
+			loaded: 200,
+			keys: [fresh, old].sort(),
+		});
+	});
+
 	test("keeps a draft younger than a day", async () => {
 		// Given
 		const { h, headers } = await withAccount();
@@ -527,6 +603,32 @@ describe("deletes and the stored bytes", () => {
 		// Then
 		expect(steps).toEqual([
 			{ stored: 200, rows: 200 },
+			{ stored: 100, rows: 100 },
+			{ stored: 0, rows: 0 },
+		]);
+	});
+
+	test("keeps the stored bytes equal when shop link pictures go", async () => {
+		// Given: three uploads of 100 bytes; a and b on one link, c on another
+		// link of the same wish
+		const { h, headers } = await withAccount();
+		const a = await uploadedId(h, headers);
+		const b = await uploadedId(h, headers);
+		const c = await uploadedId(h, headers);
+		const { wishId, linkIds } = await addLinks(h, headers, [[a, b], [c]]);
+		const steps: { stored: number; rows: number }[] = [];
+		const record = async () =>
+			steps.push({
+				stored: await h.storedBytes(),
+				rows: (await h.rows(picture)).reduce((sum, row) => sum + row.bytes, 0),
+			});
+		// When
+		await send(h, headers, "DELETE", `/api/shop-links/${linkIds[0]}`);
+		await record();
+		await send(h, headers, "DELETE", `/api/wishes/${wishId}`);
+		await record();
+		// Then
+		expect(steps).toEqual([
 			{ stored: 100, rows: 100 },
 			{ stored: 0, rows: 0 },
 		]);

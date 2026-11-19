@@ -27,9 +27,10 @@ import {
 	wishPiece,
 } from "@/piece-filter/piece-filter";
 import { TAG_NAME_MAX, type Tag } from "@/tags/tag";
-import { SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";
+import { SHOP_LINK_LIMIT, WISH_LIMIT, type Wish } from "@/wishlist/wish";
 import { countAiAction } from "./ai-action-store";
 import {
+	boughtRefusalText,
 	brandRefusalText,
 	colourRefusalText,
 	combinationRefusalText,
@@ -67,6 +68,7 @@ import {
 import type { Db } from "./db";
 import {
 	addOwnedItem,
+	buyShopLink,
 	changeOwnedItem,
 	deleteOwnedItem,
 	listOwnedItems,
@@ -104,6 +106,16 @@ const answer = (
 const ownedItemView = ({ pictureIds, ...item }: OwnedItem) => ({
 	...item,
 	pictureCount: pictureIds.length,
+});
+
+// AI apps cannot add or read pictures, so a shop link shows only how many it
+// has.
+const wishView = (wish: Wish) => ({
+	...wish,
+	shopLinks: wish.shopLinks.map(({ pictureIds, ...link }) => ({
+		...link,
+		pictureCount: pictureIds.length,
+	})),
 });
 
 const combinationView = (combination: Combination, tags: Tag[]) => ({
@@ -701,9 +713,9 @@ export function registerAiActions(server: McpServer, account: Account) {
 		async (args) => {
 			const picked = await filterOf(args);
 			if (!picked.ok) return refusal(picked.text);
-			const wishes = (await listWishes(db, userId)).filter((wish) =>
-				matchesPieceFilter(picked.filter, wishPiece(wish)),
-			);
+			const wishes = (await listWishes(db, userId))
+				.filter((wish) => matchesPieceFilter(picked.filter, wishPiece(wish)))
+				.map(wishView);
 			if (wishes.length > 0) return answer({ wishes });
 			return answer(
 				{ wishes },
@@ -731,7 +743,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 				colourId,
 			});
 			return added.ok
-				? answer({ wish: added.value.wish })
+				? answer({ wish: wishView(added.value.wish) })
 				: refusal(wishRefusalText(added.error, "wish"));
 		},
 	);
@@ -745,7 +757,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 			inputSchema: z.object({ id: z.string().describe("The wish's id.") }),
 		},
 		async ({ id }) => {
-			const deleted = await deleteWish(db, userId, id);
+			const deleted = await deleteWish(db, pictures, userId, id);
 			return deleted.ok
 				? answer({ deleted: deleted.value })
 				: refusal(wishRefusalText(deleted.error, "wish"));
@@ -781,7 +793,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 			}),
 		},
 		async ({ wishId, url, brandId = null, name, price = null }) => {
-			const added = await addShopLink(db, userId, wishId, {
+			const added = await addShopLink(db, pictures, userId, wishId, {
 				id: crypto.randomUUID(),
 				url,
 				brandId,
@@ -789,7 +801,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 				price,
 			});
 			return added.ok
-				? answer({ wish: added.value.wish })
+				? answer({ wish: wishView(added.value.wish) })
 				: refusal(wishRefusalText(added.error, "wish"));
 		},
 	);
@@ -807,14 +819,14 @@ export function registerAiActions(server: McpServer, account: Account) {
 			}),
 		},
 		async ({ id, url, brandId = null, name, price = null }) => {
-			const changed = await changeShopLink(db, userId, id, {
+			const changed = await changeShopLink(db, pictures, userId, id, {
 				url,
 				brandId,
 				name,
 				price,
 			});
 			return changed.ok
-				? answer({ wish: changed.value })
+				? answer({ wish: wishView(changed.value) })
 				: refusal(wishRefusalText(changed.error, "shop link"));
 		},
 	);
@@ -830,10 +842,29 @@ export function registerAiActions(server: McpServer, account: Account) {
 			}),
 		},
 		async ({ id }) => {
-			const deleted = await deleteShopLink(db, userId, id);
+			const deleted = await deleteShopLink(db, pictures, userId, id);
 			return deleted.ok
 				? answer({ deleted: deleted.value })
 				: refusal(wishRefusalText(deleted.error, "shop link"));
+		},
+	);
+
+	tool(
+		"mark_shop_link_bought",
+		{
+			title: "Mark a shop link as bought",
+			description:
+				"Moves a shop link to the closet as an owned item with its brand, quantity 1, and its pictures, and removes its wish with the other shop links and their pictures. When the closet holds this piece with this brand, adds 1 to that item. Answers the owned item.",
+			annotations: DELETE,
+			inputSchema: z.object({
+				id: z.string().describe("The shop link's id."),
+			}),
+		},
+		async ({ id }) => {
+			const bought = await buyShopLink(db, pictures, userId, id);
+			return bought.ok
+				? answer({ ownedItem: ownedItemView(bought.value.ownedItem) })
+				: refusal(boughtRefusalText(bought.error));
 		},
 	);
 }

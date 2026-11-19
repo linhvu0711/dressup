@@ -3,9 +3,12 @@ import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, FormSheet, ROW } from "@/components/ui/sheet-form";
 import { useToast } from "@/components/ui/toast";
+import { RequestError } from "@/data/client";
 import { BrandOptions } from "@/labels/BrandOptions";
 import type { BrandId } from "@/labels/brand";
 import { useBrands } from "@/labels/brand-api";
+import { PICTURES_LABEL, PictureSlots } from "@/pictures/PictureSlots";
+import { usePictureSlots } from "@/pictures/usePictureSlots";
 import { useAddShopLink, useChangeShopLink, useDeleteShopLink } from "./api";
 import {
 	ADDRESS_MAX,
@@ -68,6 +71,7 @@ export function ShopLinkSheet(
 		shown: priceShown(editing?.price ?? null),
 	}));
 	const [checked, setChecked] = useState<Problem | null>(null);
+	const slots = usePictureSlots(editing?.pictureIds ?? []);
 	const first = useRef<HTMLInputElement>(null);
 	const brands = useBrands();
 	const add = useAddShopLink();
@@ -75,7 +79,9 @@ export function ShopLinkSheet(
 	const del = useDeleteShopLink();
 	const sent = editing ? update : add;
 	const toast = useToast();
-	const problem = checked ?? (sent.isError ? "failed" : null);
+	const limitHit =
+		sent.error instanceof RequestError && sent.error.code === "picture_limit";
+	const problem = checked ?? (sent.isError && !limitHit ? "failed" : null);
 	// The link's own brand while the brand list loads.
 	const brandName =
 		brands.data?.find((b) => b.id === brandId)?.name ??
@@ -99,15 +105,23 @@ export function ShopLinkSheet(
 		toast(message);
 		onClose();
 	};
-	const save = () => {
-		if (sent.isPending) return;
+	// Nothing picked in the sheet stays unless Save sent it.
+	const close = () => {
+		slots.discard();
+		onClose();
+	};
+	const save = async () => {
+		if (sent.isPending || slots.saving) return;
 		if (!isWebAddress(url)) return setChecked("address");
 		if (name.trim() === "") return setChecked("name");
+		const pictureIds = await slots.settle();
+		if (pictureIds === null) return;
 		const link = {
 			url: url.trim(),
 			brandId,
 			name: name.trim(),
 			price: price.value,
+			pictureIds,
 		};
 		if (editing)
 			update.mutate({ id, ...link }, { onSuccess: done("Changes saved") });
@@ -124,7 +138,7 @@ export function ShopLinkSheet(
 			step={step === "form" ? null : STEP_TITLE[step]}
 			onBack={back}
 			focus={first}
-			onClose={onClose}
+			onClose={close}
 		>
 			<form
 				hidden={step !== "form"}
@@ -132,7 +146,7 @@ export function ShopLinkSheet(
 				className="flex flex-col gap-4 [&[hidden]]:hidden"
 				onSubmit={(e) => {
 					e.preventDefault();
-					save();
+					void save();
 				}}
 			>
 				<Field label="Address">
@@ -182,6 +196,9 @@ export function ShopLinkSheet(
 						className={INPUT}
 					/>
 				</Field>
+				<Field label={PICTURES_LABEL}>
+					<PictureSlots slots={slots} limitHit={limitHit} />
+				</Field>
 				{problem ? (
 					<p role="alert" className="text-[13px] text-destructive">
 						{PROBLEM_TEXT[problem]}
@@ -197,10 +214,14 @@ export function ShopLinkSheet(
 							Delete
 						</Button>
 					) : null}
-					<Button type="button" onClick={onClose}>
+					<Button type="button" onClick={close}>
 						Cancel
 					</Button>
-					<Button type="submit" variant="primary" disabled={sent.isPending}>
+					<Button
+						type="submit"
+						variant="primary"
+						disabled={sent.isPending || slots.saving}
+					>
 						Save
 					</Button>
 				</div>
@@ -230,7 +251,10 @@ export function ShopLinkSheet(
 							disabled={del.isPending}
 							onClick={() =>
 								del.mutate(editing.id, {
-									onSuccess: done("Shop link deleted"),
+									onSuccess: () => {
+										slots.discard();
+										done("Shop link deleted")();
+									},
 								})
 							}
 						>

@@ -26,6 +26,7 @@ const link = (
 		brand === null ? null : { id: crypto.randomUUID() as BrandId, name: brand },
 	name: "Wool jacket",
 	price,
+	pictureIds: [],
 });
 
 const wishWith = (shopLinks: ShopLink[]): Wish => ({

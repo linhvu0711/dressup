@@ -54,6 +54,7 @@ const link = (brand: BrandId | null): ShopLink => ({
 	brand: brand === null ? null : { id: brand, name: brand },
 	name: "A piece",
 	price: null,
+	pictureIds: [],
 });
 
 const wish = (typeId: TypeId, shopLinks: ShopLink[]): Wish => ({

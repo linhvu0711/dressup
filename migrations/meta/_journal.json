@@ -120,6 +120,13 @@
       "when": 1795057521538,
       "tag": "0016_harsh_gunslinger",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1795065184830,
+      "tag": "0017_futuristic_nick_fury",
+      "breakpoints": true
     }
   ]
 }
