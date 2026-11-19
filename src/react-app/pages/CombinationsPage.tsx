@@ -81,14 +81,31 @@ export function CombinationsPage() {
 	}, [empty, addressed, setParams]);
 	// Each pick replaces the address, so Back leaves the page, not one pick. A
 	// filter that hides the open combination closes it, as a look's chip does.
+	// A pick that waits for the closet makes that check when the closet is in.
+	// Only a pick checks: a combination saved from the builder opens even when
+	// the filter hides it.
+	// The check holds the search it waits for: the address changes a render
+	// after the pick, and the old filter must not answer for the new one.
+	const [checkFor, setCheckFor] = useState<string | null>(null);
 	function setFilter(next: CombinationFilter) {
 		const search = writeCombinationFilter(next).toString();
+		const nextMatched = matching(next);
 		const hidden =
 			combinationId !== undefined &&
-			matching(next)?.every((c) => c.id !== combinationId) === true;
+			nextMatched?.every((c) => c.id !== combinationId) === true;
+		setCheckFor(
+			combinationId !== undefined && nextMatched === undefined ? search : null,
+		);
 		if (hidden) navigate(wallAddress(next), { replace: true });
 		else setParams(search, { replace: true });
 	}
+	const current = params.toString();
+	useEffect(() => {
+		if (checkFor === null || checkFor !== current || !matched) return;
+		setCheckFor(null);
+		if (matched.every((c) => c.id !== combinationId))
+			navigate(wallAddress(filter), { replace: true });
+	}, [checkFor, current, matched, combinationId, filter, navigate]);
 	const shown = combinations.data?.find((c) => c.id === combinationId);
 	const open = shown !== undefined;
 	// The confirm lives here, not in the view: the view goes when the list

@@ -1,6 +1,12 @@
 import type { Page } from "@playwright/test";
 import { postOwnedItems } from "./closet-helpers";
-import { colourIds, postCombinations, three, two } from "./combination-helpers";
+import {
+	colourIds,
+	isPhone,
+	postCombinations,
+	three,
+	two,
+} from "./combination-helpers";
 import { expect, test } from "./fixtures";
 
 const FOUR_TITLE = "White short tee + Navy chino pants";
@@ -496,4 +502,37 @@ test("counts no combination for Pieces I own until the closet is in", async ({
 		"1 combination",
 	);
 	await expect(titles(page)).toHaveText([TWO_TITLE]);
+});
+
+test("closes the open combination that All of them hides once the closet is in", async ({
+	page,
+}) => {
+	test.skip(
+		isPhone(page),
+		"laptop layout only: the combination opens beside the wall",
+	);
+	// Given: laptop, a fresh account with THREE and TWO, TWO owned; THREE open
+	// beside the wall; the closet answers only when let go
+	await seedOwned(page);
+	let letGo = () => {};
+	const held = new Promise<void>((resolve) => {
+		letGo = resolve;
+	});
+	await page.route("**/api/owned-items", async (route) => {
+		await held;
+		await route.continue();
+	});
+	await openWall(page);
+	await page
+		.locator('[data-slot="combination-card"]')
+		.filter({ hasText: THREE_TITLE })
+		.click();
+	await expect(page).toHaveURL(/\/combinations\/[0-9a-f-]+$/);
+	// When
+	await openFilter(page);
+	await ownChoice(page, "All of them").click();
+	letGo();
+	// Then
+	await expect(page).toHaveURL("/combinations?own=all");
+	await expect(page.locator('[data-slot="combination-view"]')).toHaveCount(0);
 });
