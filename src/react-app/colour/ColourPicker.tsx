@@ -9,6 +9,7 @@ import {
 	readHexInput,
 } from "@/colour/hex";
 import { Button } from "@/components/ui/button";
+import { INPUT } from "@/components/ui/sheet-form";
 
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 
@@ -128,7 +129,8 @@ export function ColourField({
 						aria-label="Colour code"
 						aria-invalid={bad}
 						className={cn(
-							"h-[42px] min-w-0 flex-1 rounded-[10px] border border-input bg-card px-3 font-mono text-[14px] uppercase outline-none focus-visible:border-ring",
+							INPUT,
+							"h-[42px] flex-1 rounded-[10px] font-mono uppercase",
 							bad && "border-destructive focus-visible:border-destructive",
 						)}
 					/>

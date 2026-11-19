@@ -2,6 +2,7 @@ import { cn } from "cn";
 import { Check, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { INPUT } from "@/components/ui/sheet-form";
 import { isNameTaken } from "@/data/client";
 import { sameLabelName } from "@/labels/name";
 import { useTags } from "./api";
@@ -84,10 +85,7 @@ export function TagNameField({
 					placeholder="Tag name"
 					aria-invalid={taken || undefined}
 					aria-describedby={taken ? hintId : undefined}
-					className={cn(
-						"h-10 min-w-0 rounded-[12px] border border-input bg-card px-3 text-[14px] outline-none focus-visible:border-ring",
-						boxClassName,
-					)}
+					className={cn(INPUT, boxClassName)}
 				/>
 				{/* Button sets no type, and in the save form a button with none sends the form. */}
 				<Button

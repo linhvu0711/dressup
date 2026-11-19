@@ -1,8 +1,9 @@
+import { cn } from "cn";
 import { ChevronRight, Minus, Plus } from "lucide-react";
 import { useRef, useState } from "react";
 import { pieceName } from "@/combinations/combination";
 import { Button } from "@/components/ui/button";
-import { Field, FormSheet, ROW } from "@/components/ui/sheet-form";
+import { Field, FormSheet, INPUT, ROW } from "@/components/ui/sheet-form";
 import { useToast } from "@/components/ui/toast";
 import { RequestError } from "@/data/client";
 import type { TypeId } from "@/dress/clothing-types";
@@ -211,7 +212,7 @@ export function OwnedItemSheet(
 							}
 							onBlur={() => setQuantity(String(Math.max(1, count)))}
 							autoComplete="off"
-							className="h-10 w-14 rounded-[12px] border border-input bg-card px-3 text-center text-[14px] outline-none focus-visible:border-ring"
+							className={cn(INPUT, "w-14 text-center")}
 						/>
 						<Button
 							type="button"

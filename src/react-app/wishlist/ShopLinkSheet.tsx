@@ -1,7 +1,7 @@
 import { ChevronRight } from "lucide-react";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Field, FormSheet, ROW } from "@/components/ui/sheet-form";
+import { Field, FormSheet, INPUT, ROW } from "@/components/ui/sheet-form";
 import { useToast } from "@/components/ui/toast";
 import { RequestError } from "@/data/client";
 import { BrandOptions } from "@/labels/BrandOptions";
@@ -37,9 +37,6 @@ const PROBLEM_TEXT: Record<Problem, string> = {
 	name: "Enter a name.",
 	failed: "Not saved. Try again.",
 };
-
-const INPUT =
-	"h-10 min-w-0 rounded-[12px] border border-input bg-card px-3 text-[14px] outline-none focus-visible:border-ring";
 
 const priceShown = (price: number | null) =>
 	price === null ? "" : typedPrice(String(price)).shown;
