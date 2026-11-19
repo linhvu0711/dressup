@@ -13,7 +13,7 @@ import { PRICE_MAX, SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";
 import type { BrandError } from "./brand-store";
 import type { ColourError } from "./colour-store";
 import type { CombinationError } from "./combination-store";
-import type { OwnedItemError } from "./owned-item-store";
+import type { BoughtError, OwnedItemError } from "./owned-item-store";
 import type { TagError } from "./tag-store";
 import type { WishError } from "./wish-store";
 
@@ -123,6 +123,19 @@ export function ownedItemRefusalText(error: OwnedItemError): string {
 			return `An owned item has at most ${ITEM_PICTURE_LIMIT} pictures.`;
 		case "not_found":
 			return "No owned item with this id.";
+		case "conflict":
+			return serverError;
+	}
+}
+
+export function boughtRefusalText(error: BoughtError): string {
+	switch (error.code) {
+		case "not_found":
+			return "No shop link with this id.";
+		case "owned_item_limit":
+			return `You have ${OWNED_ITEM_LIMIT} items. That is the limit. Delete one to add a new one.`;
+		case "quantity_limit":
+			return `You have ${QUANTITY_MAX} of this item. That is the limit.`;
 		case "conflict":
 			return serverError;
 	}

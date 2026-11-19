@@ -94,6 +94,7 @@ describe("tags", () => {
 			["add_shop_link", W],
 			["change_shop_link", W],
 			["delete_shop_link", D],
+			["mark_shop_link_bought", D],
 		]);
 		expect(listed.every((t) => typeof t.title === "string")).toBe(true);
 	});
@@ -1467,7 +1468,7 @@ describe("wishes", () => {
 		brand: { name: string } | null;
 		name: string;
 		price: number | null;
-		pictureIds: string[];
+		pictureCount: number;
 	};
 	type Listed = { id: string; typeId: string; shopLinks: Link[] };
 
@@ -1520,11 +1521,109 @@ describe("wishes", () => {
 						brand: null,
 						name: "Wool jacket",
 						price: 4290000,
-						pictureIds: [],
+						pictureCount: 0,
 					},
 				],
 			},
 		]);
+	});
+
+	// The jacket wish with the COS link, and the link's id.
+	async function addJacketLink(ai: Session) {
+		const added = await ai.call("add_shop_link", cos(await addJacket(ai)));
+		return (added.data as { wish: Listed }).wish.shopLinks[0]?.id;
+	}
+
+	test("marks a shop link as bought and answers the owned item", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		const id = await addJacketLink(ai);
+		// When
+		const { data } = await ai.call("mark_shop_link_bought", { id });
+		const listed = await ai.call("list_wishes");
+		// Then
+		const { ownedItem } = data as {
+			ownedItem: {
+				id: string;
+				typeId: string;
+				colour: { name: string };
+				brand: unknown;
+				quantity: number;
+				pictureCount: number;
+			};
+		};
+		expect({
+			ownedItem: {
+				id: typeof ownedItem.id,
+				typeId: ownedItem.typeId,
+				colour: ownedItem.colour.name,
+				brand: ownedItem.brand,
+				quantity: ownedItem.quantity,
+				pictureCount: ownedItem.pictureCount,
+			},
+			wishes: (listed.data as { wishes: Listed[] }).wishes,
+		}).toEqual({
+			ownedItem: {
+				id: "string",
+				typeId: "wool",
+				colour: "Navy",
+				brand: null,
+				quantity: 1,
+				pictureCount: 0,
+			},
+			wishes: [],
+		});
+	});
+
+	test("refuses Bought at 500 owned items as a sentence", async () => {
+		// Given
+		const { h, ai, userId } = await withAiSession();
+		const id = await addJacketLink(ai);
+		await h.seedOwnedItems(userId, 500);
+		// When
+		const { isError, text } = await ai.call("mark_shop_link_bought", { id });
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "You have 500 items. That is the limit. Delete one to add a new one.",
+		});
+	});
+
+	test("lists the number of pictures of each shop link and no picture data", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		const id = await addJacketLink(ai);
+		const pictureIds: string[] = [];
+		for (const fill of [0x11, 0x22]) {
+			const body = new Uint8Array(100).fill(fill);
+			body.set([0xff, 0xd8, 0xff, 0xe0]);
+			const res = await send(h, ai.jar, "/api/pictures", {
+				method: "POST",
+				headers: { "content-type": "image/jpeg" },
+				body,
+			});
+			pictureIds.push(
+				((await res.json()) as { picture: { id: string } }).picture.id,
+			);
+		}
+		await sendJson(h, ai, "PUT", `/api/shop-links/${id}`, {
+			url: "https://cos.com/jacket",
+			brandId: null,
+			name: "Wool jacket",
+			price: 4290000,
+			pictureIds,
+		});
+		// When
+		const { data, text } = await ai.call("list_wishes");
+		// Then
+		expect({
+			counts: (data as { wishes: Listed[] }).wishes.map((w) =>
+				w.shopLinks.map((l) => l.pictureCount),
+			),
+			pictureData: [/pictureIds/, ...pictureIds].filter((p) =>
+				typeof p === "string" ? `${text}`.includes(p) : p.test(`${text}`),
+			),
+		}).toEqual({ counts: [[2]], pictureData: [] });
 	});
 
 	test("refuses a second wish for one piece as a sentence", async () => {
