@@ -7,9 +7,14 @@ import { isAiAppAllowed } from "./ai-app-store";
 import { type Auth, mcpResource } from "./auth";
 import type { Db } from "./db";
 
-function dressupServer(db: Db, pictures: R2Bucket, userId: string) {
+function dressupServer(
+	db: Db,
+	pictures: R2Bucket,
+	userId: string,
+	baseURL: string,
+) {
 	const server = new McpServer({ name: "dressup", version: "1.0.0" });
-	registerAiActions(server, { db, pictures, userId });
+	registerAiActions(server, { db, pictures, userId, baseURL });
 	return server;
 }
 
@@ -61,17 +66,16 @@ export function mcpRoute(
 				return refuse(req, baseURL, "this app is no longer allowed");
 			const token =
 				req.headers.get("authorization")?.replace(/^\S+\s+/, "") ?? "";
-			return createMcpHandler(() => dressupServer(db, pictures, sub)).fetch(
-				req,
-				{
-					authInfo: {
-						token,
-						clientId: azp,
-						scopes: scope.split(" "),
-						extra: { userId: sub },
-					},
+			return createMcpHandler(() =>
+				dressupServer(db, pictures, sub, baseURL),
+			).fetch(req, {
+				authInfo: {
+					token,
+					clientId: azp,
+					scopes: scope.split(" "),
+					extra: { userId: sub },
 				},
-			);
+			});
 		},
 		{ resource: mcpResource(baseURL) },
 	)(request);

@@ -15,6 +15,7 @@ import type { ColourError } from "./colour-store";
 import type { CombinationError } from "./combination-store";
 import type { BoughtError, OwnedItemError } from "./owned-item-store";
 import type { TagError } from "./tag-store";
+import { UPLOAD_ADDRESS_AGE_MS } from "./upload-address-store";
 import type { WishError } from "./wish-store";
 
 // Every refusal an AI app gets names the value it sent and what is allowed,
@@ -191,6 +192,12 @@ export function wishRefusalText(
 export const serverError = "dressup could not do this. Try again.";
 
 export const tooManyActions = "Too many actions. Wait a minute and try again.";
+
+export const addressGone =
+	"This upload address was used or has expired. get_upload_address gives a new one.";
+
+export const uploadAddressText = (address: string) =>
+	`Send the picture within ${UPLOAD_ADDRESS_AGE_MS / 60_000} minutes, once: curl -X POST --data-binary @photo.jpg ${address}. It answers with the picture's id.`;
 
 export const noTag = "No tag with this id.";
 

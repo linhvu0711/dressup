@@ -95,6 +95,7 @@ describe("tags", () => {
 			["change_shop_link", W],
 			["delete_shop_link", D],
 			["mark_shop_link_bought", D],
+			["get_upload_address", W],
 		]);
 		expect(listed.every((t) => typeof t.title === "string")).toBe(true);
 	});

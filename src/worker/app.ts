@@ -30,6 +30,7 @@ import { mannequinPartSchema } from "@/mannequin/mannequin";
 import { PICTURE_BYTES_MAX, pictureIdSchema } from "@/pictures/picture";
 import { tagIdSchema } from "@/tags/tag";
 import { disconnectAiApp, listAiApps } from "./ai-app-store";
+import { addressGone } from "./ai-messages";
 import {
 	type Auth,
 	type AuthEnvSettings,
@@ -85,6 +86,7 @@ import {
 	renameTag,
 	type TagError,
 } from "./tag-store";
+import { claimUploadAddress } from "./upload-address-store";
 import {
 	addShopLink,
 	addWish,
@@ -96,7 +98,10 @@ import {
 } from "./wish-store";
 
 type User = Auth["$Infer"]["Session"]["user"];
-type AppEnv = { Bindings: Env; Variables: { auth: Auth; user: User } };
+type AppEnv = {
+	Bindings: Env;
+	Variables: { auth: Auth; user: User; uploaderId: string };
+};
 
 // The parsed body, or the 400 that names the field: the whole zod path, as
 // `colours.sweater`. A body that is not JSON, or JSON but not an object
@@ -333,6 +338,19 @@ export function createApp(getDb: (env: Env) => Db) {
 		if (!session)
 			return c.json({ error: "unauthorized" } satisfies ErrorAnswer, 401);
 		c.set("user", session.user);
+		await next();
+	});
+
+	// The upload address is the pass: only the account's AI app was given it.
+	// The claim runs before the body is read, so any POST spends the address.
+	const claimAddress = createMiddleware<AppEnv>(async (c, next) => {
+		const userId = await claimUploadAddress(
+			getDb(c.env),
+			c.req.param("id") ?? "",
+		);
+		if (userId === null)
+			return c.json({ error: "address_gone", message: addressGone }, 410);
+		c.set("uploaderId", userId);
 		await next();
 	});
 
@@ -654,6 +672,28 @@ export function createApp(getDb: (env: Env) => Db) {
 		}
 		return c.body(null, 204);
 	});
+
+	app.post(
+		"/uploads/:id",
+		claimAddress,
+		bodyLimit({
+			maxSize: PICTURE_BYTES_MAX,
+			onError: (c) => c.json({ error: "too_large" } satisfies ErrorAnswer, 413),
+		}),
+		async (c) => {
+			const added = await addPicture(
+				getDb(c.env),
+				c.env.PICTURES,
+				c.var.uploaderId,
+				await c.req.arrayBuffer(),
+			);
+			if (!added.ok) {
+				const { status, body: refused } = pictureRefusal(added.error);
+				return c.json(refused, status);
+			}
+			return c.json({ pictureId: added.value.id }, 201);
+		},
+	);
 
 	app.get("/tags", withAuth, requireUser, async (c) =>
 		c.json({

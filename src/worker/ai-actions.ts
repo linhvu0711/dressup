@@ -50,6 +50,7 @@ import {
 	serverError,
 	tagRefusalText,
 	tooManyActions,
+	uploadAddressText,
 	wishRefusalText,
 } from "./ai-messages";
 import { addBrand, deleteBrand, listBrands, renameBrand } from "./brand-store";
@@ -75,6 +76,10 @@ import {
 } from "./owned-item-store";
 import { addTag, deleteTag, listTags, renameTag } from "./tag-store";
 import {
+	giveUploadAddress,
+	UPLOAD_ADDRESS_AGE_MS,
+} from "./upload-address-store";
+import {
 	addShopLink,
 	addWish,
 	changeShopLink,
@@ -83,7 +88,12 @@ import {
 	listWishes,
 } from "./wish-store";
 
-type Account = { db: Db; pictures: R2Bucket; userId: string };
+type Account = {
+	db: Db;
+	pictures: R2Bucket;
+	userId: string;
+	baseURL: string;
+};
 
 const READ: ToolAnnotations = { readOnlyHint: true };
 const WRITE: ToolAnnotations = { readOnlyHint: false, destructiveHint: false };
@@ -170,7 +180,7 @@ const filterRule =
 	"Filters are optional. Inside one filter any pick matches; an item must fit every filter given.";
 
 export function registerAiActions(server: McpServer, account: Account) {
-	const { db, pictures, userId } = account;
+	const { db, pictures, userId, baseURL } = account;
 
 	// An unknown value is refused, not left out: a list from a wrong id would
 	// read as a true answer.
@@ -850,6 +860,24 @@ export function registerAiActions(server: McpServer, account: Account) {
 			return bought.ok
 				? answer({ ownedItem: ownedItemView(bought.value.ownedItem) })
 				: refusal(boughtRefusalText(bought.error));
+		},
+	);
+
+	tool(
+		"get_upload_address",
+		{
+			title: "Get an upload address",
+			description: `Gives a one-time web address that takes one picture by HTTP POST, with no sign-in, for ${UPLOAD_ADDRESS_AGE_MS / 60_000} minutes. Send the bytes of a JPEG, PNG, or WebP of 1 MB or less from your code sandbox, then put the picture id it answers in pictureIds of add_owned_item, change_owned_item, add_shop_link, or change_shop_link. If the sandbox cannot reach the address, the user must let Claude reach this app's domain in Settings, Capabilities.`,
+			annotations: WRITE,
+			inputSchema: noArgs,
+		},
+		async () => {
+			const { id, expiresAt } = await giveUploadAddress(db, userId);
+			const address = `${baseURL}/api/uploads/${id}`;
+			return answer(
+				{ address, expiresAt: expiresAt.toISOString() },
+				uploadAddressText(address),
+			);
 		},
 	);
 }

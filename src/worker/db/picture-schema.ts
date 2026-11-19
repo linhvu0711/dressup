@@ -44,3 +44,17 @@ export const pictureStorage = sqliteTable("picture_storage", {
 	id: integer("id").primaryKey(),
 	bytes: integer("bytes").notNull(),
 });
+
+// One row is one address an AI app can send one picture to. The claim deletes
+// the row, so a used address has none.
+export const uploadAddress = sqliteTable(
+	"upload_address",
+	{
+		id: text("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+	},
+	(table) => [index("upload_address_userId_idx").on(table.userId)],
+);
