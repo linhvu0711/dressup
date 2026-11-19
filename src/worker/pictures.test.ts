@@ -253,6 +253,20 @@ describe("limits and the storage stop", () => {
 		});
 	});
 
+	test("refuses picture 1,001 when one is on a shop link", async () => {
+		// Given
+		const { h, headers } = await withAccount();
+		await h.seedPictures("alice-id", 999);
+		await addLink(h, headers, [await uploadedId(h, headers)]);
+		// When
+		const refused = await answer(await upload(h, headers));
+		// Then
+		expect(refused).toEqual({
+			status: 409,
+			body: { error: "account_picture_limit" },
+		});
+	});
+
 	test("stops uploads when all pictures reach 9 GB", async () => {
 		// Given
 		const { h, headers } = await withAccount();
@@ -428,6 +442,46 @@ async function addItem(h: Harness, headers: Headers, pictureIds: string[]) {
 	return id;
 }
 
+// A Navy wool jacket wish with one shop link holding these pictures.
+async function addLink(h: Harness, headers: Headers, pictureIds: string[]) {
+	const { colours } = (await (
+		await h.app.request("/api/colours", { headers }, h.env)
+	).json()) as { colours: { id: string; name: string }[] };
+	const navy = colours.find((c) => c.name === "Navy")?.id;
+	const json = {
+		...Object.fromEntries(headers),
+		"content-type": "application/json",
+	};
+	const wishId = crypto.randomUUID();
+	await h.app.request(
+		"/api/wishes",
+		{
+			method: "POST",
+			headers: json,
+			body: JSON.stringify({ id: wishId, typeId: "wool", colourId: navy }),
+		},
+		h.env,
+	);
+	const res = await h.app.request(
+		`/api/wishes/${wishId}/shop-links`,
+		{
+			method: "POST",
+			headers: json,
+			body: JSON.stringify({
+				id: crypto.randomUUID(),
+				url: "https://cos.com/jacket",
+				brandId: null,
+				name: "Wool jacket",
+				price: null,
+				pictureIds,
+			}),
+		},
+		h.env,
+	);
+	expect(res.status).toBe(201);
+	return wishId;
+}
+
 describe("drafts", () => {
 	afterEach(() => setSystemTime());
 
@@ -476,6 +530,23 @@ describe("drafts", () => {
 		expect({ loaded: loaded.status, keys: h.pictures.keys() }).toEqual({
 			loaded: 404,
 			keys: [fresh],
+		});
+	});
+
+	test("keeps a shop link's picture older than a day at the next upload", async () => {
+		// Given
+		const { h, headers } = await withAccount();
+		setSystemTime(new Date("2026-11-17T10:00:00Z"));
+		const old = await uploadedId(h, headers);
+		await addLink(h, headers, [old]);
+		setSystemTime(new Date("2026-11-18T11:00:00Z"));
+		// When
+		const fresh = await uploadedId(h, headers);
+		const loaded = await send(h, headers, "GET", `/api/pictures/${old}`);
+		// Then
+		expect({ loaded: loaded.status, keys: h.pictures.keys() }).toEqual({
+			loaded: 200,
+			keys: [fresh, old].sort(),
 		});
 	});
 

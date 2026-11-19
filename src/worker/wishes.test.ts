@@ -16,6 +16,7 @@ type Link = {
 	brand: { id: string; name: string } | null;
 	name: string;
 	price: number | null;
+	pictureIds: string[];
 };
 
 type Listed = {
@@ -112,6 +113,28 @@ const answer = async (res: Response) => ({
 	status: res.status,
 	body: await res.json(),
 });
+
+// A small JPEG uploaded as a draft of the account, by id.
+async function uploaded(h: Harness, headers: Headers): Promise<string> {
+	const body = new Uint8Array(100).fill(0x11);
+	body.set([0xff, 0xd8, 0xff, 0xe0]);
+	const res = await h.app.request(
+		"/api/pictures",
+		{
+			method: "POST",
+			headers: { ...Object.fromEntries(headers), "content-type": "image/jpeg" },
+			body,
+		},
+		h.env,
+	);
+	return ((await res.json()) as { picture: { id: string } }).picture.id;
+}
+
+const uploads = (h: Harness, headers: Headers, n: number) =>
+	Array.from({ length: n }).reduce<Promise<string[]>>(
+		async (ids) => [...(await ids), await uploaded(h, headers)],
+		Promise.resolve([]),
+	);
 
 describe("POST /api/wishes", () => {
 	test("adds a wish and lists it", async () => {
@@ -357,6 +380,7 @@ describe("POST /api/wishes/:id/shop-links", () => {
 					brand: { id: zara, name: "Zara" },
 					name: "Wool blend jacket",
 					price: 2990000,
+					pictureIds: [],
 				},
 			],
 		});
@@ -562,8 +586,8 @@ describe("shop link adds at once", () => {
 		await h.seedShopLinks("alice-id", FIRST_ID, 9);
 		// When
 		const results = await Promise.all([
-			addShopLink(h.db, "alice-id", FIRST_ID, zaraLink(null)),
-			addShopLink(h.db, "alice-id", FIRST_ID, {
+			addShopLink(h.db, h.env.PICTURES, "alice-id", FIRST_ID, zaraLink(null)),
+			addShopLink(h.db, h.env.PICTURES, "alice-id", FIRST_ID, {
 				...zaraLink(null),
 				id: OTHER_LINK_ID,
 			}),
@@ -591,6 +615,7 @@ describe("shop link adds at once", () => {
 		// When
 		const threw = await addShopLink(
 			h.db,
+			h.env.PICTURES,
 			"alice-id",
 			FIRST_ID,
 			zaraLink(null),
@@ -605,5 +630,140 @@ describe("shop link adds at once", () => {
 			links: h.accountRows("alice-id").shop_link ?? 0,
 			wishes: (await list(h, headers)).length,
 		}).toEqual({ threw: true, links: 0, wishes: 1 });
+	});
+});
+
+describe("shop link pictures", () => {
+	// Alice with the wish FIRST_ID for a Navy wool jacket.
+	async function aliceWithWish() {
+		const { h, headers, ids } = await alice();
+		await post(h, headers, jacket(ids));
+		return { h, headers };
+	}
+
+	const change = (pictureIds?: string[]) => ({
+		url: ZARA_URL,
+		brandId: null,
+		name: "Wool blend jacket",
+		price: 2990000,
+		...(pictureIds === undefined ? {} : { pictureIds }),
+	});
+
+	test("adds a shop link with its pictures and lists them", async () => {
+		// Given
+		const { h, headers } = await aliceWithWish();
+		const [a, b] = await uploads(h, headers, 2);
+		// When
+		const res = await postLink(h, headers, FIRST_ID, {
+			...zaraLink(null),
+			pictureIds: [a, b],
+		});
+		// Then
+		expect({
+			status: res.status,
+			pictureIds: (await linksOf(h, headers))?.[0]?.pictureIds,
+			keys: h.pictures.keys(),
+		}).toEqual({ status: 201, pictureIds: [a, b], keys: [a, b].sort() });
+	});
+
+	test("refuses a shop link with 9 pictures", async () => {
+		// Given
+		const { h, headers } = await aliceWithWish();
+		const nine = await uploads(h, headers, 9);
+		// When
+		const refused = await answer(
+			await postLink(h, headers, FIRST_ID, {
+				...zaraLink(null),
+				pictureIds: nine,
+			}),
+		);
+		// Then
+		expect({ refused, links: await linksOf(h, headers) }).toEqual({
+			refused: { status: 409, body: { error: "picture_limit" } },
+			links: [],
+		});
+	});
+
+	test("refuses a picture of another shop link in the list", async () => {
+		// Given
+		const { h, headers } = await aliceWithWish();
+		const [a] = await uploads(h, headers, 1);
+		await postLink(h, headers, FIRST_ID, {
+			...zaraLink(null),
+			pictureIds: [a],
+		});
+		// When
+		const refused = await answer(
+			await postLink(h, headers, FIRST_ID, {
+				...zaraLink(null),
+				id: OTHER_LINK_ID,
+				pictureIds: [a],
+			}),
+		);
+		// Then
+		expect({
+			refused,
+			pictureIds: (await linksOf(h, headers))?.map((l) => l.pictureIds),
+		}).toEqual({
+			refused: { status: 400, body: { error: "invalid", field: "pictureIds" } },
+			pictureIds: [[a]],
+		});
+	});
+
+	test("ends with the same pictures when one change is sent twice", async () => {
+		// Given
+		const { h, headers } = await aliceWithWish();
+		const [a, b, c] = await uploads(h, headers, 3);
+		await postLink(h, headers, FIRST_ID, {
+			...zaraLink(null),
+			pictureIds: [a, b],
+		});
+		// When
+		const first = await send(
+			h,
+			headers,
+			"PUT",
+			`/api/shop-links/${LINK_ID}`,
+			change([b, c]),
+		);
+		const second = await send(
+			h,
+			headers,
+			"PUT",
+			`/api/shop-links/${LINK_ID}`,
+			change([b, c]),
+		);
+		// Then
+		expect({
+			statuses: [first.status, second.status],
+			pictureIds: (await linksOf(h, headers))?.[0]?.pictureIds,
+			keys: h.pictures.keys(),
+		}).toEqual({
+			statuses: [200, 200],
+			pictureIds: [b, c],
+			keys: [b, c].sort(),
+		});
+	});
+
+	test("keeps a shop link's pictures when a change leaves pictureIds out", async () => {
+		// Given
+		const { h, headers } = await aliceWithWish();
+		const [a] = await uploads(h, headers, 1);
+		await postLink(h, headers, FIRST_ID, {
+			...zaraLink(null),
+			pictureIds: [a],
+		});
+		// When
+		const res = await send(h, headers, "PUT", `/api/shop-links/${LINK_ID}`, {
+			...change(),
+			price: 2490000,
+		});
+		// Then
+		const [link] = (await linksOf(h, headers)) ?? [];
+		expect({
+			status: res.status,
+			price: link?.price,
+			pictureIds: link?.pictureIds,
+		}).toEqual({ status: 200, price: 2490000, pictureIds: [a] });
 	});
 });

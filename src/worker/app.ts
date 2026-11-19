@@ -201,6 +201,7 @@ const shopLinkBodySchema = z.object({
 	brandId: z.string().nullable(),
 	name: z.string(),
 	price: z.number().nullable(),
+	pictureIds: z.array(z.string()).optional(),
 });
 
 function wishRefusal(error: WishError): Refusal {
@@ -213,6 +214,8 @@ function wishRefusal(error: WishError): Refusal {
 			return { status: 409, body: { error: "wish_limit" } };
 		case "shop_link_limit":
 			return { status: 409, body: { error: "shop_link_limit" } };
+		case "picture_limit":
+			return { status: 409, body: { error: "picture_limit" } };
 		case "conflict":
 			return { status: 409, body: { error: "conflict", field: "id" } };
 		case "not_found":
@@ -513,6 +516,7 @@ export function createApp(getDb: (env: Env) => Db) {
 		if ("refused" in body) return body.refused;
 		const added = await addShopLink(
 			getDb(c.env),
+			c.env.PICTURES,
 			c.var.user.id,
 			c.req.param("id"),
 			body.data,
@@ -530,6 +534,7 @@ export function createApp(getDb: (env: Env) => Db) {
 		if ("refused" in body) return body.refused;
 		const changed = await changeShopLink(
 			getDb(c.env),
+			c.env.PICTURES,
 			c.var.user.id,
 			c.req.param("id"),
 			body.data,

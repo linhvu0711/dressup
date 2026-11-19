@@ -1467,6 +1467,7 @@ describe("wishes", () => {
 		brand: { name: string } | null;
 		name: string;
 		price: number | null;
+		pictureIds: string[];
 	};
 	type Listed = { id: string; typeId: string; shopLinks: Link[] };
 
@@ -1519,6 +1520,7 @@ describe("wishes", () => {
 						brand: null,
 						name: "Wool jacket",
 						price: 4290000,
+						pictureIds: [],
 					},
 				],
 			},

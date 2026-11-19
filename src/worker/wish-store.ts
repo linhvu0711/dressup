@@ -21,6 +21,11 @@ import { user } from "./db/auth-schema";
 import { brand } from "./db/brand-schema";
 import { colour } from "./db/colour-schema";
 import { shopLink, wish } from "./db/wish-schema";
+import {
+	type PictureListError,
+	pictureIdsBy,
+	saveWithPictures,
+} from "./picture-store";
 import type { Result } from "./result";
 
 export type WishField =
@@ -31,6 +36,7 @@ export type WishField =
 	| "brandId"
 	| "name"
 	| "price"
+	| "pictureIds"
 	| "body";
 
 export type WishError =
@@ -38,6 +44,7 @@ export type WishError =
 	| { code: "duplicate"; id: WishId }
 	| { code: "wish_limit" }
 	| { code: "shop_link_limit" }
+	| { code: "picture_limit" }
 	| { code: "conflict" }
 	| { code: "not_found" };
 
@@ -90,6 +97,7 @@ async function readShopLinks(
 	wishId?: string,
 ): Promise<Map<string, ShopLink[]>> {
 	const byWish = new Map<string, ShopLink[]>();
+	const pictures = await pictureIdsBy(db, userId, "shopLinkId");
 	const rows = await db
 		.select({
 			id: shopLink.id,
@@ -119,6 +127,7 @@ async function readShopLinks(
 					: { id: row.brandId as BrandId, name: row.brandName },
 			name: row.name,
 			price: row.price,
+			pictureIds: pictures.get(row.id) ?? [],
 		};
 		const held = byWish.get(row.wishId);
 		if (held) held.push(link);
@@ -137,6 +146,7 @@ const FIELDS: readonly WishField[] = [
 	"brandId",
 	"name",
 	"price",
+	"pictureIds",
 ];
 
 const isField = (key: unknown): key is WishField =>
@@ -156,6 +166,17 @@ function invalid(
 			: undefined;
 	return { ok: false, error: { code: "invalid", field: key, value } };
 }
+
+const listRefusal = (
+	error: PictureListError,
+	ids: string[] | undefined,
+): { ok: false; error: WishError } =>
+	error.code === "picture_limit"
+		? { ok: false, error: { code: "picture_limit" } }
+		: {
+				ok: false,
+				error: { code: "invalid", field: "pictureIds", value: ids },
+			};
 
 const samePiece = (userId: string, piece: Piece) =>
 	and(
@@ -288,6 +309,7 @@ const linksOfWish = (db: Db, wishId: string) =>
 // them.
 export async function addShopLink(
 	db: Db,
+	bucket: R2Bucket,
 	userId: string,
 	wishId: string,
 	draft: unknown,
@@ -308,36 +330,60 @@ export async function addShopLink(
 			? { ok: true, value: { wish: held, created: false } }
 			: conflict;
 	}
-	await db
-		.insert(shopLink)
-		.select(
-			db
-				.select({
-					id: sql<string>`${input.id}`.as("id"),
-					userId: wish.userId,
-					wishId: wish.id,
-					url: sql<string>`${input.url}`.as("url"),
-					brandId: sql<string | null>`${input.brandId}`.as("brand_id"),
-					name: sql<string>`${input.name}`.as("name"),
-					price: sql<number | null>`${input.price}`.as("price"),
-					createdAt:
-						sql<number>`(cast(unixepoch('subsecond') * 1000 as integer))`.as(
-							"created_at",
+	// Only this account's new link on this wish takes the pictures, so a
+	// conflict or a refused insert attaches none.
+	const saved = await saveWithPictures(
+		db,
+		bucket,
+		{
+			userId,
+			owner: { shopLinkId: input.id },
+			ids: input.pictureIds,
+			itemHeld: exists(
+				db
+					.select({ one: sql`1` })
+					.from(shopLink)
+					.where(
+						and(
+							eq(shopLink.id, input.id),
+							eq(shopLink.userId, userId),
+							eq(shopLink.wishId, wishId),
 						),
-				})
-				.from(wish)
-				.where(
-					and(
-						eq(wish.id, wishId),
-						eq(wish.userId, userId),
-						input.brandId === null
-							? undefined
-							: exists(brandOf(db, userId, input.brandId)),
-						sql`(${linksOfWish(db, wishId)}) < ${SHOP_LINK_LIMIT}`,
 					),
-				),
-		)
-		.onConflictDoNothing();
+			),
+		},
+		db
+			.insert(shopLink)
+			.select(
+				db
+					.select({
+						id: sql<string>`${input.id}`.as("id"),
+						userId: wish.userId,
+						wishId: wish.id,
+						url: sql<string>`${input.url}`.as("url"),
+						brandId: sql<string | null>`${input.brandId}`.as("brand_id"),
+						name: sql<string>`${input.name}`.as("name"),
+						price: sql<number | null>`${input.price}`.as("price"),
+						createdAt:
+							sql<number>`(cast(unixepoch('subsecond') * 1000 as integer))`.as(
+								"created_at",
+							),
+					})
+					.from(wish)
+					.where(
+						and(
+							eq(wish.id, wishId),
+							eq(wish.userId, userId),
+							input.brandId === null
+								? undefined
+								: exists(brandOf(db, userId, input.brandId)),
+							sql`(${linksOfWish(db, wishId)}) < ${SHOP_LINK_LIMIT}`,
+						),
+					),
+			)
+			.onConflictDoNothing(),
+	);
+	if (!saved.ok) return listRefusal(saved.error, input.pictureIds);
 	const [added] = await db
 		.select({ wishId: shopLink.wishId })
 		.from(shopLink)
@@ -379,6 +425,7 @@ async function refusedLink(
 // check sits in the update itself, as in the add.
 export async function changeShopLink(
 	db: Db,
+	bucket: R2Bucket,
 	userId: string,
 	id: string,
 	draft: unknown,
@@ -386,20 +433,45 @@ export async function changeShopLink(
 	const parsed = shopLinkChangeSchema.safeParse(draft);
 	if (!parsed.success)
 		return invalid(draft, parsed.error.issues[0]?.path ?? []);
-	const input = parsed.data;
-	const [row] = await db
-		.update(shopLink)
-		.set(input)
-		.where(
-			and(
-				eq(shopLink.id, id),
-				eq(shopLink.userId, userId),
-				input.brandId === null
-					? undefined
-					: exists(brandOf(db, userId, input.brandId)),
+	const { pictureIds, ...input } = parsed.data;
+	const saved = await saveWithPictures(
+		db,
+		bucket,
+		{
+			userId,
+			owner: { shopLinkId: id },
+			ids: pictureIds,
+			// The brand is the new one only when the update wrote, since it runs
+			// first in the batch; a refused change attaches and drops nothing.
+			itemHeld: exists(
+				db
+					.select({ one: sql`1` })
+					.from(shopLink)
+					.where(
+						and(
+							eq(shopLink.id, id),
+							eq(shopLink.userId, userId),
+							sql`${shopLink.brandId} is ${input.brandId}`,
+						),
+					),
 			),
-		)
-		.returning({ wishId: shopLink.wishId });
+		},
+		db
+			.update(shopLink)
+			.set(input)
+			.where(
+				and(
+					eq(shopLink.id, id),
+					eq(shopLink.userId, userId),
+					input.brandId === null
+						? undefined
+						: exists(brandOf(db, userId, input.brandId)),
+				),
+			)
+			.returning({ wishId: shopLink.wishId }),
+	);
+	if (!saved.ok) return listRefusal(saved.error, pictureIds);
+	const [row] = saved.value;
 	if (row) {
 		const [held] = await readWishes(db, userId, row.wishId);
 		if (held) return { ok: true, value: held };

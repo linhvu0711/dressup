@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TYPE_IDS } from "@/dress/clothing-types";
 import { brandSchema } from "@/labels/brand";
 import { colourSchema } from "@/labels/colour";
+import { pictureIdSchema } from "@/pictures/picture";
 
 export const WISH_LIMIT = 200;
 
@@ -55,6 +56,9 @@ export const shopLinkInputSchema = z.object({
 	brandId: z.string().nullable(),
 	name: z.string().trim().min(1).max(SHOP_LINK_NAME_MAX),
 	price: priceSchema,
+	// The whole list; left out keeps the link's pictures, so an AI app that
+	// sends none keeps them.
+	pictureIds: z.array(z.string()).optional(),
 });
 
 export const shopLinkChangeSchema = shopLinkInputSchema.omit({ id: true });
@@ -65,6 +69,8 @@ export const shopLinkSchema = z.object({
 	brand: brandSchema.nullable(),
 	name: z.string(),
 	price: z.number().int().nullable(),
+	// In the order they were uploaded.
+	pictureIds: z.array(pictureIdSchema),
 });
 
 export type ShopLink = z.infer<typeof shopLinkSchema>;

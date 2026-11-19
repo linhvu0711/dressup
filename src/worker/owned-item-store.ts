@@ -21,7 +21,7 @@ import { ownedItem } from "./db/owned-item-schema";
 import {
 	deleteWithPictures,
 	type PictureListError,
-	pictureIdsByItem,
+	pictureIdsBy,
 	saveWithPictures,
 } from "./picture-store";
 import type { Result } from "./result";
@@ -75,7 +75,7 @@ async function readOwnedItems(
 		)
 		// Two adds in one millisecond share created_at; rowid keeps their order.
 		.orderBy(desc(ownedItem.createdAt), desc(sql`${ownedItem}.rowid`));
-	const pictures = await pictureIdsByItem(db, userId, id);
+	const pictures = await pictureIdsBy(db, userId, "ownedItemId", id);
 	return rows.map((row) => ({
 		id: row.id as OwnedItemId,
 		typeId: row.typeId,
@@ -188,7 +188,7 @@ export async function addOwnedItem(
 	// a conflict or a refused insert attaches none.
 	const pictures = {
 		userId,
-		ownedItemId: input.id,
+		owner: { ownedItemId: input.id },
 		ids: input.pictureIds,
 		itemHeld: exists(
 			db
@@ -306,7 +306,7 @@ export async function changeOwnedItem(
 		bucket,
 		{
 			userId,
-			ownedItemId: id,
+			owner: { ownedItemId: id },
 			ids: pictureIds,
 			// The brand is the new one only when the update wrote, since it runs
 			// first in the batch; a refused change attaches and drops nothing.

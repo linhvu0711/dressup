@@ -145,6 +145,7 @@ function wishFieldText(error: Extract<WishError, { code: "invalid" }>): string {
 		case "brandId":
 			return notYourBrand(error.value);
 		case "id":
+		case "pictureIds":
 		case "body":
 			return serverError;
 	}
@@ -165,6 +166,8 @@ export function wishRefusalText(
 			return `You have ${WISH_LIMIT} wishes. That is the limit. Delete one to add a new one.`;
 		case "shop_link_limit":
 			return `${SHOP_LINK_LIMIT} shop links is the limit for one wish.`;
+		case "picture_limit":
+			return `A shop link has at most ${ITEM_PICTURE_LIMIT} pictures.`;
 		case "not_found":
 			return `No ${subject} with this id.`;
 		case "conflict":

@@ -327,6 +327,7 @@ test("shows an address that is not http as text", async ({ page }) => {
 								brand: null,
 								name: "Odd link",
 								price: null,
+								pictureIds: [],
 							},
 						],
 					},

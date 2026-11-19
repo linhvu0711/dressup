@@ -781,7 +781,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 			}),
 		},
 		async ({ wishId, url, brandId = null, name, price = null }) => {
-			const added = await addShopLink(db, userId, wishId, {
+			const added = await addShopLink(db, pictures, userId, wishId, {
 				id: crypto.randomUUID(),
 				url,
 				brandId,
@@ -807,7 +807,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 			}),
 		},
 		async ({ id, url, brandId = null, name, price = null }) => {
-			const changed = await changeShopLink(db, userId, id, {
+			const changed = await changeShopLink(db, pictures, userId, id, {
 				url,
 				brandId,
 				name,

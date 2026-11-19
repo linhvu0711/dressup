@@ -44,6 +44,23 @@ export type PictureError =
 	| { code: "storage_full" }
 	| { code: "not_found" };
 
+// The one owner of a saved picture.
+export type PictureOwner = { ownedItemId: string } | { shopLinkId: string };
+
+const ownerIs = (owner: PictureOwner) =>
+	"ownedItemId" in owner
+		? eq(picture.ownedItemId, owner.ownedItemId)
+		: eq(picture.shopLinkId, owner.shopLinkId);
+
+// Both keys, so a picture never keeps a second owner.
+const ownedBy = (owner: PictureOwner) => ({
+	ownedItemId: null,
+	shopLinkId: null,
+	...owner,
+});
+
+const isDraft = and(isNull(picture.ownedItemId), isNull(picture.shopLinkId));
+
 type PictureKind = "image/jpeg" | "image/png" | "image/webp";
 
 const startsWith = (bytes: Uint8Array, head: number[], at = 0) =>
@@ -124,8 +141,7 @@ async function runWithPictures(
 	};
 }
 
-const drafts = (userId: string) =>
-	and(eq(picture.userId, userId), isNull(picture.ownedItemId));
+const drafts = (userId: string) => and(eq(picture.userId, userId), isDraft);
 
 async function sweepDrafts(db: Db, bucket: R2Bucket, userId: string) {
 	await runWithPictures(db, bucket, {
@@ -168,6 +184,7 @@ export async function addPicture(
 						id: sql<string>`${id}`.as("id"),
 						userId: user.id,
 						ownedItemId: sql<null>`null`.as("owned_item_id"),
+						shopLinkId: sql<null>`null`.as("shop_link_id"),
 						bytes: sql<number>`${size}`.as("bytes"),
 						// A select gets no column encoder, and bun:sqlite binds a Date as
 						// null, so the time goes as a number.
@@ -299,34 +316,34 @@ export async function deleteDraft(
 		: { ok: false, error: { code: "not_found" } };
 }
 
-// The saved pictures of the account's items, or of one item, each list in
-// the order of upload; drafts never show.
-export async function pictureIdsByItem(
+// The saved pictures of the account's items or links, or of one owner, each
+// list in the order of upload; drafts never show.
+export async function pictureIdsBy(
 	db: Db,
 	userId: string,
-	ownedItemId?: string,
+	column: "ownedItemId" | "shopLinkId",
+	id?: string,
 ): Promise<Map<string, PictureId[]>> {
+	const owner = picture[column];
 	const rows = await db
-		.select({ id: picture.id, ownedItemId: picture.ownedItemId })
+		.select({ id: picture.id, owner })
 		.from(picture)
 		.where(
 			and(
 				eq(picture.userId, userId),
-				ownedItemId === undefined
-					? isNotNull(picture.ownedItemId)
-					: eq(picture.ownedItemId, ownedItemId),
+				id === undefined ? isNotNull(owner) : eq(owner, id),
 			),
 		)
 		// Two uploads in one millisecond share created_at; rowid keeps their order.
 		.orderBy(asc(picture.createdAt), asc(sql`${picture}.rowid`));
-	const byItem = new Map<string, PictureId[]>();
+	const byOwner = new Map<string, PictureId[]>();
 	for (const row of rows) {
-		if (row.ownedItemId === null) continue;
-		const ids = byItem.get(row.ownedItemId) ?? [];
+		if (row.owner === null) continue;
+		const ids = byOwner.get(row.owner) ?? [];
 		ids.push(row.id as PictureId);
-		byItem.set(row.ownedItemId, ids);
+		byOwner.set(row.owner, ids);
 	}
-	return byItem;
+	return byOwner;
 }
 
 const pictureIdsSchema = z.array(pictureIdSchema);
@@ -335,7 +352,7 @@ const pictureIdsSchema = z.array(pictureIdSchema);
 async function checkPictureList(
 	db: Db,
 	userId: string,
-	ownedItemId: string,
+	owner: PictureOwner,
 	ids: string[],
 ): Promise<PictureListError | null> {
 	const invalid = { code: "invalid", field: "pictureIds" } as const;
@@ -353,7 +370,7 @@ async function checkPictureList(
 			and(
 				eq(picture.userId, userId),
 				inArray(picture.id, ids),
-				or(isNull(picture.ownedItemId), eq(picture.ownedItemId, ownedItemId)),
+				or(isDraft, ownerIs(owner)),
 			),
 		);
 	return held?.n === ids.length ? null : invalid;
@@ -361,7 +378,7 @@ async function checkPictureList(
 
 export type PictureListSave = {
 	userId: string;
-	ownedItemId: string;
+	owner: PictureOwner;
 	// The whole list; undefined keeps the owner's pictures.
 	ids: string[] | undefined;
 	// The caller's exists on its own row as the owner write left it, so a
@@ -376,27 +393,24 @@ export type PictureListSave = {
 export async function saveWithPictures<T extends Statement>(
 	db: Db,
 	bucket: R2Bucket,
-	{ userId, ownedItemId, ids, itemHeld }: PictureListSave,
-	owner: T,
+	{ userId, owner, ids, itemHeld }: PictureListSave,
+	ownerWrite: T,
 ): Promise<Result<Awaited<T>, PictureListError>> {
 	if (ids === undefined)
-		return { ok: true, value: (await owner) as Awaited<T> };
-	const refused = await checkPictureList(db, userId, ownedItemId, ids);
+		return { ok: true, value: (await ownerWrite) as Awaited<T> };
+	const refused = await checkPictureList(db, userId, owner, ids);
 	if (refused) return { ok: false, error: refused };
 	const { before } = await runWithPictures(db, bucket, {
 		before: [
-			owner,
+			ownerWrite,
 			db
 				.update(picture)
-				.set({ ownedItemId })
+				.set(ownedBy(owner))
 				.where(
 					and(
 						eq(picture.userId, userId),
 						inArray(picture.id, ids),
-						or(
-							isNull(picture.ownedItemId),
-							eq(picture.ownedItemId, ownedItemId),
-						),
+						or(isDraft, ownerIs(owner)),
 						itemHeld,
 					),
 				),
@@ -405,7 +419,7 @@ export async function saveWithPictures<T extends Statement>(
 			db,
 			and(
 				eq(picture.userId, userId),
-				eq(picture.ownedItemId, ownedItemId),
+				ownerIs(owner),
 				notInArray(picture.id, ids),
 				itemHeld,
 			),
