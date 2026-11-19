@@ -89,19 +89,32 @@ const wishlist = async (h: Harness, headers: Headers) =>
 const buy = (h: Harness, headers: Headers, linkId: string) =>
 	send(h, headers, "POST", `/api/shop-links/${linkId}/bought`);
 
+const uploads = async (h: Harness, headers: Headers, n: number) => {
+	const ids: string[] = [];
+	for (let i = 0; i < n; i++) ids.push(await uploaded(h, headers));
+	return ids;
+};
+
 const FIRST_ID = "11111111-1111-4111-8111-111111111111";
+const ITEM_ID = "22222222-2222-4222-8222-222222222222";
 const LINK_ID = "33333333-3333-4333-8333-333333333333";
 const OTHER_LINK_ID = "44444444-4444-4444-8444-444444444444";
 const ZARA_URL = "https://www.zara.com/vn/en/wool-blend-jacket.html";
 
-// Alice with the brand COS and the wish FIRST_ID for a Navy wool jacket:
-// LINK_ID is a COS link with the pictures a and b, OTHER_LINK_ID a Zara
-// link with no brand and the picture c.
-async function aliceWithLinks(h: Harness, headers: Headers) {
+type Account = { h: Harness; headers: Headers; ids: Ids; cos: string };
+
+async function account(): Promise<Account> {
+	const h = await makeHarness();
+	const headers = await h.addAccount(ALICE);
 	const ids = await colourIds(h, headers);
-	const cos = await addBrand(h, headers, "COS");
-	const a = await uploaded(h, headers);
-	const b = await uploaded(h, headers);
+	return { h, headers, ids, cos: await addBrand(h, headers, "COS") };
+}
+
+// The wish FIRST_ID for a Navy wool jacket: LINK_ID is a COS link with
+// `linkPictures` uploads, OTHER_LINK_ID a Zara link with no brand and the
+// picture c.
+async function withLinks({ h, headers, ids, cos }: Account, linkPictures = 2) {
+	const link = await uploads(h, headers, linkPictures);
 	const c = await uploaded(h, headers);
 	await send(h, headers, "POST", "/api/wishes", {
 		id: FIRST_ID,
@@ -114,7 +127,7 @@ async function aliceWithLinks(h: Harness, headers: Headers) {
 		brandId: cos,
 		name: "Wool jacket",
 		price: 4290000,
-		pictureIds: [a, b],
+		pictureIds: link,
 	});
 	await send(h, headers, "POST", `/api/wishes/${FIRST_ID}/shop-links`, {
 		id: OTHER_LINK_ID,
@@ -124,13 +137,46 @@ async function aliceWithLinks(h: Harness, headers: Headers) {
 		price: 2990000,
 		pictureIds: [c],
 	});
-	return { ids, cos, a, b, c };
+	return { link, c };
 }
 
+// The owned item ITEM_ID, a Navy wool jacket of COS, with `pictures` uploads.
+async function withItem(
+	{ h, headers, ids, cos }: Account,
+	quantity: number,
+	pictures: number,
+) {
+	const itemPictures = await uploads(h, headers, pictures);
+	await send(h, headers, "POST", "/api/owned-items", {
+		id: ITEM_ID,
+		typeId: "wool",
+		colourId: ids.Navy,
+		brandId: cos,
+		quantity,
+		pictureIds: itemPictures,
+	});
+	return itemPictures;
+}
+
+// Alice with the brand COS and the two links, LINK_ID holding a and b.
 async function alice() {
-	const h = await makeHarness();
-	const headers = await h.addAccount(ALICE);
-	return { h, headers, ...(await aliceWithLinks(h, headers)) };
+	const owner = await account();
+	const {
+		link: [a = "", b = ""],
+		c,
+	} = await withLinks(owner);
+	return { ...owner, a, b, c };
+}
+
+// Alice with the COS item ITEM_ID holding d and e, uploaded before the links.
+async function aliceWithItem(quantity = 1) {
+	const owner = await account();
+	const [d = "", e = ""] = await withItem(owner, quantity, 2);
+	const {
+		link: [a = "", b = ""],
+		c,
+	} = await withLinks(owner);
+	return { ...owner, a, b, c, d, e };
 }
 
 describe("POST /api/shop-links/:id/bought", () => {
@@ -197,6 +243,71 @@ describe("POST /api/shop-links/:id/bought", () => {
 		}).toEqual({
 			res: { status: 404, body: { error: "not_found" } },
 			links: [LINK_ID, OTHER_LINK_ID],
+		});
+	});
+
+	test("adds 1 to the item of the same piece and brand", async () => {
+		// Given
+		const { h, headers, a, b, d, e } = await aliceWithItem();
+		// When
+		const res = await buy(h, headers, LINK_ID);
+		const { ownedItem } = (await res.json()) as { ownedItem: Item };
+		// Then
+		expect({
+			status: res.status,
+			item: { id: ownedItem.id, quantity: ownedItem.quantity },
+			pictureIds: ownedItem.pictureIds,
+			items: (await closet(h, headers)).length,
+			keys: h.pictures.keys(),
+		}).toEqual({
+			status: 200,
+			item: { id: ITEM_ID, quantity: 2 },
+			pictureIds: [d, e, a, b],
+			items: 1,
+			keys: [a, b, d, e].sort(),
+		});
+	});
+
+	test("keeps 8 pictures on the item and deletes the rest", async () => {
+		// Given
+		const owner = await account();
+		const item = await withItem(owner, 1, 6);
+		const { link } = await withLinks(owner, 3);
+		const { h, headers } = owner;
+		// When
+		const res = await buy(h, headers, LINK_ID);
+		const { ownedItem } = (await res.json()) as { ownedItem: Item };
+		// Then
+		expect({
+			status: res.status,
+			pictureIds: ownedItem.pictureIds,
+			keys: h.pictures.keys(),
+		}).toEqual({
+			status: 200,
+			pictureIds: [...item, ...link.slice(0, 2)],
+			keys: [...item, ...link.slice(0, 2)].sort(),
+		});
+	});
+
+	test("refuses Bought at 99 of one item", async () => {
+		// Given
+		const { h, headers, a, b, c, d, e } = await aliceWithItem(99);
+		// When
+		const res = await answer(await buy(h, headers, LINK_ID));
+		// Then
+		expect({
+			res,
+			items: (await closet(h, headers)).map((i) => ({
+				quantity: i.quantity,
+				pictureIds: i.pictureIds,
+			})),
+			links: (await wishlist(h, headers))[0]?.shopLinks.map((l) => l.id),
+			keys: h.pictures.keys(),
+		}).toEqual({
+			res: { status: 409, body: { error: "quantity_limit" } },
+			items: [{ quantity: 99, pictureIds: [d, e] }],
+			links: [LINK_ID, OTHER_LINK_ID],
+			keys: [a, b, c, d, e].sort(),
 		});
 	});
 });
