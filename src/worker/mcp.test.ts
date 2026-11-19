@@ -47,7 +47,7 @@ describe("/api/mcp", () => {
 		});
 	});
 
-	test("lists the garments and modes to a connected AI app", async () => {
+	test("lists the types to a connected AI app", async () => {
 		// Given: initialize and notifications/initialized sent
 		const { h, bearer } = await withAiApp();
 		await post(h, INITIALIZE, bearer);
@@ -66,13 +66,7 @@ describe("/api/mcp", () => {
 		const called = await message<{
 			result: {
 				structuredContent: {
-					garments: { id: string; name: string; jacket: boolean }[];
-					modes: {
-						id: string;
-						name: string;
-						weatherGroup: string;
-						garments: string[];
-					}[];
+					types: { id: string; name: string; layer: string }[];
 				};
 			};
 		}>(
@@ -82,37 +76,24 @@ describe("/api/mcp", () => {
 					jsonrpc: "2.0",
 					id: 3,
 					method: "tools/call",
-					params: { name: "list_garments_and_modes", arguments: {} },
+					params: { name: "list_types", arguments: {} },
 				},
 				session,
 			),
 		);
 		// Then
-		const { garments, modes } = called.result.structuredContent;
-		const tool = listed.result.tools.find(
-			(t) => t.name === "list_garments_and_modes",
-		);
+		const { types } = called.result.structuredContent;
+		const tool = listed.result.tools.find((t) => t.name === "list_types");
 		expect({
 			listed: tool !== undefined,
 			readOnly: tool?.annotations?.readOnlyHint,
-			garments: garments.length,
-			modes: modes.length,
-			firstGarment: garments[0],
-			jackets: garments.filter((g) => g.jacket).map((g) => g.id),
-			firstMode: modes[0],
+			types: types.length,
+			firstType: types[0],
 		}).toEqual({
 			listed: true,
 			readOnly: true,
-			garments: 17,
-			modes: 23,
-			firstGarment: { id: "tee_s", name: "Short tee", jacket: false },
-			jackets: ["harrington", "wool"],
-			firstMode: {
-				id: "tee-casual-shorts",
-				name: "Tee + casual shorts",
-				weatherGroup: "Hot",
-				garments: ["casual_sh", "tee_s"],
-			},
+			types: 17,
+			firstType: { id: "tee_s", name: "Short tee", layer: "inner_top" },
 		});
 	});
 

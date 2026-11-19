@@ -13,10 +13,7 @@ import type {
 	ColoursAnswer,
 	CombinationAnswer,
 	CombinationsAnswer,
-	DressAnswer,
 	ErrorAnswer,
-	LookAnswer,
-	LooksAnswer,
 	MannequinAnswer,
 	MeAnswer,
 	OwnedItemAnswer,
@@ -27,7 +24,6 @@ import type {
 	WishAnswer,
 	WishesAnswer,
 } from "@/data/contract";
-import { type DressError, dressChangeSchema } from "@/dress/state";
 import { brandIdSchema } from "@/labels/brand";
 import { colourIdSchema } from "@/labels/colour";
 import { mannequinPartSchema } from "@/mannequin/mannequin";
@@ -64,14 +60,6 @@ import {
 } from "./combination-store";
 import type { Db } from "./db";
 import { user } from "./db/auth-schema";
-import { changeDress, loadDress } from "./dress-store";
-import {
-	changeLook,
-	deleteLook,
-	type LookError,
-	listLooks,
-	saveLook,
-} from "./look-store";
 import { loadMannequin, setMannequinColour } from "./mannequin-store";
 import { mcpRoute } from "./mcp";
 import {
@@ -141,38 +129,6 @@ type Refusal = {
 	status: ContentfulStatusCode;
 	body: ErrorAnswer;
 };
-
-// Only the JSON shape: the Looks module runs the look rules.
-const lookBodySchema = z.object({
-	id: z.string(),
-	modeId: z.string(),
-	name: z.string(),
-	colours: z.record(z.string(), z.string()),
-	open: z.array(z.string()),
-	tags: z.array(z.string()).default([]),
-});
-
-function lookRefusal(error: LookError): Refusal {
-	switch (error.code) {
-		case "not_in_mode":
-		case "no_colour":
-		case "name_too_long":
-		case "too_many_tags":
-		case "invalid":
-			return {
-				status: 400,
-				body: { error: "invalid", field: issueField(error.path) },
-			};
-		case "conflict":
-			return { status: 409, body: { error: "conflict", field: "id" } };
-		case "look_limit":
-			return { status: 409, body: { error: "look_limit" } };
-		case "not_found":
-			return { status: 404, body: { error: "not_found" } };
-		case "moved":
-			return { status: 409, body: { error: "conflict" } };
-	}
-}
 
 // Only the JSON shape: the Combinations module runs the combination rules.
 const combinationBodySchema = z.object({
@@ -278,11 +234,6 @@ function pictureRefusal(error: PictureError): Refusal {
 			return { status: 404, body: { error: "not_found" } };
 	}
 }
-
-const dressRefusals: Record<DressError["code"], Refusal> = {
-	not_in_row: { status: 400, body: { error: "not_in_row", field: "hex" } },
-	last_square: { status: 400, body: { error: "last_square", field: "hex" } },
-};
 
 // The website answers every bad field with "invalid"; the contract
 // (src/react-app/data/contract.ts) names every code it sends.
@@ -418,83 +369,6 @@ export function createApp(getDb: (env: Env) => Db) {
 		return c.body(null, 204);
 	});
 
-	app.get("/dress", withAuth, requireUser, async (c) =>
-		c.json(
-			(await loadDress(getDb(c.env), c.var.user.id))
-				.state satisfies DressAnswer,
-		),
-	);
-
-	app.post("/dress/changes", withAuth, requireUser, async (c) => {
-		const body = await readBody(c, dressChangeSchema);
-		if ("refused" in body) return body.refused;
-		const result = await changeDress(getDb(c.env), c.var.user.id, body.data);
-		if (!result.ok) {
-			const { status, body } = dressRefusals[result.error.code];
-			return c.json(body, status);
-		}
-		return c.body(null, 204);
-	});
-
-	app.get("/looks", withAuth, requireUser, async (c) =>
-		c.json({
-			looks: await listLooks(getDb(c.env), c.var.user.id),
-		} satisfies LooksAnswer),
-	);
-
-	app.post("/looks", withAuth, requireUser, async (c) => {
-		const body = await readBody(c, lookBodySchema);
-		if ("refused" in body) return body.refused;
-		const saved = await saveLook(getDb(c.env), c.var.user.id, body.data);
-		if (!saved.ok) {
-			const { status, body: refused } = lookRefusal(saved.error);
-			return c.json(refused, status);
-		}
-		const { look, created, tagsLeftOff } = saved.value;
-		return c.json(
-			{ look, tagsLeftOff } satisfies LookAnswer,
-			created ? 201 : 200,
-		);
-	});
-
-	// A gone look and another account's look answer the same 404, so ids of
-	// other accounts cannot be told from missing ones.
-	app.put("/looks/:id", withAuth, requireUser, async (c) => {
-		const body = await readBody(c, lookBodySchema);
-		if ("refused" in body) return body.refused;
-		const id = c.req.param("id");
-		if (body.data.id !== id)
-			return c.json(
-				{ error: "invalid", field: "id" } satisfies ErrorAnswer,
-				400,
-			);
-		const changed = await changeLook(
-			getDb(c.env),
-			c.var.user.id,
-			id,
-			body.data,
-		);
-		if (!changed.ok) {
-			const { status, body: refused } = lookRefusal(changed.error);
-			return c.json(refused, status);
-		}
-		const { look, tagsLeftOff } = changed.value;
-		return c.json({ look, tagsLeftOff } satisfies LookAnswer, 200);
-	});
-
-	app.delete("/looks/:id", withAuth, requireUser, async (c) => {
-		const deleted = await deleteLook(
-			getDb(c.env),
-			c.var.user.id,
-			c.req.param("id"),
-		);
-		if (!deleted.ok) {
-			const { status, body: refused } = lookRefusal(deleted.error);
-			return c.json(refused, status);
-		}
-		return c.body(null, 204);
-	});
-
 	app.get("/combinations", withAuth, requireUser, async (c) =>
 		c.json({
 			combinations: await listCombinations(getDb(c.env), c.var.user.id),
@@ -516,8 +390,8 @@ export function createApp(getDb: (env: Env) => Db) {
 		);
 	});
 
-	// A gone combination and another account's answer the same 404, as looks
-	// do.
+	// A gone combination and another account's combination answer the same
+	// 404, so ids of other accounts cannot be told from missing ones.
 	app.put("/combinations/:id", withAuth, requireUser, async (c) => {
 		const body = await readBody(c, combinationBodySchema);
 		if ("refused" in body) return body.refused;
@@ -898,7 +772,7 @@ export function createApp(getDb: (env: Env) => Db) {
 		return c.json({ tag: added.value } satisfies TagAnswer, 201);
 	});
 
-	// A gone tag and another account's tag answer the same 404, as looks do.
+	// A gone tag and another account's tag answer the same 404, as combinations do.
 	app.put("/tags/:id", withAuth, requireUser, async (c) => {
 		const body = await readBody(
 			c,
@@ -936,7 +810,7 @@ export function createApp(getDb: (env: Env) => Db) {
 		return c.body(null, 204);
 	});
 
-	// A gone allow and another account's allow answer the same 404, as looks do.
+	// A gone allow and another account's allow answer the same 404, as combinations do.
 	app.delete("/ai-apps/:id", withAuth, requireUser, async (c) => {
 		const disconnected = await disconnectAiApp(
 			getDb(c.env),

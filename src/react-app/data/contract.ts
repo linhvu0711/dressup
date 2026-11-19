@@ -2,10 +2,8 @@ import { z } from "zod";
 import { aiAppSchema } from "@/ai-apps/ai-app";
 import { ownedItemSchema } from "@/closet/owned-item";
 import { combinationSchema } from "@/combinations/combination";
-import { dressStateSchema } from "@/dress/state";
 import { brandSchema, listedBrandSchema } from "@/labels/brand";
 import { colourSchema, listedColourSchema } from "@/labels/colour";
-import { lookSchema } from "@/looks/look";
 import { mannequinSchema } from "@/mannequin/mannequin";
 import { pictureIdSchema } from "@/pictures/picture";
 import { listedTagSchema, tagSchema } from "@/tags/tag";
@@ -18,10 +16,7 @@ export const errorCodes = [
 	"unauthorized",
 	"invalid",
 	"conflict",
-	"look_limit",
 	"not_found",
-	"not_in_row",
-	"last_square",
 	"duplicate",
 	"colour_limit",
 	"brand_limit",
@@ -45,17 +40,6 @@ export const errorAnswer = z.object({
 });
 
 export type ErrorAnswer = z.input<typeof errorAnswer>;
-
-export const looksAnswer = z.object({ looks: z.array(lookSchema) });
-
-export type LooksAnswer = z.input<typeof looksAnswer>;
-
-export const lookAnswer = z.object({
-	look: lookSchema,
-	tagsLeftOff: z.array(z.string()),
-});
-
-export type LookAnswer = z.input<typeof lookAnswer>;
 
 export const tagsAnswer = z.object({ tags: z.array(listedTagSchema) });
 
@@ -135,9 +119,3 @@ export const meAnswer = z.object({
 });
 
 export type MeAnswer = z.input<typeof meAnswer>;
-
-export const dressAnswer = dressStateSchema;
-
-// dressStateSchema is typed z.ZodType<DressState>, whose input type is
-// unknown, so the output type is the one that checks the sender.
-export type DressAnswer = z.output<typeof dressAnswer>;

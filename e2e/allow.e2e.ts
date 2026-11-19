@@ -43,7 +43,7 @@ test.describe("Allow page", () => {
 		await expect(page.getByRole("img", { name: "Test App" })).toBeVisible();
 		await expect(
 			page.getByText(
-				"Test App wants to see and change your outfit, colours, brands, looks, combinations, closet, wishlist, and tags.",
+				"Test App wants to see and change your colours, brands, combinations, closet, wishlist, and tags.",
 			),
 		).toBeVisible();
 		await expect(page.getByRole("button", { name: "Cancel" })).toBeVisible();

@@ -123,3 +123,19 @@ describe("PUT /api/mannequin/:part", () => {
 		});
 	});
 });
+
+describe("the old dress and looks routes", () => {
+	test("answers not found at the old dress and looks routes", async () => {
+		// Given: alice signed in
+		const { h, headers } = await withAccount();
+		// When
+		const answers = [
+			await answer(await send(h, headers, "GET", "/api/dress")),
+			await answer(await send(h, headers, "POST", "/api/dress/changes", {})),
+			await answer(await send(h, headers, "GET", "/api/looks")),
+		];
+		// Then
+		const gone = { status: 404, body: { error: "not_found" } };
+		expect(answers).toEqual([gone, gone, gone]);
+	});
+});

@@ -30,19 +30,6 @@ const me = async (h: Harness, jar: Jar) => {
 	return { status: res.status, body: await res.json() };
 };
 
-const NAVY = {
-	id: "11111111-1111-4111-8111-111111111111",
-	modeId: "polo-sweater-harrington",
-	name: "Navy day",
-	colours: {
-		chino_p: "#C9B38C",
-		polo_l: "#F3F1EC",
-		sweater: "#1F3A5F",
-		harrington: "#55633F",
-	},
-	open: ["harrington"],
-};
-
 const JPEG = new Uint8Array(100).fill(0x11);
 JPEG.set([0xff, 0xd8, 0xff, 0xe0]);
 
@@ -57,27 +44,29 @@ const uploadPicture = async (h: Harness, jar: Jar) =>
 		).json()) as { picture: { id: string } }
 	).picture.id;
 
-// The account's colours, brands, outfit, mannequin, one look with one tag,
-// one combination, one owned item with one picture, one draft picture, and
-// one wish with one shop link, through the routes.
+// The account's colours, brands, mannequin, one tag, one combination with
+// that tag, one owned item with one picture, one draft picture, and one wish
+// with one shop link, through the routes.
 async function fillAccount(
 	h: Harness,
 	jar: Jar,
-	lookId = NAVY.id,
 	combinationId = "33333333-3333-4333-8333-333333333333",
 	ownedItemId = "44444444-4444-4444-8444-444444444444",
 	wishId = "66666666-6666-4666-8666-666666666666",
 	shopLinkId = "77777777-7777-4777-8777-777777777777",
 ) {
-	expect((await send(h, jar, "/api/dress")).status).toBe(200);
 	const listed = await send(h, jar, "/api/colours");
 	expect(listed.status).toBe(200);
 	const { colours } = (await listed.json()) as {
 		colours: { id: string; name: string }[];
 	};
 	const idOf = (name: string) => colours.find((c) => c.name === name)?.id;
-	const skin = { kind: "mannequin", part: "skin", hex: "#8D5524" };
-	expect((await sendJson(h, jar, "/api/dress/changes", skin)).status).toBe(204);
+	const skin = await send(h, jar, "/api/mannequin/skin", {
+		method: "PUT",
+		headers: { "content-type": "application/json" },
+		body: JSON.stringify({ hex: "#8D5524" }),
+	});
+	expect(skin.status).toBe(200);
 	const brand = { name: "Uniqlo" };
 	const brandAdded = await sendJson(h, jar, "/api/brands", brand);
 	expect(brandAdded.status).toBe(201);
@@ -85,8 +74,6 @@ async function fillAccount(
 		.id;
 	const added = await sendJson(h, jar, "/api/tags", { name: "Work" });
 	const { tag } = (await added.json()) as { tag: { id: string } };
-	const look = { ...NAVY, id: lookId, tags: [tag.id] };
-	expect((await sendJson(h, jar, "/api/looks", look)).status).toBe(201);
 	const combination = {
 		id: combinationId,
 		pieces: [
@@ -144,7 +131,7 @@ describe("DELETE /api/account", () => {
 
 	test("deletes the account and every row of it", async () => {
 		// Given: alice connected an AI app through Google and took one AI action,
-		// then saved colours, an outfit, a skin colour, and one look
+		// then saved colours, a skin colour, and one combination
 		const { h, ai, userId } = await withAiSession();
 		await ai.call("list_tags");
 		await fillAccount(h, ai.jar);
@@ -189,7 +176,6 @@ describe("DELETE /api/account", () => {
 		await fillAccount(
 			h,
 			bob,
-			"22222222-2222-4222-8222-222222222222",
 			"44444444-4444-4444-8444-444444444444",
 			"55555555-5555-4555-8555-555555555555",
 			"88888888-8888-4888-8888-888888888888",
@@ -209,7 +195,7 @@ describe("DELETE /api/account", () => {
 			},
 		}).toEqual({
 			rows: bobBefore,
-			filled: 20,
+			filled: 15,
 			me: { status: 200, email: "bob@example.com" },
 		});
 	});
@@ -253,13 +239,11 @@ describe("DELETE /api/account", () => {
 	});
 
 	test("makes a new empty account on the next Google sign-in", async () => {
-		// Given: alice's first sign-in with its starter dress, then rows, then
-		// the delete
+		// Given: alice's first sign-in, then rows, then the delete
 		const h = await makeHarness();
 		stubOutside();
 		const first = await googleSignIn(h);
 		const firstId = ((await me(h, first)).body as { id: string }).id;
-		const starter = await (await send(h, first, "/api/dress")).json();
 		await fillAccount(h, first);
 		expect((await deleteAccount(h, first)).status).toBe(204);
 		// When
@@ -269,13 +253,11 @@ describe("DELETE /api/account", () => {
 		expect({
 			email: now.email,
 			newId: now.id !== firstId,
-			looks: await (await send(h, again, "/api/looks")).json(),
-			dress: await (await send(h, again, "/api/dress")).json(),
+			mannequin: await (await send(h, again, "/api/mannequin")).json(),
 		}).toEqual({
 			email: "alice@example.com",
 			newId: true,
-			looks: { looks: [] },
-			dress: starter,
+			mannequin: { mannequin: { skin: "#D6A27B", hair: "#141418" } },
 		});
 	});
 

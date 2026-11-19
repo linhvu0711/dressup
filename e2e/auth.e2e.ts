@@ -10,7 +10,7 @@ test.describe("without a session", () => {
 	test("shows the sign-in screen at every address without a session", async ({
 		page,
 	}) => {
-		for (const path of ["/", "/looks", "/settings", "/nope"]) {
+		for (const path of ["/", "/combinations", "/settings", "/nope"]) {
 			// Given: no session
 			// When
 			await page.goto(path);

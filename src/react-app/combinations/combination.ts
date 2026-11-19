@@ -16,7 +16,7 @@ import { tagIdSchema } from "@/tags/tag";
 export const COMBINATION_LIMIT = 300;
 
 // A combination's tags go in one statement, and D1 takes at most 100 bound
-// parameters (src/worker/dress-store.ts:30-31).
+// parameters (https://developers.cloudflare.com/d1/platform/limits/).
 export const COMBINATION_TAGS_MAX = 50;
 
 export const combinationIdSchema = z.uuid().brand<"CombinationId">();
@@ -93,7 +93,6 @@ export type CombinationProblem =
 			code: "invalid";
 			path: PropertyKey[];
 			issue: z.core.$ZodIssue;
-			input: unknown;
 	  };
 
 const hasJacket = (pieces: readonly { typeId: GarmentId }[]) =>
@@ -155,7 +154,7 @@ export function checkCombination(
 			ok: false,
 			problem: { code: "not_type", path, value: valueAt(input, path) },
 		};
-	return { ok: false, problem: { code: "invalid", path, issue, input } };
+	return { ok: false, problem: { code: "invalid", path, issue } };
 }
 
 const byLayer = <T extends { typeId: GarmentId }>(pieces: readonly T[]): T[] =>

@@ -99,25 +99,6 @@ export async function makeHarness() {
 			)
 			.all()
 			.map((row) => row.name);
-	// Writes n valid looks for the account in one insert, so a test can reach
-	// the look limit without 300 requests.
-	const seedLooks = async (userId: string, n: number) => {
-		await db.insert(schema.look).values(
-			Array.from({ length: n }, (_, i) => ({
-				id: `00000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`,
-				userId,
-				modeId: "polo-sweater-harrington",
-				name: "",
-				colours: {
-					chino_p: "#C9B38C",
-					polo_l: "#F3F1EC",
-					sweater: "#1F3A5F",
-					harrington: "#55633F",
-				} as const,
-				open: [],
-			})),
-		);
-	};
 	const seedCombinationsOf = (userId: string, n: number) =>
 		seedCombinations(db, userId, n);
 	const seedOwnedItemsOf = (userId: string, n: number) =>
@@ -218,7 +199,6 @@ export async function makeHarness() {
 		tables,
 		accountRows,
 		userForeignKeys,
-		seedLooks,
 		seedCombinations: seedCombinationsOf,
 		seedOwnedItems: seedOwnedItemsOf,
 		seedWishes: seedWishesOf,
