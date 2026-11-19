@@ -1,6 +1,6 @@
 import { closeSync, openSync, readdirSync } from "node:fs";
 import { test as base, expect } from "@playwright/test";
-import { claimFile, POOL_DIR, poolFile } from "./global-setup";
+import { CLAIMS_DIR, claimFile, POOL_DIR, poolFile } from "./global-setup";
 
 // A fresh account from the pool, as its storage state file. A claim file
 // made with "wx" is taken by one test only, across all workers.
@@ -14,8 +14,9 @@ export function claimAccount() {
 		}
 		return poolFile(n);
 	}
+	const claimed = readdirSync(CLAIMS_DIR).length;
 	throw new Error(
-		"e2e account pool is empty: raise POOL_SIZE in e2e/global-setup.ts",
+		`e2e account pool is empty: global setup made ${made} accounts and tests claimed ${claimed}`,
 	);
 }
 
