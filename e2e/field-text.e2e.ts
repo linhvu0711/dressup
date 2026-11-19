@@ -1,6 +1,7 @@
 import type { Locator, Page } from "@playwright/test";
-import { isPhone } from "./combination-helpers";
+import { colourIds, isPhone } from "./combination-helpers";
 import { expect, test } from "./fixtures";
+import { postWish } from "./wishlist-helpers";
 
 const PHONE_ONLY = "phone layout only";
 
@@ -100,4 +101,24 @@ test("shows the Quantity box text at 16px on a phone", async ({ page }) => {
 				.getByRole("textbox", { name: "Quantity" }),
 		),
 	).toBe("16px");
+});
+
+test("shows the shop link boxes text at 16px on a phone", async ({ page }) => {
+	test.skip(!isPhone(page), PHONE_ONLY);
+	// Given: the phone project, a Charcoal wool jacket wish
+	await page.goto("/");
+	const ids = await colourIds(page);
+	await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
+	// When
+	await page.goto(`/piece/wool/${ids.Charcoal}`);
+	await page.getByRole("button", { name: "Add a shop link" }).click();
+	const sheet = page.getByRole("dialog", { name: "Add a shop link" });
+	// Then
+	expect(
+		await fontSizes([
+			sheet.getByRole("textbox", { name: "Address" }),
+			sheet.getByRole("textbox", { name: "Name" }),
+			sheet.getByRole("textbox", { name: "Price in ₫" }),
+		]),
+	).toEqual(["16px", "16px", "16px"]);
 });
