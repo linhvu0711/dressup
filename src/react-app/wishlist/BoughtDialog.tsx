@@ -65,7 +65,7 @@ export function BoughtDialog({
 											error.code === "not_found"
 										) {
 											onClose();
-											after.shopLinkDeleted(userId, link.id);
+											void after.shopLinkGone(userId, link.id);
 										}
 									},
 								})

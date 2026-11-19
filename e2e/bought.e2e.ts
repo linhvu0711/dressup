@@ -213,3 +213,26 @@ test("says the closet limit when Bought answers owned_item_limit", async ({
 		"You have 500 items. That is the limit. Delete one to add a new one.",
 	);
 });
+
+test("keeps the piece page when another tab bought the link first", async ({
+	page,
+}) => {
+	// Given
+	const { ids } = await onJacketPage(page, [{ pictures: 1 }]);
+	const res = await page.request.get("/api/wishes");
+	const { wishes } = (await res.json()) as {
+		wishes: { shopLinks: { id: string }[] }[];
+	};
+	const linkId = wishes[0]?.shopLinks[0]?.id;
+	expect(
+		(await page.request.post(`/api/shop-links/${linkId}/bought`)).status(),
+	).toBe(201);
+	// When
+	await buy(page);
+	// Then
+	await expect(
+		page.getByRole("heading", { name: "In your closet" }),
+	).toBeVisible();
+	await expect(confirm(page)).toHaveCount(0);
+	await expect(page).toHaveURL(`/piece/wool/${ids.Charcoal}`);
+});

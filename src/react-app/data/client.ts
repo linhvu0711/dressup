@@ -270,6 +270,13 @@ export const after = {
 		refresh(keys.colours(userId));
 		refresh(keys.brands(userId));
 	},
+	// A Bought answered not_found: another tab bought the link or deleted
+	// it. The closet loads first, so a piece bought there is in the closet
+	// before its wish leaves the wishlist, and the piece page stays.
+	async shopLinkGone(userId: string | null, id: string) {
+		await queryClient.invalidateQueries({ queryKey: keys.closet(userId) });
+		after.shopLinkDeleted(userId, id);
+	},
 	aiAppGone(userId: string | null, id: string) {
 		queryClient.setQueryData<AiApp[]>(keys.aiApps(userId), (old) =>
 			old?.filter((app) => app.id !== id),
