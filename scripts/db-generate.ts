@@ -78,6 +78,18 @@ export function currentSnapshot(base: Snapshot, changes: Change[]): Snapshot {
 	};
 }
 
+const CHANGE = "_change.json";
+
+// Wrangler applies the SQL by file name, and `x_probe.sql` sorts before
+// `x_probe_b.sql`, but `x_probe_change.json` sorts after `x_probe_b_change.json`;
+// so the change files go in the order of the migration names they carry.
+export const changeFilesInOrder = (files: string[]): string[] =>
+	files
+		.filter((file) => file.endsWith(CHANGE))
+		.map((file) => file.slice(0, -CHANGE.length))
+		.sort()
+		.map((tag) => `${tag}${CHANGE}`);
+
 const writeAtomic = (file: string, text: string) => {
 	writeFileSync(`${file}.tmp`, text);
 	renameSync(`${file}.tmp`, file);
@@ -94,7 +106,7 @@ function main(): number {
 	);
 	const current = currentSnapshot(
 		base,
-		files.filter((file) => file.endsWith("_change.json")).map(readJson),
+		changeFilesInOrder(files).map(readJson),
 	);
 
 	const tmp = mkdtempSync(join(tmpdir(), "db-generate-"));

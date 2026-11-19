@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import {
 	type Change,
+	changeFilesInOrder,
 	currentSnapshot,
 	type Snapshot,
 	snapshotChange,
@@ -139,5 +140,23 @@ describe("snapshotChange", () => {
 			],
 			remove: [["tables", "look"]],
 		});
+	});
+});
+
+describe("changeFilesInOrder", () => {
+	test("orders change files as wrangler orders their migrations", () => {
+		// Given: two migrations made in one second, and a snapshot
+		const files = [
+			"20261119164310_probe_b_change.json",
+			"0019_snapshot.json",
+			"20261119164310_probe_change.json",
+		];
+		// When
+		const ordered = changeFilesInOrder(files);
+		// Then
+		expect(ordered).toEqual([
+			"20261119164310_probe_change.json",
+			"20261119164310_probe_b_change.json",
+		]);
 	});
 });
