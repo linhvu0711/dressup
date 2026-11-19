@@ -223,6 +223,8 @@ export const noBrand = "No brand with this id.";
 
 export const noCombination = "No combination with this id.";
 
+export const noPicture = "No picture with this id.";
+
 export const noTags = "You have no tags yet.";
 
 export const noColours = "You have no colours yet.";

@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import type {
 	CallToolResult,
 	McpServer,
@@ -37,6 +38,7 @@ import {
 	noCombinationsMatch,
 	noOwnedItemMatch,
 	noOwnedItems,
+	noPicture,
 	noTags,
 	notAType,
 	notYourBrand,
@@ -71,6 +73,7 @@ import {
 	deleteOwnedItem,
 	listOwnedItems,
 } from "./owned-item-store";
+import { readPicture } from "./picture-store";
 import { addTag, deleteTag, listTags, renameTag } from "./tag-store";
 import {
 	giveUploadAddress,
@@ -582,7 +585,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		"list_owned_items",
 		{
 			title: "List the closet",
-			description: `The account's owned items, newest first. An owned item is one brand of one piece (a type in a colour) with a quantity of 1 to ${QUANTITY_MAX}. An account holds at most ${OWNED_ITEM_LIMIT}. Each item has pictureIds, its pictures in upload order. ${filterRule}`,
+			description: `The account's owned items, newest first. An owned item is one brand of one piece (a type in a colour) with a quantity of 1 to ${QUANTITY_MAX}. An account holds at most ${OWNED_ITEM_LIMIT}. Each item has pictureIds, its pictures in upload order; show_picture shows one. ${filterRule}`,
 			annotations: READ,
 			inputSchema: pieceFilterArgs,
 		},
@@ -693,7 +696,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		"list_wishes",
 		{
 			title: "List the wishlist",
-			description: `The account's wishes, newest first, each with its shop links. A wish is one piece (a type in a colour) the account wants to buy. An account holds at most ${WISH_LIMIT} wishes, and a wish at most ${SHOP_LINK_LIMIT} shop links. Each shop link has pictureIds, its pictures in upload order. ${filterRule} The brand of a wish is the brand of any of its shop links, so a wish with no link fits no brand filter.`,
+			description: `The account's wishes, newest first, each with its shop links. A wish is one piece (a type in a colour) the account wants to buy. An account holds at most ${WISH_LIMIT} wishes, and a wish at most ${SHOP_LINK_LIMIT} shop links. Each shop link has pictureIds, its pictures in upload order; show_picture shows one. ${filterRule} The brand of a wish is the brand of any of its shop links, so a wish with no link fits no brand filter.`,
 			annotations: READ,
 			inputSchema: pieceFilterArgs,
 		},
@@ -873,6 +876,39 @@ export function registerAiActions(server: McpServer, account: Account) {
 				{ address, expiresAt: expiresAt.toISOString() },
 				uploadAddressText(address),
 			);
+		},
+	);
+
+	tool(
+		"show_picture",
+		{
+			title: "Show a picture",
+			description:
+				"Gives one picture of an owned item or a shop link as an image. list_owned_items and list_wishes give the picture ids.",
+			annotations: READ,
+			inputSchema: z.object({
+				id: z
+					.string()
+					.describe("A picture id from list_owned_items or list_wishes."),
+			}),
+		},
+		async ({ id }) => {
+			const read = await readPicture(db, pictures, userId, id);
+			if (!read.ok) return refusal(noPicture);
+			const headers = new Headers();
+			read.value.writeHttpMetadata(headers);
+			const bytes = await new Response(read.value.body).arrayBuffer();
+			return {
+				content: [
+					{
+						type: "image",
+						// A hand loop with btoa takes 16 to 34 ms for 1 MB, past the
+						// 10 ms of CPU a free-plan request has (ADR 0011).
+						data: Buffer.from(bytes).toString("base64"),
+						mimeType: headers.get("content-type") ?? "",
+					},
+				],
+			};
 		},
 	);
 }

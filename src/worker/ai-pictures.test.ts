@@ -18,6 +18,7 @@ const bytes = (head: number[], length: number) => {
 };
 
 const JPEG = bytes([0xff, 0xd8, 0xff, 0xe0], 100);
+const PNG = bytes([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 100);
 const PDF = bytes([...new TextEncoder().encode("%PDF-1.7")], 100);
 
 const NO_SUCH_ID = "5b1f2c3d-0000-4000-8000-000000000000";
@@ -517,5 +518,61 @@ describe("refusals at the address", () => {
 			},
 			rows: [],
 		});
+	});
+});
+
+describe("show_picture", () => {
+	const noPicture = {
+		isError: true,
+		content: [{ type: "text", text: "No picture with this id." }],
+	};
+
+	test("shows a picture as an image", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		const p = await uploadByAddress(h, await addressOf(ai), PNG);
+		// When
+		const shown = await ai.show("show_picture", { id: p });
+		// Then
+		expect(shown).toEqual({
+			isError: false,
+			content: [
+				{
+					type: "image",
+					data: "iVBORw0KGgoREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREQ==",
+					mimeType: "image/png",
+				},
+			],
+		});
+	});
+
+	test("refuses a picture of another account", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		const bob = await h.addAccount(BOB);
+		const uploaded = await h.app.request(
+			"/api/pictures",
+			{
+				method: "POST",
+				headers: { ...Object.fromEntries(bob), "content-type": "image/png" },
+				body: PNG,
+			},
+			h.env,
+		);
+		const p = ((await uploaded.json()) as { picture: { id: string } }).picture
+			.id;
+		// When
+		const shown = await ai.show("show_picture", { id: p });
+		// Then
+		expect(shown).toEqual(noPicture);
+	});
+
+	test("refuses a picture id that does not exist", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		// When
+		const shown = await ai.show("show_picture", { id: NO_SUCH_ID });
+		// Then
+		expect(shown).toEqual(noPicture);
 	});
 });
