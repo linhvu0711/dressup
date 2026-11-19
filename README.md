@@ -23,7 +23,7 @@ GitHub runs `bun run check`, `bun test`, `bun run build`, and `bun run e2e` on e
 
 `bun install` also adds a git pre-commit hook. Before each commit it runs `bun run check`, Biome and then the type check, and stops the commit when it fails, with the errors shown. It takes about 12 seconds. To skip it once, run `git commit --no-verify`. Hooks in your global `core.hooksPath` folder, or in `.git/hooks`, still run. It needs git 2.54 or newer; on an older git, `bun install` prints a warning and the hook does not run.
 
-Before the first `bun run e2e`, run `bunx playwright install chromium` once. After a build, `bunx wrangler deploy --dry-run` checks the Worker bundle without deploying it.
+Before the first `bun run e2e`, run `bunx playwright install chromium` once. Before you write an e2e test, read the Tests rules in `CODING_STANDARDS.md`. After a build, `bunx wrangler deploy --dry-run` checks the Worker bundle without deploying it.
 
 Run `bun run db:migrate:local` once before the first `bun run dev`, and again after a new migration.
 
