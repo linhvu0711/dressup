@@ -13,7 +13,7 @@ bun run check     # Biome lint and format, and the type check
 bun test          # unit tests
 bun run e2e       # click-through in a hidden browser at phone and laptop size
 bun run build     # production build
-bun run db:generate       # a SQL migration from the Drizzle schema
+bun run db:generate       # a SQL migration from the Drizzle schema, named by time
 bun run db:migrate:local  # apply the migrations to the local database
 bun run auth:schema       # write the Better Auth tables after its config changes
 bun run deploy            # build, migrate the remote database, make the picture bucket if it is missing, then deploy
@@ -26,6 +26,8 @@ GitHub runs `bun run check`, `bun test`, `bun run build`, and `bun run e2e` on e
 Before the first `bun run e2e`, run `bunx playwright install chromium` once. After a build, `bunx wrangler deploy --dry-run` checks the Worker bundle without deploying it.
 
 Run `bun run db:migrate:local` once before the first `bun run dev`, and again after a new migration.
+
+A new migration's file name starts with the time it was made, in UTC, as `migrations/20261119160142_<name>.sql`. Its schema change sits beside it in `migrations/meta/20261119160142_change.json`. Two branches can each add one with no rename. Make migrations only with `bun run db:generate`. It adds every change file, in name order, onto the last numbered snapshot, then runs drizzle-kit on the result. Plain `drizzle-kit generate` stops, since the migrations folder has no `_journal.json`. The first 20 migrations keep their numbers.
 
 ## Settings
 
