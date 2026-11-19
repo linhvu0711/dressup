@@ -20,7 +20,7 @@ const markWindow = (page: Page) =>
 const windowStayed = (page: Page) =>
 	page.evaluate(() => (window as unknown as { stay?: boolean }).stay === true);
 
-// Khaki Harrington jacket (open) + Grey sweater + Black long tee + Navy
+// Khaki Harrington jacket + Grey sweater + Black long tee + Navy
 // casual pants. The closet has the jacket and the tee; the wishlist has the
 // jacket and the sweater. So the jacket shows both marks, the sweater Want,
 // the tee Own, and the pants none.
@@ -36,7 +36,6 @@ async function markedFour(page: Page) {
 			{ typeId: "tee_l", colourId: ids.Black },
 			{ typeId: "casual_p", colourId: ids.Navy },
 		],
-		open: true,
 	});
 	await postOwnedItems(
 		page,
@@ -58,7 +57,7 @@ test("marks each piece Own, Want, both, or none", async ({ page }) => {
 	await page.goto(`/combinations/${id}`);
 	// Then
 	await expect(lines(page)).toHaveText([
-		"Khaki Harrington jacket · openOwnWant#B8A57C",
+		"Khaki Harrington jacketOwnWant#B8A57C",
 		"Grey sweaterWant#8C8A84",
 		"Black long teeOwn#1B1B1F",
 		"Navy casual pants#1F3A5F",

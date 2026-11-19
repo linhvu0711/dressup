@@ -23,7 +23,6 @@ async function seedChinos(page: Page) {
 			{ typeId: "chino_p", colourId: ids.Beige },
 			{ typeId, colourId },
 		],
-		open: false,
 	});
 	await postCombinations(
 		page,

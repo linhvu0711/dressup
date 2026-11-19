@@ -409,7 +409,6 @@ test("keeps a combination only when it passes the piece rows, Pieces I own, and 
 	const combination = (pieces: [string, string][], tags: string[]) => ({
 		id: crypto.randomUUID(),
 		pieces: pieces.map(([typeId, colourId]) => ({ typeId, colourId })),
-		open: false,
 		tags,
 	});
 	await postCombinations(

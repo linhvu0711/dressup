@@ -1202,9 +1202,7 @@ describe("combinations", () => {
 			),
 		}).toEqual({
 			isError: false,
-			titles: [
-				"Khaki Harrington jacket (open) + Black long tee + Navy casual pants",
-			],
+			titles: ["Khaki Harrington jacket + Black long tee + Navy casual pants"],
 		});
 	});
 
