@@ -23,15 +23,37 @@ export const testEnv = {
 
 // A fresh in-memory database per test: test helpers write real rows, and
 // rows from one test would change the counts another test reads.
-export async function makeHarness() {
+// A migration's statements, split as drizzle-kit writes them.
+const migrationStatements = (tag: string) =>
+	readFileSync(`migrations/${tag}.sql`, "utf8")
+		.split("--> statement-breakpoint")
+		.map((statement) => statement.trim())
+		.filter((statement) => statement !== "");
+
+// The journal's tags up to and including `through`, so a test can build the
+// database as it stood before a later migration.
+function migrationsThrough(through: string): string[] {
+	const { entries } = JSON.parse(
+		readFileSync("migrations/meta/_journal.json", "utf8"),
+	) as { entries: { tag: string }[] };
+	const end = entries.findIndex((entry) => entry.tag === through);
+	if (end === -1) throw new Error(`No migration ${through}`);
+	return entries.slice(0, end + 1).map((entry) => entry.tag);
+}
+
+export async function makeHarness(options: { through?: string } = {}) {
 	const sqlite = new Database(":memory:");
-	// bun:sqlite leaves foreign keys off; D1 has them on, and the dress rows
-	// go with their user only through them.
+	// bun:sqlite leaves foreign keys off; D1 has them on, and an account's rows
+	// go with its user only through them.
 	sqlite.run("PRAGMA foreign_keys = ON");
 	// drizzle's bun:sqlite driver has no batch; D1 runs a batch as one
 	// transaction, one batch at a time, so this does the same.
 	const local = drizzle({ client: sqlite, schema });
-	migrate(local, { migrationsFolder: "./migrations" });
+	if (options.through === undefined)
+		migrate(local, { migrationsFolder: "./migrations" });
+	else
+		for (const tag of migrationsThrough(options.through))
+			for (const statement of migrationStatements(tag)) sqlite.run(statement);
 	let last: Promise<unknown> = Promise.resolve();
 	const runBatch = async (queries: readonly unknown[]) => {
 		sqlite.run("BEGIN");
@@ -179,13 +201,16 @@ export async function makeHarness() {
 			throw new Error("addTrigger takes only CREATE TRIGGER");
 		sqlite.run(sql);
 	};
+	// Rows of the tables a later migration drops, which the schema no longer
+	// holds.
+	const insertOld = (sql: string) => {
+		if (!/^\s*INSERT INTO\b/.test(sql))
+			throw new Error("insertOld takes only INSERT INTO");
+		sqlite.run(sql);
+	};
 	// Runs a migration again, as a Worker deploy would on a live database.
 	const runMigration = (tag: string) => {
-		const statements = readFileSync(`migrations/${tag}.sql`, "utf8")
-			.split("--> statement-breakpoint")
-			.map((statement) => statement.trim())
-			.filter((statement) => statement !== "");
-		for (const statement of statements) sqlite.run(statement);
+		for (const statement of migrationStatements(tag)) sqlite.run(statement);
 	};
 	return {
 		app,
@@ -207,6 +232,7 @@ export async function makeHarness() {
 		setUploads,
 		storedBytes,
 		addTrigger,
+		insertOld,
 		runMigration,
 	};
 }

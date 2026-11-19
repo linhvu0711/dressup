@@ -5,8 +5,6 @@ import * as authSchema from "./auth-schema";
 import * as brandSchema from "./brand-schema";
 import * as colourSchema from "./colour-schema";
 import * as combinationSchema from "./combination-schema";
-import * as dressSchema from "./dress-schema";
-import * as lookSchema from "./look-schema";
 import * as mannequinSchema from "./mannequin-schema";
 import * as ownedItemSchema from "./owned-item-schema";
 import * as pictureSchema from "./picture-schema";
@@ -19,8 +17,6 @@ export const schema = {
 	...brandSchema,
 	...colourSchema,
 	...combinationSchema,
-	...dressSchema,
-	...lookSchema,
 	...mannequinSchema,
 	...ownedItemSchema,
 	...pictureSchema,
