@@ -2,8 +2,8 @@ import { cn } from "cn";
 import { ChevronRight } from "lucide-react";
 import type { Ref } from "react";
 import { Field, LIST_ROW, ROW } from "@/components/ui/sheet-form";
+import { TYPE_IDS, TYPE_NAMES, type TypeId } from "@/dress/clothing-types";
 import { TypeFigure } from "@/dress/figure/TypeFigure";
-import { GARMENT_IDS, GARMENT_NAMES, type GarmentId } from "@/dress/garments";
 
 // The Type row of a form: the picked type's figure and name, or "Pick a
 // type". It opens the type list.
@@ -12,7 +12,7 @@ export function TypeField({
 	onOpen,
 	ref,
 }: {
-	typeId: GarmentId | null;
+	typeId: TypeId | null;
 	onOpen: () => void;
 	ref?: Ref<HTMLButtonElement>;
 }) {
@@ -35,7 +35,7 @@ export function TypeButton({
 	onOpen,
 	ref,
 }: {
-	typeId: GarmentId | null;
+	typeId: TypeId | null;
 	empty: string;
 	onOpen: () => void;
 	ref?: Ref<HTMLButtonElement>;
@@ -46,7 +46,7 @@ export function TypeButton({
 				{typeId ? (
 					<>
 						<TypeFigure typeId={typeId} />
-						{GARMENT_NAMES[typeId]}
+						{TYPE_NAMES[typeId]}
 					</>
 				) : (
 					<span className="text-muted-foreground">{empty}</span>
@@ -63,7 +63,7 @@ export function TypeOptions({
 	onPick,
 	onAny,
 }: {
-	onPick: (typeId: GarmentId) => void;
+	onPick: (typeId: TypeId) => void;
 	onAny?: () => void;
 }) {
 	return (
@@ -80,7 +80,7 @@ export function TypeOptions({
 					Any type
 				</button>
 			) : null}
-			{GARMENT_IDS.map((option) => (
+			{TYPE_IDS.map((option) => (
 				<button
 					key={option}
 					type="button"
@@ -89,7 +89,7 @@ export function TypeOptions({
 					onClick={() => onPick(option)}
 				>
 					<TypeFigure typeId={option} className="size-11 flex-none" />
-					{GARMENT_NAMES[option]}
+					{TYPE_NAMES[option]}
 				</button>
 			))}
 		</div>

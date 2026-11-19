@@ -1,4 +1,5 @@
 import { type ReactNode, useId } from "react";
+import type { Hex, TypeId } from "@/dress/clothing-types";
 import { ArmsSkin } from "@/dress/figure/body";
 import {
 	arm,
@@ -16,7 +17,6 @@ import {
 	shl,
 	useUrl,
 } from "@/dress/figure/parts";
-import type { GarmentId, Hex } from "@/dress/garments";
 
 const SL_SHORT =
 	"M 126 172 C 110 177, 100 196, 99 222 C 98 238, 98 252, 96 266 L 138 275 C 139 258, 140 240, 139 222 C 134 208, 129 190, 126 172 Z";
@@ -720,8 +720,8 @@ function trainShorts(c: Hex) {
 	);
 }
 
-export const GARMENT_DRAWINGS: Record<
-	GarmentId,
+export const TYPE_DRAWINGS: Record<
+	TypeId,
 	(c: Hex, open: boolean) => ReactNode
 > = {
 	tee_s: (c) => tee(c, false),

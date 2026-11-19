@@ -1,16 +1,16 @@
 import { expect, test } from "bun:test";
-import { GARMENT_IDS, type GarmentId, LAYER_OF, type Layer } from "./garments";
+import { LAYER_OF, type Layer, TYPE_IDS, type TypeId } from "./clothing-types";
 
 test("puts each type in one layer", () => {
-	// Given: LAYER_OF and GARMENT_IDS
+	// Given: LAYER_OF and TYPE_IDS
 	// When
-	const byLayer: Partial<Record<Layer, GarmentId[]>> = {};
-	for (const id of GARMENT_IDS) {
+	const byLayer: Partial<Record<Layer, TypeId[]>> = {};
+	for (const id of TYPE_IDS) {
 		const layer = LAYER_OF[id];
 		byLayer[layer] = [...(byLayer[layer] ?? []), id];
 	}
 	// Then
-	expect({ byLayer, count: GARMENT_IDS.length }).toEqual({
+	expect({ byLayer, count: TYPE_IDS.length }).toEqual({
 		byLayer: {
 			inner_top: [
 				"tee_s",

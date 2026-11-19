@@ -1,7 +1,7 @@
 import type { Hex } from "@/colour/hex";
+import { isJacket, type TypeId } from "@/dress/clothing-types";
 import { Mannequin } from "@/dress/figure/Mannequin";
 import { MannequinPlaceholder } from "@/dress/figure/MannequinPlaceholder";
-import { type GarmentId, isJacket } from "@/dress/garments";
 import { useMannequin } from "@/mannequin/api";
 import { wornLayers } from "./combination";
 
@@ -15,7 +15,7 @@ export function CombinationFigure({
 	lite = false,
 	label,
 }: {
-	pieces: readonly { typeId: GarmentId; hex: Hex }[];
+	pieces: readonly { typeId: TypeId; hex: Hex }[];
 	open: boolean;
 	viewBox?: string;
 	lite?: boolean;

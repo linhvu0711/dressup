@@ -1,13 +1,13 @@
 import type { ClosetPiece, OwnedItem } from "@/closet/owned-item";
 import {
-	GARMENT_IDS,
-	GARMENT_NAMES,
-	type GarmentId,
 	LAYER_GROUP_NAMES,
 	LAYER_OF,
 	LAYERS,
 	type Layer,
-} from "@/dress/garments";
+	TYPE_IDS,
+	TYPE_NAMES,
+	type TypeId,
+} from "@/dress/clothing-types";
 import type { BrandId } from "@/labels/brand";
 import type { ColourId } from "@/labels/colour";
 import type { Wish } from "@/wishlist/wish";
@@ -18,7 +18,7 @@ import type { Wish } from "@/wishlist/wish";
 // null in brands is No brand.
 export type PieceFilter = {
 	layers: Layer[];
-	types: GarmentId[];
+	types: TypeId[];
 	colours: ColourId[];
 	brands: (BrandId | null)[];
 };
@@ -31,7 +31,7 @@ export const NO_FILTER: PieceFilter = {
 };
 
 export type FilterPiece = {
-	typeId: GarmentId;
+	typeId: TypeId;
 	colourId: ColourId;
 	brandIds: (BrandId | null)[];
 };
@@ -81,8 +81,8 @@ const unique = <T>(values: T[]) => [...new Set(values)];
 const isLayer = (value: string): value is Layer =>
 	(LAYERS as readonly string[]).includes(value);
 
-const isType = (value: string): value is GarmentId =>
-	(GARMENT_IDS as readonly string[]).includes(value);
+const isType = (value: string): value is TypeId =>
+	(TYPE_IDS as readonly string[]).includes(value);
 
 // The address is typed by hand or kept from an old link, so a layer or a
 // type that is not one is left out. Layers and types come out in the app's
@@ -92,7 +92,7 @@ export function readPieceFilter(params: URLSearchParams): PieceFilter {
 	const types = params.getAll("type").filter(isType);
 	return {
 		layers: LAYERS.filter((l) => layers.includes(l)),
-		types: GARMENT_IDS.filter((t) => types.includes(t)),
+		types: TYPE_IDS.filter((t) => types.includes(t)),
 		colours: unique(params.getAll("colour") as ColourId[]),
 		brands: unique(
 			params.getAll("brand").map((b) => (b === "none" ? null : (b as BrandId))),
@@ -146,7 +146,7 @@ export const pieceFilterChips = (
 	})),
 	...f.types.map((type) => ({
 		key: `type:${type}`,
-		label: GARMENT_NAMES[type],
+		label: TYPE_NAMES[type],
 		without: { ...f, types: without(f.types, type) },
 	})),
 	...f.colours.map((id) => ({

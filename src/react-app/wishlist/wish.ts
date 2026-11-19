@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { GARMENT_IDS } from "@/dress/garments";
+import { TYPE_IDS } from "@/dress/clothing-types";
 import { brandSchema } from "@/labels/brand";
 import { colourSchema } from "@/labels/colour";
 
@@ -22,7 +22,7 @@ export type WishId = z.infer<typeof wishIdSchema>;
 // checks that it is the account's.
 export const wishInputSchema = z.object({
 	id: wishIdSchema,
-	typeId: z.enum(GARMENT_IDS),
+	typeId: z.enum(TYPE_IDS),
 	colourId: z.string(),
 });
 
@@ -71,7 +71,7 @@ export type ShopLink = z.infer<typeof shopLinkSchema>;
 
 export const wishSchema = z.object({
 	id: wishIdSchema,
-	typeId: z.enum(GARMENT_IDS),
+	typeId: z.enum(TYPE_IDS),
 	colour: colourSchema,
 	shopLinks: z.array(shopLinkSchema),
 });

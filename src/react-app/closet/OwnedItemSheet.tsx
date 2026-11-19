@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Field, FormSheet, ROW } from "@/components/ui/sheet-form";
 import { useToast } from "@/components/ui/toast";
 import { RequestError } from "@/data/client";
+import type { TypeId } from "@/dress/clothing-types";
 import { TypeFigure } from "@/dress/figure/TypeFigure";
-import type { GarmentId } from "@/dress/garments";
 import { BrandOptions } from "@/labels/BrandOptions";
 import type { BrandId } from "@/labels/brand";
 import { useBrands } from "@/labels/brand-api";
@@ -65,9 +65,7 @@ export function OwnedItemSheet(
 		() => editing?.id ?? (crypto.randomUUID() as OwnedItemId),
 	);
 	const [step, setStep] = useState<Step>("form");
-	const [typeId, setTypeId] = useState<GarmentId | null>(
-		editing?.typeId ?? null,
-	);
+	const [typeId, setTypeId] = useState<TypeId | null>(editing?.typeId ?? null);
 	const [colourId, setColourId] = useState<ColourId | undefined>(
 		editing?.colour.id,
 	);

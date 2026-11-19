@@ -2,8 +2,8 @@ import type { Hex } from "@/colour/hex";
 
 export type { Hex };
 
-// The garment list.
-export const GARMENT_IDS = [
+// The type list.
+export const TYPE_IDS = [
 	"tee_s",
 	"tee_l",
 	"polo_s",
@@ -23,9 +23,9 @@ export const GARMENT_IDS = [
 	"train_p",
 ] as const;
 
-export type GarmentId = (typeof GARMENT_IDS)[number];
+export type TypeId = (typeof TYPE_IDS)[number];
 
-export const GARMENT_NAMES: Record<GarmentId, string> = {
+export const TYPE_NAMES: Record<TypeId, string> = {
 	tee_s: "Short tee",
 	tee_l: "Long tee",
 	polo_s: "Short polo",
@@ -49,8 +49,8 @@ export const JACKET_IDS = ["harrington", "wool"] as const;
 
 export type JacketId = (typeof JACKET_IDS)[number];
 
-export const isJacket = (id: GarmentId): id is JacketId =>
-	(JACKET_IDS as readonly GarmentId[]).includes(id);
+export const isJacket = (id: TypeId): id is JacketId =>
+	(JACKET_IDS as readonly TypeId[]).includes(id);
 
 export const LAYERS = ["bottom", "inner_top", "sweater", "jacket"] as const;
 
@@ -72,7 +72,7 @@ export const LAYER_GROUP_NAMES: Record<Layer, string> = {
 	jacket: "Jackets",
 };
 
-export const LAYER_OF: Record<GarmentId, Layer> = {
+export const LAYER_OF: Record<TypeId, Layer> = {
 	tee_s: "inner_top",
 	tee_l: "inner_top",
 	polo_s: "inner_top",
@@ -92,4 +92,4 @@ export const LAYER_OF: Record<GarmentId, Layer> = {
 	train_p: "bottom",
 };
 
-export type GarmentLayer = { garment: GarmentId; color: Hex };
+export type FigureLayer = { typeId: TypeId; color: Hex };

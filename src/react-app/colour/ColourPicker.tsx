@@ -148,7 +148,7 @@ export function ColourField({
 	);
 }
 
-// The colour picker. It knows no garment, so skin and hair (#14) can use it
+// The colour picker. It knows no type, so skin and hair (#14) can use it
 // too.
 export function ColourPicker({
 	title,

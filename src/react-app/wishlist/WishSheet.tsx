@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Field, FormSheet } from "@/components/ui/sheet-form";
 import { useToast } from "@/components/ui/toast";
 import { RequestError } from "@/data/client";
-import type { GarmentId } from "@/dress/garments";
+import type { TypeId } from "@/dress/clothing-types";
 import { ColourSwatches } from "@/labels/ColourSwatches";
 import type { ColourId } from "@/labels/colour";
 import { usePieceLink } from "@/shell/piece-link";
@@ -30,7 +30,7 @@ export function WishSheet({ onClose }: { onClose: () => void }) {
 	// a new wish, so it takes a new id.
 	const [id, setId] = useState(() => crypto.randomUUID() as WishId);
 	const [step, setStep] = useState<Step>("form");
-	const [typeId, setTypeId] = useState<GarmentId | null>(null);
+	const [typeId, setTypeId] = useState<TypeId | null>(null);
 	const [colourId, setColourId] = useState<ColourId | undefined>();
 	const first = useRef<HTMLButtonElement>(null);
 	const wishlist = useWishlist();

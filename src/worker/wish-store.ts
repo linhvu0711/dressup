@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, exists, notExists, sql } from "drizzle-orm";
 import type { Hex } from "@/colour/hex";
-import type { GarmentId } from "@/dress/garments";
+import type { TypeId } from "@/dress/clothing-types";
 import type { BrandId } from "@/labels/brand";
 import type { ColourId } from "@/labels/colour";
 import {
@@ -43,7 +43,7 @@ export type WishError =
 
 export type AddedWish = { wish: Wish; created: boolean };
 
-type Piece = { typeId: GarmentId; colourId: string };
+type Piece = { typeId: TypeId; colourId: string };
 
 // The account's wishes, newest first, or the one with this id.
 async function readWishes(

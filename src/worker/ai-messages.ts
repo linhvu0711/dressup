@@ -4,7 +4,7 @@ import {
 	COMBINATION_LIMIT,
 	COMBINATION_TAGS_MAX,
 } from "@/combinations/combination";
-import { GARMENT_NAMES, LAYER_NAMES } from "@/dress/garments";
+import { LAYER_NAMES, TYPE_NAMES } from "@/dress/clothing-types";
 import { BRAND_LIMIT, BRAND_NAME_MAX } from "@/labels/brand";
 import { COLOUR_LIMIT, COLOUR_NAME_MAX } from "@/labels/colour";
 import { ITEM_PICTURE_LIMIT } from "@/pictures/picture";
@@ -69,7 +69,7 @@ export function combinationRefusalText(error: CombinationError): string {
 		case "pieces_count":
 			return "A combination has 2 to 4 pieces.";
 		case "same_layer":
-			return `${GARMENT_NAMES[error.other]} and ${GARMENT_NAMES[error.typeId]} are both in the ${LAYER_NAMES[error.layer].toLowerCase()} layer. A combination has at most one piece for each layer.`;
+			return `${TYPE_NAMES[error.other]} and ${TYPE_NAMES[error.typeId]} are both in the ${LAYER_NAMES[error.layer].toLowerCase()} layer. A combination has at most one piece for each layer.`;
 		case "not_type":
 			return notAType(error.value);
 		case "not_colour":

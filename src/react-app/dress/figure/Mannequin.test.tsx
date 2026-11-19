@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { type JacketId, TYPE_IDS } from "@/dress/clothing-types";
 import { Mannequin } from "@/dress/figure/Mannequin";
-import { GARMENT_IDS, type JacketId } from "@/dress/garments";
 import { STARTER_MANNEQUIN } from "@/mannequin/mannequin";
 
 describe("Mannequin", () => {
@@ -43,7 +43,7 @@ describe("Mannequin", () => {
 	});
 
 	test("points each url at an id in the figure", () => {
-		// Given: a figure with no garments: its floor, shadows, body, and head
+		// Given: a figure with no clothes: its floor, shadows, body, and head
 		const markup = renderToStaticMarkup(<Mannequin {...STARTER_MANNEQUIN} />);
 		// When
 		const ids = new Set(
@@ -54,19 +54,19 @@ describe("Mannequin", () => {
 		expect(used.filter((id) => !ids.has(id))).toEqual([]);
 	});
 
-	test.each(GARMENT_IDS.map((id) => [id]))(
-		"draws each garment in the given colour (%s)",
+	test.each(TYPE_IDS.map((id) => [id]))(
+		"draws each type in the given colour (%s)",
 		(id) => {
-			// Given: one garment in the test colour
+			// Given: one type in the test colour
 			// When
 			const markup = renderToStaticMarkup(
 				<Mannequin
 					{...STARTER_MANNEQUIN}
-					layers={[{ garment: id, color: "#12AB34" }]}
+					layers={[{ typeId: id, color: "#12AB34" }]}
 				/>,
 			);
 			// Then
-			expect(markup).toContain(`data-garment="${id}"`);
+			expect(markup).toContain(`data-type-id="${id}"`);
 			expect(markup).toContain('fill="#12AB34"');
 		},
 	);
@@ -75,12 +75,12 @@ describe("Mannequin", () => {
 		// Given: a Harrington jacket in #C9B38C and a wool jacket in #A8865C,
 		// each closed and open
 		// When
-		const draw = (garment: JacketId, color: `#${string}`, open: boolean) =>
+		const draw = (typeId: JacketId, color: `#${string}`, open: boolean) =>
 			renderToStaticMarkup(
 				<Mannequin
 					{...STARTER_MANNEQUIN}
-					layers={[{ garment, color }]}
-					openJackets={open ? [garment] : []}
+					layers={[{ typeId, color }]}
+					openJackets={open ? [typeId] : []}
 				/>,
 			);
 		const harrington = [
@@ -113,15 +113,15 @@ describe("Mannequin", () => {
 			<Mannequin
 				{...STARTER_MANNEQUIN}
 				layers={[
-					{ garment: "chino_p", color: "#C9B38C" },
-					{ garment: "polo_l", color: "#F3F1EC" },
-					{ garment: "sweater", color: "#1F3A5F" },
+					{ typeId: "chino_p", color: "#C9B38C" },
+					{ typeId: "polo_l", color: "#F3F1EC" },
+					{ typeId: "sweater", color: "#1F3A5F" },
 				]}
 			/>,
 		);
 		// Then
 		expect(
-			[...markup.matchAll(/data-garment="([^"]+)"/g)].map((m) => m[1]),
+			[...markup.matchAll(/data-type-id="([^"]+)"/g)].map((m) => m[1]),
 		).toEqual(["chino_p", "polo_l", "sweater"]);
 	});
 });

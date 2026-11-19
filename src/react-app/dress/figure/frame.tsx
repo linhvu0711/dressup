@@ -1,6 +1,6 @@
 import { type ReactNode, useId } from "react";
+import type { Hex } from "@/dress/clothing-types";
 import { Defs, FigureContext } from "@/dress/figure/parts";
-import type { Hex } from "@/dress/garments";
 
 // The svg of one figure with its own defs, so a page with many figures has no
 // shared ids. Children read the prefix through FigureContext (useUrl).
@@ -43,7 +43,7 @@ export function FigureSvg({
 	);
 }
 
-// The body and its garments are drawn narrow and stretched wide here.
+// The body and the clothes on it are drawn narrow and stretched wide here.
 export function Stretch({ children }: { children: ReactNode }) {
 	return <g transform="matrix(1.12 0 0 1 -24 0)">{children}</g>;
 }

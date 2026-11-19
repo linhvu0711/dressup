@@ -1,4 +1,4 @@
-import { GARMENT_IDS } from "@/dress/garments";
+import { TYPE_IDS } from "@/dress/clothing-types";
 import { addBrand } from "../brand-store";
 import { listColours } from "../colour-store";
 import type { Db } from "../db";
@@ -24,9 +24,9 @@ export async function seedOwnedItems(db: Db, userId: string, n: number) {
 		return {
 			id: `00000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`,
 			userId,
-			typeId: GARMENT_IDS[piece % GARMENT_IDS.length],
+			typeId: TYPE_IDS[piece % TYPE_IDS.length],
 			colourId:
-				colours[Math.floor(piece / GARMENT_IDS.length) % colours.length].id,
+				colours[Math.floor(piece / TYPE_IDS.length) % colours.length].id,
 			brandId: brandIds[i % 3],
 			quantity: 1,
 			createdAt: new Date(Date.UTC(2026, 0, 1) - i * 1000),

@@ -54,7 +54,7 @@ export function MannequinSection() {
 					>
 						{shown ? (
 							<Mannequin
-								layers={[{ garment: "tee_s", color: "#F3F1EC" }]}
+								layers={[{ typeId: "tee_s", color: "#F3F1EC" }]}
 								viewBox={PREVIEW_VIEW_BOX}
 								lite
 								label="Mannequin preview"

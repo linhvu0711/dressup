@@ -565,10 +565,10 @@ test("wears pale blank pieces with no bottom and no top", async ({ page }) => {
 	await page.goto("/build");
 	// Then
 	await expect(
-		stage(page).locator('[data-garment="casual_p"] [fill="#E2DED7"]').first(),
+		stage(page).locator('[data-type-id="casual_p"] [fill="#E2DED7"]').first(),
 	).toBeAttached();
 	await expect(
-		stage(page).locator('[data-garment="tee_s"] [fill="#E2DED7"]').first(),
+		stage(page).locator('[data-type-id="tee_s"] [fill="#E2DED7"]').first(),
 	).toBeAttached();
 	await expect(page.getByRole("button", { name: "Save" })).toBeDisabled();
 });
@@ -581,10 +581,10 @@ test("puts a picked piece on the mannequin at once", async ({ page }) => {
 	await swatch(page, "Navy").click();
 	// Then
 	await expect(
-		stage(page).locator('[data-garment="casual_p"] [fill="#1F3A5F"]').first(),
+		stage(page).locator('[data-type-id="casual_p"] [fill="#1F3A5F"]').first(),
 	).toBeAttached();
 	await expect(
-		stage(page).locator('[data-garment="casual_p"] [fill="#E2DED7"]'),
+		stage(page).locator('[data-type-id="casual_p"] [fill="#E2DED7"]'),
 	).toHaveCount(0);
 });
 
@@ -599,16 +599,16 @@ test("replaces a piece in the same layer and takes it off", async ({
 	await typeChip(page, "Chino pants").click();
 	// Then
 	await expect(
-		stage(page).locator('[data-garment="chino_p"] [fill="#1F3A5F"]').first(),
+		stage(page).locator('[data-type-id="chino_p"] [fill="#1F3A5F"]').first(),
 	).toBeAttached();
-	await expect(stage(page).locator('[data-garment="casual_p"]')).toHaveCount(0);
+	await expect(stage(page).locator('[data-type-id="casual_p"]')).toHaveCount(0);
 	// When
 	await typeChip(page, "None").click();
 	// Then
 	await expect(
-		stage(page).locator('[data-garment="casual_p"] [fill="#E2DED7"]').first(),
+		stage(page).locator('[data-type-id="casual_p"] [fill="#E2DED7"]').first(),
 	).toBeAttached();
-	await expect(stage(page).locator('[data-garment="chino_p"]')).toHaveCount(0);
+	await expect(stage(page).locator('[data-type-id="chino_p"]')).toHaveCount(0);
 });
 
 test("starts a jacket open and closes it", async ({ page }) => {
@@ -620,14 +620,14 @@ test("starts a jacket open and closes it", async ({ page }) => {
 	// Then
 	const front = page.getByRole("radiogroup", { name: "Jacket front" });
 	await expect(
-		stage(page).locator('[data-garment="harrington"]'),
+		stage(page).locator('[data-type-id="harrington"]'),
 	).toHaveAttribute("data-front", "open");
 	await expect(front.getByRole("radio", { name: "Open" })).toBeChecked();
 	// When
 	await front.getByRole("radio", { name: "Closed" }).click();
 	// Then
 	await expect(
-		stage(page).locator('[data-garment="harrington"]'),
+		stage(page).locator('[data-type-id="harrington"]'),
 	).toHaveAttribute("data-front", "closed");
 });
 
@@ -874,10 +874,10 @@ test("changes a combination in the builder", async ({ page }) => {
 		page.getByRole("heading", { name: "Change combination" }),
 	).toBeVisible();
 	await expect(
-		stage(page).locator('[data-garment="harrington"]'),
+		stage(page).locator('[data-type-id="harrington"]'),
 	).toHaveAttribute("data-front", "open");
 	await expect(
-		stage(page).locator('[data-garment="casual_p"] [fill="#1F3A5F"]').first(),
+		stage(page).locator('[data-type-id="casual_p"] [fill="#1F3A5F"]').first(),
 	).toBeAttached();
 	// When
 	await pick(page, "Bottom", "Casual pants", "Grey");
@@ -912,7 +912,7 @@ test("keeps the saved pieces in the builder when the colours do not load", async
 	await changeButton(page).click();
 	// Then
 	await expect(
-		stage(page).locator('[data-garment="casual_p"] [fill="#1F3A5F"]').first(),
+		stage(page).locator('[data-type-id="casual_p"] [fill="#1F3A5F"]').first(),
 	).toBeAttached();
 	await expect(page.getByText("Pick 2 pieces or more")).toHaveCount(0);
 	await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
@@ -1042,6 +1042,6 @@ test("says Could not load your combinations in the builder and loads on Retry", 
 		page.getByRole("heading", { name: "Change combination" }),
 	).toBeVisible();
 	await expect(
-		stage(page).locator('[data-garment="harrington"]'),
+		stage(page).locator('[data-type-id="harrington"]'),
 	).toHaveAttribute("data-front", "open");
 });

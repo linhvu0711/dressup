@@ -8,7 +8,7 @@ import {
 	ownedItemInputSchema,
 } from "@/closet/owned-item";
 import type { Hex } from "@/colour/hex";
-import type { GarmentId } from "@/dress/garments";
+import type { TypeId } from "@/dress/clothing-types";
 import type { BrandId } from "@/labels/brand";
 import type { ColourId } from "@/labels/colour";
 import { brandOf } from "./brand-store";
@@ -45,7 +45,7 @@ export type OwnedItemError =
 
 export type AddedOwnedItem = { ownedItem: OwnedItem; created: boolean };
 
-type Piece = { typeId: GarmentId; colourId: string; brandId: string | null };
+type Piece = { typeId: TypeId; colourId: string; brandId: string | null };
 
 // The account's owned items, newest first, or the one with this id.
 async function readOwnedItems(

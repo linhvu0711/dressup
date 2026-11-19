@@ -1,4 +1,4 @@
-import { GARMENT_IDS } from "@/dress/garments";
+import { TYPE_IDS } from "@/dress/clothing-types";
 import { listColours } from "../colour-store";
 import type { Db } from "../db";
 import { shopLink, wish } from "../db/wish-schema";
@@ -15,8 +15,8 @@ export async function seedWishes(db: Db, userId: string, n: number) {
 	const all = Array.from({ length: n }, (_, i) => ({
 		id: `00000000-0000-4000-a000-${String(i + 1).padStart(12, "0")}`,
 		userId,
-		typeId: GARMENT_IDS[i % GARMENT_IDS.length],
-		colourId: colours[Math.floor(i / GARMENT_IDS.length)].id,
+		typeId: TYPE_IDS[i % TYPE_IDS.length],
+		colourId: colours[Math.floor(i / TYPE_IDS.length)].id,
 		createdAt: new Date(Date.UTC(2026, 0, 1) - i * 1000),
 	}));
 	for (let i = 0; i < all.length; i += CHUNK)

@@ -1,14 +1,14 @@
 import { z } from "zod";
 import {
-	GARMENT_IDS,
-	GARMENT_NAMES,
-	type GarmentId,
-	type GarmentLayer,
+	type FigureLayer,
 	type Hex,
 	LAYER_OF,
 	LAYERS,
 	type Layer,
-} from "@/dress/garments";
+	TYPE_IDS,
+	TYPE_NAMES,
+	type TypeId,
+} from "@/dress/clothing-types";
 import { colourSchema } from "@/labels/colour";
 import { tagIdSchema } from "@/tags/tag";
 
@@ -29,14 +29,14 @@ export const combinationInputSchema = z
 	.object({
 		id: combinationIdSchema,
 		pieces: z
-			.array(z.object({ typeId: z.enum(GARMENT_IDS), colourId: z.string() }))
+			.array(z.object({ typeId: z.enum(TYPE_IDS), colourId: z.string() }))
 			.min(2)
 			.max(4),
 		open: z.boolean(),
 		tags: z.array(tagIdSchema).max(COMBINATION_TAGS_MAX).default([]),
 	})
 	.superRefine((combination, ctx) => {
-		const seen = new Map<Layer, GarmentId>();
+		const seen = new Map<Layer, TypeId>();
 		for (const [i, { typeId }] of combination.pieces.entries()) {
 			const layer = LAYER_OF[typeId];
 			const other = seen.get(layer);
@@ -55,7 +55,7 @@ export const combinationInputSchema = z
 
 // zod types params as Record<string, any>, so the layer rule writes its
 // params to this shape and checkCombination reads them back.
-type SameLayer = { typeId: GarmentId; other: GarmentId; layer: Layer };
+type SameLayer = { typeId: TypeId; other: TypeId; layer: Layer };
 
 export type CombinationInput = z.infer<typeof combinationInputSchema>;
 
@@ -68,7 +68,7 @@ export const combinationSchema = z.object({
 	pieces: z.array(
 		z.object({
 			layer: z.enum(LAYERS),
-			typeId: z.enum(GARMENT_IDS),
+			typeId: z.enum(TYPE_IDS),
 			colour: colourSchema,
 		}),
 	),
@@ -95,7 +95,7 @@ export type CombinationProblem =
 			issue: z.core.$ZodIssue;
 	  };
 
-const hasJacket = (pieces: readonly { typeId: GarmentId }[]) =>
+const hasJacket = (pieces: readonly { typeId: TypeId }[]) =>
 	pieces.some((p) => LAYER_OF[p.typeId] === "jacket");
 
 const valueAt = (input: unknown, path: readonly PropertyKey[]): unknown =>
@@ -157,7 +157,7 @@ export function checkCombination(
 	return { ok: false, problem: { code: "invalid", path, issue } };
 }
 
-const byLayer = <T extends { typeId: GarmentId }>(pieces: readonly T[]): T[] =>
+const byLayer = <T extends { typeId: TypeId }>(pieces: readonly T[]): T[] =>
 	[...pieces].sort(
 		(a, b) =>
 			LAYERS.indexOf(LAYER_OF[a.typeId]) - LAYERS.indexOf(LAYER_OF[b.typeId]),
@@ -166,7 +166,7 @@ const byLayer = <T extends { typeId: GarmentId }>(pieces: readonly T[]): T[] =>
 // The pieces and the jacket state as one text, so the database can refuse a
 // second combination with the same identity.
 export function combinationKey(
-	pieces: readonly { typeId: GarmentId; colourId: string }[],
+	pieces: readonly { typeId: TypeId; colourId: string }[],
 	open: boolean,
 ): string {
 	const key = byLayer(pieces)
@@ -177,19 +177,19 @@ export function combinationKey(
 
 // A type's name inside a title: "long tee", but "Harrington jacket", since
 // Harrington is a name.
-const typeWord = (id: GarmentId) => {
-	const name = GARMENT_NAMES[id];
+const typeWord = (id: TypeId) => {
+	const name = TYPE_NAMES[id];
 	return id === "harrington" ? name : name[0].toLowerCase() + name.slice(1);
 };
 
 // The order a combination is read in: the top layer first.
-export const topFirst = <T extends { typeId: GarmentId }>(
+export const topFirst = <T extends { typeId: TypeId }>(
 	pieces: readonly T[],
 ): T[] => byLayer(pieces).reverse();
 
 // A piece as the title and the piece lines name it: "Black long tee".
 export function pieceName(piece: {
-	typeId: GarmentId;
+	typeId: TypeId;
 	colour: { name: string };
 }): string {
 	return `${piece.colour.name} ${typeWord(piece.typeId)}`;
@@ -198,7 +198,7 @@ export function pieceName(piece: {
 // The pieces, top layer first, as "Khaki Harrington jacket (open) + Black long
 // tee + Navy casual pants".
 export function combinationTitle(combination: {
-	pieces: readonly { typeId: GarmentId; colour: { name: string } }[];
+	pieces: readonly { typeId: TypeId; colour: { name: string } }[];
 	open: boolean;
 }): string {
 	return topFirst(combination.pieces)
@@ -219,18 +219,16 @@ export const BLANK: Hex = "#E2DED7";
 // casual pants with no bottom, and a pale short tee with no inner top and no
 // sweater.
 export function wornLayers(
-	pieces: readonly { typeId: GarmentId; hex: Hex }[],
-): GarmentLayer[] {
-	const worn: GarmentLayer[] = byLayer(pieces).map((p) => ({
-		garment: p.typeId,
+	pieces: readonly { typeId: TypeId; hex: Hex }[],
+): FigureLayer[] {
+	const worn: FigureLayer[] = byLayer(pieces).map((p) => ({
+		typeId: p.typeId,
 		color: p.hex,
 	}));
-	const blank = (garment: GarmentId): GarmentLayer[] => [
-		{ garment, color: BLANK },
-	];
-	const bottom = worn.filter((l) => LAYER_OF[l.garment] === "bottom");
-	const above = worn.filter((l) => LAYER_OF[l.garment] !== "bottom");
-	const hasTop = above.some((l) => LAYER_OF[l.garment] !== "jacket");
+	const blank = (typeId: TypeId): FigureLayer[] => [{ typeId, color: BLANK }];
+	const bottom = worn.filter((l) => LAYER_OF[l.typeId] === "bottom");
+	const above = worn.filter((l) => LAYER_OF[l.typeId] !== "bottom");
+	const hasTop = above.some((l) => LAYER_OF[l.typeId] !== "jacket");
 	return [
 		...(bottom.length > 0 ? bottom : blank("casual_p")),
 		...(hasTop ? [] : blank("tee_s")),
