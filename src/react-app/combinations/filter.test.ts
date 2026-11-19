@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { GarmentId } from "@/dress/garments";
+import type { TypeId } from "@/dress/clothing-types";
 import type { ColourId } from "@/labels/colour";
 import type { TagId } from "@/tags/tag";
 import {
@@ -22,7 +22,7 @@ const T2 = "00000000-0000-4000-8000-000000000002" as TagId;
 
 const combination = (
 	id: string,
-	pieces: [GarmentId, ColourId][],
+	pieces: [TypeId, ColourId][],
 	tags: TagId[] = [],
 ) => ({
 	id,

@@ -5,7 +5,7 @@ import type { Hex } from "@/colour/hex";
 import { Button } from "@/components/ui/button";
 import { ActiveFilters, FilterButton } from "@/components/ui/filter";
 import { Notice } from "@/components/ui/notice";
-import type { GarmentId } from "@/dress/garments";
+import type { TypeId } from "@/dress/clothing-types";
 import { PieceFilterSheet } from "@/piece-filter/PieceFilterSheet";
 import type { FilterPiece } from "@/piece-filter/piece-filter";
 import { usePieceFilter } from "@/piece-filter/use-piece-filter";
@@ -19,7 +19,7 @@ const WALL =
 const PULSE = "animate-placeholder motion-reduce:animate-none";
 
 type TilePiece = {
-	typeId: GarmentId;
+	typeId: TypeId;
 	colour: { id: string; name: string; hex: Hex };
 };
 

@@ -2,7 +2,7 @@ import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
-import { LAYER_OF } from "@/dress/garments";
+import { LAYER_OF } from "@/dress/clothing-types";
 import { Stage } from "@/dress/Stage";
 import { useMannequin } from "@/mannequin/api";
 import { MannequinFailed } from "@/mannequin/MannequinFailed";

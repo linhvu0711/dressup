@@ -1,10 +1,10 @@
 import { combinationKey } from "@/combinations/combination";
-import { type GarmentId, LAYER_OF } from "@/dress/garments";
+import { LAYER_OF, type TypeId } from "@/dress/clothing-types";
 import { listColours } from "../colour-store";
 import type { Db } from "../db";
 import { combination, combinationPiece } from "../db/combination-schema";
 
-const BOTTOMS: GarmentId[] = [
+const BOTTOMS: TypeId[] = [
 	"casual_sh",
 	"chino_sh",
 	"chino_p",
@@ -13,7 +13,7 @@ const BOTTOMS: GarmentId[] = [
 	"train_p",
 ];
 
-const TOPS: GarmentId[] = ["tee_s", "tee_l", "polo_s", "polo_l"];
+const TOPS: TypeId[] = ["tee_s", "tee_l", "polo_s", "polo_l"];
 
 // D1 takes at most 100 bound values in one statement; a combination binds 4
 // and its two pieces 10, so 9 combinations go in each pair of inserts.

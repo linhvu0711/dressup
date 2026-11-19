@@ -1,7 +1,7 @@
 import type { Hex } from "@/colour/hex";
+import type { TypeId } from "@/dress/clothing-types";
 import { FigureSvg, Stretch } from "@/dress/figure/frame";
-import { GARMENT_DRAWINGS } from "@/dress/figure/garments";
-import type { GarmentId } from "@/dress/garments";
+import { GARMENT_DRAWINGS } from "@/dress/figure/type-drawings";
 import { STARTER_MANNEQUIN } from "@/mannequin/mannequin";
 
 // Square crops of the figure, each just around the drawn part, so the small
@@ -11,7 +11,7 @@ const TOP = "40 140 320 320";
 const SHORTS = "100 368 200 200";
 const PANTS = "0 368 400 400";
 
-const VIEW_BOX: Record<GarmentId, string> = {
+const VIEW_BOX: Record<TypeId, string> = {
 	tee_s: TOP,
 	tee_l: TOP,
 	polo_s: TOP,
@@ -38,7 +38,7 @@ export function TypeFigure({
 	hex = "#8C8A84",
 	className = "-ml-1 size-[22px] flex-none",
 }: {
-	typeId: GarmentId;
+	typeId: TypeId;
 	hex?: Hex;
 	className?: string;
 }) {

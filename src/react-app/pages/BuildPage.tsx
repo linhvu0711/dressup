@@ -11,17 +11,17 @@ import { useWallAddress } from "@/combinations/wall-address";
 import { Button } from "@/components/ui/button";
 import { CHIP } from "@/components/ui/chip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MannequinPlaceholder } from "@/dress/figure/MannequinPlaceholder";
-import { TypeFigure } from "@/dress/figure/TypeFigure";
 import {
-	GARMENT_IDS,
-	GARMENT_NAMES,
-	type GarmentId,
 	LAYER_NAMES,
 	LAYER_OF,
 	LAYERS,
 	type Layer,
-} from "@/dress/garments";
+	TYPE_IDS,
+	TYPE_NAMES,
+	type TypeId,
+} from "@/dress/clothing-types";
+import { MannequinPlaceholder } from "@/dress/figure/MannequinPlaceholder";
+import { TypeFigure } from "@/dress/figure/TypeFigure";
 import { Stage } from "@/dress/Stage";
 import { useColours } from "@/labels/api";
 import { ColourSwatches } from "@/labels/ColourSwatches";
@@ -30,7 +30,7 @@ import { useMannequin } from "@/mannequin/api";
 import { MannequinFailed } from "@/mannequin/MannequinFailed";
 import { PageHeader } from "../shell/PageHeader";
 
-type Picks = Partial<Record<Layer, { typeId: GarmentId; colourId: ColourId }>>;
+type Picks = Partial<Record<Layer, { typeId: TypeId; colourId: ColourId }>>;
 
 const LABEL = "font-medium text-[12.5px] text-muted-foreground";
 
@@ -129,7 +129,7 @@ function Builder({ combination }: { combination?: Combination }) {
 		else {
 			const colourId = picked?.colourId ?? list[0]?.id;
 			if (!colourId) return;
-			next[layer] = { typeId: value as GarmentId, colourId };
+			next[layer] = { typeId: value as TypeId, colourId };
 		}
 		setPicks(next);
 	}
@@ -219,19 +219,17 @@ function Builder({ combination }: { combination?: Combination }) {
 								<ToggleGroup.Item value={NONE} className={CHIP}>
 									None
 								</ToggleGroup.Item>
-								{GARMENT_IDS.filter((id) => LAYER_OF[id] === layer).map(
-									(id) => (
-										<ToggleGroup.Item
-											key={id}
-											value={id}
-											disabled={list.length === 0}
-											className={CHIP}
-										>
-											<TypeFigure typeId={id} />
-											{GARMENT_NAMES[id]}
-										</ToggleGroup.Item>
-									),
-								)}
+								{TYPE_IDS.filter((id) => LAYER_OF[id] === layer).map((id) => (
+									<ToggleGroup.Item
+										key={id}
+										value={id}
+										disabled={list.length === 0}
+										className={CHIP}
+									>
+										<TypeFigure typeId={id} />
+										{TYPE_NAMES[id]}
+									</ToggleGroup.Item>
+								))}
 							</ToggleGroup.Root>
 						</div>
 						<div className="flex flex-col gap-2">

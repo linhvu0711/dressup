@@ -5,16 +5,16 @@ import { Button } from "@/components/ui/button";
 import { CHIP } from "@/components/ui/chip";
 import { FilterSheet } from "@/components/ui/filter";
 import { LABEL, LIST_ROW, ROW } from "@/components/ui/sheet-form";
-import { TypeFigure } from "@/dress/figure/TypeFigure";
 import {
-	GARMENT_IDS,
-	GARMENT_NAMES,
-	type GarmentId,
 	LAYER_GROUP_NAMES,
 	LAYER_OF,
 	LAYERS,
 	type Layer,
-} from "@/dress/garments";
+	TYPE_IDS,
+	TYPE_NAMES,
+	type TypeId,
+} from "@/dress/clothing-types";
+import { TypeFigure } from "@/dress/figure/TypeFigure";
 import type { BrandId } from "@/labels/brand";
 import { useBrands } from "@/labels/brand-api";
 import { ColourSwatches } from "@/labels/ColourSwatches";
@@ -39,12 +39,12 @@ export function PieceFilterSheet({
 		...filter.layers.map((l) => `layer:${l}`),
 		...filter.types.map((t) => `type:${t}`),
 	];
-	const toggleType = (type: GarmentId) =>
+	const toggleType = (type: TypeId) =>
 		onChange({
 			...filter,
 			types: filter.types.includes(type)
 				? filter.types.filter((t) => t !== type)
-				: GARMENT_IDS.filter((t) => t === type || filter.types.includes(t)),
+				: TYPE_IDS.filter((t) => t === type || filter.types.includes(t)),
 		});
 	return (
 		<FilterSheet
@@ -68,7 +68,7 @@ export function PieceFilterSheet({
 							onChange({
 								...filter,
 								layers: LAYERS.filter((l) => values.includes(`layer:${l}`)),
-								types: GARMENT_IDS.filter((t) => values.includes(`type:${t}`)),
+								types: TYPE_IDS.filter((t) => values.includes(`type:${t}`)),
 							})
 						}
 						className="flex flex-wrap gap-[7px]"
@@ -88,7 +88,7 @@ export function PieceFilterSheet({
 								value={`type:${type}`}
 								className={CHIP}
 							>
-								{GARMENT_NAMES[type]}
+								{TYPE_NAMES[type]}
 							</ToggleGroup.Item>
 						))}
 					</ToggleGroup.Root>
@@ -122,26 +122,24 @@ export function PieceFilterSheet({
 					{LAYERS.map((layer) => (
 						<div key={layer} className="flex flex-col">
 							<span className={LABEL}>{LAYER_GROUP_NAMES[layer]}</span>
-							{GARMENT_IDS.filter((id) => LAYER_OF[id] === layer).map(
-								(type) => {
-									const on = filter.types.includes(type);
-									return (
-										<button
-											key={type}
-											type="button"
-											aria-pressed={on}
-											className={LIST_ROW}
-											onClick={() => toggleType(type)}
-										>
-											<TypeFigure typeId={type} className="size-11 flex-none" />
-											<span className="flex-1">{GARMENT_NAMES[type]}</span>
-											{on ? (
-												<Check size={18} strokeWidth={1.9} aria-hidden />
-											) : null}
-										</button>
-									);
-								},
-							)}
+							{TYPE_IDS.filter((id) => LAYER_OF[id] === layer).map((type) => {
+								const on = filter.types.includes(type);
+								return (
+									<button
+										key={type}
+										type="button"
+										aria-pressed={on}
+										className={LIST_ROW}
+										onClick={() => toggleType(type)}
+									>
+										<TypeFigure typeId={type} className="size-11 flex-none" />
+										<span className="flex-1">{TYPE_NAMES[type]}</span>
+										{on ? (
+											<Check size={18} strokeWidth={1.9} aria-hidden />
+										) : null}
+									</button>
+								);
+							})}
 						</div>
 					))}
 				</div>

@@ -4,7 +4,7 @@ import {
 	type OwnedItem,
 	type OwnedItemId,
 } from "@/closet/owned-item";
-import type { GarmentId } from "@/dress/garments";
+import type { TypeId } from "@/dress/clothing-types";
 import type { BrandId } from "@/labels/brand";
 import type { ColourId } from "@/labels/colour";
 import type { ShopLink, ShopLinkId, Wish, WishId } from "@/wishlist/wish";
@@ -36,7 +36,7 @@ const colour = (id: ColourId) => ({
 
 const item = (
 	id: string,
-	typeId: GarmentId,
+	typeId: TypeId,
 	colourId: ColourId,
 	brand: BrandId | null,
 ): OwnedItem => ({
@@ -56,7 +56,7 @@ const link = (brand: BrandId | null): ShopLink => ({
 	price: null,
 });
 
-const wish = (typeId: GarmentId, shopLinks: ShopLink[]): Wish => ({
+const wish = (typeId: TypeId, shopLinks: ShopLink[]): Wish => ({
 	id: crypto.randomUUID() as WishId,
 	typeId,
 	colour: colour(NAVY),
@@ -69,7 +69,7 @@ const filterOf = (picks: Partial<PieceFilter>): PieceFilter => ({
 });
 
 const piece = (
-	typeId: GarmentId,
+	typeId: TypeId,
 	colourId: ColourId,
 	brandIds: (BrandId | null)[] = [],
 ): FilterPiece => ({ typeId, colourId, brandIds });

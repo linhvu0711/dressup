@@ -1,13 +1,13 @@
-import { BodySkin, Head, Shoes } from "@/dress/figure/body";
-import { FigureSvg, Stretch } from "@/dress/figure/frame";
-import { GARMENT_DRAWINGS } from "@/dress/figure/garments";
-import { useUrl } from "@/dress/figure/parts";
 import {
 	type GarmentLayer,
 	type Hex,
 	isJacket,
 	type JacketId,
-} from "@/dress/garments";
+} from "@/dress/clothing-types";
+import { BodySkin, Head, Shoes } from "@/dress/figure/body";
+import { FigureSvg, Stretch } from "@/dress/figure/frame";
+import { useUrl } from "@/dress/figure/parts";
+import { GARMENT_DRAWINGS } from "@/dress/figure/type-drawings";
 
 export function Mannequin({
 	layers = [],

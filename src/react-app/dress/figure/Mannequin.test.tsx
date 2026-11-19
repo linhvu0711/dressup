@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { type JacketId, TYPE_IDS } from "@/dress/clothing-types";
 import { Mannequin } from "@/dress/figure/Mannequin";
-import { GARMENT_IDS, type JacketId } from "@/dress/garments";
 import { STARTER_MANNEQUIN } from "@/mannequin/mannequin";
 
 describe("Mannequin", () => {
@@ -54,7 +54,7 @@ describe("Mannequin", () => {
 		expect(used.filter((id) => !ids.has(id))).toEqual([]);
 	});
 
-	test.each(GARMENT_IDS.map((id) => [id]))(
+	test.each(TYPE_IDS.map((id) => [id]))(
 		"draws each garment in the given colour (%s)",
 		(id) => {
 			// Given: one garment in the test colour

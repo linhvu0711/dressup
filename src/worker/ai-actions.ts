@@ -15,7 +15,7 @@ import {
 	type Combination,
 	combinationTitle,
 } from "@/combinations/combination";
-import { GARMENT_IDS, GARMENT_NAMES, LAYER_OF } from "@/dress/garments";
+import { LAYER_OF, TYPE_IDS, TYPE_NAMES } from "@/dress/clothing-types";
 import { BRAND_LIMIT, BRAND_NAME_MAX, type BrandId } from "@/labels/brand";
 import { COLOUR_LIMIT, COLOUR_NAME_MAX, type ColourId } from "@/labels/colour";
 import {
@@ -113,7 +113,7 @@ const combinationView = (combination: Combination, tags: Tag[]) => ({
 	pieces: combination.pieces.map((p) => ({
 		layer: p.layer,
 		typeId: p.typeId,
-		type: GARMENT_NAMES[p.typeId],
+		type: TYPE_NAMES[p.typeId],
 		colour: p.colour,
 	})),
 	tags: tags
@@ -168,7 +168,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 	): Promise<{ ok: true; filter: PieceFilter } | { ok: false; text: string }> {
 		const { types = [], colourIds = [], brandIds = [] } = args;
 		const badType = types.find(
-			(t) => !(GARMENT_IDS as readonly string[]).includes(t),
+			(t) => !(TYPE_IDS as readonly string[]).includes(t),
 		);
 		if (badType !== undefined) return { ok: false, text: notAType(badType) };
 		if (colourIds.length > 0) {
@@ -441,9 +441,9 @@ export function registerAiActions(server: McpServer, account: Account) {
 		},
 		async () =>
 			answer({
-				types: GARMENT_IDS.map((id) => ({
+				types: TYPE_IDS.map((id) => ({
 					id,
-					name: GARMENT_NAMES[id],
+					name: TYPE_NAMES[id],
 					layer: LAYER_OF[id],
 				})),
 			}),

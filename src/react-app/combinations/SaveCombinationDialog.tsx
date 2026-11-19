@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
 import { keys, RequestError } from "@/data/client";
-import type { GarmentId } from "@/dress/garments";
+import type { TypeId } from "@/dress/clothing-types";
 import type { Colour } from "@/labels/colour";
 import { useTags } from "@/tags/api";
 import { TagPicker } from "@/tags/TagPicker";
@@ -37,7 +37,7 @@ export function SaveCombinationDialog({
 	onClose,
 	changing,
 }: {
-	pieces: readonly { typeId: GarmentId; colour: Colour }[];
+	pieces: readonly { typeId: TypeId; colour: Colour }[];
 	open: boolean;
 	onClose: () => void;
 	changing?: Combination;

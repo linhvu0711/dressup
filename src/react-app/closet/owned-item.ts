@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { GARMENT_IDS } from "@/dress/garments";
+import { TYPE_IDS } from "@/dress/clothing-types";
 import { brandSchema } from "@/labels/brand";
 import { colourSchema } from "@/labels/colour";
 import { pictureIdSchema } from "@/pictures/picture";
@@ -19,7 +19,7 @@ export const quantitySchema = z.number().int().min(1).max(QUANTITY_MAX);
 // ids here; the store checks that they are the account's.
 export const ownedItemInputSchema = z.object({
 	id: ownedItemIdSchema,
-	typeId: z.enum(GARMENT_IDS),
+	typeId: z.enum(TYPE_IDS),
 	colourId: z.string(),
 	brandId: z.string().nullable(),
 	quantity: quantitySchema,
@@ -37,7 +37,7 @@ export const ownedItemChangeSchema = z.object({
 
 export const ownedItemSchema = z.object({
 	id: ownedItemIdSchema,
-	typeId: z.enum(GARMENT_IDS),
+	typeId: z.enum(TYPE_IDS),
 	colour: colourSchema,
 	brand: brandSchema.nullable(),
 	quantity: quantitySchema,

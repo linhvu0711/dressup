@@ -1,10 +1,10 @@
-import { GARMENT_IDS, GARMENT_NAMES, type GarmentId } from "@/dress/garments";
+import { TYPE_IDS, TYPE_NAMES, type TypeId } from "@/dress/clothing-types";
 import type { ColourId } from "@/labels/colour";
 import type { Tag, TagId } from "@/tags/tag";
 import { type CombinationProblem, pieceName } from "./combination";
 
 // A piece row: a type, a colour, or both. A row with neither filters nothing.
-export type PieceRow = { typeId: GarmentId | null; colourId: ColourId | null };
+export type PieceRow = { typeId: TypeId | null; colourId: ColourId | null };
 
 export type CombinationFilter = { pieces: PieceRow[]; tags: TagId[] };
 
@@ -15,11 +15,11 @@ export const BLANK_ROW: PieceRow = { typeId: null, colourId: null };
 export const isBlank = (row: PieceRow) =>
 	row.typeId === null && row.colourId === null;
 
-const isTypeId = (value: string): value is GarmentId =>
-	(GARMENT_IDS as readonly string[]).includes(value);
+const isTypeId = (value: string): value is TypeId =>
+	(TYPE_IDS as readonly string[]).includes(value);
 
 type Filtered = {
-	pieces: readonly { typeId: GarmentId; colour: { id: ColourId } }[];
+	pieces: readonly { typeId: TypeId; colour: { id: ColourId } }[];
 	tags: readonly TagId[];
 };
 
@@ -64,7 +64,7 @@ export function checkPieceRows(
 	return {
 		ok: true,
 		rows: rows.map((r) => ({
-			typeId: (r.typeId ?? null) as GarmentId | null,
+			typeId: (r.typeId ?? null) as TypeId | null,
 			colourId: (r.colourId ?? null) as ColourId | null,
 		})),
 	};
@@ -83,7 +83,7 @@ export function readCombinationFilter(
 		const colour = value.slice(dot + 1);
 		if (type !== "" && !isTypeId(type)) continue;
 		const row: PieceRow = {
-			typeId: type === "" ? null : (type as GarmentId),
+			typeId: type === "" ? null : (type as TypeId),
 			colourId: colour === "" ? null : (colour as ColourId),
 		};
 		if (!isBlank(row)) pieces.push(row);
@@ -129,7 +129,7 @@ export type FilterChip = {
 	label: string;
 	// Only a row with a type alone draws its type's figure, as the chips frame
 	// shows.
-	typeId: GarmentId | null;
+	typeId: TypeId | null;
 	without: CombinationFilter;
 };
 
@@ -158,7 +158,7 @@ export function filterChips(
 			];
 		if (row.typeId !== null)
 			return [
-				{ key, label: GARMENT_NAMES[row.typeId], typeId: row.typeId, without },
+				{ key, label: TYPE_NAMES[row.typeId], typeId: row.typeId, without },
 			];
 		return [
 			{

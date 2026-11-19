@@ -6,7 +6,7 @@ import {
 	text,
 	uniqueIndex,
 } from "drizzle-orm/sqlite-core";
-import type { GarmentId } from "../../react-app/dress/garments";
+import type { TypeId } from "../../react-app/dress/clothing-types";
 import { user } from "./auth-schema";
 import { brand } from "./brand-schema";
 import { colour } from "./colour-schema";
@@ -22,7 +22,7 @@ export const wish = sqliteTable(
 		userId: text("user_id")
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
-		typeId: text("type_id").$type<GarmentId>().notNull(),
+		typeId: text("type_id").$type<TypeId>().notNull(),
 		colourId: text("colour_id")
 			.notNull()
 			.references(() => colour.id),

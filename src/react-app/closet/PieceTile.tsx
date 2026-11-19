@@ -1,8 +1,8 @@
 import { Link } from "react-router";
 import type { Hex } from "@/colour/hex";
 import { pieceName } from "@/combinations/combination";
+import type { TypeId } from "@/dress/clothing-types";
 import { TypeFigure } from "@/dress/figure/TypeFigure";
-import type { GarmentId } from "@/dress/garments";
 import { type PieceTab, usePieceLink } from "@/shell/piece-link";
 
 // One tile of a wall of pieces: the piece drawn in its colour, an optional
@@ -16,7 +16,7 @@ export function PieceTile({
 	badge,
 	line,
 }: {
-	piece: { typeId: GarmentId; colour: { id: string; name: string; hex: Hex } };
+	piece: { typeId: TypeId; colour: { id: string; name: string; hex: Hex } };
 	from: PieceTab;
 	label: string;
 	slot: string;

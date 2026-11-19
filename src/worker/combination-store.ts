@@ -20,7 +20,7 @@ import {
 	combinationKey,
 } from "@/combinations/combination";
 import { checkPieceRows, filterCombinations } from "@/combinations/filter";
-import { LAYER_OF, LAYERS } from "@/dress/garments";
+import { LAYER_OF, LAYERS } from "@/dress/clothing-types";
 import type { ColourId } from "@/labels/colour";
 import type { TagId } from "@/tags/tag";
 import { listColours } from "./colour-store";

@@ -6,7 +6,7 @@ import {
 	useContext,
 	useId,
 } from "react";
-import type { Hex } from "@/dress/garments";
+import type { Hex } from "@/dress/clothing-types";
 
 type Figure = {
 	prefix: string;

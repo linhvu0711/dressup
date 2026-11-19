@@ -1,6 +1,6 @@
 import { type ReactNode, useId } from "react";
+import type { Hex } from "@/dress/clothing-types";
 import { Defs, FigureContext } from "@/dress/figure/parts";
-import type { Hex } from "@/dress/garments";
 
 // The svg of one figure with its own defs, so a page with many figures has no
 // shared ids. Children read the prefix through FigureContext (useUrl).
