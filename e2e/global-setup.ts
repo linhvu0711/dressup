@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import type { FullConfig } from "@playwright/test";
 import { eq, like } from "drizzle-orm";
 import { OWNED_ITEM_LIMIT } from "@/closet/owned-item";
 import { COMBINATION_LIMIT } from "@/combinations/combination";
@@ -34,11 +35,10 @@ export const BRANDS_FULL_FILE = "e2e/.auth/brands-full.json";
 export const COMBINATIONS_FULL_FILE = "e2e/.auth/combinations-full.json";
 export const CLOSET_FULL_FILE = "e2e/.auth/closet-full.json";
 export const WISHLIST_FULL_FILE = "e2e/.auth/wishlist-full.json";
-// Each test changes the colours it saves, and tests run in parallel, so
-// each one claims its own fresh account from this pool (e2e/fixtures.ts).
-export const POOL_SIZE = 1000;
-export const poolFile = (n: number) => `e2e/.auth/pool/${n}.json`;
-export const claimFile = (n: number) => `e2e/.auth/claims/${n}`;
+export const POOL_DIR = "e2e/.auth/pool";
+export const CLAIMS_DIR = "e2e/.auth/claims";
+export const poolFile = (n: number) => `${POOL_DIR}/${n}.json`;
+export const claimFile = (n: number) => `${CLAIMS_DIR}/${n}`;
 
 export const signOutTests = ["settings", "late-check"] as const;
 export const signOutFile = (
@@ -54,7 +54,47 @@ export const aiAppFile = (project: string, test: (typeof aiAppTests)[number]) =>
 
 const TEST_APP_ID = "https://client.example/meta.json";
 
-export default async function globalSetup() {
+type ListedSuite = {
+	suites?: ListedSuite[];
+	specs?: { tests: { projectName: string }[] }[];
+};
+
+// Each test changes the colours it saves, and tests run in parallel, so each
+// one claims its own fresh account from the pool (e2e/fixtures.ts), and a retry
+// claims again. Global setup gets the config but not the tests, so it asks
+// Playwright for the list. Tests that bring their own account are counted too,
+// a small margin. The run's --repeat-each does not reach the config.
+function accountsNeeded(config: FullConfig) {
+	const out = execFileSync(
+		"bunx",
+		[
+			"playwright",
+			"test",
+			"--list",
+			"--reporter=json",
+			"--config",
+			config.configFile ?? "playwright.config.ts",
+		],
+		{
+			encoding: "utf8",
+			maxBuffer: 64 * 1024 * 1024,
+			stdio: ["ignore", "pipe", "inherit"],
+		},
+	);
+	const retries = new Map(config.projects.map((p) => [p.name, p.retries]));
+	let needed = 0;
+	const count = (suite: ListedSuite) => {
+		for (const spec of suite.specs ?? [])
+			for (const test of spec.tests)
+				needed += 1 + (retries.get(test.projectName) ?? 0);
+		for (const inner of suite.suites ?? []) count(inner);
+	};
+	count(JSON.parse(out) as ListedSuite);
+	return needed;
+}
+
+export default async function globalSetup(config: FullConfig) {
+	const poolSize = accountsNeeded(config);
 	// No TTY on stdin, so wrangler applies without its confirm prompt.
 	execFileSync("bun", ["run", "db:migrate:local"], {
 		stdio: ["ignore", "inherit", "inherit"],
@@ -217,10 +257,12 @@ export default async function globalSetup() {
 			}
 		// The pool's rows go with its users.
 		await db.delete(schema.user).where(like(schema.user.id, "e2e-pool-%"));
-		rmSync("e2e/.auth/claims", { recursive: true, force: true });
-		mkdirSync("e2e/.auth/claims", { recursive: true });
-		mkdirSync("e2e/.auth/pool", { recursive: true });
-		for (let n = 0; n < POOL_SIZE; n++) {
+		// A file left by a larger run would point at a deleted account.
+		rmSync(POOL_DIR, { recursive: true, force: true });
+		rmSync(CLAIMS_DIR, { recursive: true, force: true });
+		mkdirSync(CLAIMS_DIR, { recursive: true });
+		mkdirSync(POOL_DIR, { recursive: true });
+		for (let n = 0; n < poolSize; n++) {
 			const userId = `e2e-pool-${n}`;
 			await helpers.saveUser(
 				helpers.createUser({
@@ -238,6 +280,9 @@ export default async function globalSetup() {
 				JSON.stringify({ cookies: poolCookies, origins: [] }),
 			);
 		}
+		console.log(
+			`e2e account pool: ${poolSize} accounts for ${poolSize} listed test runs`,
+		);
 		// Sign-out ends its session, so each such test gets its own.
 		for (const project of ["phone", "laptop"])
 			for (const test of signOutTests)
