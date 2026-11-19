@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useSearchParams } from "react-router";
 import { useColours } from "@/labels/api";
 import { useBrands } from "@/labels/brand-api";
@@ -21,11 +22,18 @@ export function usePieceFilter<E>(
 	const [params, setParams] = useSearchParams();
 	const colours = useColours();
 	const brands = useBrands();
-	const filter = prunePieceFilter(
-		readPieceFilter(params),
-		colours.data,
-		brands.data,
-	);
+	const read = readPieceFilter(params);
+	const filter = prunePieceFilter(read, colours.data, brands.data);
+	// A deleted label leaves the address too: else a reload matches by it
+	// until the labels load, and for good when they fail to load.
+	const prunedQuery =
+		filterSize(filter) < filterSize(read)
+			? writePieceFilter(filter).toString()
+			: null;
+	useEffect(() => {
+		if (prunedQuery !== null)
+			setParams(new URLSearchParams(prunedQuery), { replace: true });
+	}, [prunedQuery, setParams]);
 	// Each pick replaces the history entry, so Back leaves the tab instead of
 	// undoing one pick. A pick lands at once: in a transition, a quick second
 	// pick would build on the filter before the first and drop it.

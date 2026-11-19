@@ -227,11 +227,13 @@ test("drops a deleted brand from the closet filter", async ({ page }) => {
 	await expect(page.locator('[data-slot="toast"]')).toHaveText("Brand deleted");
 	await page.goBack();
 	await expect(closetTiles(page)).toHaveCount(2);
+	await expect(page).toHaveURL(/\/closet$/);
 	// Then
 	expect({
 		chips: await chips(page).count(),
 		tiles: await closetTiles(page).count(),
-	}).toEqual({ chips: 0, tiles: 2 });
+		address: new URL(page.url()).search,
+	}).toEqual({ chips: 0, tiles: 2, address: "" });
 });
 
 test("filters the wishlist by the brands of its shop links", async ({
