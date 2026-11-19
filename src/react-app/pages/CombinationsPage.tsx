@@ -88,8 +88,11 @@ export function CombinationsPage() {
 	// The confirm lives here, not in the view: the view goes when the list
 	// drops the deleted combination, and the confirm must still say so.
 	const [deleting, setDeleting] = useState<Combination | null>(null);
+	// With no closet every combination would look Not all, so Pieces I own
+	// waits for it. Any never does.
+	const waitsForCloset = filter.own !== "any";
 	let wall: ReactNode;
-	if (combinations.isPending) {
+	if (combinations.isPending || (waitsForCloset && closet.isPending)) {
 		wall = (
 			<div className={WALL}>
 				{Array.from({ length: 6 }, (_, i) => (
@@ -112,6 +115,14 @@ export function CombinationsPage() {
 	} else if (combinations.isError) {
 		// Checked before the data: a failed refetch keeps the old list.
 		wall = <CombinationsFailed onRetry={() => void combinations.refetch()} />;
+	} else if (waitsForCloset && closet.isError && !closet.data) {
+		wall = (
+			<Notice title="Could not load your closet">
+				<Button className="mt-2" onClick={() => void closet.refetch()}>
+					Retry
+				</Button>
+			</Notice>
+		);
 	} else if (combinations.data.length === 0) {
 		wall = (
 			<Notice title="No combinations yet">

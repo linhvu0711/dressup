@@ -75,7 +75,9 @@ export const filterCombinations = <T extends Filtered>(
 ): T[] => list.filter((c) => matchesFilter(c, f, owned));
 
 export const filterSize = (f: CombinationFilter) =>
-	f.pieces.filter((row) => !isBlank(row)).length + f.tags.length;
+	f.pieces.filter((row) => !isBlank(row)).length +
+	f.tags.length +
+	(f.own === "any" ? 0 : 1);
 
 // The rows an AI app sends, before the account's colours are checked.
 export function checkPieceRows(
@@ -216,7 +218,19 @@ export function filterChips(
 			without: { ...f, tags: f.tags.filter((t) => t !== id) },
 		}),
 	);
-	return [...rows, ...tagChips];
+	// After the rows and before the tags, the order of the sheet's groups.
+	const ownChip: FilterChip[] =
+		f.own === "any"
+			? []
+			: [
+					{
+						key: "own",
+						label: f.own === "all" ? "Own all pieces" : "Not all owned",
+						typeId: null,
+						without: { ...f, own: "any" },
+					},
+				];
+	return [...rows, ...ownChip, ...tagChips];
 }
 
 export const shownText = (n: number) =>

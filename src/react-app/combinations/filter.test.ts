@@ -187,6 +187,22 @@ describe("combination filter", () => {
 		expect(labels).toEqual(["White short tee", "Sweater", "Navy", "work"]);
 	});
 
+	test("names the Pieces I own chip", () => {
+		// Given
+		const filter: CombinationFilter = {
+			pieces: [{ typeId: "tee_s", colourId: WHITE }],
+			tags: [T1],
+			own: "all",
+		};
+		const colours = [{ id: WHITE, name: "White", hex: "#F4F2ED" as const }];
+		// When
+		const labels = filterChips(filter, [{ id: T1, name: "Work" }], colours).map(
+			(c) => c.label,
+		);
+		// Then
+		expect(labels).toEqual(["White short tee", "Own all pieces", "Work"]);
+	});
+
 	// A owns every piece; B lacks its Black chino pants; C lacks its Navy
 	// sweater.
 	const owned: ReadonlySet<string> = new Set([

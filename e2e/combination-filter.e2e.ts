@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { postOwnedItems } from "./closet-helpers";
 import { colourIds, postCombinations, three, two } from "./combination-helpers";
 import { expect, test } from "./fixtures";
 
@@ -324,4 +325,148 @@ test("drops the filter from the address of an empty wall", async ({ page }) => {
 	await expect(
 		page.getByRole("link", { name: "Build a combination" }),
 	).toHaveAttribute("href", "/build");
+});
+
+// THREE and TWO, with both pieces of TWO in the closet: TWO is the one
+// combination whose pieces the closet holds all of.
+async function seedOwned(page: Page) {
+	await page.goto("/");
+	const ids = await colourIds(page);
+	await postCombinations(page, three(ids), two(ids));
+	await postOwnedItems(
+		page,
+		{ typeId: "train_sh", colourId: ids.Grey, brandId: null, quantity: 1 },
+		{ typeId: "tee_s", colourId: ids.White, brandId: null, quantity: 1 },
+	);
+}
+
+const ownChoice = (page: Page, name: string) =>
+	sheet(page)
+		.getByRole("radiogroup", { name: "Pieces I own" })
+		.getByRole("radio", { name, exact: true });
+
+test("shows only the combinations whose pieces I own all of", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account with THREE and TWO, TWO owned
+	await seedOwned(page);
+	await openWall(page);
+	// When
+	await openFilter(page);
+	await ownChoice(page, "All of them").click();
+	await page.getByRole("button", { name: "Show 1 combination" }).click();
+	// Then
+	await expect(titles(page)).toHaveText([TWO_TITLE]);
+});
+
+test("shows the combinations with a piece I do not own", async ({ page }) => {
+	// Given: both projects, a fresh account with THREE and TWO, TWO owned
+	await seedOwned(page);
+	await openWall(page);
+	// When
+	await openFilter(page);
+	await ownChoice(page, "Not all").click();
+	await page.getByRole("button", { name: "Show 1 combination" }).click();
+	// Then
+	await expect(titles(page)).toHaveText([THREE_TITLE]);
+});
+
+test("shows Own all pieces as a chip", async ({ page }) => {
+	// Given: both projects, a fresh account with THREE and TWO, TWO owned
+	await seedOwned(page);
+	// When
+	await openWall(page, "?own=all");
+	// Then
+	await expect(
+		page.getByRole("button", { name: "Remove Own all pieces" }),
+	).toBeVisible();
+});
+
+test("puts Any back with Clear all", async ({ page }) => {
+	// Given: both projects, a fresh account with THREE and TWO, TWO owned;
+	// the wall at All of them
+	await seedOwned(page);
+	await openWall(page, "?own=all");
+	await expect(titles(page)).toHaveText([TWO_TITLE]);
+	// When
+	await page
+		.getByRole("group", { name: "Active filters" })
+		.getByRole("button", { name: "Clear all" })
+		.click();
+	// Then
+	await expect(page).toHaveURL("/combinations");
+});
+
+test("keeps a combination only when it passes the piece rows, Pieces I own, and the tags", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account. P passes all three; Q has no
+	// White short tee; R has no work tag; S has Navy casual pants, which the
+	// closet lacks
+	await page.goto("/");
+	const work = await postTag(page, "work");
+	const ids = await colourIds(page);
+	const combination = (pieces: [string, string][], tags: string[]) => ({
+		id: crypto.randomUUID(),
+		pieces: pieces.map(([typeId, colourId]) => ({ typeId, colourId })),
+		open: false,
+		tags,
+	});
+	await postCombinations(
+		page,
+		combination(
+			[
+				["tee_s", ids.White],
+				["chino_p", ids.Navy],
+			],
+			[work],
+		),
+		combination(
+			[
+				["tee_l", ids.Black],
+				["chino_p", ids.Navy],
+			],
+			[work],
+		),
+		combination(
+			[
+				["tee_s", ids.White],
+				["train_sh", ids.Grey],
+			],
+			[],
+		),
+		combination(
+			[
+				["tee_s", ids.White],
+				["casual_p", ids.Navy],
+			],
+			[work],
+		),
+	);
+	await postOwnedItems(
+		page,
+		{ typeId: "tee_s", colourId: ids.White, brandId: null, quantity: 1 },
+		{ typeId: "chino_p", colourId: ids.Navy, brandId: null, quantity: 1 },
+		{ typeId: "tee_l", colourId: ids.Black, brandId: null, quantity: 1 },
+		{ typeId: "train_sh", colourId: ids.Grey, brandId: null, quantity: 1 },
+	);
+	// When
+	await openWall(page, `?piece=tee_s.${ids.White}&tag=${work}&own=all`);
+	// Then
+	await expect(titles(page)).toHaveText([FOUR_TITLE]);
+});
+
+test("says Could not load your closet when Pieces I own has no closet", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account with THREE and TWO, TWO owned;
+	// the closet answers 500
+	await seedOwned(page);
+	await page.route("**/api/owned-items", (route) =>
+		route.fulfill({ status: 500 }),
+	);
+	// When
+	await page.goto("/combinations?own=all");
+	// Then
+	await expect(page.getByText("Could not load your closet")).toBeVisible();
 });
