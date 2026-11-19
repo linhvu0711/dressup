@@ -2,6 +2,7 @@ import { ExternalLink, Pencil, Plus } from "lucide-react";
 import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { PictureStrip } from "@/pictures/PictureStrip";
+import { BoughtDialog } from "./BoughtDialog";
 import { RemoveWishDialog } from "./RemoveWishDialog";
 import { ShopLinkSheet } from "./ShopLinkSheet";
 import {
@@ -21,6 +22,7 @@ export function WishlistPart({ wish }: { wish: Wish }) {
 	// The sheet: a new link, or the link it changes.
 	const [sheet, setSheet] = useState<ShopLink | "add" | null>(null);
 	const [removing, setRemoving] = useState(false);
+	const [buying, setBuying] = useState<ShopLink | null>(null);
 	const full = wish.shopLinks.length >= SHOP_LINK_LIMIT;
 	return (
 		<section aria-labelledby={title} className="flex flex-col gap-2">
@@ -90,6 +92,9 @@ export function WishlistPart({ wish }: { wish: Wish }) {
 									<Pencil size={16} strokeWidth={1.9} aria-hidden />
 								</Button>
 							</div>
+							<Button className="self-end" onClick={() => setBuying(link)}>
+								Bought
+							</Button>
 						</li>
 					))}
 				</ul>
@@ -101,6 +106,13 @@ export function WishlistPart({ wish }: { wish: Wish }) {
 			>
 				Remove from wishlist
 			</Button>
+			{buying ? (
+				<BoughtDialog
+					link={buying}
+					wishId={wish.id}
+					onClose={() => setBuying(null)}
+				/>
+			) : null}
 			{removing ? (
 				<RemoveWishDialog wish={wish} onClose={() => setRemoving(false)} />
 			) : null}

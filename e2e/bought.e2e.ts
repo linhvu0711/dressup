@@ -124,3 +124,92 @@ test("shows each shop link's pictures as a strip and opens the viewer", async ({
 		page.getByRole("dialog", { name: "Picture 1 of 2" }),
 	).toBeVisible();
 });
+
+const card = (page: Page) =>
+	page.getByRole("listitem", { name: "Wool jacket", exact: true });
+
+const confirm = (page: Page) =>
+	page.getByRole("alertdialog", { name: "Bought this one?" });
+
+// Bought on the card, then Bought in the confirm.
+async function buy(page: Page) {
+	await card(page).getByRole("button", { name: "Bought" }).click();
+	await confirm(page).getByRole("button", { name: "Bought" }).click();
+}
+
+test("opens the Bought confirm and keeps the wish on Cancel", async ({
+	page,
+}) => {
+	// Given
+	await onJacketPage(page, [{ pictures: 2 }]);
+	// When
+	await card(page).getByRole("button", { name: "Bought" }).click();
+	const shown = {
+		text: await confirm(page).getByRole("paragraph").first().textContent(),
+		buttons: await confirm(page).getByRole("button").allInnerTexts(),
+	};
+	await confirm(page).getByRole("button", { name: "Cancel" }).click();
+	// Then
+	expect(shown).toEqual({
+		text: "It goes to your closet with its pictures. The wish and its other shop links go away.",
+		buttons: ["Cancel", "Bought"],
+	});
+	await expect(
+		page.getByRole("heading", { name: "On your wishlist" }),
+	).toBeVisible();
+	await expect(card(page)).toBeVisible();
+});
+
+test("moves a shop link to the closet after Bought", async ({ page }) => {
+	// Given
+	const { ids } = await onJacketPage(page, [{ pictures: 2 }]);
+	// When
+	await buy(page);
+	// Then
+	await expect(toast(page)).toHaveText("Moved to your closet");
+	await expect(
+		page.getByRole("heading", { name: "In your closet" }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "No brand × 1" }),
+	).toBeVisible();
+	await expect(strip(page, "No brand").getByRole("button")).toHaveCount(2);
+	await expect(
+		page.getByRole("heading", { name: "On your wishlist" }),
+	).toHaveCount(0);
+	await expect(page).toHaveURL(`/piece/wool/${ids.Charcoal}`);
+});
+
+test("keeps the confirm open with Not saved when Bought fails", async ({
+	page,
+}) => {
+	// Given
+	await onJacketPage(page, [{ pictures: 2 }]);
+	await page.route("**/api/shop-links/*/bought", (route) =>
+		route.fulfill({ status: 500 }),
+	);
+	// When
+	await buy(page);
+	// Then
+	await expect(confirm(page).getByRole("alert")).toHaveText(
+		"Not saved. Try again.",
+	);
+	// The open confirm hides the page from roles, so the card goes by its slot.
+	await expect(page.locator('[data-slot="shop-link"]')).toHaveCount(1);
+});
+
+test("says the closet limit when Bought answers owned_item_limit", async ({
+	page,
+}) => {
+	// Given
+	await onJacketPage(page, [{ pictures: 2 }]);
+	await page.route("**/api/shop-links/*/bought", (route) =>
+		route.fulfill({ status: 409, json: { error: "owned_item_limit" } }),
+	);
+	// When
+	await buy(page);
+	// Then
+	await expect(confirm(page).getByRole("alert")).toHaveText(
+		"You have 500 items. That is the limit. Delete one to add a new one.",
+	);
+});

@@ -44,6 +44,17 @@ const refresh = (queryKey: readonly unknown[]) => {
 		.then(() => queryClient.invalidateQueries({ queryKey }));
 };
 
+// The item in the closet list, in place or first.
+const putInCloset = (userId: string | null, item: OwnedItem) =>
+	queryClient.setQueryData<OwnedItem[]>(
+		keys.closet(userId),
+		(old) =>
+			old &&
+			(old.some((i) => i.id === item.id)
+				? old.map((i) => (i.id === item.id ? item : i))
+				: [item, ...old]),
+	);
+
 // What each change does to the cache. Each rule takes the account the hook
 // read, so a change that ends after an account switch writes nothing of it
 // into the other account's lists.
@@ -181,14 +192,7 @@ export const after = {
 	// As combinationSaved; a new item also makes its colour in use and counts
 	// on its brand.
 	ownedItemAdded(userId: string | null, item: OwnedItem) {
-		queryClient.setQueryData<OwnedItem[]>(
-			keys.closet(userId),
-			(old) =>
-				old &&
-				(old.some((i) => i.id === item.id)
-					? old.map((i) => (i.id === item.id ? item : i))
-					: [item, ...old]),
-		);
+		putInCloset(userId, item);
 		refresh(keys.closet(userId));
 		refresh(keys.colours(userId));
 		refresh(keys.brands(userId));
@@ -250,6 +254,18 @@ export const after = {
 		queryClient.setQueryData<Wish[]>(keys.wishlist(userId), (old) =>
 			old?.filter((w) => w.id !== id),
 		);
+		refresh(keys.wishlist(userId));
+		refresh(keys.colours(userId));
+		refresh(keys.brands(userId));
+	},
+	// The closet takes the item before the wish goes, so the piece page never
+	// finds the piece in neither list and sends the person back.
+	shopLinkBought(userId: string | null, item: OwnedItem, wishId: string) {
+		putInCloset(userId, item);
+		queryClient.setQueryData<Wish[]>(keys.wishlist(userId), (old) =>
+			old?.filter((w) => w.id !== wishId),
+		);
+		refresh(keys.closet(userId));
 		refresh(keys.wishlist(userId));
 		refresh(keys.colours(userId));
 		refresh(keys.brands(userId));
