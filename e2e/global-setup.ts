@@ -5,7 +5,6 @@ import { OWNED_ITEM_LIMIT } from "@/closet/owned-item";
 import { COMBINATION_LIMIT } from "@/combinations/combination";
 import { BRAND_LIMIT } from "@/labels/brand";
 import { COLOUR_LIMIT } from "@/labels/colour";
-import { LOOK_LIMIT } from "@/looks/look";
 import { SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";
 import { addBrand } from "../src/worker/brand-store";
 import {
@@ -24,13 +23,11 @@ import {
 	COLOURS_FULL_USER,
 	COMBINATIONS_FULL_USER,
 	E2E_USER,
-	LIMIT_USER,
 	WISHLIST_FULL_USER,
 	withTestAuth,
 } from "./sessions";
 
 export const SESSION_FILE = "e2e/.auth/session.json";
-export const LIMIT_FILE = "e2e/.auth/limit.json";
 export const COLOURS_FULL_FILE = "e2e/.auth/colours-full.json";
 export const COLOURS_EMPTY_FILE = "e2e/.auth/colours-empty.json";
 export const BRANDS_FULL_FILE = "e2e/.auth/brands-full.json";
@@ -72,33 +69,6 @@ export default async function globalSetup() {
 		mkdirSync("e2e/.auth", { recursive: true });
 		const cookies = await newSessionCookies();
 		writeFileSync(SESSION_FILE, JSON.stringify({ cookies, origins: [] }));
-		// Its looks go with the user row.
-		await db.delete(schema.user).where(eq(schema.user.id, LIMIT_USER.id));
-		await helpers.saveUser(helpers.createUser(LIMIT_USER));
-		const looks = Array.from({ length: LOOK_LIMIT }, (_, n) => ({
-			id: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
-			userId: LIMIT_USER.id,
-			modeId: "polo-sweater-harrington",
-			name: "",
-			colours: {
-				chino_p: "#C9B38C",
-				polo_l: "#F3F1EC",
-				sweater: "#1F3A5F",
-				harrington: "#55633F",
-			} as const,
-			open: [],
-		}));
-		// D1 takes at most 100 bound values in one statement; a look binds 6.
-		for (let i = 0; i < looks.length; i += 10)
-			await db.insert(schema.look).values(looks.slice(i, i + 10));
-		const limitCookies = await helpers.getCookies({
-			userId: LIMIT_USER.id,
-			domain: "localhost",
-		});
-		writeFileSync(
-			LIMIT_FILE,
-			JSON.stringify({ cookies: limitCookies, origins: [] }),
-		);
 		// Filled through the colour store, so the seed mark and the ids are the
 		// store's own; its colours go with the user row.
 		await db
@@ -245,7 +215,7 @@ export default async function globalSetup() {
 					JSON.stringify({ cookies: aiCookies, origins: [] }),
 				);
 			}
-		// The pool's dress rows go with its users.
+		// The pool's rows go with its users.
 		await db.delete(schema.user).where(like(schema.user.id, "e2e-pool-%"));
 		rmSync("e2e/.auth/claims", { recursive: true, force: true });
 		mkdirSync("e2e/.auth/claims", { recursive: true });

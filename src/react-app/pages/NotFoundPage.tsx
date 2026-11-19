@@ -9,7 +9,7 @@ export function NotFoundPage() {
 				There is no page at this address.
 			</p>
 			<Button asChild className="mt-2">
-				<Link to="/">Go to Dress</Link>
+				<Link to="/">Go to Combinations</Link>
 			</Button>
 		</div>
 	);

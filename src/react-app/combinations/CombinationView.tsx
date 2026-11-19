@@ -2,10 +2,10 @@ import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
-import { useDressState } from "@/dress/DressState";
 import { LAYER_OF } from "@/dress/garments";
-import { OutfitFailed } from "@/dress/OutfitFailed";
 import { Stage } from "@/dress/Stage";
+import { useMannequin } from "@/mannequin/api";
+import { MannequinFailed } from "@/mannequin/MannequinFailed";
 import { useTags } from "@/tags/api";
 import { CombinationFigure } from "./CombinationFigure";
 import {
@@ -28,7 +28,7 @@ export function CombinationView({
 }) {
 	const toast = useToast();
 	const address = useWallAddress();
-	const dress = useDressState();
+	const mannequin = useMannequin();
 	const title = combinationTitle(combination);
 	// In the tag list's order; a tag deleted on another device is skipped.
 	const tags =
@@ -65,8 +65,8 @@ export function CombinationView({
 				</Button>
 			</div>
 			<Stage className="mx-3 flex-[0_0_52%] rounded-[24px] wide:-order-1 wide:mx-4 wide:mt-4 wide:flex-[0_0_50%] wide:rounded-[22px]">
-				{dress.status === "failed" ? (
-					<OutfitFailed onLoadAgain={dress.loadAgain} />
+				{mannequin.isError ? (
+					<MannequinFailed onLoadAgain={() => mannequin.refetch()} />
 				) : (
 					<CombinationFigure
 						pieces={combination.pieces.map((p) => ({

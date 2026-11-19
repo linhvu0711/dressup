@@ -1,14 +1,14 @@
 import { cn } from "cn";
 import { useState } from "react";
 import { ColourPicker } from "@/colour/ColourPicker";
+import type { Hex } from "@/colour/hex";
 import { PLACEHOLDER } from "@/components/ui/placeholder";
 import { useToast } from "@/components/ui/toast";
-import { useDressState } from "@/dress/DressState";
 import { Mannequin } from "@/dress/figure/Mannequin";
 import { MannequinPlaceholder } from "@/dress/figure/MannequinPlaceholder";
-import type { Hex } from "@/dress/garments";
-import { OutfitFailed } from "@/dress/OutfitFailed";
-import { MANNEQUIN_PARTS, type MannequinPart } from "@/dress/state";
+import { useMannequin, useSetMannequinColour } from "@/mannequin/api";
+import { MannequinFailed } from "@/mannequin/MannequinFailed";
+import { MANNEQUIN_PARTS, type MannequinPart } from "@/mannequin/mannequin";
 
 const NAMES: Record<MannequinPart, string> = {
 	skin: "Skin colour",
@@ -24,13 +24,14 @@ type Live = { part: MannequinPart; hex: Hex };
 
 // The Mannequin part of the Settings page.
 export function MannequinSection() {
-	const dress = useDressState();
+	const mannequin = useMannequin();
+	const set = useSetMannequinColour();
 	const toast = useToast();
 	const [open, setOpen] = useState<MannequinPart | null>(null);
-	// The colour the picker shows before "Set". Only the preview shows it; the
-	// rows keep the stored colour.
+	// The colour the picker shows before "Set", and while its save runs. Only
+	// the preview shows it; the rows keep the stored colour.
 	const [live, setLive] = useState<Live | null>(null);
-	const stored = dress.status === "ready" ? dress.state.mannequin : null;
+	const stored = mannequin.data ?? null;
 	const shown = stored && live ? { ...stored, [live.part]: live.hex } : stored;
 
 	const close = () => {
@@ -43,8 +44,8 @@ export function MannequinSection() {
 			<h2 className="mt-1.5 mb-1.5 font-sans text-[12.5px] font-medium text-muted-foreground">
 				Mannequin
 			</h2>
-			{dress.status === "failed" ? (
-				<OutfitFailed onLoadAgain={dress.loadAgain} />
+			{mannequin.isError ? (
+				<MannequinFailed onLoadAgain={() => mannequin.refetch()} />
 			) : (
 				<div className="flex items-center gap-[18px]">
 					<div
@@ -101,17 +102,28 @@ export function MannequinSection() {
 					</div>
 				</div>
 			)}
-			{open && dress.status === "ready" ? (
+			{open && stored ? (
 				<ColourPicker
 					title={NAMES[open]}
-					start={dress.state.mannequin[open]}
+					start={stored[open]}
 					action="Set"
 					onLive={(hex) => setLive({ part: open, hex })}
 					onCancel={close}
 					onDone={(hex) => {
-						dress.setMannequinColour(open, hex);
-						close();
-						toast(`${NAMES[open]} set`);
+						const part = open;
+						setOpen(null);
+						set.mutate(
+							{ part, hex },
+							{
+								onSuccess: () => toast(`${NAMES[part]} set`),
+								onError: () => toast("Not set. Try again."),
+								// A newer colour typed meanwhile stays in the preview.
+								onSettled: () =>
+									setLive((now) =>
+										now?.part === part && now.hex === hex ? null : now,
+									),
+							},
+						);
 					}}
 				/>
 			) : null}

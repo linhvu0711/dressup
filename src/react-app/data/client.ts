@@ -10,7 +10,7 @@ import {
 	type ListedBrand,
 } from "@/labels/brand";
 import type { Colour, ColourId, ListedColour } from "@/labels/colour";
-import type { Look, LookId } from "@/looks/look";
+import type { Mannequin, MannequinPart } from "@/mannequin/mannequin";
 import type { ListedTag, Tag, TagId } from "@/tags/tag";
 import type { Wish } from "@/wishlist/wish";
 import { type ErrorCode, errorAnswer, meAnswer } from "./contract";
@@ -22,7 +22,6 @@ export const queryClient = new QueryClient();
 
 export const keys = {
 	me: ["me"] as const,
-	looks: (userId: string | null) => ["looks", userId] as const,
 	tags: (userId: string | null) => ["tags", userId] as const,
 	colours: (userId: string | null) => ["colours", userId] as const,
 	brands: (userId: string | null) => ["brands", userId] as const,
@@ -30,6 +29,7 @@ export const keys = {
 	combinations: (userId: string | null) => ["combinations", userId] as const,
 	closet: (userId: string | null) => ["closet", userId] as const,
 	wishlist: (userId: string | null) => ["wishlist", userId] as const,
+	mannequin: (userId: string | null) => ["mannequin", userId] as const,
 	addTag: ["tags", "add"] as const,
 	allowApp: (clientId: string) => ["allow-app", clientId] as const,
 };
@@ -48,34 +48,6 @@ const refresh = (queryKey: readonly unknown[]) => {
 // read, so a change that ends after an account switch writes nothing of it
 // into the other account's lists.
 export const after = {
-	// The wall shows a cached list at once while it asks the server again, so
-	// the saved look goes into that list now, or a first visit's empty list
-	// would show "No looks yet" after a save. A look saved again keeps its
-	// place, as the server keeps its time.
-	lookSaved(userId: string | null, look: Look) {
-		queryClient.setQueryData<Look[]>(
-			keys.looks(userId),
-			(old) =>
-				old &&
-				(old.some((l) => l.id === look.id)
-					? old.map((l) => (l.id === look.id ? look : l))
-					: [look, ...old]),
-		);
-		refresh(keys.looks(userId));
-	},
-	// The changed look keeps its place, as the server keeps its time.
-	lookChanged(userId: string | null, look: Look) {
-		queryClient.setQueryData<Look[]>(keys.looks(userId), (old) =>
-			old?.map((l) => (l.id === look.id ? look : l)),
-		);
-		refresh(keys.looks(userId));
-	},
-	lookGone(userId: string | null, id: LookId) {
-		queryClient.setQueryData<Look[]>(keys.looks(userId), (old) =>
-			old?.filter((l) => l.id !== id),
-		);
-		refresh(keys.looks(userId));
-	},
 	tagAdded(userId: string | null, tag: Tag) {
 		queryClient.setQueryData<ListedTag[]>(keys.tags(userId), (old) =>
 			old ? [...old, { ...tag, combinations: 0 }] : old,
@@ -93,14 +65,13 @@ export const after = {
 	tagsMayDiffer(userId: string | null) {
 		refresh(keys.tags(userId));
 	},
-	// Until the looks and combinations load again, their views and the chips
-	// skip a tag the list no longer holds.
+	// Until the combinations load again, their views and the chips skip a tag
+	// the list no longer holds.
 	tagDeleted(userId: string | null, id: TagId) {
 		queryClient.setQueryData<ListedTag[]>(keys.tags(userId), (old) =>
 			old?.filter((t) => t.id !== id),
 		);
 		refresh(keys.tags(userId));
-		refresh(keys.looks(userId));
 		refresh(keys.combinations(userId));
 	},
 	colourAdded(userId: string | null, colour: Colour) {
@@ -144,6 +115,22 @@ export const after = {
 	brandsMayDiffer(userId: string | null) {
 		refresh(keys.brands(userId));
 	},
+	// Only the part this save set: an older save of the other part can answer
+	// later, and its answer still holds that part's colour from before.
+	mannequinSet(
+		userId: string | null,
+		part: MannequinPart,
+		mannequin: Mannequin,
+	) {
+		queryClient.setQueryData<Mannequin>(keys.mannequin(userId), (old) =>
+			old ? { ...old, [part]: mannequin[part] } : mannequin,
+		);
+	},
+	// Two saves of one part can answer out of order, so the stored colours
+	// are read again once a save ends.
+	mannequinSaveEnded(userId: string | null) {
+		refresh(keys.mannequin(userId));
+	},
 	// A new name can move the brand in the A to Z list; its count of items
 	// stays, as a rename leaves it.
 	brandChanged(userId: string | null, brand: Brand) {
@@ -165,8 +152,10 @@ export const after = {
 		refresh(keys.closet(userId));
 		refresh(keys.wishlist(userId));
 	},
-	// As lookSaved; a saved combination also makes its colours in use, and
-	// moves its tags' counts.
+	// The wall shows a cached list at once while it asks the server again, so
+	// the saved combination goes into that list now, or a first visit's empty
+	// list would show "No combinations yet" after a save. A saved combination
+	// also makes its colours in use, and moves its tags' counts.
 	combinationSaved(userId: string | null, combination: Combination) {
 		queryClient.setQueryData<Combination[]>(
 			keys.combinations(userId),
@@ -189,8 +178,8 @@ export const after = {
 		refresh(keys.colours(userId));
 		refresh(keys.tags(userId));
 	},
-	// As lookSaved; a new item also makes its colour in use and counts on its
-	// brand.
+	// As combinationSaved; a new item also makes its colour in use and counts
+	// on its brand.
 	ownedItemAdded(userId: string | null, item: OwnedItem) {
 		queryClient.setQueryData<OwnedItem[]>(
 			keys.closet(userId),
@@ -224,7 +213,7 @@ export const after = {
 		refresh(keys.colours(userId));
 		refresh(keys.brands(userId));
 	},
-	// As lookSaved; a new wish also makes its colour in use.
+	// As combinationSaved; a new wish also makes its colour in use.
 	wishAdded(userId: string | null, wish: Wish) {
 		queryClient.setQueryData<Wish[]>(
 			keys.wishlist(userId),
@@ -382,15 +371,4 @@ export async function signedOut() {
 // rebuilds the page when the account changes, so the cached id holds.
 export function cachedUserId(): string | null {
 	return queryClient.getQueryData<Me | null>(keys.me)?.id ?? null;
-}
-
-// The signed-in account, after the session check of the same focus, which
-// says who holds the cookie.
-export async function sessionUserId(): Promise<string | null> {
-	if (queryClient.isFetching({ queryKey: keys.me }) > 0)
-		await queryClient.refetchQueries(
-			{ queryKey: keys.me },
-			{ cancelRefetch: false },
-		);
-	return cachedUserId();
 }

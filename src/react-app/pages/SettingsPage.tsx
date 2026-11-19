@@ -27,7 +27,7 @@ export function SettingsPage() {
 				start={<BackLink to={pageBeforeSettings(location.state)} />}
 			/>
 			{/* The page scrolls in its own box: on a phone it is taller than the
-			    space between the bars, and would run under the "Not saved" bar. */}
+			    space between the bars. */}
 			<div className="min-h-0 flex-1 overflow-auto">
 				<div className="mx-auto flex w-full max-w-[560px] flex-col px-[18px] pt-1.5 pb-11">
 					<MannequinSection />

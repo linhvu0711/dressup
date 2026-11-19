@@ -11,13 +11,6 @@ export const E2E_USER = {
 	name: "E2E Person",
 };
 
-// Holds 300 looks, the look limit, for the save form's limit tests.
-export const LIMIT_USER = {
-	id: "e2e-limit",
-	email: "limit@dressup.test",
-	name: "Limit Person",
-};
-
 // Holds 100 colours, the colour limit, for the colour form's limit test.
 export const COLOURS_FULL_USER = {
 	id: "e2e-colours-full",

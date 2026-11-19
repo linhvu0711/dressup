@@ -1,12 +1,9 @@
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter, Navigate } from "react-router";
 import { AllowPage } from "./pages/AllowPage";
 import { BuildPage } from "./pages/BuildPage";
 import { ClosetPage } from "./pages/ClosetPage";
 import { CombinationsPage } from "./pages/CombinationsPage";
-import { ComparePage } from "./pages/ComparePage";
-import { DressPage } from "./pages/DressPage";
 import { LabelsPage } from "./pages/LabelsPage";
-import { LooksPage } from "./pages/LooksPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { PiecePage } from "./pages/PiecePage";
 import { PrivacyPage } from "./pages/PrivacyPage";
@@ -18,10 +15,7 @@ export const router = createBrowserRouter([
 	{
 		element: <SessionGate />,
 		children: [
-			{ index: true, element: <DressPage /> },
-			{ path: "looks", element: <LooksPage /> },
-			{ path: "looks/compare", element: <ComparePage /> },
-			{ path: "looks/:lookId", element: <LooksPage /> },
+			{ index: true, element: <Navigate to="/combinations" replace /> },
 			{ path: "settings", element: <SettingsPage /> },
 			{ path: "combinations", element: <CombinationsPage /> },
 			{ path: "combinations/:combinationId", element: <CombinationsPage /> },

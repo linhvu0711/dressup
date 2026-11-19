@@ -24,10 +24,10 @@ import { useWallAddress, wallAddress } from "@/combinations/wall-address";
 import { Button } from "@/components/ui/button";
 import { ActiveFilters, FilterButton } from "@/components/ui/filter";
 import { Notice } from "@/components/ui/notice";
-import { useDressState } from "@/dress/DressState";
 import { TypeFigure } from "@/dress/figure/TypeFigure";
-import { OutfitFailed } from "@/dress/OutfitFailed";
 import { useColours } from "@/labels/api";
+import { useMannequin } from "@/mannequin/api";
+import { MannequinFailed } from "@/mannequin/MannequinFailed";
 import { useTags } from "@/tags/api";
 import { PageHeader } from "../shell/PageHeader";
 
@@ -43,7 +43,7 @@ const PULSE = "animate-placeholder motion-reduce:animate-none";
 export function CombinationsPage() {
 	const { combinationId } = useParams();
 	const combinations = useCombinations();
-	const dress = useDressState();
+	const mannequin = useMannequin();
 	const tags = useTags();
 	const colours = useColours();
 	const [params, setParams] = useSearchParams();
@@ -119,9 +119,9 @@ export function CombinationsPage() {
 				</Button>
 			</Notice>
 		);
-	} else if (dress.status === "failed") {
+	} else if (mannequin.isError) {
 		// After the empty check: with no cards there is no mannequin to fail.
-		wall = <OutfitFailed onLoadAgain={dress.loadAgain} />;
+		wall = <MannequinFailed onLoadAgain={() => mannequin.refetch()} />;
 	} else if (visible.length === 0) {
 		wall = (
 			<Notice title="No combinations here">

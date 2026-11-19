@@ -93,38 +93,3 @@ export const LAYER_OF: Record<GarmentId, Layer> = {
 };
 
 export type GarmentLayer = { garment: GarmentId; color: Hex };
-
-const W = "#F3F1EC";
-const BK = "#1B1B1F";
-const NV = "#1F3A5F";
-const GY = "#8C8A84";
-const KH = "#C9B38C";
-const CH = "#39424F";
-const LB = "#BFD3EA";
-const CR = "#E6DFD0";
-const BG = "#7A2E2E";
-const ST = "#9C9A98";
-const FO = "#2F5D50";
-const GR = "#2F4A3A";
-const CA = "#A8865C";
-
-// A garment starts in the first colour of its set.
-export const STARTER_COLOURS: Record<GarmentId, readonly Hex[]> = {
-	tee_s: [W, BK, GY, NV],
-	tee_l: [W, BK, GY, NV],
-	polo_s: [W, NV, BK, FO],
-	polo_l: [W, NV, BK, FO],
-	shirt_s: [W, LB, NV],
-	shirt_l: [LB, W, NV],
-	sweater: [NV, GY, CR, BG],
-	harrington: [KH, NV, GR],
-	wool: [CA, CH, NV],
-	ttee_s: [BK, GY, W],
-	ttee_l: [BK, GY, W],
-	chino_sh: [KH, CH, ST],
-	chino_p: [KH, CH, ST, BK],
-	casual_sh: [GY, BK, CH],
-	casual_p: [GY, BK, CH, KH],
-	train_sh: [BK, CH, GY],
-	train_p: [BK, CH, GY],
-};

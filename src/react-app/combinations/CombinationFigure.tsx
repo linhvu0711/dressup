@@ -1,13 +1,13 @@
 import type { Hex } from "@/colour/hex";
-import { useDressState } from "@/dress/DressState";
 import { Mannequin } from "@/dress/figure/Mannequin";
 import { MannequinPlaceholder } from "@/dress/figure/MannequinPlaceholder";
 import { type GarmentId, isJacket } from "@/dress/garments";
+import { useMannequin } from "@/mannequin/api";
 import { wornLayers } from "./combination";
 
 // Pieces on the mannequin in the account's skin and hair, with pale blanks
 // for a missing bottom or top; until skin and hair load it is the stage's
-// grey placeholder. The skin and hair come through the outfit code until #77.
+// grey placeholder.
 export function CombinationFigure({
 	pieces,
 	open,
@@ -21,9 +21,8 @@ export function CombinationFigure({
 	lite?: boolean;
 	label?: string;
 }) {
-	const dress = useDressState();
-	if (dress.status !== "ready")
-		return <MannequinPlaceholder viewBox={viewBox} />;
+	const colours = useMannequin().data;
+	if (!colours) return <MannequinPlaceholder viewBox={viewBox} />;
 	const jacket = pieces.map((p) => p.typeId).find(isJacket);
 	return (
 		<Mannequin
@@ -33,8 +32,8 @@ export function CombinationFigure({
 			viewBox={viewBox}
 			layers={wornLayers(pieces)}
 			openJackets={open && jacket ? [jacket] : []}
-			skin={dress.state.mannequin.skin}
-			hair={dress.state.mannequin.hair}
+			skin={colours.skin}
+			hair={colours.hair}
 		/>
 	);
 }

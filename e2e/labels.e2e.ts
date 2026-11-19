@@ -392,9 +392,11 @@ test("shows Could not load your colours and loads on Retry", async ({
 test("shows the sign-in screen when the colours answer 401", async ({
 	page,
 }) => {
-	// Given: / open and its session check passed; then the session is gone for
-	// the session check and for the colours
-	await page.goto("/");
+	// Given: a page with no data of its own open, and its session check
+	// passed; then the session is gone for the session check and for the
+	// colours. Not /, whose wall loads the colours, or /settings, whose
+	// requests can land after the 401 is in place and sign out too early.
+	await page.goto("/nope");
 	await expect(
 		page.getByRole("navigation", { name: "Main" }).getByRole("link", {
 			name: "Labels",

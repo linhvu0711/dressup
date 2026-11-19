@@ -93,9 +93,8 @@ export async function renameTag(
 	}
 }
 
-// Only the account's own tag goes, and with it the tag on each look and each
-// combination (the keys' cascade); not found when the account has no tag
-// with this id.
+// Only the account's own tag goes, and with it the tag on each combination
+// (the keys' cascade); not found when the account has no tag with this id.
 export async function deleteTag(
 	db: Db,
 	userId: string,

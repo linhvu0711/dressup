@@ -42,8 +42,6 @@ test("opens the wishlist from the Wishlist tab", async ({ page }) => {
 		page.getByRole("heading", { name: "Wishlist", exact: true }),
 	).toBeVisible();
 	await expect(mainNav(page).getByRole("link")).toHaveText([
-		"Dress",
-		"Looks",
 		"Combinations",
 		"Closet",
 		"Wishlist",

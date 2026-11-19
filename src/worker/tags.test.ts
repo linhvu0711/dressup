@@ -3,19 +3,6 @@ import { BOB, type Harness, withAccount } from "./test/harness";
 
 type Tag = { id: string; name: string; combinations: number };
 
-const NAVY = {
-	id: "11111111-1111-4111-8111-111111111111",
-	modeId: "polo-sweater-harrington",
-	name: "Navy day",
-	colours: {
-		chino_p: "#C9B38C",
-		polo_l: "#F3F1EC",
-		sweater: "#1F3A5F",
-		harrington: "#55633F",
-	},
-	open: ["harrington"],
-};
-
 const send = (
 	{ app, env }: Harness,
 	headers: Headers,
@@ -364,29 +351,6 @@ describe("PUT and DELETE /api/tags/:id", () => {
 			body: { error: "not_found" },
 			aliceNames: ["Work"],
 		});
-	});
-});
-
-describe("tags and looks", () => {
-	test("deletes a tag and keeps its looks", async () => {
-		// Given: alice saved NAVY with "Work" and "Trip"
-		const { h, headers } = await withAccount();
-		const work = await added(h, headers, "Work");
-		const trip = await added(h, headers, "Trip");
-		await send(h, headers, "POST", "/api/looks", {
-			...NAVY,
-			tags: [work, trip],
-		});
-		// When
-		const res = await send(h, headers, "DELETE", `/api/tags/${work}`);
-		const { looks } = (await (
-			await send(h, headers, "GET", "/api/looks")
-		).json()) as { looks: { id: string; tags: string[] }[] };
-		// Then
-		expect({
-			status: res.status,
-			looks: looks.map(({ id, tags }) => ({ id, tags })),
-		}).toEqual({ status: 204, looks: [{ id: NAVY.id, tags: [trip] }] });
 	});
 });
 

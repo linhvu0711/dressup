@@ -2,7 +2,7 @@ import type { Hex } from "@/colour/hex";
 import { FigureSvg, Stretch } from "@/dress/figure/frame";
 import { GARMENT_DRAWINGS } from "@/dress/figure/garments";
 import type { GarmentId } from "@/dress/garments";
-import { STARTER_MANNEQUIN } from "@/dress/state";
+import { STARTER_MANNEQUIN } from "@/mannequin/mannequin";
 
 // Square crops of the figure, each just around the drawn part, so the small
 // chip picture fills its box: a top covers x 72 to 327 and y 143 to 459,

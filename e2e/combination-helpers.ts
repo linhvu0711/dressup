@@ -1,5 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 
+export const isPhone = (page: Page) => (page.viewportSize()?.width ?? 0) < 900;
+
 // The account's colour ids by name, through its own session.
 export async function colourIds(page: Page): Promise<Record<string, string>> {
 	const res = await page.request.get("/api/colours");

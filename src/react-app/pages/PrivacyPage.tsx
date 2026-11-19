@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router";
 
 const SUPPORT_EMAIL = "linh.tuan.vu.contact@gmail.com";
-const LAST_CHANGED = "18 November 2026";
+const LAST_CHANGED = "19 November 2026";
 
 function Section({
 	id,
@@ -59,19 +59,19 @@ export function PrivacyPage() {
 						<li>Your Google account's name, email, and picture.</li>
 						<li>The colours you save.</li>
 						<li>The brands you save.</li>
-						<li>Your last outfit.</li>
-						<li>Your looks and their tags.</li>
+						<li>The tags you save.</li>
 						<li>Your combinations.</li>
 						<li>Your closet.</li>
 						<li>The pictures you add to your closet.</li>
+						<li>Your wishlist and its shop links.</li>
 						<li>Your mannequin's skin and hair colour.</li>
 					</ul>
 				</Section>
 
 				<Section id="privacy-why" title="Why">
 					<p className="mt-2">
-						dressup keeps this only to show you your own clothes and looks.
-						Nothing is sold, shared, or used for ads.
+						dressup keeps this only to show you your own clothes and
+						combinations. Nothing is sold, shared, or used for ads.
 					</p>
 				</Section>
 

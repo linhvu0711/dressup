@@ -349,7 +349,7 @@ describe("duplicate", () => {
 
 	test("answers duplicate when another tab saves the same pieces first", async () => {
 		// Given: alice; her save's write waits until another tab saved the same
-		// pieces with id 33333333-…, as looks.test.ts races two changes
+		// pieces with id 33333333-…
 		const { h, headers, ids } = await alice();
 		const { db } = h;
 		const batch = db.batch.bind(db);

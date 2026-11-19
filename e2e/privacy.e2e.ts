@@ -87,11 +87,11 @@ test("names what dressup keeps", async ({ page }) => {
 		"Your Google account's name, email, and picture.",
 		"The colours you save.",
 		"The brands you save.",
-		"Your last outfit.",
-		"Your looks and their tags.",
+		"The tags you save.",
 		"Your combinations.",
 		"Your closet.",
 		"The pictures you add to your closet.",
+		"Your wishlist and its shop links.",
 		"Your mannequin's skin and hair colour.",
 	]);
 });
@@ -103,7 +103,7 @@ test("says why dressup keeps it", async ({ page }) => {
 	const lines = page.getByRole("region", { name: "Why" }).locator("p");
 	// Then
 	await expect(lines).toHaveText([
-		"dressup keeps this only to show you your own clothes and looks. Nothing is sold, shared, or used for ads.",
+		"dressup keeps this only to show you your own clothes and combinations. Nothing is sold, shared, or used for ads.",
 	]);
 });
 
@@ -143,7 +143,7 @@ test("gives the support email and the date of the last change", async ({
 	await page.goto("/privacy");
 	const contact = page.getByRole("region", { name: "Contact" });
 	// Then
-	await expect(page.getByText("Last changed: 18 November 2026")).toBeVisible();
+	await expect(page.getByText("Last changed: 19 November 2026")).toBeVisible();
 	await expect(contact.locator("p")).toHaveText([
 		"Questions about this page or your data: linh.tuan.vu.contact@gmail.com.",
 	]);

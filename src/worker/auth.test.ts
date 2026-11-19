@@ -65,7 +65,7 @@ describe("GET /api/me", () => {
 });
 
 describe("migrations", () => {
-	test("makes the auth, dress, look, and tag tables from the migrations", async () => {
+	test("makes the auth, mannequin, and tag tables from the migrations", async () => {
 		// Given
 		const h = await makeHarness();
 		// When
@@ -78,13 +78,10 @@ describe("migrations", () => {
 			"brand",
 			"colour",
 			"colour_seed",
-			"colour_square",
 			"combination",
 			"combination_piece",
 			"combination_tag",
 			"jwks",
-			"look",
-			"look_tag",
 			"mannequin",
 			"oauth_access_token",
 			"oauth_client",
@@ -93,8 +90,6 @@ describe("migrations", () => {
 			"oauth_consent",
 			"oauth_refresh_token",
 			"oauth_resource",
-			"outfit",
-			"outfit_garment",
 			"owned_item",
 			"picture",
 			"picture_storage",
