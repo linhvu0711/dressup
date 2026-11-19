@@ -1,5 +1,6 @@
 import { and, asc, count, desc, eq, exists, notExists, sql } from "drizzle-orm";
 import type { Hex } from "@/colour/hex";
+import type { PieceRef } from "@/combinations/marks";
 import type { TypeId } from "@/dress/clothing-types";
 import type { BrandId } from "@/labels/brand";
 import type { ColourId } from "@/labels/colour";
@@ -138,6 +139,22 @@ async function readShopLinks(
 }
 
 export const listWishes = (db: Db, userId: string) => readWishes(db, userId);
+
+// The pieces the account wants, for the Want marks: no shop links, which
+// listWishes reads too.
+export async function listWishedPieces(
+	db: Db,
+	userId: string,
+): Promise<PieceRef[]> {
+	const rows = await db
+		.select({ typeId: wish.typeId, colourId: wish.colourId })
+		.from(wish)
+		.where(eq(wish.userId, userId));
+	return rows.map((row) => ({
+		typeId: row.typeId,
+		colour: { id: row.colourId as ColourId },
+	}));
+}
 
 const FIELDS: readonly WishField[] = [
 	"id",

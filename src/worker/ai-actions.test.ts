@@ -1114,6 +1114,34 @@ describe("combinations", () => {
 		});
 	});
 
+	test("lists own and want for each piece", async () => {
+		// Given: THREE, the Khaki Harrington jacket owned and wanted, the Black
+		// long tee wanted
+		const { ai } = await withAiSession();
+		const ids = await colourIds(ai);
+		await savedId(ai, three(ids));
+		await ai.call("add_owned_item", {
+			typeId: "harrington",
+			colourId: ids.Khaki,
+			quantity: 1,
+		});
+		await ai.call("add_wish", { typeId: "harrington", colourId: ids.Khaki });
+		await ai.call("add_wish", { typeId: "tee_l", colourId: ids.Black });
+		// When
+		const { data } = await ai.call("list_combinations");
+		// Then: in layer order, bottom first
+		type Marked = { pieces: { typeId: string; own: boolean; want: boolean }[] };
+		expect(
+			(data as { combinations: Marked[] }).combinations[0].pieces.map(
+				({ typeId, own, want }) => ({ typeId, own, want }),
+			),
+		).toEqual([
+			{ typeId: "casual_p", own: false, want: false },
+			{ typeId: "tee_l", own: false, want: true },
+			{ typeId: "harrington", own: true, want: true },
+		]);
+	});
+
 	test("refuses a type in a filter that is not a type", async () => {
 		// Given
 		const { ai } = await withAiSession();

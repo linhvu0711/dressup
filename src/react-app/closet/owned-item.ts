@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { pieceKey } from "@/combinations/marks";
 import { TYPE_IDS } from "@/dress/clothing-types";
 import { brandSchema } from "@/labels/brand";
 import { colourSchema } from "@/labels/colour";
@@ -59,7 +60,7 @@ export type ClosetPiece = {
 export function closetPieces(items: readonly OwnedItem[]): ClosetPiece[] {
 	const pieces = new Map<string, ClosetPiece>();
 	for (const item of items) {
-		const key = `${item.typeId}/${item.colour.id}`;
+		const key = pieceKey(item);
 		const piece = pieces.get(key);
 		if (piece) {
 			piece.quantity += item.quantity;
