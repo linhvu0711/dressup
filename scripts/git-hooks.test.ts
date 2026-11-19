@@ -268,4 +268,23 @@ describe("pre-commit check", () => {
 		expect(result.code).toBe(0);
 		expect(existsSync(join(pkg, ".git"))).toBe(false);
 	});
+	test("warns when git cannot run config hooks", () => {
+		// Given: a repo before bun install, with a git that has no hook command
+		const { env } = makeTmp();
+		const repo = initRepo(env);
+		const oldbin = join(tmp, "oldbin");
+		mkdirSync(oldbin);
+		writeScript(
+			join(oldbin, "git"),
+			`if [ "$1" = hook ]; then echo "git: 'hook' is not a git command. See 'git --help'." >&2; exit 1; fi\nexec "${Bun.which("git")}" "$@"`,
+		);
+		const oldGit = { ...env, PATH: `${oldbin}:${env.PATH}` };
+		// When
+		const result = install(repo, oldGit);
+		// Then
+		expect(result.code).toBe(0);
+		expect(result.output).toContain(
+			"warning: this git does not run hooks from config (git 2.54 or newer does), so the pre-commit check will not run. Update git.",
+		);
+	});
 });
