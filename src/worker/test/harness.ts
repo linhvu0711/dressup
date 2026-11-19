@@ -591,7 +591,7 @@ export async function message<T>(res: Response): Promise<T> {
 
 type ToolResult = {
 	isError?: boolean;
-	content: { type: string; text: string }[];
+	content: { type: string; text?: string; data?: string; mimeType?: string }[];
 	structuredContent?: Record<string, unknown>;
 };
 
@@ -616,7 +616,10 @@ export async function aiSession(h: Harness) {
 		session,
 	);
 	let id = 1;
-	const call = async (name: string, args: Record<string, unknown> = {}) => {
+	const callTool = async (
+		name: string,
+		args: Record<string, unknown> = {},
+	): Promise<ToolResult> => {
 		id += 1;
 		const { result, error } = await message<{
 			result?: ToolResult;
@@ -635,11 +638,20 @@ export async function aiSession(h: Harness) {
 		);
 		if (!result)
 			throw new Error(`tools/call ${name}: ${JSON.stringify(error)}`);
+		return result;
+	};
+	const call = async (name: string, args: Record<string, unknown> = {}) => {
+		const result = await callTool(name, args);
 		return {
 			isError: result.isError ?? false,
 			text: result.content[0]?.text,
 			data: result.structuredContent,
 		};
+	};
+	// A picture comes back as an image part, which has no text.
+	const show = async (name: string, args: Record<string, unknown> = {}) => {
+		const result = await callTool(name, args);
+		return { isError: result.isError ?? false, content: result.content };
 	};
 	const list = async () => {
 		id += 1;
@@ -648,7 +660,7 @@ export async function aiSession(h: Harness) {
 		);
 		return result.tools;
 	};
-	return { jar, call, list };
+	return { jar, call, show, list };
 }
 
 const accountId = async (h: Harness, jar: Jar) =>

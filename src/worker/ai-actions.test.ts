@@ -95,6 +95,8 @@ describe("tags", () => {
 			["change_shop_link", W],
 			["delete_shop_link", D],
 			["mark_shop_link_bought", D],
+			["get_upload_address", W],
+			["show_picture", R],
 		]);
 		expect(listed.every((t) => typeof t.title === "string")).toBe(true);
 	});
@@ -1313,7 +1315,7 @@ describe("owned items", () => {
 		expect(h.pictures.keys()).toEqual([]);
 	});
 
-	test("lists the number of pictures of each item and no picture data", async () => {
+	test("lists the picture ids of each item in upload order", async () => {
 		// Given
 		const { h, ai } = await withAiSession();
 		const a = await uploadPicture(h, ai);
@@ -1322,12 +1324,9 @@ describe("owned items", () => {
 		// When
 		const { data } = await ai.call("list_owned_items");
 		// Then
-		const [item] = (data as { ownedItems: Record<string, unknown>[] })
+		const [item] = (data as { ownedItems: { pictureIds: string[] }[] })
 			.ownedItems;
-		expect({
-			pictureCount: item.pictureCount,
-			hasPictureIds: "pictureIds" in item,
-		}).toEqual({ pictureCount: 2, hasPictureIds: false });
+		expect(item.pictureIds).toEqual([a, b]);
 	});
 
 	test("says there is no such owned item", async () => {
@@ -1448,7 +1447,7 @@ describe("wishes", () => {
 		brand: { name: string } | null;
 		name: string;
 		price: number | null;
-		pictureCount: number;
+		pictureIds: string[];
 	};
 	type Listed = { id: string; typeId: string; shopLinks: Link[] };
 
@@ -1501,7 +1500,7 @@ describe("wishes", () => {
 						brand: null,
 						name: "Wool jacket",
 						price: 4290000,
-						pictureCount: 0,
+						pictureIds: [],
 					},
 				],
 			},
@@ -1514,8 +1513,8 @@ describe("wishes", () => {
 		return (added.data as { wish: Listed }).wish.shopLinks[0]?.id;
 	}
 
-	// `n` JPEG uploads saved on the link as the browser saves them; AI apps
-	// cannot add pictures.
+	// `n` JPEG uploads saved on the link as the browser saves them, so these
+	// cases do not lean on the AI tools.
 	async function savePictures(
 		h: Harness,
 		ai: Session,
@@ -1561,7 +1560,7 @@ describe("wishes", () => {
 				colour: { name: string };
 				brand: unknown;
 				quantity: number;
-				pictureCount: number;
+				pictureIds: string[];
 			};
 		};
 		expect({
@@ -1571,7 +1570,7 @@ describe("wishes", () => {
 				colour: ownedItem.colour.name,
 				brand: ownedItem.brand,
 				quantity: ownedItem.quantity,
-				pictureCount: ownedItem.pictureCount,
+				pictures: ownedItem.pictureIds.length,
 			},
 			pictureIds: "pictureIds" in ownedItem,
 			wishes: (listed.data as { wishes: Listed[] }).wishes,
@@ -1582,7 +1581,7 @@ describe("wishes", () => {
 				colour: "Navy",
 				brand: null,
 				quantity: 1,
-				pictureCount: 1,
+				pictures: 1,
 			},
 			pictureIds: "pictureIds" in ownedItem,
 			wishes: [],
@@ -1603,22 +1602,19 @@ describe("wishes", () => {
 		});
 	});
 
-	test("lists the number of pictures of each shop link and no picture data", async () => {
+	test("lists the picture ids of each shop link in upload order", async () => {
 		// Given
 		const { h, ai } = await withAiSession();
 		const id = await addJacketLink(ai);
 		const pictureIds = await savePictures(h, ai, id, 2);
 		// When
-		const { data, text } = await ai.call("list_wishes");
+		const { data } = await ai.call("list_wishes");
 		// Then
-		expect({
-			counts: (data as { wishes: Listed[] }).wishes.map((w) =>
-				w.shopLinks.map((l) => l.pictureCount),
+		expect(
+			(data as { wishes: Listed[] }).wishes.map((w) =>
+				w.shopLinks.map((l) => l.pictureIds),
 			),
-			pictureData: [/pictureIds/, ...pictureIds].filter((p) =>
-				typeof p === "string" ? `${text}`.includes(p) : p.test(`${text}`),
-			),
-		}).toEqual({ counts: [[2]], pictureData: [] });
+		).toEqual([[pictureIds]]);
 	});
 
 	test("refuses a second wish for one piece as a sentence", async () => {

@@ -31,6 +31,14 @@ import { PICTURE_BYTES_MAX, pictureIdSchema } from "@/pictures/picture";
 import { tagIdSchema } from "@/tags/tag";
 import { disconnectAiApp, listAiApps } from "./ai-app-store";
 import {
+	accountPictureLimit,
+	addressGone,
+	notAPicture,
+	notStored,
+	storageFull,
+	tooLargeUpload,
+} from "./ai-messages";
+import {
 	type Auth,
 	type AuthEnvSettings,
 	createAuth,
@@ -85,6 +93,7 @@ import {
 	renameTag,
 	type TagError,
 } from "./tag-store";
+import { claimUploadAddress } from "./upload-address-store";
 import {
 	addShopLink,
 	addWish,
@@ -96,7 +105,10 @@ import {
 } from "./wish-store";
 
 type User = Auth["$Infer"]["Session"]["user"];
-type AppEnv = { Bindings: Env; Variables: { auth: Auth; user: User } };
+type AppEnv = {
+	Bindings: Env;
+	Variables: { auth: Auth; user: User; uploaderId: string };
+};
 
 // The parsed body, or the 400 that names the field: the whole zod path, as
 // `colours.sweater`. A body that is not JSON, or JSON but not an object
@@ -237,6 +249,34 @@ function wishRefusal(error: WishError): Refusal {
 	}
 }
 
+// An AI app reads the code and the model reads the sentence; every refusal
+// spends the address, so each sentence says to use a new one.
+function uploadRefusal(error: PictureError): {
+	status: ContentfulStatusCode;
+	body: { error: string; message: string };
+} {
+	switch (error.code) {
+		case "invalid":
+			return {
+				status: 415,
+				body: { error: "not_an_image", message: notAPicture },
+			};
+		case "account_picture_limit":
+			return {
+				status: 409,
+				body: { error: "account_picture_limit", message: accountPictureLimit },
+			};
+		case "storage_full":
+			return {
+				status: 507,
+				body: { error: "storage_full", message: storageFull },
+			};
+		case "not_found":
+		case "picture_limit":
+			return { status: 500, body: { error: "not_stored", message: notStored } };
+	}
+}
+
 function pictureRefusal(error: PictureError): Refusal {
 	switch (error.code) {
 		case "invalid":
@@ -333,6 +373,19 @@ export function createApp(getDb: (env: Env) => Db) {
 		if (!session)
 			return c.json({ error: "unauthorized" } satisfies ErrorAnswer, 401);
 		c.set("user", session.user);
+		await next();
+	});
+
+	// The upload address is the pass: only the account's AI app was given it.
+	// The claim runs before the body is read, so any POST spends the address.
+	const claimAddress = createMiddleware<AppEnv>(async (c, next) => {
+		const userId = await claimUploadAddress(
+			getDb(c.env),
+			c.req.param("id") ?? "",
+		);
+		if (userId === null)
+			return c.json({ error: "address_gone", message: addressGone }, 410);
+		c.set("uploaderId", userId);
 		await next();
 	});
 
@@ -654,6 +707,36 @@ export function createApp(getDb: (env: Env) => Db) {
 		}
 		return c.body(null, 204);
 	});
+
+	app.post(
+		"/uploads/:id",
+		claimAddress,
+		bodyLimit({
+			maxSize: PICTURE_BYTES_MAX,
+			onError: (c) =>
+				c.json({ error: "too_large", message: tooLargeUpload }, 413),
+		}),
+		async (c) => {
+			// Read outside the try, so bodyLimit sees a body that runs over.
+			const bytes = await c.req.arrayBuffer();
+			try {
+				const added = await addPicture(
+					getDb(c.env),
+					c.env.PICTURES,
+					c.var.uploaderId,
+					bytes,
+				);
+				if (!added.ok) {
+					const { status, body } = uploadRefusal(added.error);
+					return c.json(body, status);
+				}
+				return c.json({ pictureId: added.value.id }, 201);
+			} catch {
+				// addPicture takes its row and count back before it throws.
+				return c.json({ error: "not_stored", message: notStored }, 500);
+			}
+		},
+	);
 
 	app.get("/tags", withAuth, requireUser, async (c) =>
 		c.json({

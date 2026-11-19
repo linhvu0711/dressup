@@ -97,6 +97,7 @@ describe("migrations", () => {
 			"session",
 			"shop_link",
 			"tag",
+			"upload_address",
 			"user",
 			"verification",
 			"wish",

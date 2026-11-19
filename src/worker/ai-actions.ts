@@ -1,14 +1,11 @@
+import { Buffer } from "node:buffer";
 import type {
 	CallToolResult,
 	McpServer,
 	ToolAnnotations,
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import {
-	OWNED_ITEM_LIMIT,
-	type OwnedItem,
-	QUANTITY_MAX,
-} from "@/closet/owned-item";
+import { OWNED_ITEM_LIMIT, QUANTITY_MAX } from "@/closet/owned-item";
 import {
 	COMBINATION_LIMIT,
 	COMBINATION_TAGS_MAX,
@@ -18,6 +15,7 @@ import {
 import { LAYER_OF, TYPE_IDS, TYPE_NAMES } from "@/dress/clothing-types";
 import { BRAND_LIMIT, BRAND_NAME_MAX, type BrandId } from "@/labels/brand";
 import { COLOUR_LIMIT, COLOUR_NAME_MAX, type ColourId } from "@/labels/colour";
+import { ITEM_PICTURE_LIMIT } from "@/pictures/picture";
 import {
 	filterSize,
 	matchesPieceFilter,
@@ -27,7 +25,7 @@ import {
 	wishPiece,
 } from "@/piece-filter/piece-filter";
 import { TAG_NAME_MAX, type Tag } from "@/tags/tag";
-import { SHOP_LINK_LIMIT, WISH_LIMIT, type Wish } from "@/wishlist/wish";
+import { SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";
 import { countAiAction } from "./ai-action-store";
 import {
 	boughtRefusalText,
@@ -40,6 +38,7 @@ import {
 	noCombinationsMatch,
 	noOwnedItemMatch,
 	noOwnedItems,
+	noPicture,
 	noTags,
 	notAType,
 	notYourBrand,
@@ -50,6 +49,7 @@ import {
 	serverError,
 	tagRefusalText,
 	tooManyActions,
+	uploadAddressText,
 	wishRefusalText,
 } from "./ai-messages";
 import { addBrand, deleteBrand, listBrands, renameBrand } from "./brand-store";
@@ -73,7 +73,12 @@ import {
 	deleteOwnedItem,
 	listOwnedItems,
 } from "./owned-item-store";
+import { readPicture } from "./picture-store";
 import { addTag, deleteTag, listTags, renameTag } from "./tag-store";
+import {
+	giveUploadAddress,
+	UPLOAD_ADDRESS_AGE_MS,
+} from "./upload-address-store";
 import {
 	addShopLink,
 	addWish,
@@ -83,7 +88,12 @@ import {
 	listWishes,
 } from "./wish-store";
 
-type Account = { db: Db; pictures: R2Bucket; userId: string };
+type Account = {
+	db: Db;
+	pictures: R2Bucket;
+	userId: string;
+	baseURL: string;
+};
 
 const READ: ToolAnnotations = { readOnlyHint: true };
 const WRITE: ToolAnnotations = { readOnlyHint: false, destructiveHint: false };
@@ -100,22 +110,6 @@ const answer = (
 ): CallToolResult => ({
 	content: [{ type: "text", text }],
 	structuredContent: data,
-});
-
-// AI apps cannot add or read pictures, so an item shows only how many it has.
-const ownedItemView = ({ pictureIds, ...item }: OwnedItem) => ({
-	...item,
-	pictureCount: pictureIds.length,
-});
-
-// AI apps cannot add or read pictures, so a shop link shows only how many it
-// has.
-const wishView = (wish: Wish) => ({
-	...wish,
-	shopLinks: wish.shopLinks.map(({ pictureIds, ...link }) => ({
-		...link,
-		pictureCount: pictureIds.length,
-	})),
 });
 
 const combinationView = (combination: Combination, tags: Tag[]) => ({
@@ -156,6 +150,14 @@ const field = {
 			colourId: z.string().describe("A colour id from list_colours."),
 		}),
 	),
+	// Loose strings on purpose, as add_owned_item: a list of 9 must reach the
+	// store to get a sentence.
+	pictureIds: z
+		.array(z.string())
+		.optional()
+		.describe(
+			`The whole picture list, at most ${ITEM_PICTURE_LIMIT}, in order: ids that an upload address answered and ids the item has now. An id left out is deleted for good. Leave pictureIds out to keep the pictures as they are.`,
+		),
 };
 
 // Loose strings on purpose, as the add tools: a type or an id that is not one
@@ -170,7 +172,7 @@ const filterRule =
 	"Filters are optional. Inside one filter any pick matches; an item must fit every filter given.";
 
 export function registerAiActions(server: McpServer, account: Account) {
-	const { db, pictures, userId } = account;
+	const { db, pictures, userId, baseURL } = account;
 
 	// An unknown value is refused, not left out: a list from a wrong id would
 	// read as a true answer.
@@ -583,7 +585,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		"list_owned_items",
 		{
 			title: "List the closet",
-			description: `The account's owned items, newest first. An owned item is one brand of one piece (a type in a colour) with a quantity of 1 to ${QUANTITY_MAX}. An account holds at most ${OWNED_ITEM_LIMIT}. Each item has pictureCount, the number of its pictures. AI apps cannot add or read pictures. ${filterRule}`,
+			description: `The account's owned items, newest first. An owned item is one brand of one piece (a type in a colour) with a quantity of 1 to ${QUANTITY_MAX}. An account holds at most ${OWNED_ITEM_LIMIT}. Each item has pictureIds, its pictures in upload order; show_picture shows one. ${filterRule}`,
 			annotations: READ,
 			inputSchema: pieceFilterArgs,
 		},
@@ -593,8 +595,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 			const ownedItems = (await listOwnedItems(db, userId)).filter((item) =>
 				matchesPieceFilter(picked.filter, ownedItemPiece(item)),
 			);
-			if (ownedItems.length > 0)
-				return answer({ ownedItems: ownedItems.map(ownedItemView) });
+			if (ownedItems.length > 0) return answer({ ownedItems });
 			return answer(
 				{ ownedItems },
 				filterSize(picked.filter) > 0 ? noOwnedItemMatch : noOwnedItems,
@@ -623,9 +624,10 @@ export function registerAiActions(server: McpServer, account: Account) {
 				quantity: z
 					.number()
 					.describe(`How many the account owns, 1 to ${QUANTITY_MAX}.`),
+				pictureIds: field.pictureIds,
 			}),
 		},
-		async ({ typeId, colourId, brandId = null, quantity }) => {
+		async ({ typeId, colourId, brandId = null, quantity, pictureIds }) => {
 			// The server makes the id, as save_combination does.
 			const added = await addOwnedItem(db, pictures, userId, {
 				id: crypto.randomUUID(),
@@ -633,9 +635,10 @@ export function registerAiActions(server: McpServer, account: Account) {
 				colourId,
 				brandId,
 				quantity,
+				pictureIds,
 			});
 			return added.ok
-				? answer({ ownedItem: ownedItemView(added.value.ownedItem) })
+				? answer({ ownedItem: added.value.ownedItem })
 				: refusal(ownedItemRefusalText(added.error));
 		},
 	);
@@ -656,15 +659,17 @@ export function registerAiActions(server: McpServer, account: Account) {
 				quantity: z
 					.number()
 					.describe(`How many the account owns, 1 to ${QUANTITY_MAX}.`),
+				pictureIds: field.pictureIds,
 			}),
 		},
-		async ({ id, brandId, quantity }) => {
+		async ({ id, brandId, quantity, pictureIds }) => {
 			const changed = await changeOwnedItem(db, pictures, userId, id, {
 				brandId,
 				quantity,
+				pictureIds,
 			});
 			return changed.ok
-				? answer({ ownedItem: ownedItemView(changed.value) })
+				? answer({ ownedItem: changed.value })
 				: refusal(ownedItemRefusalText(changed.error));
 		},
 	);
@@ -691,16 +696,16 @@ export function registerAiActions(server: McpServer, account: Account) {
 		"list_wishes",
 		{
 			title: "List the wishlist",
-			description: `The account's wishes, newest first, each with its shop links. A wish is one piece (a type in a colour) the account wants to buy. An account holds at most ${WISH_LIMIT} wishes, and a wish at most ${SHOP_LINK_LIMIT} shop links. ${filterRule} The brand of a wish is the brand of any of its shop links, so a wish with no link fits no brand filter.`,
+			description: `The account's wishes, newest first, each with its shop links. A wish is one piece (a type in a colour) the account wants to buy. An account holds at most ${WISH_LIMIT} wishes, and a wish at most ${SHOP_LINK_LIMIT} shop links. Each shop link has pictureIds, its pictures in upload order; show_picture shows one. ${filterRule} The brand of a wish is the brand of any of its shop links, so a wish with no link fits no brand filter.`,
 			annotations: READ,
 			inputSchema: pieceFilterArgs,
 		},
 		async (args) => {
 			const picked = await filterOf(args);
 			if (!picked.ok) return refusal(picked.text);
-			const wishes = (await listWishes(db, userId))
-				.filter((wish) => matchesPieceFilter(picked.filter, wishPiece(wish)))
-				.map(wishView);
+			const wishes = (await listWishes(db, userId)).filter((wish) =>
+				matchesPieceFilter(picked.filter, wishPiece(wish)),
+			);
 			if (wishes.length > 0) return answer({ wishes });
 			return answer(
 				{ wishes },
@@ -728,7 +733,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 				colourId,
 			});
 			return added.ok
-				? answer({ wish: wishView(added.value.wish) })
+				? answer({ wish: added.value.wish })
 				: refusal(wishRefusalText(added.error, "wish"));
 		},
 	);
@@ -764,6 +769,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 			.nullable()
 			.optional()
 			.describe("The price in whole VND. Leave it out for no price."),
+		pictureIds: field.pictureIds,
 	};
 
 	tool(
@@ -777,16 +783,17 @@ export function registerAiActions(server: McpServer, account: Account) {
 				...shopLinkFields,
 			}),
 		},
-		async ({ wishId, url, brandId = null, name, price = null }) => {
+		async ({ wishId, url, brandId = null, name, price = null, pictureIds }) => {
 			const added = await addShopLink(db, pictures, userId, wishId, {
 				id: crypto.randomUUID(),
 				url,
 				brandId,
 				name,
 				price,
+				pictureIds,
 			});
 			return added.ok
-				? answer({ wish: wishView(added.value.wish) })
+				? answer({ wish: added.value.wish })
 				: refusal(wishRefusalText(added.error, "wish"));
 		},
 	);
@@ -803,15 +810,16 @@ export function registerAiActions(server: McpServer, account: Account) {
 				...shopLinkFields,
 			}),
 		},
-		async ({ id, url, brandId = null, name, price = null }) => {
+		async ({ id, url, brandId = null, name, price = null, pictureIds }) => {
 			const changed = await changeShopLink(db, pictures, userId, id, {
 				url,
 				brandId,
 				name,
 				price,
+				pictureIds,
 			});
 			return changed.ok
-				? answer({ wish: wishView(changed.value) })
+				? answer({ wish: changed.value })
 				: refusal(wishRefusalText(changed.error, "shop link"));
 		},
 	);
@@ -848,8 +856,59 @@ export function registerAiActions(server: McpServer, account: Account) {
 		async ({ id }) => {
 			const bought = await buyShopLink(db, pictures, userId, id);
 			return bought.ok
-				? answer({ ownedItem: ownedItemView(bought.value.ownedItem) })
+				? answer({ ownedItem: bought.value.ownedItem })
 				: refusal(boughtRefusalText(bought.error));
+		},
+	);
+
+	tool(
+		"get_upload_address",
+		{
+			title: "Get an upload address",
+			description: `Gives a one-time web address that takes one picture by HTTP POST, with no sign-in, for ${UPLOAD_ADDRESS_AGE_MS / 60_000} minutes. Send the bytes of a JPEG, PNG, or WebP of 1 MB or less from your code sandbox, then put the picture id it answers in pictureIds of add_owned_item, change_owned_item, add_shop_link, or change_shop_link. If the sandbox cannot reach the address, the user must let Claude reach this app's domain in Settings, Capabilities.`,
+			annotations: WRITE,
+			inputSchema: noArgs,
+		},
+		async () => {
+			const { id, expiresAt } = await giveUploadAddress(db, userId);
+			const address = `${baseURL}/api/uploads/${id}`;
+			return answer(
+				{ address, expiresAt: expiresAt.toISOString() },
+				uploadAddressText(address),
+			);
+		},
+	);
+
+	tool(
+		"show_picture",
+		{
+			title: "Show a picture",
+			description:
+				"Gives one picture of an owned item or a shop link as an image. list_owned_items and list_wishes give the picture ids.",
+			annotations: READ,
+			inputSchema: z.object({
+				id: z
+					.string()
+					.describe("A picture id from list_owned_items or list_wishes."),
+			}),
+		},
+		async ({ id }) => {
+			const read = await readPicture(db, pictures, userId, id);
+			if (!read.ok) return refusal(noPicture);
+			const headers = new Headers();
+			read.value.writeHttpMetadata(headers);
+			const bytes = await new Response(read.value.body).arrayBuffer();
+			return {
+				content: [
+					{
+						type: "image",
+						// A hand loop with btoa takes 16 to 34 ms for 1 MB, past the
+						// 10 ms of CPU a free-plan request has (ADR 0011).
+						data: Buffer.from(bytes).toString("base64"),
+						mimeType: headers.get("content-type") ?? "",
+					},
+				],
+			};
 		},
 	);
 }
