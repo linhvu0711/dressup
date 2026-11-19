@@ -27,7 +27,7 @@ Before the first `bun run e2e`, run `bunx playwright install chromium` once. Aft
 
 Run `bun run db:migrate:local` once before the first `bun run dev`, and again after a new migration.
 
-A new migration's file name starts with the time it was made, in UTC, as `migrations/20261119160142_<name>.sql`. Its schema change sits beside it in `migrations/meta/20261119160142_change.json`. Two branches can each add one with no rename. Make migrations only with `bun run db:generate`. It adds every change file, in name order, onto the last numbered snapshot, then runs drizzle-kit on the result. Plain `drizzle-kit generate` stops, since the migrations folder has no `_journal.json`. The first 20 migrations keep their numbers.
+A new migration's file name starts with the time it was made, in UTC, as `migrations/20261119160142_<name>.sql`. Its schema change sits beside it in `migrations/meta/20261119160142_<name>_change.json`. Two branches can each add one with no rename. Make migrations only with `bun run db:generate`. It adds every change file, in name order, onto the last numbered snapshot, then runs drizzle-kit on the result. Plain `drizzle-kit generate` stops, since the migrations folder has no `_journal.json`. The first 20 migrations keep their numbers.
 
 ## Settings
 

@@ -1,4 +1,5 @@
 import {
+	existsSync,
 	mkdirSync,
 	mkdtempSync,
 	readdirSync,
@@ -129,16 +130,23 @@ function main(): number {
 			const made: Snapshot = JSON.parse(
 				readFileSync(join(out, "meta", `${prefix}_snapshot.json`), "utf8"),
 			);
+			// The prefix has one-second steps, so the change file carries the whole
+			// migration name, and two migrations made in one second keep both.
+			const changeFile = join(
+				meta,
+				`${sqlFile.slice(0, -".sql".length)}_change.json`,
+			);
+			const sqlTarget = join(root, "migrations", sqlFile);
+			for (const target of [changeFile, sqlTarget])
+				if (existsSync(target))
+					throw new Error(`${relative(root, target)} exists already`);
 			// The change goes first: a crash before the SQL leaves a change with no
 			// SQL, which the table test and the next migrate show.
 			writeAtomic(
-				join(meta, `${prefix}_change.json`),
+				changeFile,
 				`${JSON.stringify(snapshotChange(current, made), null, 2)}\n`,
 			);
-			writeAtomic(
-				join(root, "migrations", sqlFile),
-				readFileSync(join(out, sqlFile), "utf8"),
-			);
+			writeAtomic(sqlTarget, readFileSync(join(out, sqlFile), "utf8"));
 		}
 		return run.exitCode ?? 1;
 	} finally {
