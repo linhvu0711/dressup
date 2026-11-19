@@ -1534,10 +1534,42 @@ describe("wishes", () => {
 		return (added.data as { wish: Listed }).wish.shopLinks[0]?.id;
 	}
 
+	// `n` JPEG uploads saved on the link as the browser saves them; AI apps
+	// cannot add pictures.
+	async function savePictures(
+		h: Harness,
+		ai: Session,
+		id: string | undefined,
+		n: number,
+	) {
+		const pictureIds: string[] = [];
+		for (let i = 0; i < n; i++) {
+			const body = new Uint8Array(100).fill(0x11 + i);
+			body.set([0xff, 0xd8, 0xff, 0xe0]);
+			const res = await send(h, ai.jar, "/api/pictures", {
+				method: "POST",
+				headers: { "content-type": "image/jpeg" },
+				body,
+			});
+			pictureIds.push(
+				((await res.json()) as { picture: { id: string } }).picture.id,
+			);
+		}
+		await sendJson(h, ai, "PUT", `/api/shop-links/${id}`, {
+			url: "https://cos.com/jacket",
+			brandId: null,
+			name: "Wool jacket",
+			price: 4290000,
+			pictureIds,
+		});
+		return pictureIds;
+	}
+
 	test("marks a shop link as bought and answers the owned item", async () => {
 		// Given
-		const { ai } = await withAiSession();
+		const { h, ai } = await withAiSession();
 		const id = await addJacketLink(ai);
+		await savePictures(h, ai, id, 1);
 		// When
 		const { data } = await ai.call("mark_shop_link_bought", { id });
 		const listed = await ai.call("list_wishes");
@@ -1561,6 +1593,7 @@ describe("wishes", () => {
 				quantity: ownedItem.quantity,
 				pictureCount: ownedItem.pictureCount,
 			},
+			pictureIds: "pictureIds" in ownedItem,
 			wishes: (listed.data as { wishes: Listed[] }).wishes,
 		}).toEqual({
 			ownedItem: {
@@ -1569,8 +1602,9 @@ describe("wishes", () => {
 				colour: "Navy",
 				brand: null,
 				quantity: 1,
-				pictureCount: 0,
+				pictureCount: 1,
 			},
+			pictureIds: "pictureIds" in ownedItem,
 			wishes: [],
 		});
 	});
@@ -1593,26 +1627,7 @@ describe("wishes", () => {
 		// Given
 		const { h, ai } = await withAiSession();
 		const id = await addJacketLink(ai);
-		const pictureIds: string[] = [];
-		for (const fill of [0x11, 0x22]) {
-			const body = new Uint8Array(100).fill(fill);
-			body.set([0xff, 0xd8, 0xff, 0xe0]);
-			const res = await send(h, ai.jar, "/api/pictures", {
-				method: "POST",
-				headers: { "content-type": "image/jpeg" },
-				body,
-			});
-			pictureIds.push(
-				((await res.json()) as { picture: { id: string } }).picture.id,
-			);
-		}
-		await sendJson(h, ai, "PUT", `/api/shop-links/${id}`, {
-			url: "https://cos.com/jacket",
-			brandId: null,
-			name: "Wool jacket",
-			price: 4290000,
-			pictureIds,
-		});
+		const pictureIds = await savePictures(h, ai, id, 2);
 		// When
 		const { data, text } = await ai.call("list_wishes");
 		// Then
