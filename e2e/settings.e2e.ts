@@ -203,6 +203,45 @@ test("puts the old skin back and says Not set when the save fails", async ({
 	await expect(row(page, "Skin colour #D6A27B")).toBeVisible();
 });
 
+test("keeps a hair colour set while an older skin save answers late", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account, /settings; the skin save is
+	// stored at once, but its answer, which still holds the old hair, waits
+	// until the hair save has answered
+	await page.goto("/settings");
+	let hairAnswered = () => {};
+	const hairDone = new Promise<void>((done) => {
+		hairAnswered = done;
+	});
+	await page.route("**/api/mannequin/skin", async (route) => {
+		const response = await route.fetch();
+		await hairDone;
+		await route.fulfill({ response });
+	});
+	const skinAnswer = page.waitForResponse((res) =>
+		res.url().endsWith("/api/mannequin/skin"),
+	);
+	const hairAnswer = page.waitForResponse(
+		(res) => res.url().endsWith("/api/mannequin/hair") && res.status() === 200,
+	);
+	// When
+	await row(page, "Skin colour #D6A27B").click();
+	const skin = page.getByRole("dialog", { name: "Skin colour" });
+	await skin.getByRole("textbox", { name: "Colour code" }).fill("8D5524");
+	await skin.getByRole("button", { name: "Set", exact: true }).click();
+	await row(page, "Hair colour #141418").click();
+	const hair = page.getByRole("dialog", { name: "Hair colour" });
+	await hair.getByRole("textbox", { name: "Colour code" }).fill("B55239");
+	await hair.getByRole("button", { name: "Set", exact: true }).click();
+	await hairAnswer;
+	hairAnswered();
+	await skinAnswer;
+	// Then
+	await expect(row(page, "Skin colour #8D5524")).toBeVisible();
+	await expect(row(page, "Hair colour #B55239")).toBeVisible();
+});
+
 test("shows the grey preview while the colours load", async ({ page }) => {
 	// Given: GET /api/mannequin held until the test lets it go
 	let release = () => {};

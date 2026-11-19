@@ -28,6 +28,8 @@ export function useSetMannequinColour() {
 					answer: mannequinAnswer,
 				})
 			).mannequin,
-		onSuccess: (mannequin) => after.mannequinSet(userId, mannequin),
+		onSuccess: (mannequin, { part }) =>
+			after.mannequinSet(userId, part, mannequin),
+		onSettled: () => after.mannequinSaveEnded(userId),
 	});
 }

@@ -117,7 +117,11 @@ export function MannequinSection() {
 							{
 								onSuccess: () => toast(`${NAMES[part]} set`),
 								onError: () => toast("Not set. Try again."),
-								onSettled: () => setLive(null),
+								// A newer colour typed meanwhile stays in the preview.
+								onSettled: () =>
+									setLive((now) =>
+										now?.part === part && now.hex === hex ? null : now,
+									),
 							},
 						);
 					}}

@@ -10,7 +10,7 @@ import {
 	type ListedBrand,
 } from "@/labels/brand";
 import type { Colour, ColourId, ListedColour } from "@/labels/colour";
-import type { Mannequin } from "@/mannequin/mannequin";
+import type { Mannequin, MannequinPart } from "@/mannequin/mannequin";
 import type { ListedTag, Tag, TagId } from "@/tags/tag";
 import type { Wish } from "@/wishlist/wish";
 import { type ErrorCode, errorAnswer, meAnswer } from "./contract";
@@ -115,11 +115,24 @@ export const after = {
 	brandsMayDiffer(userId: string | null) {
 		refresh(keys.brands(userId));
 	},
+	// Only the part this save set: an older save of the other part can answer
+	// later, and its answer still holds that part's colour from before.
+	mannequinSet(
+		userId: string | null,
+		part: MannequinPart,
+		mannequin: Mannequin,
+	) {
+		queryClient.setQueryData<Mannequin>(keys.mannequin(userId), (old) =>
+			old ? { ...old, [part]: mannequin[part] } : mannequin,
+		);
+	},
+	// Two saves of one part can answer out of order, so the stored colours
+	// are read again once a save ends.
+	mannequinSaveEnded(userId: string | null) {
+		refresh(keys.mannequin(userId));
+	},
 	// A new name can move the brand in the A to Z list; its count of items
 	// stays, as a rename leaves it.
-	mannequinSet(userId: string | null, mannequin: Mannequin) {
-		queryClient.setQueryData<Mannequin>(keys.mannequin(userId), mannequin);
-	},
 	brandChanged(userId: string | null, brand: Brand) {
 		queryClient.setQueryData<ListedBrand[]>(keys.brands(userId), (old) =>
 			old
