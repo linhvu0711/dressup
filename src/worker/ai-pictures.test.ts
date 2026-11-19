@@ -347,3 +347,77 @@ describe("owned item pictures", () => {
 		});
 	});
 });
+
+type Link = { id: string; pictureIds: string[] };
+
+const coat = {
+	url: "https://www.cos.com/coat",
+	name: "Wool coat",
+};
+
+// A wish for a Navy wool jacket, and its id.
+const addWish = async (ai: Session) => {
+	const { colourId } = await shirt(ai);
+	const { data } = await ai.call("add_wish", { typeId: "wool", colourId });
+	return (data as { wish: { id: string } }).wish.id;
+};
+
+describe("shop link pictures", () => {
+	test("adds a shop link with a picture sent by address", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		const wishId = await addWish(ai);
+		const [a] = await uploads(h, ai, 1);
+		// When
+		await ai.call("add_shop_link", { wishId, ...coat, pictureIds: [a] });
+		const { data } = await ai.call("list_wishes");
+		// Then
+		const [wish] = (data as { wishes: { shopLinks: Link[] }[] }).wishes;
+		expect(wish.shopLinks[0]?.pictureIds).toEqual([a]);
+	});
+
+	test("deletes a picture left out of a shop link's list", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		const wishId = await addWish(ai);
+		const [a, b] = await uploads(h, ai, 2);
+		const added = await ai.call("add_shop_link", {
+			wishId,
+			...coat,
+			pictureIds: [a, b],
+		});
+		const id = (added.data as { wish: { shopLinks: Link[] } }).wish.shopLinks[0]
+			?.id;
+		// When
+		const { data } = await ai.call("change_shop_link", {
+			id,
+			...coat,
+			pictureIds: [b],
+		});
+		// Then
+		expect({
+			pictureIds: (data as { wish: { shopLinks: Link[] } }).wish.shopLinks[0]
+				?.pictureIds,
+			keys: h.pictures.keys(),
+		}).toEqual({ pictureIds: [b], keys: [b] });
+	});
+
+	test("refuses 9 pictures on a shop link as a sentence", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		const wishId = await addWish(ai);
+		const nine = await uploads(h, ai, 9);
+		// When
+		const { isError, text } = await ai.call("add_shop_link", {
+			wishId,
+			...coat,
+			pictureIds: nine,
+		});
+		// Then
+		expect({ isError, text, links: await h.rows(schema.shopLink) }).toEqual({
+			isError: true,
+			text: "A shop link has at most 8 pictures.",
+			links: [],
+		});
+	});
+});

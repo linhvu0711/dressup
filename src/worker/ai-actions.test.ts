@@ -1446,7 +1446,7 @@ describe("wishes", () => {
 		brand: { name: string } | null;
 		name: string;
 		price: number | null;
-		pictureCount: number;
+		pictureIds: string[];
 	};
 	type Listed = { id: string; typeId: string; shopLinks: Link[] };
 
@@ -1499,7 +1499,7 @@ describe("wishes", () => {
 						brand: null,
 						name: "Wool jacket",
 						price: 4290000,
-						pictureCount: 0,
+						pictureIds: [],
 					},
 				],
 			},
@@ -1512,8 +1512,8 @@ describe("wishes", () => {
 		return (added.data as { wish: Listed }).wish.shopLinks[0]?.id;
 	}
 
-	// `n` JPEG uploads saved on the link as the browser saves them; AI apps
-	// cannot add pictures.
+	// `n` JPEG uploads saved on the link as the browser saves them, so these
+	// cases do not lean on the AI tools.
 	async function savePictures(
 		h: Harness,
 		ai: Session,
@@ -1601,22 +1601,19 @@ describe("wishes", () => {
 		});
 	});
 
-	test("lists the number of pictures of each shop link and no picture data", async () => {
+	test("lists the picture ids of each shop link in upload order", async () => {
 		// Given
 		const { h, ai } = await withAiSession();
 		const id = await addJacketLink(ai);
 		const pictureIds = await savePictures(h, ai, id, 2);
 		// When
-		const { data, text } = await ai.call("list_wishes");
+		const { data } = await ai.call("list_wishes");
 		// Then
-		expect({
-			counts: (data as { wishes: Listed[] }).wishes.map((w) =>
-				w.shopLinks.map((l) => l.pictureCount),
+		expect(
+			(data as { wishes: Listed[] }).wishes.map((w) =>
+				w.shopLinks.map((l) => l.pictureIds),
 			),
-			pictureData: [/pictureIds/, ...pictureIds].filter((p) =>
-				typeof p === "string" ? `${text}`.includes(p) : p.test(`${text}`),
-			),
-		}).toEqual({ counts: [[2]], pictureData: [] });
+		).toEqual([[pictureIds]]);
 	});
 
 	test("refuses a second wish for one piece as a sentence", async () => {

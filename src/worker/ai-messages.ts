@@ -159,8 +159,9 @@ function wishFieldText(error: Extract<WishError, { code: "invalid" }>): string {
 			return notYourColour(error.value);
 		case "brandId":
 			return notYourBrand(error.value);
-		case "id":
 		case "pictureIds":
+			return "pictureIds holds an id that is not your upload or a picture of this shop link. list_wishes names the link's pictures; get_upload_address gives a new upload.";
+		case "id":
 		case "body":
 			return serverError;
 	}

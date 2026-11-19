@@ -24,7 +24,7 @@ import {
 	wishPiece,
 } from "@/piece-filter/piece-filter";
 import { TAG_NAME_MAX, type Tag } from "@/tags/tag";
-import { SHOP_LINK_LIMIT, WISH_LIMIT, type Wish } from "@/wishlist/wish";
+import { SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";
 import { countAiAction } from "./ai-action-store";
 import {
 	boughtRefusalText,
@@ -107,16 +107,6 @@ const answer = (
 ): CallToolResult => ({
 	content: [{ type: "text", text }],
 	structuredContent: data,
-});
-
-// AI apps cannot add or read pictures, so a shop link shows only how many it
-// has.
-const wishView = (wish: Wish) => ({
-	...wish,
-	shopLinks: wish.shopLinks.map(({ pictureIds, ...link }) => ({
-		...link,
-		pictureCount: pictureIds.length,
-	})),
 });
 
 const combinationView = (combination: Combination, tags: Tag[]) => ({
@@ -703,16 +693,16 @@ export function registerAiActions(server: McpServer, account: Account) {
 		"list_wishes",
 		{
 			title: "List the wishlist",
-			description: `The account's wishes, newest first, each with its shop links. A wish is one piece (a type in a colour) the account wants to buy. An account holds at most ${WISH_LIMIT} wishes, and a wish at most ${SHOP_LINK_LIMIT} shop links. ${filterRule} The brand of a wish is the brand of any of its shop links, so a wish with no link fits no brand filter.`,
+			description: `The account's wishes, newest first, each with its shop links. A wish is one piece (a type in a colour) the account wants to buy. An account holds at most ${WISH_LIMIT} wishes, and a wish at most ${SHOP_LINK_LIMIT} shop links. Each shop link has pictureIds, its pictures in upload order. ${filterRule} The brand of a wish is the brand of any of its shop links, so a wish with no link fits no brand filter.`,
 			annotations: READ,
 			inputSchema: pieceFilterArgs,
 		},
 		async (args) => {
 			const picked = await filterOf(args);
 			if (!picked.ok) return refusal(picked.text);
-			const wishes = (await listWishes(db, userId))
-				.filter((wish) => matchesPieceFilter(picked.filter, wishPiece(wish)))
-				.map(wishView);
+			const wishes = (await listWishes(db, userId)).filter((wish) =>
+				matchesPieceFilter(picked.filter, wishPiece(wish)),
+			);
 			if (wishes.length > 0) return answer({ wishes });
 			return answer(
 				{ wishes },
@@ -740,7 +730,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 				colourId,
 			});
 			return added.ok
-				? answer({ wish: wishView(added.value.wish) })
+				? answer({ wish: added.value.wish })
 				: refusal(wishRefusalText(added.error, "wish"));
 		},
 	);
@@ -776,6 +766,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 			.nullable()
 			.optional()
 			.describe("The price in whole VND. Leave it out for no price."),
+		pictureIds: field.pictureIds,
 	};
 
 	tool(
@@ -789,16 +780,17 @@ export function registerAiActions(server: McpServer, account: Account) {
 				...shopLinkFields,
 			}),
 		},
-		async ({ wishId, url, brandId = null, name, price = null }) => {
+		async ({ wishId, url, brandId = null, name, price = null, pictureIds }) => {
 			const added = await addShopLink(db, pictures, userId, wishId, {
 				id: crypto.randomUUID(),
 				url,
 				brandId,
 				name,
 				price,
+				pictureIds,
 			});
 			return added.ok
-				? answer({ wish: wishView(added.value.wish) })
+				? answer({ wish: added.value.wish })
 				: refusal(wishRefusalText(added.error, "wish"));
 		},
 	);
@@ -815,15 +807,16 @@ export function registerAiActions(server: McpServer, account: Account) {
 				...shopLinkFields,
 			}),
 		},
-		async ({ id, url, brandId = null, name, price = null }) => {
+		async ({ id, url, brandId = null, name, price = null, pictureIds }) => {
 			const changed = await changeShopLink(db, pictures, userId, id, {
 				url,
 				brandId,
 				name,
 				price,
+				pictureIds,
 			});
 			return changed.ok
-				? answer({ wish: wishView(changed.value) })
+				? answer({ wish: changed.value })
 				: refusal(wishRefusalText(changed.error, "shop link"));
 		},
 	);
