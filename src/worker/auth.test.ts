@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { BetterAuthOptions } from "better-auth";
+import { getTableName, is } from "drizzle-orm";
+import { SQLiteTable } from "drizzle-orm/sqlite-core";
 import { createApp } from "./app";
 import { type Auth, authOptions, createAuthCache } from "./auth";
 import { schema } from "./db";
@@ -65,43 +67,21 @@ describe("GET /api/me", () => {
 });
 
 describe("migrations", () => {
-	test("makes the auth, mannequin, and tag tables from the migrations", async () => {
-		// Given
+	test("makes every schema table, and only those, from the migrations", async () => {
+		// Given: the database the migrations make, and the Drizzle schema
 		const h = await makeHarness();
 		// When
-		const names = h.tables();
+		// SQLite makes sqlite_sequence itself for an AUTOINCREMENT key.
+		const made = h.tables().filter((name) => !name.startsWith("sqlite_"));
+		const schemaTables: string[] = Object.values(schema)
+			.filter((value) => is(value, SQLiteTable))
+			.map((table) => getTableName(table))
+			.sort();
 		// Then
-		expect(names).toEqual([
-			"__drizzle_migrations",
-			"account",
-			"ai_action_count",
-			"brand",
-			"colour",
-			"colour_seed",
-			"combination",
-			"combination_piece",
-			"combination_tag",
-			"jwks",
-			"mannequin",
-			"oauth_access_token",
-			"oauth_client",
-			"oauth_client_assertion",
-			"oauth_client_resource",
-			"oauth_consent",
-			"oauth_refresh_token",
-			"oauth_resource",
-			"owned_item",
-			"picture",
-			"picture_storage",
-			"picture_upload_month",
-			"session",
-			"shop_link",
-			"tag",
-			"upload_address",
-			"user",
-			"verification",
-			"wish",
-		]);
+		expect({
+			notInMigrations: schemaTables.filter((name) => !made.includes(name)),
+			notInSchema: made.filter((name) => !schemaTables.includes(name)),
+		}).toEqual({ notInMigrations: [], notInSchema: [] });
 	});
 });
 

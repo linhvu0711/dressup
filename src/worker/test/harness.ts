@@ -1,10 +1,9 @@
 import { Database } from "bun:sqlite";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { betterAuth } from "better-auth";
 import { testUtils } from "better-auth/plugins";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sqlite";
-import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 import { createApp } from "../app";
 import { type AuthSettings, authOptions, createClientDiscovery } from "../auth";
@@ -30,15 +29,18 @@ const migrationStatements = (tag: string) =>
 		.map((statement) => statement.trim())
 		.filter((statement) => statement !== "");
 
-// The journal's tags up to and including `through`, so a test can build the
-// database as it stood before a later migration.
-function migrationsThrough(through: string): string[] {
-	const { entries } = JSON.parse(
-		readFileSync("migrations/meta/_journal.json", "utf8"),
-	) as { entries: { tag: string }[] };
-	const end = entries.findIndex((entry) => entry.tag === through);
+// Wrangler applies the migration files in name order and keeps no journal,
+// so tests build the database the same way. With `through`, the tags stop
+// there, so a test can build the database as it stood before a later one.
+function migrationTags(through?: string): string[] {
+	const tags = readdirSync("migrations")
+		.filter((name) => name.endsWith(".sql"))
+		.map((name) => name.slice(0, -".sql".length))
+		.sort();
+	if (through === undefined) return tags;
+	const end = tags.indexOf(through);
 	if (end === -1) throw new Error(`No migration ${through}`);
-	return entries.slice(0, end + 1).map((entry) => entry.tag);
+	return tags.slice(0, end + 1);
 }
 
 export async function makeHarness(options: { through?: string } = {}) {
@@ -49,11 +51,8 @@ export async function makeHarness(options: { through?: string } = {}) {
 	// drizzle's bun:sqlite driver has no batch; D1 runs a batch as one
 	// transaction, one batch at a time, so this does the same.
 	const local = drizzle({ client: sqlite, schema });
-	if (options.through === undefined)
-		migrate(local, { migrationsFolder: "./migrations" });
-	else
-		for (const tag of migrationsThrough(options.through))
-			for (const statement of migrationStatements(tag)) sqlite.run(statement);
+	for (const tag of migrationTags(options.through))
+		for (const statement of migrationStatements(tag)) sqlite.run(statement);
 	let last: Promise<unknown> = Promise.resolve();
 	let onBatch = () => {};
 	const runBatch = async (queries: readonly unknown[]) => {
