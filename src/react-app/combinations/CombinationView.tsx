@@ -14,6 +14,7 @@ import {
 	pieceName,
 	topFirst,
 } from "./combination";
+import { useWallAddress } from "./wall-address";
 
 // The open combination. Under 900 px it is the combination's own page, its
 // head row on top with Back; from 900 px it is the right part of the
@@ -26,6 +27,7 @@ export function CombinationView({
 	onDelete: () => void;
 }) {
 	const toast = useToast();
+	const address = useWallAddress();
 	const dress = useDressState();
 	const title = combinationTitle(combination);
 	// In the tag list's order; a tag deleted on another device is skipped.
@@ -35,7 +37,7 @@ export function CombinationView({
 		<div data-slot="combination-view" className="flex min-h-0 flex-1 flex-col">
 			<div className="flex min-h-[62px] flex-none items-center gap-3 px-4 pt-[14px] pb-2 wide:px-6 wide:pt-[18px]">
 				<Button asChild variant="icon" size="icon" className="wide:hidden">
-					<Link to="/combinations" aria-label="Back" title="Back">
+					<Link to={address.wall} aria-label="Back" title="Back">
 						<ArrowLeft size={18} strokeWidth={1.9} aria-hidden />
 					</Link>
 				</Button>
@@ -44,7 +46,7 @@ export function CombinationView({
 				</h2>
 				<Button asChild variant="icon" size="icon">
 					<Link
-						to={`/build/${combination.id}`}
+						to={address.builder(combination.id)}
 						aria-label="Change this combination"
 						title="Change this combination"
 					>

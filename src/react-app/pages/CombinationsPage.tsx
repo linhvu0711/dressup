@@ -1,17 +1,34 @@
 import { cn } from "cn";
 import { Plus } from "lucide-react";
-import { type ReactNode, useState } from "react";
-import { Link, useParams } from "react-router";
+import { type ReactNode, useEffect, useState } from "react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useCombinations } from "@/combinations/api";
 import { CombinationCard } from "@/combinations/CombinationCard";
+import { CombinationFilterSheet } from "@/combinations/CombinationFilterSheet";
 import { CombinationsFailed } from "@/combinations/CombinationsFailed";
 import { CombinationView } from "@/combinations/CombinationView";
 import type { Combination } from "@/combinations/combination";
 import { DeleteCombinationDialog } from "@/combinations/DeleteCombinationDialog";
+import {
+	type CombinationFilter,
+	filterChips,
+	filterCombinations,
+	filterSize,
+	NO_FILTER,
+	pruneCombinationFilter,
+	readCombinationFilter,
+	shownText,
+	writeCombinationFilter,
+} from "@/combinations/filter";
+import { useWallAddress, wallAddress } from "@/combinations/wall-address";
 import { Button } from "@/components/ui/button";
+import { ActiveFilters, FilterButton } from "@/components/ui/filter";
 import { Notice } from "@/components/ui/notice";
 import { useDressState } from "@/dress/DressState";
+import { TypeFigure } from "@/dress/figure/TypeFigure";
 import { OutfitFailed } from "@/dress/OutfitFailed";
+import { useColours } from "@/labels/api";
+import { useTags } from "@/tags/api";
 import { PageHeader } from "../shell/PageHeader";
 
 const WALL =
@@ -27,6 +44,41 @@ export function CombinationsPage() {
 	const { combinationId } = useParams();
 	const combinations = useCombinations();
 	const dress = useDressState();
+	const tags = useTags();
+	const colours = useColours();
+	const [params, setParams] = useSearchParams();
+	const navigate = useNavigate();
+	const address = useWallAddress();
+	const filter = pruneCombinationFilter(
+		readCombinationFilter(params),
+		tags.data,
+		colours.data,
+	);
+	const visible = combinations.data
+		? filterCombinations(combinations.data, filter)
+		: [];
+	const [filtering, setFiltering] = useState(false);
+	// An empty wall shows no filter, so it keeps none in its address: the
+	// builder carries the address along, and the next save would come back to
+	// a wall filtered by something the user cannot see.
+	const empty = combinations.data?.length === 0;
+	const addressed = params.toString() !== "";
+	useEffect(() => {
+		if (empty && addressed) setParams("", { replace: true });
+	}, [empty, addressed, setParams]);
+	// Each pick replaces the address, so Back leaves the page, not one pick. A
+	// filter that hides the open combination closes it, as a look's chip does.
+	function setFilter(next: CombinationFilter) {
+		const search = writeCombinationFilter(next).toString();
+		const hidden =
+			combinationId !== undefined &&
+			combinations.data !== undefined &&
+			!filterCombinations(combinations.data, next).some(
+				(c) => c.id === combinationId,
+			);
+		if (hidden) navigate(wallAddress(next), { replace: true });
+		else setParams(search, { replace: true });
+	}
 	const shown = combinations.data?.find((c) => c.id === combinationId);
 	const open = shown !== undefined;
 	// The confirm lives here, not in the view: the view goes when the list
@@ -63,17 +115,28 @@ export function CombinationsPage() {
 					Pick 2 to 4 pieces on the mannequin. Your combinations come here.
 				</p>
 				<Button asChild variant="primary" className="mt-2">
-					<Link to="/build">Build a combination</Link>
+					<Link to={address.builder()}>Build a combination</Link>
 				</Button>
 			</Notice>
 		);
 	} else if (dress.status === "failed") {
 		// After the empty check: with no cards there is no mannequin to fail.
 		wall = <OutfitFailed onLoadAgain={dress.loadAgain} />;
+	} else if (visible.length === 0) {
+		wall = (
+			<Notice title="No combinations here">
+				<p className="max-w-[30ch] text-muted-foreground">
+					No combination matches all of your filters.
+				</p>
+				<Button className="mt-2" onClick={() => setFilter(NO_FILTER)}>
+					Clear all
+				</Button>
+			</Notice>
+		);
 	} else {
 		wall = (
 			<div data-slot="combination-wall" className={WALL}>
-				{combinations.data.map((combination) => (
+				{visible.map((combination) => (
 					<CombinationCard
 						key={combination.id}
 						combination={combination}
@@ -100,17 +163,39 @@ export function CombinationsPage() {
 				<PageHeader
 					title="Combinations"
 					end={
-						<Button asChild variant="primary" size="icon">
-							<Link
-								to="/build"
-								aria-label="New combination"
-								title="New combination"
-							>
-								<Plus size={18} strokeWidth={1.9} aria-hidden />
-							</Link>
-						</Button>
+						<div className="flex items-center gap-3">
+							{combinations.data?.length ? (
+								<FilterButton
+									count={filterSize(filter)}
+									onClick={() => setFiltering(true)}
+								/>
+							) : null}
+							<Button asChild variant="primary" size="icon">
+								<Link
+									to={address.builder()}
+									aria-label="New combination"
+									title="New combination"
+								>
+									<Plus size={18} strokeWidth={1.9} aria-hidden />
+								</Link>
+							</Button>
+						</div>
 					}
 				/>
+				{combinations.data?.length ? (
+					<ActiveFilters
+						chips={filterChips(filter, tags.data, colours.data).map((chip) => ({
+							key: chip.key,
+							label: chip.label,
+							icon: chip.typeId ? (
+								<TypeFigure typeId={chip.typeId} />
+							) : undefined,
+							onRemove: () => setFilter(chip.without),
+						}))}
+						onClearAll={() => setFilter(NO_FILTER)}
+						shown={shownText(visible.length)}
+					/>
+				) : null}
 				{wall}
 			</div>
 			{shown ? (
@@ -124,6 +209,14 @@ export function CombinationsPage() {
 						onDelete={() => setDeleting(shown)}
 					/>
 				</aside>
+			) : null}
+			{filtering ? (
+				<CombinationFilterSheet
+					filter={filter}
+					onChange={setFilter}
+					shown={shownText(visible.length)}
+					onClose={() => setFiltering(false)}
+				/>
 			) : null}
 			{deleting ? (
 				<DeleteCombinationDialog

@@ -25,6 +25,7 @@ import {
 	combinationTitle,
 } from "./combination";
 import { useLeaveGoneCombination } from "./gone";
+import { useWallAddress } from "./wall-address";
 
 // The save form: the title, the tag chips, then Save. A combination the account has already,
 // or a full account, turns Save off with a line that says why. With changing,
@@ -57,6 +58,7 @@ export function SaveCombinationDialog({
 	const combinations = useCombinations();
 	const toast = useToast();
 	const navigate = useNavigate();
+	const address = useWallAddress();
 	const sent = pieces.map((p) => ({ typeId: p.typeId, colourId: p.colour.id }));
 	const key = combinationKey(sent, open);
 	const refused = send.error instanceof RequestError ? send.error : null;
@@ -108,7 +110,7 @@ export function SaveCombinationDialog({
 									? {
 											onSuccess: () => {
 												toast("Changes saved");
-												navigate(`/combinations/${changing.id}`, {
+												navigate(address.combination(changing.id), {
 													replace: true,
 												});
 											},
@@ -120,7 +122,7 @@ export function SaveCombinationDialog({
 									: {
 											onSuccess: () => {
 												toast("Saved to Combinations");
-												navigate("/combinations");
+												navigate(address.wall);
 											},
 										},
 							);
@@ -130,13 +132,13 @@ export function SaveCombinationDialog({
 							{combinationTitle({ pieces, open })}
 						</p>
 						<TagPicker picked={tags} onChange={setTags} />
-						{alert === "duplicate" ? (
+						{sameId ? (
 							<div className="flex items-center gap-3">
 								<p role="alert" className="text-[13px] text-destructive">
 									You have this combination already.
 								</p>
 								<Button asChild>
-									<Link to={`/combinations/${sameId}`}>Open it</Link>
+									<Link to={address.combination(sameId)}>Open it</Link>
 								</Button>
 							</div>
 						) : alert === "full" ? (

@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { Link } from "react-router";
 import { CombinationFigure } from "./CombinationFigure";
 import { type Combination, combinationTitle } from "./combination";
+import { useWallAddress } from "./wall-address";
 
 const VIEW_BOX = "10 14 380 590";
 
@@ -17,13 +18,14 @@ export function CombinationCard({
 	marked?: boolean;
 }) {
 	const ref = useRef<HTMLAnchorElement>(null);
+	const address = useWallAddress();
 	useEffect(() => {
 		if (marked) ref.current?.scrollIntoView({ block: "nearest" });
 	}, [marked]);
 	return (
 		<Link
 			ref={ref}
-			to={`/combinations/${combination.id}`}
+			to={address.combination(combination.id)}
 			data-slot="combination-card"
 			aria-current={marked ? "true" : undefined}
 			className="flex min-w-0 flex-col gap-[7px]"

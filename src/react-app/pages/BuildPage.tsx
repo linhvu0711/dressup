@@ -7,6 +7,7 @@ import { CombinationFigure } from "@/combinations/CombinationFigure";
 import { CombinationsFailed } from "@/combinations/CombinationsFailed";
 import type { Combination } from "@/combinations/combination";
 import { SaveCombinationDialog } from "@/combinations/SaveCombinationDialog";
+import { useWallAddress } from "@/combinations/wall-address";
 import { Button } from "@/components/ui/button";
 import { CHIP } from "@/components/ui/chip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -41,6 +42,7 @@ const NONE = "none";
 export function BuildPage() {
 	const { combinationId } = useParams();
 	const combinations = useCombinations();
+	const address = useWallAddress();
 	if (combinationId === undefined) return <Builder />;
 	const found = combinations.data?.find((c) => c.id === combinationId);
 	if (found) return <Builder key={found.id} combination={found} />;
@@ -58,7 +60,7 @@ export function BuildPage() {
 				</Stage>
 			</ChangeShell>
 		);
-	return <Navigate to="/combinations" replace />;
+	return <Navigate to={address.wall} replace />;
 }
 
 // The header of the builder in change mode, before the combination is in.
@@ -72,7 +74,8 @@ function ChangeShell({ id, children }: { id: string; children: ReactNode }) {
 }
 
 function Close({ to }: { to?: string }) {
-	const href = to === undefined ? "/combinations" : `/combinations/${to}`;
+	const address = useWallAddress();
+	const href = to === undefined ? address.wall : address.combination(to);
 	return (
 		<Button asChild variant="icon" size="icon">
 			<Link to={href} aria-label="Close" title="Close">
