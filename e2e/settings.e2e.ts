@@ -106,10 +106,17 @@ test("shows the set skin on the wall, a combination's page, and the builder", as
 		data: { hex: "#8D5524" },
 	});
 	expect(set.status()).toBe(200);
-	const dark = async (figure: Locator) => {
-		await expect(figure).toBeVisible();
-		return (await figure.innerHTML()).includes('fill="#8D5524"');
-	};
+	// Each figure is the grey placeholder until the skin loads, so this waits
+	// for the skin and is false only when it never comes.
+	const dark = (figure: Locator) =>
+		figure
+			.locator('[fill="#8D5524"]')
+			.first()
+			.waitFor({ state: "attached", timeout: 5000 })
+			.then(
+				() => true,
+				() => false,
+			);
 	// When
 	await page.goto("/combinations");
 	const wall = await dark(
@@ -255,7 +262,7 @@ test("opens the delete confirm from the bin button", async ({ page }) => {
 	await page.getByRole("button", { name: "Delete my account" }).click();
 	// Then
 	await expect(confirm(page)).toContainText(
-		"All your looks and colours go away for good. You cannot undo this.",
+		"All your combinations, closet, wishlist, and colours go away for good. You cannot undo this.",
 	);
 	await expect(
 		confirm(page).getByRole("button", { name: "Cancel", exact: true }),

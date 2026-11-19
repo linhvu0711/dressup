@@ -17,7 +17,7 @@ export function DeleteAccount() {
 				<div className="min-w-0">
 					Delete my account
 					<small className="block text-xs text-muted-foreground">
-						Your looks and colours go away for good.
+						Your combinations, closet, wishlist, and colours go away for good.
 					</small>
 				</div>
 				<span className="flex-1" />
@@ -59,7 +59,8 @@ function DeleteConfirm({ onClose }: { onClose: () => void }) {
 						Delete your account?
 					</Dialog.Title>
 					<Dialog.Description className="text-[14px] text-muted-foreground">
-						All your looks and colours go away for good. You cannot undo this.
+						All your combinations, closet, wishlist, and colours go away for
+						good. You cannot undo this.
 					</Dialog.Description>
 					{del.isError ? (
 						<p role="alert" className="text-[13px] text-destructive">
