@@ -21,7 +21,6 @@ export const three = (ids: Record<string, string>) => ({
 		{ typeId: "tee_l", colourId: ids.Black },
 		{ typeId: "casual_p", colourId: ids.Navy },
 	],
-	open: true,
 });
 
 // White short tee + Grey training shorts.
@@ -31,7 +30,6 @@ export const two = (ids: Record<string, string>) => ({
 		{ typeId: "train_sh", colourId: ids.Grey },
 		{ typeId: "tee_s", colourId: ids.White },
 	],
-	open: false,
 });
 
 export async function postCombinations(page: Page, ...bodies: unknown[]) {

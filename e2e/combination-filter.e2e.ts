@@ -37,7 +37,6 @@ async function seedWall(page: Page) {
 				{ typeId: "chino_p", colourId: ids.Navy },
 				{ typeId: "tee_s", colourId: ids.White },
 			],
-			open: false,
 			tags: [work, weekend],
 		},
 	);

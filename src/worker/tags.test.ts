@@ -371,7 +371,6 @@ describe("tags and combinations", () => {
 			{ typeId: "tee_l", colourId: ids.Black },
 			{ typeId: "casual_p", colourId: ids.Navy },
 		],
-		open: true,
 		tags,
 	});
 
@@ -382,7 +381,6 @@ describe("tags and combinations", () => {
 			{ typeId: "train_sh", colourId: ids.Grey },
 			{ typeId: "tee_s", colourId: ids.White },
 		],
-		open: false,
 		tags,
 	});
 

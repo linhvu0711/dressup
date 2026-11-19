@@ -416,7 +416,6 @@ describe("colours", () => {
 				{ typeId: "casual_p", colourId: idOf("Navy") },
 				{ typeId: "tee_l", colourId: idOf("White") },
 			],
-			open: false,
 		});
 		// When
 		const { isError, text } = await ai.call("delete_colour", {
@@ -666,7 +665,6 @@ describe("combinations", () => {
 			{ typeId: "tee_l", colourId: ids.Black },
 			{ typeId: "casual_p", colourId: ids.Navy },
 		],
-		open: true,
 	});
 
 	// White short tee + Grey training shorts.
@@ -709,22 +707,6 @@ describe("combinations", () => {
 			id,
 			title: "Khaki Harrington jacket + Black long tee + Grey casual pants",
 		});
-	});
-
-	test("keeps the jacket state when a change leaves open out", async () => {
-		// Given: THREE saved with its jacket open
-		const { ai } = await withAiSession();
-		const ids = await colourIds(ai);
-		const id = await savedId(ai, three(ids));
-		// When
-		const { data } = await ai.call("change_combination", {
-			id,
-			pieces: greyPants(ids),
-		});
-		// Then
-		expect(
-			(data as { combination: Listed & { open: boolean } }).combination.open,
-		).toBe(true);
 	});
 
 	test("refuses a change into a combination the account has", async () => {
@@ -850,14 +832,15 @@ describe("combinations", () => {
 		const saved = await ai.call("save_combination", three(ids));
 		const { data } = await ai.call("list_combinations");
 		// Then
+		const { combinations } = data as { combinations: Listed[] };
 		expect({
 			isError: saved.isError,
-			titles: (data as { combinations: Listed[] }).combinations.map(
-				(c) => c.title,
-			),
+			titles: combinations.map((c) => c.title),
+			fields: combinations.map((c) => Object.keys(c).sort()),
 		}).toEqual({
 			isError: false,
 			titles: ["Khaki Harrington jacket + Black long tee + Navy casual pants"],
+			fields: [["id", "pieces", "tags", "title"]],
 		});
 	});
 

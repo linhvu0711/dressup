@@ -127,6 +127,13 @@
       "when": 1795065184830,
       "tag": "0017_futuristic_nick_fury",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1795067282434,
+      "tag": "0018_awesome_inhumans",
+      "breakpoints": true
     }
   ]
 }

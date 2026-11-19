@@ -123,6 +123,14 @@ export async function makeHarness(options: { through?: string } = {}) {
 			)
 			.all()
 			.map((row) => row.name);
+	// A table's column names in order, to see what a migration dropped.
+	const columns = (table: string) =>
+		sqlite
+			.query<{ name: string }, [string]>(
+				"select name from pragma_table_info(?) order by cid",
+			)
+			.all(table)
+			.map((row) => row.name);
 	const seedCombinationsOf = (userId: string, n: number) =>
 		seedCombinations(db, userId, n);
 	const seedOwnedItemsOf = (userId: string, n: number) =>
@@ -254,6 +262,7 @@ export async function makeHarness(options: { through?: string } = {}) {
 		addAccount,
 		rows,
 		tables,
+		columns,
 		accountRows,
 		userForeignKeys,
 		seedCombinations: seedCombinationsOf,

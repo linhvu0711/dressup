@@ -80,7 +80,6 @@ async function fillAccount(
 			{ typeId: "casual_p", colourId: idOf("Navy") },
 			{ typeId: "tee_l", colourId: idOf("White") },
 		],
-		open: false,
 		tags: [tag.id],
 	};
 	expect(

@@ -15,7 +15,6 @@ type Ids = Record<string, string>;
 
 type Listed = {
 	id: string;
-	open: boolean;
 	tags: string[];
 	pieces: {
 		layer: string;
@@ -73,7 +72,6 @@ const three = (ids: Ids) => ({
 		{ typeId: "tee_l", colourId: ids.Black },
 		{ typeId: "casual_p", colourId: ids.Navy },
 	],
-	open: true,
 });
 
 // White short tee + Grey training shorts.
@@ -83,7 +81,6 @@ const two = (ids: Ids) => ({
 		{ typeId: "train_sh", colourId: ids.Grey },
 		{ typeId: "tee_s", colourId: ids.White },
 	],
-	open: false,
 });
 
 const THIRD_ID = "33333333-3333-4333-8333-333333333333";
@@ -131,7 +128,6 @@ describe("POST /api/combinations", () => {
 			listed: [
 				{
 					id: FIRST_ID,
-					open: true,
 					tags: [],
 					pieces: [
 						{
@@ -177,23 +173,6 @@ describe("POST /api/combinations", () => {
 			statuses: [first.status, again.status],
 			count: (await list(h, headers)).length,
 		}).toEqual({ statuses: [201, 200], count: 1 });
-	});
-
-	test("saves the same pieces with the jacket closed", async () => {
-		// Given: alice saved THREE
-		const { h, headers, ids } = await alice();
-		await post(h, headers, three(ids));
-		// When
-		const res = await post(h, headers, {
-			...three(ids),
-			id: SECOND_ID,
-			open: false,
-		});
-		// Then
-		expect({
-			status: res.status,
-			count: (await list(h, headers)).length,
-		}).toEqual({ status: 201, count: 2 });
 	});
 
 	test("refuses an id another account saved", async () => {
@@ -307,7 +286,7 @@ describe("combination rules", () => {
 });
 
 describe("duplicate", () => {
-	test("refuses the same pieces and jacket state", async () => {
+	test("refuses the same pieces in another order", async () => {
 		// Given: alice saved THREE
 		const { h, headers, ids } = await alice();
 		await post(h, headers, three(ids));
@@ -316,7 +295,6 @@ describe("duplicate", () => {
 		const res = await post(h, headers, {
 			id: SECOND_ID,
 			pieces: [pants, jacket, tee],
-			open: true,
 		});
 		// Then
 		expect({
@@ -327,23 +305,6 @@ describe("duplicate", () => {
 			status: 409,
 			body: { error: "duplicate", id: FIRST_ID },
 			count: 1,
-		});
-	});
-
-	test("refuses the same pieces with no jacket sent open and closed", async () => {
-		// Given: alice saved TWO (no jacket, open false)
-		const { h, headers, ids } = await alice();
-		await post(h, headers, two(ids));
-		// When
-		const res = await post(h, headers, {
-			...two(ids),
-			id: "33333333-3333-4333-8333-333333333333",
-			open: true,
-		});
-		// Then
-		expect({ status: res.status, body: await res.json() }).toEqual({
-			status: 409,
-			body: { error: "duplicate", id: SECOND_ID },
 		});
 	});
 
@@ -424,11 +385,7 @@ describe("combination limit", () => {
 		// When
 		const results = await Promise.all([
 			saveCombination(h.db, "alice-id", three(ids)),
-			saveCombination(h.db, "alice-id", {
-				...three(ids),
-				id: SECOND_ID,
-				open: false,
-			}),
+			saveCombination(h.db, "alice-id", { ...greyPants(ids), id: SECOND_ID }),
 		]);
 		// Then
 		expect({
@@ -457,7 +414,6 @@ describe("PUT /api/combinations/:id", () => {
 			status: res.status,
 			ids: listed.map((c) => c.id),
 			pieces: piecesOf(listed[1]),
-			open: listed[1].open,
 		}).toEqual({
 			status: 200,
 			ids: [SECOND_ID, FIRST_ID],
@@ -466,7 +422,6 @@ describe("PUT /api/combinations/:id", () => {
 				["tee_l", "Black"],
 				["harrington", "Khaki"],
 			],
-			open: true,
 		});
 	});
 
@@ -636,7 +591,6 @@ describe("changes at once", () => {
 				{ typeId: "casual_p", colourId: ids.Grey },
 				{ typeId: "tee_s", colourId: ids.White },
 			],
-			open: false,
 		});
 		const batch = db.batch.bind(db);
 		const otherTabFirst: typeof batch = async (items) => {

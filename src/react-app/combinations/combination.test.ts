@@ -1,22 +1,5 @@
 import { expect, test } from "bun:test";
-import {
-	combinationKey,
-	combinationTitle,
-	pieceName,
-	wornLayers,
-} from "./combination";
-
-test("keys pieces with no jacket the same, open or not", () => {
-	// Given: Navy casual pants and a Black long tee, as colour ids n and b
-	const pieces = [
-		{ typeId: "casual_p", colourId: "n" },
-		{ typeId: "tee_l", colourId: "b" },
-	] as const;
-	// When
-	const keys = [combinationKey(pieces, true), combinationKey(pieces, false)];
-	// Then
-	expect(keys).toEqual(["casual_p:n+tee_l:b", "casual_p:n+tee_l:b"]);
-});
+import { combinationTitle, pieceName, wornLayers } from "./combination";
 
 const piece = (
 	typeId: "casual_p" | "tee_l" | "harrington" | "sweater" | "wool" | "shirt_l",
@@ -42,7 +25,7 @@ test("names a combination top layer first", () => {
 });
 
 test("draws the pieces bottom layer first", () => {
-	// Given: an open-or-closed Khaki Harrington, a Black long tee, Navy pants
+	// Given: a Khaki Harrington, a Black long tee, Navy pants
 	const pieces = [
 		{ typeId: "harrington", hex: "#B8A57C" },
 		{ typeId: "tee_l", hex: "#1B1B1F" },

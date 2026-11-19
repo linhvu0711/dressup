@@ -32,7 +32,6 @@ export const combinationInputSchema = z
 			.array(z.object({ typeId: z.enum(TYPE_IDS), colourId: z.string() }))
 			.min(2)
 			.max(4),
-		open: z.boolean(),
 		tags: z.array(tagIdSchema).max(COMBINATION_TAGS_MAX).default([]),
 	})
 	.superRefine((combination, ctx) => {
@@ -72,7 +71,6 @@ export const combinationSchema = z.object({
 			colour: colourSchema,
 		}),
 	),
-	open: z.boolean(),
 	tags: z.array(tagIdSchema),
 });
 
@@ -95,9 +93,6 @@ export type CombinationProblem =
 			issue: z.core.$ZodIssue;
 	  };
 
-const hasJacket = (pieces: readonly { typeId: TypeId }[]) =>
-	pieces.some((p) => LAYER_OF[p.typeId] === "jacket");
-
 const valueAt = (input: unknown, path: readonly PropertyKey[]): unknown =>
 	path.reduce<unknown>(
 		(value, key) =>
@@ -107,24 +102,13 @@ const valueAt = (input: unknown, path: readonly PropertyKey[]): unknown =>
 		input,
 	);
 
-// The jacket state counts only with a jacket, so a combination with no jacket
-// has one identity however open was sent.
 export function checkCombination(
 	input: unknown,
 ):
 	| { ok: true; combination: CombinationInput }
 	| { ok: false; problem: CombinationProblem } {
 	const parsed = combinationInputSchema.safeParse(input);
-	if (parsed.success) {
-		const combination = parsed.data;
-		return {
-			ok: true,
-			combination: {
-				...combination,
-				open: combination.open && hasJacket(combination.pieces),
-			},
-		};
-	}
+	if (parsed.success) return { ok: true, combination: parsed.data };
 	const issue = parsed.error.issues[0];
 	const path = [...issue.path];
 	if (issue.code === "custom")
@@ -163,16 +147,14 @@ const byLayer = <T extends { typeId: TypeId }>(pieces: readonly T[]): T[] =>
 			LAYERS.indexOf(LAYER_OF[a.typeId]) - LAYERS.indexOf(LAYER_OF[b.typeId]),
 	);
 
-// The pieces and the jacket state as one text, so the database can refuse a
-// second combination with the same identity.
+// The pieces as one text, bottom layer first, so the same pieces in any order
+// make one key and the database can refuse a second combination of them.
 export function combinationKey(
 	pieces: readonly { typeId: TypeId; colourId: string }[],
-	open: boolean,
 ): string {
-	const key = byLayer(pieces)
+	return byLayer(pieces)
 		.map((p) => `${p.typeId}:${p.colourId}`)
 		.join("+");
-	return open && hasJacket(pieces) ? `${key}|open` : key;
 }
 
 // A type's name inside a title: "long tee", but "Harrington jacket", since

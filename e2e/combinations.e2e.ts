@@ -611,6 +611,22 @@ test("replaces a piece in the same layer and takes it off", async ({
 	await expect(stage(page).locator('[data-type-id="chino_p"]')).toHaveCount(0);
 });
 
+test("shows the jacket types and colours with no Jacket front switch", async ({
+	page,
+}) => {
+	// Given: both projects, /build, the Jacket tab
+	await page.goto("/build");
+	await page.getByRole("tab", { name: "Jacket" }).click();
+	// When
+	await typeChip(page, "Harrington jacket").click();
+	// Then
+	expect({
+		types: await page.getByRole("radiogroup", { name: "Type" }).count(),
+		colours: await page.getByRole("radiogroup", { name: "Colour" }).count(),
+		front: await page.getByRole("radiogroup", { name: "Jacket front" }).count(),
+	}).toEqual({ types: 1, colours: 1, front: 0 });
+});
+
 test("keeps the layer tabs in view when the picker scrolls", async ({
 	page,
 }) => {

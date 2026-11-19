@@ -380,7 +380,6 @@ async function aliceWithCombination() {
 			{ typeId: "casual_p", colourId: ids.Navy },
 			{ typeId: "tee_l", colourId: ids.White },
 		],
-		open: false,
 	});
 	return { h, headers, ids };
 }
