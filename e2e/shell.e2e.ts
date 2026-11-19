@@ -92,8 +92,8 @@ test.describe("dark device", () => {
 test("sets the app fonts", async ({ page }) => {
 	// Given: both projects
 	// When
-	await page.goto("/");
-	await expect(page.locator("h1")).toHaveText("Dress");
+	await page.goto("/combinations");
+	await expect(page.locator("h1")).toHaveText("Combinations");
 	const fonts = await page.evaluate(() => {
 		const probe = document.createElement("div");
 		probe.setAttribute("style", "font-family: var(--font-mono)");
@@ -120,68 +120,92 @@ test("sets the app fonts", async ({ page }) => {
 	);
 });
 
-test("clicks through Dress, Looks, Settings, and back to Dress", async ({
+test("opens the Combinations page at /", async ({ page }) => {
+	// Given: both projects, a fresh account
+	// When
+	await page.goto("/");
+	// Then
+	await expect(page).toHaveURL("/combinations");
+	await expect(
+		page.getByRole("heading", { name: "Combinations", exact: true }),
+	).toBeVisible();
+});
+
+test("shows Page not found at the old look addresses", async ({ page }) => {
+	// Given: both projects, a fresh account
+	const titles: string[] = [];
+	// When
+	for (const address of ["/looks", "/looks/compare", "/looks/abc"]) {
+		await page.goto(address);
+		titles.push((await page.locator("h1").textContent()) ?? "");
+	}
+	// Then
+	expect(titles).toEqual([
+		"Page not found",
+		"Page not found",
+		"Page not found",
+	]);
+});
+
+test("clicks through Combinations, Settings, and back to Combinations", async ({
 	page,
 }) => {
 	// Given
-	await page.goto("/");
-	await expect(page.locator("h1")).toHaveText("Dress");
-	await expect(page).toHaveURL("/");
-	// When
-	await page.getByRole("link", { name: "Looks" }).click();
-	// Then
-	await expect(page.locator("h1")).toHaveText("Looks");
-	await expect(page).toHaveURL("/looks");
+	await page.goto("/combinations");
+	await expect(page.locator("h1")).toHaveText("Combinations");
 	// When
 	await page.getByRole("link", { name: "Settings" }).click();
 	// Then
 	await expect(page.locator("h1")).toHaveText("Settings");
 	await expect(page).toHaveURL("/settings");
 	// When
-	await page.getByRole("link", { name: "Dress" }).click();
+	await page.getByRole("link", { name: "Combinations" }).click();
 	// Then
-	await expect(page.locator("h1")).toHaveText("Dress");
-	await expect(page).toHaveURL("/");
+	await expect(page.locator("h1")).toHaveText("Combinations");
+	await expect(page).toHaveURL("/combinations");
 });
 
 test("marks the tab of the open page", async ({ page }) => {
 	// Given: both projects
 	// When
-	await page.goto("/looks");
+	await page.goto("/combinations");
 	// Then
-	await expect(page.getByRole("link", { name: "Looks" })).toHaveAttribute(
-		"aria-current",
-		"page",
-	);
 	await expect(
-		page.getByRole("link", { name: "Dress", exact: true }),
+		page.getByRole("link", { name: "Combinations" }),
+	).toHaveAttribute("aria-current", "page");
+	await expect(
+		page.getByRole("link", { name: "Closet", exact: true }),
 	).not.toHaveAttribute("aria-current");
 });
 
-test("shows Page not found with a link to Dress", async ({ page }) => {
+test("shows Page not found with a link to Combinations", async ({ page }) => {
 	// Given: both projects
 	// When
 	await page.goto("/nope");
 	// Then
 	await expect(page.locator("h1")).toHaveText("Page not found");
 	// When
-	await page.getByRole("link", { name: "Go to Dress" }).click();
+	await page.getByRole("link", { name: "Go to Combinations" }).click();
 	// Then
-	await expect(page).toHaveURL("/");
-	await expect(page.locator("h1")).toHaveText("Dress");
+	await expect(page).toHaveURL("/combinations");
+	await expect(page.locator("h1")).toHaveText("Combinations");
 });
 
 test("shows the bottom bar under 900 px", async ({ page, viewport }) => {
 	test.skip((viewport?.width ?? 0) >= 900, "phone layout only");
 	// Given: a viewport under 900 px
 	// When
-	await page.goto("/");
+	await page.goto("/combinations");
 	// Then
 	await expect(page.getByRole("banner")).toHaveCount(0);
 	await expect(page.getByText("dressup", { exact: true })).toBeHidden();
 	const bar = page.getByRole("navigation", { name: "Main" });
-	await expect(bar.getByRole("link", { name: "Dress" })).toBeVisible();
-	await expect(bar.getByRole("link", { name: "Looks" })).toBeVisible();
+	await expect(bar.getByRole("link")).toHaveText([
+		"Combinations",
+		"Closet",
+		"Wishlist",
+		"Labels",
+	]);
 	const box = await bar.boundingBox();
 	expect({ y: box?.y, height: box?.height }).toEqual({ y: 751, height: 61 });
 });
@@ -190,17 +214,18 @@ test("shows the top bar from 900 px", async ({ page, viewport }) => {
 	test.skip((viewport?.width ?? 0) < 900, "laptop layout only");
 	// Given: a viewport of 900 px or more
 	// When
-	await page.goto("/");
+	await page.goto("/combinations");
 	// Then
 	const banner = page.getByRole("banner");
 	const box = await banner.boundingBox();
 	expect({ y: box?.y, height: box?.height }).toEqual({ y: 0, height: 60 });
 	await expect(banner.getByText("dressup", { exact: true })).toBeVisible();
-	await expect(banner.getByRole("link", { name: "Dress" })).toBeVisible();
-	await expect(banner.getByRole("link", { name: "Looks" })).toBeVisible();
-	await expect(banner.getByRole("link").last()).toHaveAccessibleName(
-		"Settings",
-	);
+	const links = banner.getByRole("link");
+	const names = ["Combinations", "Closet", "Wishlist", "Labels", "Settings"];
+	await expect(links).toHaveCount(names.length);
+	for (const [i, name] of names.entries()) {
+		await expect(links.nth(i)).toHaveAccessibleName(name);
+	}
 	await expect(page.getByRole("navigation", { name: "Main" })).toHaveCount(1);
 });
 
@@ -209,7 +234,7 @@ test("draws the pill button 38 px high with round ends", async ({ page }) => {
 	// When
 	await page.goto("/nope");
 	const pill = await page
-		.getByRole("link", { name: "Go to Dress" })
+		.getByRole("link", { name: "Go to Combinations" })
 		.evaluate((el) => {
 			const style = getComputedStyle(el);
 			return { radius: style.borderTopLeftRadius, height: style.height };

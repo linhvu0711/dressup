@@ -94,12 +94,12 @@ test.describe("without a session", () => {
 test.describe("the shared session", () => {
 	test.use({ storageState: SESSION_FILE });
 
-	test("shows the Dress page with a session", async ({ page }) => {
+	test("shows the Combinations page with a session", async ({ page }) => {
 		// Given: the config's session for e2e-user
 		// When
 		await page.goto("/");
 		// Then
-		await expect(page.locator("h1")).toHaveText("Dress");
+		await expect(page.locator("h1")).toHaveText("Combinations");
 		const me = await page.request.get("/api/me");
 		expect(me.status()).toBe(200);
 		const body = await me.json();
@@ -130,7 +130,7 @@ test("shows the empty shell while the session is checked", async ({ page }) => {
 		page.getByRole("button", { name: "Sign in with Google" }),
 	).toHaveCount(0);
 	release();
-	await expect(page.locator("h1")).toHaveText("Dress");
+	await expect(page.locator("h1")).toHaveText("Combinations");
 });
 
 test.describe("sign out", () => {
@@ -174,7 +174,7 @@ test.describe("sign out", () => {
 			),
 		);
 		await page.goto("/");
-		await expect(page.locator("h1")).toHaveText("Dress");
+		await expect(page.locator("h1")).toHaveText("Combinations");
 		let release = () => {};
 		const held = new Promise<void>((resolve) => {
 			release = resolve;

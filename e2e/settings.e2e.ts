@@ -21,6 +21,24 @@ const storedChange = (page: Page) =>
 		(res) => res.url().endsWith("/api/mannequin/skin") && res.status() === 200,
 	);
 
+test("shows the Mannequin, Connected AI apps, and Account parts", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account
+	// When
+	await page.goto("/settings");
+	// Then
+	await expect(page.getByRole("heading", { level: 2 })).toHaveText([
+		"Mannequin",
+		"Connected AI apps",
+		"Account",
+	]);
+	await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Delete my account" }),
+	).toBeVisible();
+});
+
 test("shows the skin and hair rows with a preview", async ({ page }) => {
 	// Given: both projects, a fresh account
 	// When

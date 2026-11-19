@@ -31,8 +31,8 @@ async function pickNavyShirt(page: Page) {
 }
 
 test("opens the closet from the Closet tab", async ({ page }) => {
-	// Given: a fresh account, the Dress page open
-	await page.goto("/");
+	// Given: a fresh account, the Combinations page open
+	await page.goto("/combinations");
 	// When
 	await mainNav(page).getByRole("link", { name: "Closet" }).click();
 	// Then
@@ -41,8 +41,6 @@ test("opens the closet from the Closet tab", async ({ page }) => {
 		page.getByRole("heading", { name: "Closet", exact: true }),
 	).toBeVisible();
 	await expect(mainNav(page).getByRole("link")).toHaveText([
-		"Dress",
-		"Looks",
 		"Combinations",
 		"Closet",
 		"Wishlist",

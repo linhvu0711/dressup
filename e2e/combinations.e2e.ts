@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 import {
 	colourIds,
+	isPhone,
 	pick,
 	postCombinations,
 	swatch,
@@ -10,7 +11,6 @@ import {
 } from "./combination-helpers";
 import { expect, test } from "./fixtures";
 import { COMBINATIONS_FULL_FILE } from "./global-setup";
-import { isPhone } from "./looks-helpers";
 
 const LONG_TITLE =
 	"Khaki Harrington jacket (open) + Black long tee + Navy casual pants";
@@ -20,8 +20,8 @@ const cards = (page: Page) => page.locator('[data-slot="combination-card"]');
 const mainNav = (page: Page) => page.getByRole("navigation", { name: "Main" });
 
 test("opens the wall from the Combinations tab", async ({ page }) => {
-	// Given: both projects, a fresh account, the Dress page open
-	await page.goto("/");
+	// Given: both projects, a fresh account, the Labels page open
+	await page.goto("/labels");
 	// When
 	await mainNav(page).getByRole("link", { name: "Combinations" }).click();
 	// Then
@@ -55,7 +55,6 @@ test("shows the saved combinations newest first with their titles", async ({
 	page,
 }) => {
 	// Given: both projects, a fresh account with THREE, then TWO saved
-	await page.goto("/");
 	const ids = await colourIds(page);
 	await postCombinations(page, three(ids), two(ids));
 	// When
@@ -80,7 +79,6 @@ test("shows the saved combinations newest first with their titles", async ({
 
 test("marks the combination the address names", async ({ page }) => {
 	// Given: both projects, a fresh account with THREE and TWO saved
-	await page.goto("/");
 	const ids = await colourIds(page);
 	const first = three(ids);
 	await postCombinations(page, first, two(ids));
@@ -234,9 +232,10 @@ test("shows grey cards and no alert while the mannequin loads", async ({
 test("shows the sign-in screen when the combinations answer 401", async ({
 	page,
 }) => {
-	// Given: both projects, / open; then the session is gone for the session
-	// check and for the combinations
-	await page.goto("/");
+	// Given: both projects, /labels open, since / loads the wall before the
+	// 401s are in place; then the session is gone for the session check and
+	// for the combinations
+	await page.goto("/labels");
 	await expect(mainNav(page)).toBeVisible();
 	const noSession = { status: 401, json: { error: "unauthorized" } };
 	await page.route("/api/me", (route) => route.fulfill(noSession));
@@ -257,7 +256,6 @@ const viewTitle = (page: Page) => view(page).locator("h2");
 
 // THREE saved, then the address of its own page.
 async function savedThree(page: Page) {
-	await page.goto("/");
 	const saved = three(await colourIds(page));
 	await postCombinations(page, saved);
 	return saved;
@@ -454,7 +452,6 @@ const titles = (page: Page) => page.locator('[data-slot="combination-title"]');
 
 // THREE, then TWO saved; THREE's own page open.
 async function threeOpenBesideTwo(page: Page) {
-	await page.goto("/");
 	const ids = await colourIds(page);
 	const first = three(ids);
 	const second = two(ids);
