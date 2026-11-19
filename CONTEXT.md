@@ -17,6 +17,8 @@
 - Colour: a name and a colour code that the account saves once and uses on any kind of clothing. The user manages colours on the Labels page. A new account starts with a starter set, and an account holds at most 100.
 - Brand: a name that the account saves once and puts on owned items and shop links. An item can have no brand. The user manages brands on the Labels page. An account holds at most 100.
 - Owned item: one brand of one piece in the closet, with a quantity. Two navy long button-ups from two brands are two owned items. An account holds at most 500.
+- Picture: a photo that the user uploads to an owned item. Only the user adds pictures. The browser shrinks each one to 1 MB or less. An owned item holds at most 8, and an account at most 1,000.
+- Picture storage stop: uploads stop for all accounts when the stored pictures reach 9 GB, or when 900,000 uploads happen in one month. It keeps Cloudflare R2 inside its free amount.
 - Outfit: what the mannequin wears now: the mode, the picked colour of each garment, and each jacket open or closed. The account keeps it, with its colour squares.
 - Look: a saved outfit. It holds the mode, its own copy of each garment's colour, the jacket state (open or closed), an optional name, and tags.
 - Tag: a label the user makes and puts on combinations. The user renames and deletes tags on the Labels page.

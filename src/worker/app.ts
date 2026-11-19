@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { type Context, Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { createMiddleware } from "hono/factory";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
@@ -18,6 +19,7 @@ import type {
 	MeAnswer,
 	OwnedItemAnswer,
 	OwnedItemsAnswer,
+	PictureAnswer,
 	TagAnswer,
 	TagsAnswer,
 	WishAnswer,
@@ -26,6 +28,7 @@ import type {
 import { type DressError, dressChangeSchema } from "@/dress/state";
 import { brandIdSchema } from "@/labels/brand";
 import { colourIdSchema } from "@/labels/colour";
+import { PICTURE_BYTES_MAX, pictureIdSchema } from "@/pictures/picture";
 import { tagIdSchema } from "@/tags/tag";
 import { disconnectAiApp, listAiApps } from "./ai-app-store";
 import {
@@ -74,6 +77,13 @@ import {
 	listOwnedItems,
 	type OwnedItemError,
 } from "./owned-item-store";
+import {
+	addPicture,
+	deleteDraft,
+	deleteWithPictures,
+	type PictureError,
+	readPicture,
+} from "./picture-store";
 import {
 	addTag,
 	deleteTag,
@@ -199,6 +209,7 @@ const ownedItemBodySchema = z.object({
 	colourId: z.string(),
 	brandId: z.string().nullable(),
 	quantity: z.number(),
+	pictureIds: z.array(z.string()).optional(),
 });
 
 function ownedItemRefusal(error: OwnedItemError): Refusal {
@@ -209,6 +220,8 @@ function ownedItemRefusal(error: OwnedItemError): Refusal {
 			return { status: 409, body: { error: "duplicate", id: error.id } };
 		case "owned_item_limit":
 			return { status: 409, body: { error: "owned_item_limit" } };
+		case "picture_limit":
+			return { status: 409, body: { error: "picture_limit" } };
 		case "conflict":
 			return { status: 409, body: { error: "conflict", field: "id" } };
 		case "not_found":
@@ -242,6 +255,21 @@ function wishRefusal(error: WishError): Refusal {
 			return { status: 409, body: { error: "shop_link_limit" } };
 		case "conflict":
 			return { status: 409, body: { error: "conflict", field: "id" } };
+		case "not_found":
+			return { status: 404, body: { error: "not_found" } };
+	}
+}
+
+function pictureRefusal(error: PictureError): Refusal {
+	switch (error.code) {
+		case "invalid":
+			return { status: 400, body: { error: "invalid", field: error.field } };
+		case "picture_limit":
+			return { status: 409, body: { error: "picture_limit" } };
+		case "account_picture_limit":
+			return { status: 409, body: { error: "account_picture_limit" } };
+		case "storage_full":
+			return { status: 507, body: { error: "storage_full" } };
 		case "not_found":
 			return { status: 404, body: { error: "not_found" } };
 	}
@@ -341,7 +369,13 @@ export function createApp(getDb: (env: Env) => Db) {
 	);
 
 	app.on(["GET", "POST", "DELETE"], "/mcp", withAuth, (c) =>
-		mcpRoute(c.var.auth, getDb(c.env), c.env.BETTER_AUTH_URL, c.req.raw),
+		mcpRoute(
+			c.var.auth,
+			getDb(c.env),
+			c.env.PICTURES,
+			c.env.BETTER_AUTH_URL,
+			c.req.raw,
+		),
 	);
 
 	app.get("/health", (c) => c.json({ ok: true }));
@@ -357,10 +391,18 @@ export function createApp(getDb: (env: Env) => Db) {
 	});
 
 	app.delete("/account", withAuth, requireUser, async (c) => {
-		// One statement: the sessions, the Google link, and every app row go
-		// with the user row through their foreign keys, all or nothing. Better
-		// Auth's own delete wants a session under a day old or an email (#12).
-		await getDb(c.env).delete(user).where(eq(user.id, c.var.user.id));
+		// One batch: the sessions, the Google link, and every app row go with
+		// the user row through their foreign keys, all or nothing. The picture
+		// store deletes the pictures' rows first in the same batch, so their
+		// objects and the stored bytes go too. Better Auth's own delete wants a
+		// session under a day old or an email (#12).
+		const db = getDb(c.env);
+		await deleteWithPictures(
+			db,
+			c.env.PICTURES,
+			{ userId: c.var.user.id },
+			db.delete(user).where(eq(user.id, c.var.user.id)),
+		);
 		// Sign-out also clears the 5-minute cookie cache, which would keep the
 		// deleted account on screen.
 		const { headers } = await c.var.auth.api.signOut({
@@ -515,7 +557,12 @@ export function createApp(getDb: (env: Env) => Db) {
 	app.post("/owned-items", withAuth, requireUser, async (c) => {
 		const body = await readBody(c, ownedItemBodySchema);
 		if ("refused" in body) return body.refused;
-		const added = await addOwnedItem(getDb(c.env), c.var.user.id, body.data);
+		const added = await addOwnedItem(
+			getDb(c.env),
+			c.env.PICTURES,
+			c.var.user.id,
+			body.data,
+		);
 		if (!added.ok) {
 			const { status, body: refused } = ownedItemRefusal(added.error);
 			return c.json(refused, status);
@@ -527,11 +574,16 @@ export function createApp(getDb: (env: Env) => Db) {
 	app.put("/owned-items/:id", withAuth, requireUser, async (c) => {
 		const body = await readBody(
 			c,
-			z.object({ brandId: z.string().nullable(), quantity: z.number() }),
+			z.object({
+				brandId: z.string().nullable(),
+				quantity: z.number(),
+				pictureIds: z.array(z.string()).optional(),
+			}),
 		);
 		if ("refused" in body) return body.refused;
 		const changed = await changeOwnedItem(
 			getDb(c.env),
+			c.env.PICTURES,
 			c.var.user.id,
 			c.req.param("id"),
 			body.data,
@@ -546,6 +598,7 @@ export function createApp(getDb: (env: Env) => Db) {
 	app.delete("/owned-items/:id", withAuth, requireUser, async (c) => {
 		const deleted = await deleteOwnedItem(
 			getDb(c.env),
+			c.env.PICTURES,
 			c.var.user.id,
 			c.req.param("id"),
 		);
@@ -631,6 +684,59 @@ export function createApp(getDb: (env: Env) => Db) {
 		);
 		if (!deleted.ok) {
 			const { status, body: refused } = wishRefusal(deleted.error);
+			return c.json(refused, status);
+		}
+		return c.body(null, 204);
+	});
+
+	app.post(
+		"/pictures",
+		withAuth,
+		requireUser,
+		bodyLimit({
+			maxSize: PICTURE_BYTES_MAX,
+			onError: (c) => c.json({ error: "too_large" } satisfies ErrorAnswer, 413),
+		}),
+		async (c) => {
+			const added = await addPicture(
+				getDb(c.env),
+				c.env.PICTURES,
+				c.var.user.id,
+				await c.req.arrayBuffer(),
+			);
+			if (!added.ok) {
+				const { status, body: refused } = pictureRefusal(added.error);
+				return c.json(refused, status);
+			}
+			return c.json({ picture: added.value } satisfies PictureAnswer, 201);
+		},
+	);
+
+	app.get("/pictures/:id", withAuth, requireUser, async (c) => {
+		const id = pictureIdSchema.safeParse(c.req.param("id"));
+		const read = id.success
+			? await readPicture(getDb(c.env), c.env.PICTURES, c.var.user.id, id.data)
+			: ({ ok: false, error: { code: "not_found" } } as const);
+		if (!read.ok) {
+			const { status, body: refused } = pictureRefusal(read.error);
+			return c.json(refused, status);
+		}
+		const headers = new Headers();
+		read.value.writeHttpMetadata(headers);
+		// A picture never gets new bytes: a new upload is a new id.
+		headers.set("cache-control", "private, max-age=31536000, immutable");
+		return new Response(read.value.body, { headers });
+	});
+
+	app.delete("/pictures/:id", withAuth, requireUser, async (c) => {
+		const deleted = await deleteDraft(
+			getDb(c.env),
+			c.env.PICTURES,
+			c.var.user.id,
+			c.req.param("id"),
+		);
+		if (!deleted.ok) {
+			const { status, body: refused } = pictureRefusal(deleted.error);
 			return c.json(refused, status);
 		}
 		return c.body(null, 204);

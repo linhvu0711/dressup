@@ -4,7 +4,11 @@ import type {
 	ToolAnnotations,
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { OWNED_ITEM_LIMIT, QUANTITY_MAX } from "@/closet/owned-item";
+import {
+	OWNED_ITEM_LIMIT,
+	type OwnedItem,
+	QUANTITY_MAX,
+} from "@/closet/owned-item";
 import {
 	COMBINATION_LIMIT,
 	COMBINATION_TAGS_MAX,
@@ -83,7 +87,7 @@ import {
 	listWishes,
 } from "./wish-store";
 
-type Account = { db: Db; userId: string };
+type Account = { db: Db; pictures: R2Bucket; userId: string };
 
 const garmentsAndModes = {
 	garments: GARMENT_IDS.map((id) => ({
@@ -136,6 +140,12 @@ const lookView = (look: Look, tags: Tag[]) => ({
 		.map(({ id, name }) => ({ id, name })),
 });
 
+// AI apps cannot add or read pictures, so an item shows only how many it has.
+const ownedItemView = ({ pictureIds, ...item }: OwnedItem) => ({
+	...item,
+	pictureCount: pictureIds.length,
+});
+
 const combinationView = (combination: Combination, tags: Tag[]) => ({
 	id: combination.id,
 	title: combinationTitle(combination),
@@ -180,7 +190,7 @@ const field = {
 };
 
 export function registerAiActions(server: McpServer, account: Account) {
-	const { db, userId } = account;
+	const { db, pictures, userId } = account;
 
 	// The look with its tags named, and a sentence first for each tag left off.
 	async function lookAnswer(changed: { look: Look; tagsLeftOff: string[] }) {
@@ -762,7 +772,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		"list_owned_items",
 		{
 			title: "List the closet",
-			description: `The account's owned items, newest first. An owned item is one brand of one piece (a type in a colour) with a quantity of 1 to ${QUANTITY_MAX}. An account holds at most ${OWNED_ITEM_LIMIT}.`,
+			description: `The account's owned items, newest first. An owned item is one brand of one piece (a type in a colour) with a quantity of 1 to ${QUANTITY_MAX}. An account holds at most ${OWNED_ITEM_LIMIT}. Each item has pictureCount, the number of its pictures. AI apps cannot add or read pictures.`,
 			annotations: READ,
 			inputSchema: noArgs,
 		},
@@ -770,7 +780,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 			const ownedItems = await listOwnedItems(db, userId);
 			return ownedItems.length === 0
 				? answer({ ownedItems }, noOwnedItems)
-				: answer({ ownedItems });
+				: answer({ ownedItems: ownedItems.map(ownedItemView) });
 		},
 	);
 
@@ -799,7 +809,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		},
 		async ({ typeId, colourId, brandId = null, quantity }) => {
 			// The server makes the id, as save_combination does.
-			const added = await addOwnedItem(db, userId, {
+			const added = await addOwnedItem(db, pictures, userId, {
 				id: crypto.randomUUID(),
 				typeId,
 				colourId,
@@ -807,7 +817,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 				quantity,
 			});
 			return added.ok
-				? answer({ ownedItem: added.value.ownedItem })
+				? answer({ ownedItem: ownedItemView(added.value.ownedItem) })
 				: refusal(ownedItemRefusalText(added.error));
 		},
 	);
@@ -831,12 +841,12 @@ export function registerAiActions(server: McpServer, account: Account) {
 			}),
 		},
 		async ({ id, brandId, quantity }) => {
-			const changed = await changeOwnedItem(db, userId, id, {
+			const changed = await changeOwnedItem(db, pictures, userId, id, {
 				brandId,
 				quantity,
 			});
 			return changed.ok
-				? answer({ ownedItem: changed.value })
+				? answer({ ownedItem: ownedItemView(changed.value) })
 				: refusal(ownedItemRefusalText(changed.error));
 		},
 	);
@@ -852,7 +862,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 			}),
 		},
 		async ({ id }) => {
-			const deleted = await deleteOwnedItem(db, userId, id);
+			const deleted = await deleteOwnedItem(db, pictures, userId, id);
 			return deleted.ok
 				? answer({ deleted: deleted.value })
 				: refusal(ownedItemRefusalText(deleted.error));

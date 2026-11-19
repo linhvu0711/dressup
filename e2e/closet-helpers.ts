@@ -25,6 +25,7 @@ export async function postOwnedItems(
 		colourId: string;
 		brandId: string | null;
 		quantity: number;
+		pictureIds?: string[];
 	}[]
 ) {
 	for (const body of bodies) {

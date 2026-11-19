@@ -39,7 +39,7 @@ export const CLOSET_FULL_FILE = "e2e/.auth/closet-full.json";
 export const WISHLIST_FULL_FILE = "e2e/.auth/wishlist-full.json";
 // Each test changes the colours it saves, and tests run in parallel, so
 // each one claims its own fresh account from this pool (e2e/fixtures.ts).
-export const POOL_SIZE = 600;
+export const POOL_SIZE = 1000;
 export const poolFile = (n: number) => `e2e/.auth/pool/${n}.json`;
 export const claimFile = (n: number) => `e2e/.auth/claims/${n}`;
 
@@ -63,6 +63,9 @@ export default async function globalSetup() {
 		stdio: ["ignore", "inherit", "inherit"],
 	});
 	await withTestAuth(async ({ db, helpers, newSessionCookies }) => {
+		// A walk that filled the month would make this run refuse uploads.
+		await db.delete(schema.pictureUploadMonth);
+		await db.delete(schema.pictureStorage);
 		// Delete first, so a second run ends in the same state.
 		await db.delete(schema.user).where(eq(schema.user.id, E2E_USER.id));
 		await helpers.saveUser(helpers.createUser(E2E_USER));

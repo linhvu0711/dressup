@@ -43,9 +43,23 @@ const NAVY = {
 	open: ["harrington"],
 };
 
+const JPEG = new Uint8Array(100).fill(0x11);
+JPEG.set([0xff, 0xd8, 0xff, 0xe0]);
+
+const uploadPicture = async (h: Harness, jar: Jar) =>
+	(
+		(await (
+			await send(h, jar, "/api/pictures", {
+				method: "POST",
+				headers: { "content-type": "image/jpeg" },
+				body: JPEG,
+			})
+		).json()) as { picture: { id: string } }
+	).picture.id;
+
 // The account's colours, brands, outfit, mannequin, one look with one tag,
-// one combination, one owned item, and one wish with one shop link, through
-// the routes.
+// one combination, one owned item with one picture, one draft picture, and
+// one wish with one shop link, through the routes.
 async function fillAccount(
 	h: Harness,
 	jar: Jar,
@@ -85,12 +99,15 @@ async function fillAccount(
 	expect(
 		(await sendJson(h, jar, "/api/combinations", combination)).status,
 	).toBe(201);
+	const saved = await uploadPicture(h, jar);
+	await uploadPicture(h, jar);
 	const ownedItem = {
 		id: ownedItemId,
 		typeId: "casual_p",
 		colourId: idOf("Navy"),
 		brandId: null,
 		quantity: 1,
+		pictureIds: [saved],
 	};
 	expect((await sendJson(h, jar, "/api/owned-items", ownedItem)).status).toBe(
 		201,
@@ -138,10 +155,16 @@ describe("DELETE /api/account", () => {
 		const rules = Object.entries(h.userForeignKeys()).filter(
 			([, rule]) => rule !== "CASCADE",
 		);
-		expect({ status: res.status, left: left(h, userId), rules }).toEqual({
+		expect({
+			status: res.status,
+			left: left(h, userId),
+			rules,
+			objects: h.pictures.keys(),
+		}).toEqual({
 			status: 204,
 			left: [],
 			rules: [],
+			objects: [],
 		});
 	});
 
@@ -186,7 +209,7 @@ describe("DELETE /api/account", () => {
 			},
 		}).toEqual({
 			rows: bobBefore,
-			filled: 19,
+			filled: 20,
 			me: { status: 200, email: "bob@example.com" },
 		});
 	});

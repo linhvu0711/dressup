@@ -317,15 +317,18 @@ export async function request(
 	options: { body?: unknown; answer?: z.ZodType } = {},
 ): Promise<unknown> {
 	const what = `${method} ${path}`;
+	const { body } = options;
 	const res = await fetch(
 		path,
-		options.body === undefined
+		body === undefined
 			? { method }
-			: {
-					method,
-					headers: { "content-type": "application/json" },
-					body: JSON.stringify(options.body),
-				},
+			: body instanceof Blob
+				? { method, headers: { "content-type": body.type }, body }
+				: {
+						method,
+						headers: { "content-type": "application/json" },
+						body: JSON.stringify(body),
+					},
 	);
 	if (res.status === 401) {
 		// A lost session makes the session check run again; it finds none,

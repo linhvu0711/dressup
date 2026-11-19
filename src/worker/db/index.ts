@@ -8,6 +8,7 @@ import * as combinationSchema from "./combination-schema";
 import * as dressSchema from "./dress-schema";
 import * as lookSchema from "./look-schema";
 import * as ownedItemSchema from "./owned-item-schema";
+import * as pictureSchema from "./picture-schema";
 import * as tagSchema from "./tag-schema";
 import * as wishSchema from "./wish-schema";
 
@@ -20,6 +21,7 @@ export const schema = {
 	...dressSchema,
 	...lookSchema,
 	...ownedItemSchema,
+	...pictureSchema,
 	...tagSchema,
 	...wishSchema,
 };

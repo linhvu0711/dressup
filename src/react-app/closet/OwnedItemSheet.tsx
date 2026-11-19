@@ -12,6 +12,8 @@ import type { BrandId } from "@/labels/brand";
 import { useBrands } from "@/labels/brand-api";
 import { ColourSwatches } from "@/labels/ColourSwatches";
 import type { ColourId } from "@/labels/colour";
+import { PICTURES_LABEL, PictureSlots } from "@/pictures/PictureSlots";
+import { usePictureSlots } from "@/pictures/usePictureSlots";
 import {
 	useAddOwnedItem,
 	useChangeOwnedItem,
@@ -73,6 +75,9 @@ export function OwnedItemSheet(
 		editing?.brand?.id ?? null,
 	);
 	const [quantity, setQuantity] = useState(String(editing?.quantity ?? 1));
+	const slots = usePictureSlots(editing?.pictureIds ?? []);
+	// Save waits for the uploads that run, then sends the list.
+	const [saving, setSaving] = useState(false);
 	const first = useRef<HTMLButtonElement>(null);
 	const closet = useCloset();
 	const brands = useBrands();
@@ -89,11 +94,13 @@ export function OwnedItemSheet(
 		((closet.data?.length ?? 0) >= OWNED_ITEM_LIMIT ||
 			(add.error instanceof RequestError &&
 				add.error.code === "owned_item_limit"));
+	const limitHit =
+		sent.error instanceof RequestError && sent.error.code === "picture_limit";
 	const problem: Problem | null = full
 		? "full"
 		: sent.error instanceof RequestError && sent.error.code === "duplicate"
 			? "duplicate"
-			: sent.isError
+			: sent.isError && !limitHit
 				? "failed"
 				: null;
 	// The item's own brand while the brand list loads.
@@ -118,17 +125,28 @@ export function OwnedItemSheet(
 		toast(message);
 		onClose();
 	};
-	const save = () => {
-		if (!typeId || !colourId || full || sent.isPending) return;
+	// Nothing picked in the sheet stays unless Save sent it.
+	const close = () => {
+		slots.discard();
+		onClose();
+	};
+	const save = async () => {
+		if (!typeId || !colourId || full || sent.isPending || saving) return;
 		const n = Math.max(1, count);
+		setSaving(true);
+		await slots.idle();
+		setSaving(false);
+		// Cancel stays open while the uploads run; once used, nothing is saved.
+		if (slots.discarded) return;
+		const pictureIds = slots.ids();
 		if (editing)
 			update.mutate(
-				{ id, brandId, quantity: n },
+				{ id, brandId, quantity: n, pictureIds },
 				{ onSuccess: done("Changes saved") },
 			);
 		else
 			add.mutate(
-				{ id, typeId, colourId, brandId, quantity: n },
+				{ id, typeId, colourId, brandId, quantity: n, pictureIds },
 				{ onSuccess: done("Added to your closet") },
 			);
 	};
@@ -139,14 +157,14 @@ export function OwnedItemSheet(
 			step={step === "form" ? null : STEP_TITLE[step]}
 			onBack={back}
 			focus={first}
-			onClose={onClose}
+			onClose={close}
 		>
 			<form
 				hidden={step !== "form"}
 				className="flex flex-col gap-4 [&[hidden]]:hidden"
 				onSubmit={(e) => {
 					e.preventDefault();
-					save();
+					void save();
 				}}
 			>
 				{editing ? (
@@ -217,6 +235,9 @@ export function OwnedItemSheet(
 						</Button>
 					</div>
 				</Field>
+				<Field label={PICTURES_LABEL}>
+					<PictureSlots slots={slots} limitHit={limitHit} />
+				</Field>
 				{problem ? (
 					<p role="alert" className="text-[13px] text-destructive">
 						{PROBLEM_TEXT[problem]}
@@ -232,13 +253,13 @@ export function OwnedItemSheet(
 							Delete
 						</Button>
 					) : null}
-					<Button type="button" onClick={onClose}>
+					<Button type="button" onClick={close}>
 						Cancel
 					</Button>
 					<Button
 						type="submit"
 						variant="primary"
-						disabled={!typeId || !colourId || full || sent.isPending}
+						disabled={!typeId || !colourId || full || sent.isPending || saving}
 					>
 						Save
 					</Button>
@@ -277,7 +298,10 @@ export function OwnedItemSheet(
 							disabled={del.isPending}
 							onClick={() =>
 								del.mutate(editing.id, {
-									onSuccess: done("Removed from your closet"),
+									onSuccess: () => {
+										slots.discard();
+										done("Removed from your closet")();
+									},
 								})
 							}
 						>

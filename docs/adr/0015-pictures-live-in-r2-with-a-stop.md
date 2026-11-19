@@ -1,0 +1,3 @@
+# Pictures live in R2, with a stop at 9 GB
+
+Pictures live in a Cloudflare R2 bucket, and the Worker is the only way in and out. The browser shrinks each picture to 1 MB or less before upload. R2 gives 10 GB of storage and 1 million uploads a month free, bills above that, and has no spending cap (https://developers.cloudflare.com/r2/pricing/, https://developers.cloudflare.com/billing/manage/spend-management/). So the app keeps its own counts in D1 and refuses uploads for all accounts at 9 GB stored or at 900,000 uploads in a month. D1 was not an option: on the free plan it holds 2 MB for each value and 500 MB for each database (https://developers.cloudflare.com/d1/platform/limits/). Cloudflare Images has no free storage.

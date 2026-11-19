@@ -18,6 +18,12 @@ import { user } from "./db/auth-schema";
 import { brand } from "./db/brand-schema";
 import { colour } from "./db/colour-schema";
 import { ownedItem } from "./db/owned-item-schema";
+import {
+	deleteWithPictures,
+	type PictureListError,
+	pictureIdsByItem,
+	saveWithPictures,
+} from "./picture-store";
 import type { Result } from "./result";
 
 export type OwnedItemField =
@@ -26,12 +32,14 @@ export type OwnedItemField =
 	| "colourId"
 	| "brandId"
 	| "quantity"
+	| "pictureIds"
 	| "body";
 
 export type OwnedItemError =
 	| { code: "invalid"; field: OwnedItemField; value?: unknown }
 	| { code: "duplicate"; id: OwnedItemId }
 	| { code: "owned_item_limit" }
+	| { code: "picture_limit" }
 	| { code: "not_found" }
 	| { code: "conflict" };
 
@@ -67,6 +75,7 @@ async function readOwnedItems(
 		)
 		// Two adds in one millisecond share created_at; rowid keeps their order.
 		.orderBy(desc(ownedItem.createdAt), desc(sql`${ownedItem}.rowid`));
+	const pictures = await pictureIdsByItem(db, userId, id);
 	return rows.map((row) => ({
 		id: row.id as OwnedItemId,
 		typeId: row.typeId,
@@ -80,6 +89,7 @@ async function readOwnedItems(
 				? null
 				: { id: row.brandId as BrandId, name: row.brandName },
 		quantity: row.quantity,
+		pictureIds: pictures.get(row.id) ?? [],
 	}));
 }
 
@@ -91,7 +101,8 @@ const isField = (key: unknown): key is OwnedItemField =>
 	key === "typeId" ||
 	key === "colourId" ||
 	key === "brandId" ||
-	key === "quantity";
+	key === "quantity" ||
+	key === "pictureIds";
 
 // The first bad field, with the value that was sent for it.
 function invalid(
@@ -117,6 +128,17 @@ const samePiece = (userId: string, piece: Piece) =>
 		eq(ownedItem.colourId, piece.colourId),
 		sql`${ownedItem.brandId} is ${piece.brandId}`,
 	);
+
+const listRefusal = (
+	error: PictureListError,
+	ids: string[] | undefined,
+): { ok: false; error: OwnedItemError } =>
+	error.code === "picture_limit"
+		? { ok: false, error: { code: "picture_limit" } }
+		: {
+				ok: false,
+				error: { code: "invalid", field: "pictureIds", value: ids },
+			};
 
 // Why a write that the guards stopped did not happen, in the order a person
 // would fix it. `otherThan` is the item a change writes, which holds its own
@@ -153,6 +175,7 @@ async function refusedWrite(
 // itself, so two adds at once cannot both pass them.
 export async function addOwnedItem(
 	db: Db,
+	bucket: R2Bucket,
 	userId: string,
 	draft: unknown,
 ): Promise<Result<AddedOwnedItem, OwnedItemError>> {
@@ -161,6 +184,19 @@ export async function addOwnedItem(
 		return invalid(draft, parsed.error.issues[0]?.path ?? []);
 	const input = parsed.data;
 	const conflict = { ok: false, error: { code: "conflict" } } as const;
+	// Only this account's item of this piece and brand takes the pictures, so
+	// a conflict or a refused insert attaches none.
+	const pictures = {
+		userId,
+		ownedItemId: input.id,
+		ids: input.pictureIds,
+		itemHeld: exists(
+			db
+				.select({ one: sql`1` })
+				.from(ownedItem)
+				.where(and(eq(ownedItem.id, input.id), samePiece(userId, input))),
+		),
+	};
 	const [before] = await db
 		.select({
 			userId: ownedItem.userId,
@@ -177,53 +213,65 @@ export async function addOwnedItem(
 			before.colourId === input.colourId &&
 			before.brandId === input.brandId;
 		if (!same) return conflict;
-		await db
-			.update(ownedItem)
-			.set({ quantity: input.quantity })
-			.where(and(eq(ownedItem.id, input.id), eq(ownedItem.userId, userId)));
+		const saved = await saveWithPictures(
+			db,
+			bucket,
+			pictures,
+			db
+				.update(ownedItem)
+				.set({ quantity: input.quantity })
+				.where(and(eq(ownedItem.id, input.id), eq(ownedItem.userId, userId))),
+		);
+		if (!saved.ok) return listRefusal(saved.error, input.pictureIds);
 		const [held] = await readOwnedItems(db, userId, input.id);
 		return held
 			? { ok: true, value: { ownedItem: held, created: false } }
 			: conflict;
 	}
-	await db
-		.insert(ownedItem)
-		.select(
-			db
-				.select({
-					id: sql<string>`${input.id}`.as("id"),
-					userId: user.id,
-					typeId: sql<string>`${input.typeId}`.as("type_id"),
-					colourId: sql<string>`${input.colourId}`.as("colour_id"),
-					brandId: sql<string | null>`${input.brandId}`.as("brand_id"),
-					quantity: sql<number>`${input.quantity}`.as("quantity"),
-					createdAt:
-						sql<number>`(cast(unixepoch('subsecond') * 1000 as integer))`.as(
-							"created_at",
-						),
-				})
-				.from(user)
-				.where(
-					and(
-						eq(user.id, userId),
-						exists(colourOf(db, userId, input.colourId)),
-						input.brandId === null
-							? undefined
-							: exists(brandOf(db, userId, input.brandId)),
-						sql`(${db
-							.select({ n: count() })
-							.from(ownedItem)
-							.where(eq(ownedItem.userId, userId))}) < ${OWNED_ITEM_LIMIT}`,
-						notExists(
-							db
-								.select({ one: sql`1` })
+	const saved = await saveWithPictures(
+		db,
+		bucket,
+		pictures,
+		db
+			.insert(ownedItem)
+			.select(
+				db
+					.select({
+						id: sql<string>`${input.id}`.as("id"),
+						userId: user.id,
+						typeId: sql<string>`${input.typeId}`.as("type_id"),
+						colourId: sql<string>`${input.colourId}`.as("colour_id"),
+						brandId: sql<string | null>`${input.brandId}`.as("brand_id"),
+						quantity: sql<number>`${input.quantity}`.as("quantity"),
+						createdAt:
+							sql<number>`(cast(unixepoch('subsecond') * 1000 as integer))`.as(
+								"created_at",
+							),
+					})
+					.from(user)
+					.where(
+						and(
+							eq(user.id, userId),
+							exists(colourOf(db, userId, input.colourId)),
+							input.brandId === null
+								? undefined
+								: exists(brandOf(db, userId, input.brandId)),
+							sql`(${db
+								.select({ n: count() })
 								.from(ownedItem)
-								.where(samePiece(userId, input)),
+								.where(eq(ownedItem.userId, userId))}) < ${OWNED_ITEM_LIMIT}`,
+							notExists(
+								db
+									.select({ one: sql`1` })
+									.from(ownedItem)
+									.where(samePiece(userId, input)),
+							),
 						),
 					),
-				),
-		)
-		.onConflictDoNothing({ target: ownedItem.id });
+			)
+			.onConflictDoNothing({ target: ownedItem.id }),
+	);
+	if (!saved.ok) return listRefusal(saved.error, input.pictureIds);
 	const [added] = await readOwnedItems(db, userId, input.id);
 	if (added) return { ok: true, value: { ownedItem: added, created: true } };
 	const [taken] = await db
@@ -243,6 +291,7 @@ export async function addOwnedItem(
 // one piece with no brand, and each must still take a new quantity.
 export async function changeOwnedItem(
 	db: Db,
+	bucket: R2Bucket,
 	userId: string,
 	id: string,
 	draft: unknown,
@@ -250,33 +299,58 @@ export async function changeOwnedItem(
 	const parsed = ownedItemChangeSchema.safeParse(draft);
 	if (!parsed.success)
 		return invalid(draft, parsed.error.issues[0]?.path ?? []);
-	const { brandId, quantity } = parsed.data;
+	const { brandId, quantity, pictureIds } = parsed.data;
 	const other = alias(ownedItem, "other");
-	const [row] = await db
-		.update(ownedItem)
-		.set({ brandId, quantity })
-		.where(
-			and(
-				eq(ownedItem.id, id),
-				eq(ownedItem.userId, userId),
-				brandId === null ? undefined : exists(brandOf(db, userId, brandId)),
-				sql`(${ownedItem.brandId} is ${brandId} or ${notExists(
-					db
-						.select({ one: sql`1` })
-						.from(other)
-						.where(
-							and(
-								eq(other.userId, userId),
-								eq(other.typeId, ownedItem.typeId),
-								eq(other.colourId, ownedItem.colourId),
-								sql`${other.brandId} is ${brandId}`,
-								ne(other.id, ownedItem.id),
-							),
+	const saved = await saveWithPictures(
+		db,
+		bucket,
+		{
+			userId,
+			ownedItemId: id,
+			ids: pictureIds,
+			// The brand is the new one only when the update wrote, since it runs
+			// first in the batch; a refused change attaches and drops nothing.
+			itemHeld: exists(
+				db
+					.select({ one: sql`1` })
+					.from(ownedItem)
+					.where(
+						and(
+							eq(ownedItem.id, id),
+							eq(ownedItem.userId, userId),
+							sql`${ownedItem.brandId} is ${brandId}`,
 						),
-				)})`,
+					),
 			),
-		)
-		.returning({ id: ownedItem.id });
+		},
+		db
+			.update(ownedItem)
+			.set({ brandId, quantity })
+			.where(
+				and(
+					eq(ownedItem.id, id),
+					eq(ownedItem.userId, userId),
+					brandId === null ? undefined : exists(brandOf(db, userId, brandId)),
+					sql`(${ownedItem.brandId} is ${brandId} or ${notExists(
+						db
+							.select({ one: sql`1` })
+							.from(other)
+							.where(
+								and(
+									eq(other.userId, userId),
+									eq(other.typeId, ownedItem.typeId),
+									eq(other.colourId, ownedItem.colourId),
+									sql`${other.brandId} is ${brandId}`,
+									ne(other.id, ownedItem.id),
+								),
+							),
+					)})`,
+				),
+			)
+			.returning({ id: ownedItem.id }),
+	);
+	if (!saved.ok) return listRefusal(saved.error, pictureIds);
+	const [row] = saved.value;
 	if (row) {
 		const [changed] = await readOwnedItems(db, userId, id);
 		if (changed) return { ok: true, value: changed };
@@ -302,13 +376,19 @@ export async function changeOwnedItem(
 // with this id.
 export async function deleteOwnedItem(
 	db: Db,
+	bucket: R2Bucket,
 	userId: string,
 	id: string,
 ): Promise<Result<OwnedItemId, OwnedItemError>> {
-	const [row] = await db
-		.delete(ownedItem)
-		.where(and(eq(ownedItem.id, id), eq(ownedItem.userId, userId)))
-		.returning({ id: ownedItem.id });
+	const [row] = await deleteWithPictures(
+		db,
+		bucket,
+		{ userId, ownedItemId: id },
+		db
+			.delete(ownedItem)
+			.where(and(eq(ownedItem.id, id), eq(ownedItem.userId, userId)))
+			.returning({ id: ownedItem.id }),
+	);
 	return row
 		? { ok: true, value: row.id as OwnedItemId }
 		: { ok: false, error: { code: "not_found" } };

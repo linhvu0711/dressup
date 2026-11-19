@@ -1986,6 +1986,63 @@ describe("owned items", () => {
 		});
 	});
 
+	// A draft picture uploaded as the session's browser, by id.
+	const uploadPicture = async (h: Harness, ai: Session) => {
+		const body = new Uint8Array(100).fill(0x11);
+		body.set([0xff, 0xd8, 0xff, 0xe0]);
+		const res = await send(h, ai.jar, "/api/pictures", {
+			method: "POST",
+			headers: { "content-type": "image/jpeg" },
+			body,
+		});
+		return ((await res.json()) as { picture: { id: string } }).picture.id;
+	};
+
+	// The shirt with these pictures, added as the website adds it, by id.
+	const addWithPictures = async (
+		h: Harness,
+		ai: Session,
+		pictureIds: string[],
+	) => {
+		const id = crypto.randomUUID();
+		const res = await sendJson(h, ai, "POST", "/api/owned-items", {
+			...(await shirt(ai)),
+			id,
+			brandId: null,
+			pictureIds,
+		});
+		expect(res.status).toBe(201);
+		return id;
+	};
+
+	test("deletes an owned item with its pictures", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		const a = await uploadPicture(h, ai);
+		const id = await addWithPictures(h, ai, [a]);
+		// When
+		await ai.call("delete_owned_item", { id });
+		// Then
+		expect(h.pictures.keys()).toEqual([]);
+	});
+
+	test("lists the number of pictures of each item and no picture data", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		const a = await uploadPicture(h, ai);
+		const b = await uploadPicture(h, ai);
+		await addWithPictures(h, ai, [a, b]);
+		// When
+		const { data } = await ai.call("list_owned_items");
+		// Then
+		const [item] = (data as { ownedItems: Record<string, unknown>[] })
+			.ownedItems;
+		expect({
+			pictureCount: item.pictureCount,
+			hasPictureIds: "pictureIds" in item,
+		}).toEqual({ pictureCount: 2, hasPictureIds: false });
+	});
+
 	test("says there is no such owned item", async () => {
 		// Given
 		const { ai } = await withAiSession();

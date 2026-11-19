@@ -17,6 +17,7 @@ const item = (
 		colour,
 		brand: brand === null ? null : { id: brand, name: brand },
 		quantity,
+		pictureIds: [] as OwnedItem["pictureIds"],
 	}) as OwnedItem;
 
 test("puts the items of one piece on one tile with their total", () => {
