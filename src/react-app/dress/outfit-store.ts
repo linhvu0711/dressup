@@ -7,10 +7,10 @@ import {
 	type ChangeResult,
 	type DressChange,
 	type DressState,
-	type MannequinPart,
 	type Outfit,
 } from "@/dress/state";
 import type { Look } from "@/looks/look";
+import type { MannequinPart } from "@/mannequin/mannequin";
 
 export type OutfitView = { account: string | null; unsaved: boolean } & (
 	| { status: "loading" }

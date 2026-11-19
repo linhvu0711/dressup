@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Mannequin } from "@/dress/figure/Mannequin";
 import { GARMENT_IDS, type JacketId } from "@/dress/garments";
-import { STARTER_MANNEQUIN } from "@/dress/state";
+import { STARTER_MANNEQUIN } from "@/mannequin/mannequin";
 
 describe("Mannequin", () => {
 	test("draws the skin, hair, and white shoes", () => {

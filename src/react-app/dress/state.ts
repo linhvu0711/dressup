@@ -10,6 +10,12 @@ import {
 	STARTER_COLOURS,
 } from "@/dress/garments";
 import { DEFAULT_MODE_ID, MODES, type ModeId } from "@/dress/modes";
+import {
+	MANNEQUIN_PARTS,
+	type Mannequin,
+	type MannequinPart,
+	STARTER_MANNEQUIN,
+} from "@/mannequin/mannequin";
 
 // What the Dress page keeps for a person. Colours are keyed by garment, not
 // by mode, so a garment keeps its colour in every mode that has it.
@@ -18,18 +24,7 @@ export type DressState = {
 	swatches: Record<GarmentId, readonly Hex[]>;
 	picked: Record<GarmentId, Hex>;
 	open: readonly JacketId[];
-	mannequin: MannequinColours;
-};
-
-export const MANNEQUIN_PARTS = ["skin", "hair"] as const;
-
-export type MannequinPart = (typeof MANNEQUIN_PARTS)[number];
-
-export type MannequinColours = Record<MannequinPart, Hex>;
-
-export const STARTER_MANNEQUIN: MannequinColours = {
-	skin: "#D6A27B",
-	hair: "#141418",
+	mannequin: Mannequin;
 };
 
 const perGarment = <T>(value: (id: GarmentId) => T) =>

@@ -11,10 +11,11 @@ import {
 	LAYER_NAMES,
 } from "@/dress/garments";
 import { MODES, type ModeId, modeById } from "@/dress/modes";
-import { type DressError, MANNEQUIN_PARTS } from "@/dress/state";
+import type { DressError } from "@/dress/state";
 import { BRAND_LIMIT, BRAND_NAME_MAX } from "@/labels/brand";
 import { COLOUR_LIMIT, COLOUR_NAME_MAX } from "@/labels/colour";
 import { LOOK_LIMIT, LOOK_NAME_MAX, LOOK_TAGS_MAX } from "@/looks/look";
+import { MANNEQUIN_PARTS } from "@/mannequin/mannequin";
 import { ITEM_PICTURE_LIMIT } from "@/pictures/picture";
 import { TAG_NAME_MAX } from "@/tags/tag";
 import { PRICE_MAX, SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";

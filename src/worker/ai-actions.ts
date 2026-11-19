@@ -23,14 +23,11 @@ import {
 	LAYER_OF,
 } from "@/dress/garments";
 import { MODES } from "@/dress/modes";
-import {
-	type DressState,
-	dressChangeSchema,
-	MANNEQUIN_PARTS,
-} from "@/dress/state";
+import { type DressState, dressChangeSchema } from "@/dress/state";
 import { BRAND_LIMIT, BRAND_NAME_MAX, type BrandId } from "@/labels/brand";
 import { COLOUR_LIMIT, COLOUR_NAME_MAX, type ColourId } from "@/labels/colour";
 import { LOOK_LIMIT, LOOK_NAME_MAX, type Look } from "@/looks/look";
+import { MANNEQUIN_PARTS } from "@/mannequin/mannequin";
 import {
 	filterSize,
 	matchesPieceFilter,

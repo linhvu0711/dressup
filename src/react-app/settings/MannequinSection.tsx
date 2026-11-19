@@ -8,7 +8,7 @@ import { Mannequin } from "@/dress/figure/Mannequin";
 import { MannequinPlaceholder } from "@/dress/figure/MannequinPlaceholder";
 import type { Hex } from "@/dress/garments";
 import { OutfitFailed } from "@/dress/OutfitFailed";
-import { MANNEQUIN_PARTS, type MannequinPart } from "@/dress/state";
+import { MANNEQUIN_PARTS, type MannequinPart } from "@/mannequin/mannequin";
 
 const NAMES: Record<MannequinPart, string> = {
 	skin: "Skin colour",

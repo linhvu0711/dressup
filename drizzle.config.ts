@@ -10,6 +10,7 @@ export default defineConfig({
 		"./src/worker/db/combination-schema.ts",
 		"./src/worker/db/dress-schema.ts",
 		"./src/worker/db/look-schema.ts",
+		"./src/worker/db/mannequin-schema.ts",
 		"./src/worker/db/owned-item-schema.ts",
 		"./src/worker/db/picture-schema.ts",
 		"./src/worker/db/tag-schema.ts",

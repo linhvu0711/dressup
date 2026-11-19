@@ -12,16 +12,11 @@ import {
 	type DressChange,
 	type DressError,
 	type DressState,
-	MANNEQUIN_PARTS,
-	STARTER_MANNEQUIN,
 } from "@/dress/state";
+import { MANNEQUIN_PARTS, STARTER_MANNEQUIN } from "@/mannequin/mannequin";
 import type { Db } from "./db";
-import {
-	colourSquare,
-	mannequin,
-	outfit,
-	outfitGarment,
-} from "./db/dress-schema";
+import { colourSquare, outfit, outfitGarment } from "./db/dress-schema";
+import { mannequin } from "./db/mannequin-schema";
 import type { Result } from "./result";
 
 function seed(db: Db, userId: string) {

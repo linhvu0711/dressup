@@ -6,6 +6,7 @@ import { dressStateSchema } from "@/dress/state";
 import { brandSchema, listedBrandSchema } from "@/labels/brand";
 import { colourSchema, listedColourSchema } from "@/labels/colour";
 import { lookSchema } from "@/looks/look";
+import { mannequinSchema } from "@/mannequin/mannequin";
 import { pictureIdSchema } from "@/pictures/picture";
 import { listedTagSchema, tagSchema } from "@/tags/tag";
 import { wishSchema } from "@/wishlist/wish";
@@ -83,6 +84,10 @@ export type BrandsAnswer = z.input<typeof brandsAnswer>;
 export const brandAnswer = z.object({ brand: brandSchema });
 
 export type BrandAnswer = z.input<typeof brandAnswer>;
+
+export const mannequinAnswer = z.object({ mannequin: mannequinSchema });
+
+export type MannequinAnswer = z.input<typeof mannequinAnswer>;
 
 export const combinationsAnswer = z.object({
 	combinations: z.array(combinationSchema),

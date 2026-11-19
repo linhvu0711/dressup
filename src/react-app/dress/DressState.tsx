@@ -15,8 +15,9 @@ import type { GarmentId, Hex, JacketId } from "@/dress/garments";
 import type { ModeId } from "@/dress/modes";
 import { httpOutfitServer } from "@/dress/outfit-server";
 import { createOutfitStore } from "@/dress/outfit-store";
-import type { DressState, MannequinPart } from "@/dress/state";
+import type { DressState } from "@/dress/state";
 import type { Look } from "@/looks/look";
+import type { MannequinPart } from "@/mannequin/mannequin";
 
 type DressCommands = {
 	pickMode: (id: ModeId) => void;

@@ -4,6 +4,7 @@ import { bodyLimit } from "hono/body-limit";
 import { createMiddleware } from "hono/factory";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
+import { hexSchema } from "@/colour/hex";
 import type {
 	AiAppsAnswer,
 	BrandAnswer,
@@ -16,6 +17,7 @@ import type {
 	ErrorAnswer,
 	LookAnswer,
 	LooksAnswer,
+	MannequinAnswer,
 	MeAnswer,
 	OwnedItemAnswer,
 	OwnedItemsAnswer,
@@ -28,6 +30,7 @@ import type {
 import { type DressError, dressChangeSchema } from "@/dress/state";
 import { brandIdSchema } from "@/labels/brand";
 import { colourIdSchema } from "@/labels/colour";
+import { mannequinPartSchema } from "@/mannequin/mannequin";
 import { PICTURE_BYTES_MAX, pictureIdSchema } from "@/pictures/picture";
 import { tagIdSchema } from "@/tags/tag";
 import { disconnectAiApp, listAiApps } from "./ai-app-store";
@@ -69,6 +72,7 @@ import {
 	listLooks,
 	saveLook,
 } from "./look-store";
+import { loadMannequin, setMannequinColour } from "./mannequin-store";
 import { mcpRoute } from "./mcp";
 import {
 	addOwnedItem,
@@ -800,6 +804,30 @@ export function createApp(getDb: (env: Env) => Db) {
 			return c.json(body, status);
 		}
 		return c.body(null, 204);
+	});
+
+	app.get("/mannequin", withAuth, requireUser, async (c) =>
+		c.json({
+			mannequin: await loadMannequin(getDb(c.env), c.var.user.id),
+		} satisfies MannequinAnswer),
+	);
+
+	app.put("/mannequin/:part", withAuth, requireUser, async (c) => {
+		const part = mannequinPartSchema.safeParse(c.req.param("part"));
+		if (!part.success)
+			return c.json(
+				{ error: "invalid", field: "part" } satisfies ErrorAnswer,
+				400,
+			);
+		const body = await readBody(c, z.object({ hex: hexSchema }));
+		if ("refused" in body) return body.refused;
+		const mannequin = await setMannequinColour(
+			getDb(c.env),
+			c.var.user.id,
+			part.data,
+			body.data.hex,
+		);
+		return c.json({ mannequin } satisfies MannequinAnswer, 200);
 	});
 
 	app.get("/brands", withAuth, requireUser, async (c) =>
