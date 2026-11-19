@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 import { postOwnedItems } from "./closet-helpers";
 import { colourIds, postCombinations } from "./combination-helpers";
 import { expect, test } from "./fixtures";
-import { postWish } from "./wishlist-helpers";
+import { postShopLink, postWish } from "./wishlist-helpers";
 
 const lines = (page: Page) => page.locator('[data-slot="piece-line"]');
 
@@ -43,9 +43,12 @@ async function markedFour(page: Page) {
 		{ typeId: "tee_l", colourId: ids.Black, brandId: null, quantity: 1 },
 		{ typeId: "harrington", colourId: ids.Khaki, brandId: null, quantity: 1 },
 	);
-	await postWish(page, { typeId: "sweater", colourId: ids.Grey });
+	const sweaterWish = await postWish(page, {
+		typeId: "sweater",
+		colourId: ids.Grey,
+	});
 	await postWish(page, { typeId: "harrington", colourId: ids.Khaki });
-	return { id, ids };
+	return { id, ids, sweaterWish };
 }
 
 test("marks each piece Own, Want, both, or none", async ({ page }) => {
@@ -146,5 +149,42 @@ test("drops Want after the wish is removed, with no reload", async ({
 	// Then
 	await expect(page).toHaveURL(`/combinations/${id}`);
 	await expect(line(page, "Grey sweater")).toHaveText("Grey sweater#8C8A84");
+	expect(await windowStayed(page)).toBe(true);
+});
+
+test("shows Own and drops Want after Bought, with no reload", async ({
+	page,
+}) => {
+	// Given: both projects, the four pieces above, the Grey sweater's wish with
+	// one shop link, the combination open
+	const { id, sweaterWish } = await markedFour(page);
+	await postShopLink(page, sweaterWish, {
+		url: "https://cos.com/sweater",
+		brandId: null,
+		name: "Cos sweater",
+		price: null,
+	});
+	await page.goto(`/combinations/${id}`);
+	await expect(line(page, "Grey sweater")).toHaveText(
+		"Grey sweaterWant#8C8A84",
+	);
+	await markWindow(page);
+	// When: the shop link is Bought on the sweater's piece page
+	await line(page, "Grey sweater").getByRole("link").click();
+	await page
+		.getByRole("listitem", { name: "Cos sweater", exact: true })
+		.getByRole("button", { name: "Bought" })
+		.click();
+	await page
+		.getByRole("alertdialog", { name: "Bought this one?" })
+		.getByRole("button", { name: "Bought" })
+		.click();
+	await expect(
+		page.getByRole("heading", { name: "In your closet" }),
+	).toBeVisible();
+	await page.getByRole("link", { name: "Back" }).click();
+	// Then
+	await expect(page).toHaveURL(`/combinations/${id}`);
+	await expect(line(page, "Grey sweater")).toHaveText("Grey sweaterOwn#8C8A84");
 	expect(await windowStayed(page)).toBe(true);
 });
