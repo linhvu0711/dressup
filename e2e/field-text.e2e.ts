@@ -7,6 +7,8 @@ const PHONE_ONLY = "phone layout only";
 const fontSize = (box: Locator) =>
 	box.evaluate((el) => getComputedStyle(el).fontSize);
 
+const fontSizes = (boxes: Locator[]) => Promise.all(boxes.map(fontSize));
+
 async function openBrandSheet(page: Page) {
 	await page.goto("/labels");
 	await page.getByRole("tab", { name: "Brands" }).click();
@@ -61,4 +63,22 @@ test("keeps pinch zoom allowed in the viewport tag", async ({ page }) => {
 		.filter((key) => key === "maximum-scale" || key === "user-scalable");
 	// Then
 	expect(zoomLocks).toEqual([]);
+});
+
+test("shows the colour sheet boxes text at 16px on a phone", async ({
+	page,
+}) => {
+	test.skip(!isPhone(page), PHONE_ONLY);
+	// Given: the phone project, a fresh account
+	// When
+	await page.goto("/labels");
+	await page.getByRole("button", { name: "Add a colour" }).click();
+	const sheet = page.getByRole("dialog");
+	// Then
+	expect(
+		await fontSizes([
+			sheet.getByRole("textbox", { name: "Name" }),
+			sheet.getByRole("textbox", { name: "Colour code" }),
+		]),
+	).toEqual(["16px", "16px"]);
 });
