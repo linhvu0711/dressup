@@ -2,6 +2,7 @@ import { cn } from "cn";
 import { Plus } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { useCloset } from "@/closet/api";
 import { useCombinations } from "@/combinations/api";
 import { CombinationCard } from "@/combinations/CombinationCard";
 import { CombinationFilterSheet } from "@/combinations/CombinationFilterSheet";
@@ -20,6 +21,7 @@ import {
 	shownText,
 	writeCombinationFilter,
 } from "@/combinations/filter";
+import { NO_PIECES, pieceKeys } from "@/combinations/marks";
 import { useWallAddress, wallAddress } from "@/combinations/wall-address";
 import { Button } from "@/components/ui/button";
 import { ActiveFilters, FilterButton } from "@/components/ui/filter";
@@ -54,9 +56,20 @@ export function CombinationsPage() {
 		tags.data,
 		colours.data,
 	);
-	const visible = combinations.data
-		? filterCombinations(combinations.data, filter)
-		: [];
+	// The wall opens the app, and Any never reads the closet, so the closet
+	// loads only for Pieces I own.
+	const waitsForCloset = filter.own !== "any";
+	const closet = useCloset({ enabled: waitsForCloset });
+	const owned = closet.data && pieceKeys(closet.data);
+	// With no closet every combination would look Not all, so Pieces I own
+	// matches nothing until the closet is in: undefined, not an empty list.
+	// Any never waits.
+	const matching = (f: CombinationFilter) =>
+		combinations.data && (f.own === "any" || owned)
+			? filterCombinations(combinations.data, f, owned ?? NO_PIECES)
+			: undefined;
+	const matched = matching(filter);
+	const visible = matched ?? [];
 	const [filtering, setFiltering] = useState(false);
 	// An empty wall shows no filter, so it keeps none in its address: the
 	// builder carries the address along, and the next save would come back to
@@ -68,24 +81,38 @@ export function CombinationsPage() {
 	}, [empty, addressed, setParams]);
 	// Each pick replaces the address, so Back leaves the page, not one pick. A
 	// filter that hides the open combination closes it, as a look's chip does.
+	// A pick that waits for the closet makes that check when the closet is in.
+	// Only a pick checks: a combination saved from the builder opens even when
+	// the filter hides it.
+	// The check holds the search it waits for: the address changes a render
+	// after the pick, and the old filter must not answer for the new one.
+	const [checkFor, setCheckFor] = useState<string | null>(null);
 	function setFilter(next: CombinationFilter) {
 		const search = writeCombinationFilter(next).toString();
+		const nextMatched = matching(next);
 		const hidden =
 			combinationId !== undefined &&
-			combinations.data !== undefined &&
-			!filterCombinations(combinations.data, next).some(
-				(c) => c.id === combinationId,
-			);
+			nextMatched?.every((c) => c.id !== combinationId) === true;
+		setCheckFor(
+			combinationId !== undefined && nextMatched === undefined ? search : null,
+		);
 		if (hidden) navigate(wallAddress(next), { replace: true });
 		else setParams(search, { replace: true });
 	}
+	const current = params.toString();
+	useEffect(() => {
+		if (checkFor === null || checkFor !== current || !matched) return;
+		setCheckFor(null);
+		if (matched.every((c) => c.id !== combinationId))
+			navigate(wallAddress(filter), { replace: true });
+	}, [checkFor, current, matched, combinationId, filter, navigate]);
 	const shown = combinations.data?.find((c) => c.id === combinationId);
 	const open = shown !== undefined;
 	// The confirm lives here, not in the view: the view goes when the list
 	// drops the deleted combination, and the confirm must still say so.
 	const [deleting, setDeleting] = useState<Combination | null>(null);
 	let wall: ReactNode;
-	if (combinations.isPending) {
+	if (combinations.isPending || (waitsForCloset && closet.isPending)) {
 		wall = (
 			<div className={WALL}>
 				{Array.from({ length: 6 }, (_, i) => (
@@ -108,6 +135,14 @@ export function CombinationsPage() {
 	} else if (combinations.isError) {
 		// Checked before the data: a failed refetch keeps the old list.
 		wall = <CombinationsFailed onRetry={() => void combinations.refetch()} />;
+	} else if (waitsForCloset && closet.isError && !closet.data) {
+		wall = (
+			<Notice title="Could not load your closet">
+				<Button className="mt-2" onClick={() => void closet.refetch()}>
+					Retry
+				</Button>
+			</Notice>
+		);
 	} else if (combinations.data.length === 0) {
 		wall = (
 			<Notice title="No combinations yet">
@@ -182,7 +217,7 @@ export function CombinationsPage() {
 						</div>
 					}
 				/>
-				{combinations.data?.length ? (
+				{combinations.data?.length && matched ? (
 					<ActiveFilters
 						chips={filterChips(filter, tags.data, colours.data).map((chip) => ({
 							key: chip.key,
@@ -193,7 +228,7 @@ export function CombinationsPage() {
 							onRemove: () => setFilter(chip.without),
 						}))}
 						onClearAll={() => setFilter(NO_FILTER)}
-						shown={shownText(visible.length)}
+						shown={shownText(matched.length)}
 					/>
 				) : null}
 				{wall}
@@ -214,7 +249,7 @@ export function CombinationsPage() {
 				<CombinationFilterSheet
 					filter={filter}
 					onChange={setFilter}
-					shown={shownText(visible.length)}
+					shown={matched ? shownText(matched.length) : "combinations"}
 					onClose={() => setFiltering(false)}
 				/>
 			) : null}

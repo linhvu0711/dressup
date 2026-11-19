@@ -12,6 +12,8 @@ import {
 	type Combination,
 	combinationTitle,
 } from "@/combinations/combination";
+import { OWN_CHOICES } from "@/combinations/filter";
+import { type Holdings, holdingsOf, markOf } from "@/combinations/marks";
 import { LAYER_OF, TYPE_IDS, TYPE_NAMES } from "@/dress/clothing-types";
 import { BRAND_LIMIT, BRAND_NAME_MAX, type BrandId } from "@/labels/brand";
 import { COLOUR_LIMIT, COLOUR_NAME_MAX, type ColourId } from "@/labels/colour";
@@ -72,6 +74,7 @@ import {
 	changeOwnedItem,
 	deleteOwnedItem,
 	listOwnedItems,
+	listOwnedPieces,
 } from "./owned-item-store";
 import { readPicture } from "./picture-store";
 import { addTag, deleteTag, listTags, renameTag } from "./tag-store";
@@ -85,6 +88,7 @@ import {
 	changeShopLink,
 	deleteShopLink,
 	deleteWish,
+	listWishedPieces,
 	listWishes,
 } from "./wish-store";
 
@@ -112,7 +116,11 @@ const answer = (
 	structuredContent: data,
 });
 
-const combinationView = (combination: Combination, tags: Tag[]) => ({
+const combinationView = (
+	combination: Combination,
+	tags: Tag[],
+	holdings: Holdings,
+) => ({
 	id: combination.id,
 	title: combinationTitle(combination),
 	pieces: combination.pieces.map((p) => ({
@@ -120,11 +128,20 @@ const combinationView = (combination: Combination, tags: Tag[]) => ({
 		typeId: p.typeId,
 		type: TYPE_NAMES[p.typeId],
 		colour: p.colour,
+		...markOf(holdings, p),
 	})),
 	tags: tags
 		.filter((t) => combination.tags.includes(t.id))
 		.map(({ id, name }) => ({ id, name })),
 });
+
+const holdingsFor = async (db: Db, userId: string) => {
+	const [owned, wanted] = await Promise.all([
+		listOwnedPieces(db, userId),
+		listWishedPieces(db, userId),
+	]);
+	return holdingsOf(owned, wanted);
+};
 
 const noArgs = z.object({});
 
@@ -467,7 +484,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		{
 			title: "List the combinations",
 			description:
-				"The account's saved combinations, newest first, each with its title, its pieces, and its tags. pieces and tags narrow the list: a combination must match every piece row and carry every tag.",
+				"The account's saved combinations, newest first, each with its title, its pieces, and its tags. Each piece has own, true when the closet has an owned item of that type and colour, and want, true when the wishlist has a wish for it. pieces, tags, and own narrow the list: a combination must match every piece row, carry every tag, and pass own.",
 			annotations: READ,
 			inputSchema: z.object({
 				pieces: z
@@ -492,17 +509,31 @@ export function registerAiActions(server: McpServer, account: Account) {
 					.describe(
 						"Tag ids from list_tags. A combination is listed when it carries every one.",
 					),
+				own: z
+					.enum(OWN_CHOICES)
+					.optional()
+					.describe(
+						"Pieces I own. all lists the combinations whose every piece the closet has; not_all lists the ones with a piece it lacks; any, the default, lists them all.",
+					),
 			}),
 		},
-		async ({ pieces = [], tags: tagIds = [] }) => {
-			const [found, tags] = await Promise.all([
-				findCombinations(db, userId, { pieces, tags: tagIds }),
+		async ({ pieces = [], tags: tagIds = [], own = "any" }) => {
+			const [tags, holdings] = await Promise.all([
 				listTags(db, userId),
+				holdingsFor(db, userId),
 			]);
+			const found = await findCombinations(
+				db,
+				userId,
+				{ pieces, tags: tagIds, own },
+				holdings.owned,
+			);
 			if (!found.ok) return refusal(combinationRefusalText(found.error));
-			const combinations = found.value.map((c) => combinationView(c, tags));
+			const combinations = found.value.map((c) =>
+				combinationView(c, tags, holdings),
+			);
 			if (combinations.length > 0) return answer({ combinations });
-			const filtered = pieces.length > 0 || tagIds.length > 0;
+			const filtered = pieces.length > 0 || tagIds.length > 0 || own !== "any";
 			return answer(
 				{ combinations },
 				filtered ? noCombinationsMatch : noCombinations,
@@ -529,10 +560,15 @@ export function registerAiActions(server: McpServer, account: Account) {
 				tags,
 			});
 			if (!saved.ok) return refusal(combinationRefusalText(saved.error));
+			const [accountTags, holdings] = await Promise.all([
+				listTags(db, userId),
+				holdingsFor(db, userId),
+			]);
 			return answer({
 				combination: combinationView(
 					saved.value.combination,
-					await listTags(db, userId),
+					accountTags,
+					holdings,
 				),
 			});
 		},
@@ -557,8 +593,12 @@ export function registerAiActions(server: McpServer, account: Account) {
 				tags,
 			});
 			if (!changed.ok) return refusal(combinationRefusalText(changed.error));
+			const [accountTags, holdings] = await Promise.all([
+				listTags(db, userId),
+				holdingsFor(db, userId),
+			]);
 			return answer({
-				combination: combinationView(changed.value, await listTags(db, userId)),
+				combination: combinationView(changed.value, accountTags, holdings),
 			});
 		},
 	);

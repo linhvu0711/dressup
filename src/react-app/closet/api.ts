@@ -4,7 +4,7 @@ import { ownedItemAnswer, ownedItemsAnswer } from "../data/contract";
 import type { PictureId } from "../pictures/picture";
 import type { OwnedItemId } from "./owned-item";
 
-export function useCloset() {
+export function useCloset({ enabled = true }: { enabled?: boolean } = {}) {
 	const userId = cachedUserId();
 	return useQuery({
 		queryKey: keys.closet(userId),
@@ -14,7 +14,7 @@ export function useCloset() {
 					answer: ownedItemsAnswer,
 				})
 			).ownedItems,
-		enabled: userId !== null,
+		enabled: enabled && userId !== null,
 		// "Retry" on the page is the person's way to try again, as on Looks.
 		retry: false,
 	});

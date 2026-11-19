@@ -2,13 +2,27 @@ import { TYPE_IDS, TYPE_NAMES, type TypeId } from "@/dress/clothing-types";
 import type { ColourId } from "@/labels/colour";
 import type { Tag, TagId } from "@/tags/tag";
 import { type CombinationProblem, pieceName } from "./combination";
+import { type PieceRef, pieceKey } from "./marks";
 
 // A piece row: a type, a colour, or both. A row with neither filters nothing.
 export type PieceRow = { typeId: TypeId | null; colourId: ColourId | null };
 
-export type CombinationFilter = { pieces: PieceRow[]; tags: TagId[] };
+// Pieces I own: any, all of a combination's pieces owned, or not all of them.
+export const OWN_CHOICES = ["any", "all", "not_all"] as const;
 
-export const NO_FILTER: CombinationFilter = { pieces: [], tags: [] };
+export type OwnChoice = (typeof OWN_CHOICES)[number];
+
+export type CombinationFilter = {
+	pieces: PieceRow[];
+	tags: TagId[];
+	own: OwnChoice;
+};
+
+export const NO_FILTER: CombinationFilter = {
+	pieces: [],
+	tags: [],
+	own: "any",
+};
 
 export const BLANK_ROW: PieceRow = { typeId: null, colourId: null };
 
@@ -19,7 +33,7 @@ const isTypeId = (value: string): value is TypeId =>
 	(TYPE_IDS as readonly string[]).includes(value);
 
 type Filtered = {
-	pieces: readonly { typeId: TypeId; colour: { id: ColourId } }[];
+	pieces: readonly PieceRef[];
 	tags: readonly TagId[];
 };
 
@@ -32,18 +46,38 @@ const matchesRow = (c: Filtered, row: PieceRow) =>
 			(row.colourId === null || p.colour.id === row.colourId),
 	);
 
-export const matchesFilter = (c: Filtered, f: CombinationFilter): boolean =>
+const matchesOwn = (
+	c: Filtered,
+	own: OwnChoice,
+	owned: ReadonlySet<string>,
+) => {
+	if (own === "any") return true;
+	const all = c.pieces.every((p) => owned.has(pieceKey(p)));
+	return own === "all" ? all : !all;
+};
+
+// The owned set is an argument, not part of the filter: the filter is the
+// user's choice, and what the account owns is data the caller loaded.
+export const matchesFilter = (
+	c: Filtered,
+	f: CombinationFilter,
+	owned: ReadonlySet<string>,
+): boolean =>
 	f.pieces.every((row) => isBlank(row) || matchesRow(c, row)) &&
-	f.tags.every((tag) => c.tags.includes(tag));
+	f.tags.every((tag) => c.tags.includes(tag)) &&
+	matchesOwn(c, f.own, owned);
 
 // Keeps the order it gets, so the newest combination stays first.
 export const filterCombinations = <T extends Filtered>(
 	list: T[],
 	f: CombinationFilter,
-): T[] => list.filter((c) => matchesFilter(c, f));
+	owned: ReadonlySet<string>,
+): T[] => list.filter((c) => matchesFilter(c, f, owned));
 
 export const filterSize = (f: CombinationFilter) =>
-	f.pieces.filter((row) => !isBlank(row)).length + f.tags.length;
+	f.pieces.filter((row) => !isBlank(row)).length +
+	f.tags.length +
+	(f.own === "any" ? 0 : 1);
 
 // The rows an AI app sends, before the account's colours are checked.
 export function checkPieceRows(
@@ -89,7 +123,12 @@ export function readCombinationFilter(
 		if (!isBlank(row)) pieces.push(row);
 	}
 	const tags = [...new Set(params.getAll("tag"))] as TagId[];
-	return { pieces, tags };
+	const own = params.get("own");
+	return {
+		pieces,
+		tags,
+		own: own === "all" || own === "not_all" ? own : "any",
+	};
 }
 
 export function writeCombinationFilter(f: CombinationFilter): URLSearchParams {
@@ -99,6 +138,7 @@ export function writeCombinationFilter(f: CombinationFilter): URLSearchParams {
 			params.append("piece", `${row.typeId ?? ""}.${row.colourId ?? ""}`);
 	}
 	for (const tag of f.tags) params.append("tag", tag);
+	if (f.own !== "any") params.append("own", f.own);
 	return params;
 }
 
@@ -119,6 +159,7 @@ export function pruneCombinationFilter(
 				.filter((row) => !isBlank(row))
 		: f.pieces;
 	return {
+		...f,
 		pieces,
 		tags: tags ? f.tags.filter((id) => tags.some((t) => t.id === id)) : f.tags,
 	};
@@ -177,7 +218,19 @@ export function filterChips(
 			without: { ...f, tags: f.tags.filter((t) => t !== id) },
 		}),
 	);
-	return [...rows, ...tagChips];
+	// After the rows and before the tags, the order of the sheet's groups.
+	const ownChip: FilterChip[] =
+		f.own === "any"
+			? []
+			: [
+					{
+						key: "own",
+						label: f.own === "all" ? "Own all pieces" : "Not all owned",
+						typeId: null,
+						without: { ...f, own: "any" },
+					},
+				];
+	return [...rows, ...ownChip, ...tagChips];
 }
 
 export const shownText = (n: number) =>

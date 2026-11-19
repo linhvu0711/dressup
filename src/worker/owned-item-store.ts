@@ -20,6 +20,7 @@ import {
 	QUANTITY_MAX,
 } from "@/closet/owned-item";
 import type { Hex } from "@/colour/hex";
+import type { PieceRef } from "@/combinations/marks";
 import type { TypeId } from "@/dress/clothing-types";
 import type { BrandId } from "@/labels/brand";
 import type { ColourId } from "@/labels/colour";
@@ -109,6 +110,22 @@ async function readOwnedItems(
 
 export const listOwnedItems = (db: Db, userId: string) =>
 	readOwnedItems(db, userId);
+
+// The pieces the account owns, for the Own marks: no brand, quantity, or
+// pictures, which listOwnedItems reads too.
+export async function listOwnedPieces(
+	db: Db,
+	userId: string,
+): Promise<PieceRef[]> {
+	const rows = await db
+		.select({ typeId: ownedItem.typeId, colourId: ownedItem.colourId })
+		.from(ownedItem)
+		.where(eq(ownedItem.userId, userId));
+	return rows.map((row) => ({
+		typeId: row.typeId,
+		colour: { id: row.colourId as ColourId },
+	}));
+}
 
 const isField = (key: unknown): key is OwnedItemField =>
 	key === "id" ||

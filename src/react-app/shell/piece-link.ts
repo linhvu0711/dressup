@@ -5,11 +5,15 @@ import { z } from "zod";
 // from, with that tab's filter.
 export type PieceTab = "/closet" | "/wishlist";
 
+// A combination's page opens a piece page too; its address carries the wall's
+// filter, so Back brings the wall back filtered.
+type PieceFrom = PieceTab | `/combinations/${string}`;
+
 type LinkPiece = { typeId: string; colour: { id: string } };
 
 // The one way in to a piece page, so every link writes the address and the
 // back state alike, and none forgets the filter in the tab's address.
-export function usePieceLink(from: PieceTab) {
+export function usePieceLink(from: PieceFrom) {
 	const { search } = useLocation();
 	return (piece: LinkPiece) => ({
 		to: `/piece/${piece.typeId}/${piece.colour.id}`,
@@ -17,10 +21,14 @@ export function usePieceLink(from: PieceTab) {
 	});
 }
 
-// Router state is whatever history holds, so it is parsed before use. A
-// typed address has none and goes back to the closet.
+// Router state is whatever history holds, so it is parsed before use, and
+// only a tab or a combination's page gets through. A typed address has none
+// and goes back to the closet.
 const pieceState = z.object({
-	from: z.enum(["/closet", "/wishlist"]),
+	from: z.union([
+		z.enum(["/closet", "/wishlist"]),
+		z.string().regex(/^\/combinations\/[^/?#]+$/),
+	]),
 	search: z
 		.string()
 		.regex(/^(\?.*)?$/)

@@ -53,7 +53,11 @@ const C = combination("C", [
 const only = (pieces: CombinationFilter["pieces"]): CombinationFilter => ({
 	pieces,
 	tags: [],
+	own: "any",
 });
+
+// Any never reads what the account owns.
+const NONE: ReadonlySet<string> = new Set();
 
 describe("combination filter", () => {
 	test("shows only the combinations with a white short tee and some navy piece", () => {
@@ -65,6 +69,7 @@ describe("combination filter", () => {
 				{ typeId: "tee_s", colourId: WHITE },
 				{ typeId: null, colourId: NAVY },
 			]),
+			NONE,
 		);
 		// Then
 		expect(ids(shown)).toEqual(["A"]);
@@ -80,6 +85,7 @@ describe("combination filter", () => {
 		const shown = filterCombinations(
 			[D],
 			only([{ typeId: "tee_s", colourId: WHITE }]),
+			NONE,
 		);
 		// Then
 		expect(ids(shown)).toEqual([]);
@@ -88,7 +94,7 @@ describe("combination filter", () => {
 	test("filters nothing with a row with no type and no colour", () => {
 		// Given: A, B, C
 		// When
-		const shown = filterCombinations([A, B, C], only([BLANK_ROW]));
+		const shown = filterCombinations([A, B, C], only([BLANK_ROW]), NONE);
 		// Then
 		expect(ids(shown)).toEqual(["A", "B", "C"]);
 	});
@@ -101,7 +107,11 @@ describe("combination filter", () => {
 			{ ...C, tags: [T2] },
 		];
 		// When
-		const shown = filterCombinations(list, { pieces: [], tags: [T1, T2] });
+		const shown = filterCombinations(
+			list,
+			{ pieces: [], tags: [T1, T2], own: "any" },
+			NONE,
+		);
 		// Then
 		expect(ids(shown)).toEqual(["A"]);
 	});
@@ -113,6 +123,7 @@ describe("combination filter", () => {
 		const shown = filterCombinations(
 			[C, B, A],
 			only([{ typeId: null, colourId: WHITE }]),
+			NONE,
 		);
 		// Then
 		expect(ids(shown)).toEqual(["B", "A"]);
@@ -137,6 +148,7 @@ describe("combination filter", () => {
 				{ typeId: null, colourId: GONE },
 			],
 			tags: [T1, T2],
+			own: "any",
 		};
 		// When
 		const pruned = pruneCombinationFilter(
@@ -148,6 +160,7 @@ describe("combination filter", () => {
 		expect(pruned).toEqual({
 			pieces: [{ typeId: "sweater", colourId: null }],
 			tags: [T2],
+			own: "any",
 		});
 	});
 
@@ -160,6 +173,7 @@ describe("combination filter", () => {
 				{ typeId: null, colourId: NAVY },
 			],
 			tags: [T1],
+			own: "any",
 		};
 		const colours = [
 			{ id: WHITE, name: "White", hex: "#F4F2ED" as const },
@@ -171,5 +185,85 @@ describe("combination filter", () => {
 		);
 		// Then
 		expect(labels).toEqual(["White short tee", "Sweater", "Navy", "work"]);
+	});
+
+	test("names the Pieces I own chip", () => {
+		// Given
+		const filter: CombinationFilter = {
+			pieces: [{ typeId: "tee_s", colourId: WHITE }],
+			tags: [T1],
+			own: "all",
+		};
+		const colours = [{ id: WHITE, name: "White", hex: "#F4F2ED" as const }];
+		// When
+		const labels = filterChips(filter, [{ id: T1, name: "Work" }], colours).map(
+			(c) => c.label,
+		);
+		// Then
+		expect(labels).toEqual(["White short tee", "Own all pieces", "Work"]);
+	});
+
+	// A owns every piece; B lacks its Black chino pants; C lacks its Navy
+	// sweater.
+	const owned: ReadonlySet<string> = new Set([
+		`tee_s/${WHITE}`,
+		`chino_p/${NAVY}`,
+		`tee_s/${GREY}`,
+	]);
+
+	test("shows every combination with Any", () => {
+		// Given: A, B, C; the account owns the White short tee only
+		// When
+		const shown = filterCombinations(
+			[A, B, C],
+			{ ...only([]), own: "any" },
+			new Set([`tee_s/${WHITE}`]),
+		);
+		// Then
+		expect(ids(shown)).toEqual(["A", "B", "C"]);
+	});
+
+	test("shows only the combinations with every piece owned with All of them", () => {
+		// Given: A, B, C, and the owned pieces above
+		// When
+		const shown = filterCombinations(
+			[A, B, C],
+			{ ...only([]), own: "all" },
+			owned,
+		);
+		// Then
+		expect(ids(shown)).toEqual(["A"]);
+	});
+
+	test("shows the combinations with a piece not owned with Not all", () => {
+		// Given: A, B, C, and the owned pieces above
+		// When
+		const shown = filterCombinations(
+			[A, B, C],
+			{ ...only([]), own: "not_all" },
+			owned,
+		);
+		// Then
+		expect(ids(shown)).toEqual(["B", "C"]);
+	});
+
+	test("keeps Pieces I own in the address", () => {
+		// Given
+		const filter: CombinationFilter = {
+			pieces: [{ typeId: "tee_s", colourId: WHITE }],
+			tags: [T1],
+			own: "not_all",
+		};
+		// When
+		const written = writeCombinationFilter(filter).toString();
+		// Then
+		expect({
+			written,
+			read: readCombinationFilter(new URLSearchParams(written)),
+		}).toEqual({
+			written:
+				"piece=tee_s.00000000-0000-4000-8000-0000000000a1&tag=00000000-0000-4000-8000-000000000001&own=not_all",
+			read: filter,
+		});
 	});
 });

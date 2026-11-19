@@ -1,5 +1,6 @@
 import { cn } from "cn";
 import { ChevronDown, Plus, X } from "lucide-react";
+import { ToggleGroup } from "radix-ui";
 import { useState } from "react";
 import { TypeButton, TypeOptions } from "@/closet/TypeOptions";
 import { Button } from "@/components/ui/button";
@@ -15,8 +16,15 @@ import {
 	type CombinationFilter,
 	isBlank,
 	NO_FILTER,
+	type OwnChoice,
 	type PieceRow,
 } from "./filter";
+
+const OWN_LABEL: Record<OwnChoice, string> = {
+	any: "Any",
+	all: "All of them",
+	not_all: "Not all",
+};
 
 type Step = { kind: "type" | "colour"; row: number };
 
@@ -133,6 +141,25 @@ export function CombinationFilterSheet({
 						<Plus size={14} strokeWidth={1.9} aria-hidden />
 						Another piece
 					</button>
+				</div>
+				<div className="flex flex-col gap-2">
+					<span className={LABEL}>Pieces I own</span>
+					<ToggleGroup.Root
+						type="single"
+						aria-label="Pieces I own"
+						value={filter.own}
+						onValueChange={(value) => {
+							// Radix gives "" when the chip that is on is clicked again.
+							if (value) onChange({ ...filter, own: value as OwnChoice });
+						}}
+						className="flex flex-wrap gap-[7px]"
+					>
+						{(Object.keys(OWN_LABEL) as OwnChoice[]).map((own) => (
+							<ToggleGroup.Item key={own} value={own} className={CHIP}>
+								{OWN_LABEL[own]}
+							</ToggleGroup.Item>
+						))}
+					</ToggleGroup.Root>
 				</div>
 				{tags.data?.length ? (
 					<div className="flex flex-col gap-2">
