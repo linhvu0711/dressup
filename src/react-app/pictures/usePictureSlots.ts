@@ -22,12 +22,12 @@ export type PictureNote =
 
 export type PictureSlots = ReturnType<typeof usePictureSlots>;
 
-// The pictures of one open item sheet: the item's own, and the ones picked
-// in it, each shrunk and uploaded as a draft. Save sends ids(); Cancel calls
-// discard(), so the drafts go.
+// The pictures of one open item or shop link sheet: the owner's own, and the
+// ones picked in it, each shrunk and uploaded as a draft. Save sends what
+// settle() gives; Cancel calls discard(), so the drafts go.
 export function usePictureSlots(saved: readonly PictureId[]) {
-	// A ref, so ids() after await idle() reads the slots as the uploads left
-	// them, not as the last render saw them.
+	// A ref, so settle() reads the slots as the uploads left them, not as the
+	// last render saw them.
 	const slots = useRef<Slot[]>(
 		saved.map((id) => ({
 			key: id,
@@ -43,6 +43,7 @@ export function usePictureSlots(saved: readonly PictureId[]) {
 	const running = useRef(new Set<Promise<void>>());
 	const objectUrls = useRef(new Set<string>());
 	const discarded = useRef(false);
+	const [saving, setSaving] = useState(false);
 
 	const update = (change: (old: Slot[]) => Slot[]) => {
 		slots.current = change(slots.current);
@@ -136,12 +137,17 @@ export function usePictureSlots(saved: readonly PictureId[]) {
 			forget(key);
 			if (slot?.state === "uploaded" && slot.id) void dropDraft(slot.id);
 		},
-		async idle() {
+		// True while settle() waits for the uploads.
+		saving,
+		// The ids to save, once the uploads that run are done. Cancel stays
+		// open while they run; once used, nothing is saved, so this gives null.
+		// A failed slot is left out: the person saw Failed and chose Save.
+		async settle(): Promise<PictureId[] | null> {
+			setSaving(true);
 			while (running.current.size > 0)
 				await Promise.allSettled([...running.current]);
-		},
-		// A failed slot is left out: the person saw Failed and chose Save.
-		ids(): PictureId[] {
+			setSaving(false);
+			if (discarded.current) return null;
 			return slots.current.flatMap((s) =>
 				(s.state === "saved" || s.state === "uploaded") && s.id ? [s.id] : [],
 			);
@@ -150,9 +156,6 @@ export function usePictureSlots(saved: readonly PictureId[]) {
 			discarded.current = true;
 			for (const s of slots.current)
 				if (s.state === "uploaded" && s.id) void dropDraft(s.id);
-		},
-		get discarded() {
-			return discarded.current;
 		},
 		// The slots plus the picked files that are still shrinking.
 		get taken() {

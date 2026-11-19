@@ -18,7 +18,7 @@ const ALERT = "text-[13px] text-destructive";
 
 const SLOT = "size-16 rounded-[12px] border border-input bg-muted";
 
-// The row of picture slots in the item sheet, then a "+" slot that opens the
+// The row of picture slots in the item or shop link sheet, then a "+" slot that opens the
 // system's picker. limitHit is the server's picture_limit answer to a Save.
 export function PictureSlots({
 	slots,

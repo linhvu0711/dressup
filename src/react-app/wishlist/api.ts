@@ -38,6 +38,7 @@ type ShopLinkFields = {
 	brandId: string | null;
 	name: string;
 	price: number | null;
+	pictureIds: string[];
 };
 
 export function useAddShopLink() {
