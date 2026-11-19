@@ -6,6 +6,8 @@
 - Combinations page: the wall of saved combinations. The user filters it by pieces and by tags.
 - Combination page: one saved combination: the mannequin, the title, and a line for each piece with its colour. From 900 px it sits beside the Combinations page.
 - Piece page: the page for one piece, with everything the account holds about it.
+- Own mark: shows on a piece of a combination when the closet has an owned item of that piece.
+- Want mark: shows on a piece of a combination when the wishlist has a wish for that piece. A piece can show both marks.
 - Mannequin: the figure drawn by code as SVG. Front view, no face, white shoes. Each account sets its skin and hair colour.
 - Account: one Google sign-in. Each account has a private space. No account sees another account's data.
 - Colour: a name and a colour code that the account saves once and uses on any kind of clothing. The user manages colours on the Labels page. A new account starts with a starter set, and an account holds at most 100.
