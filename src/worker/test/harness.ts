@@ -55,6 +55,7 @@ export async function makeHarness(options: { through?: string } = {}) {
 		for (const tag of migrationsThrough(options.through))
 			for (const statement of migrationStatements(tag)) sqlite.run(statement);
 	let last: Promise<unknown> = Promise.resolve();
+	let onBatch = () => {};
 	const runBatch = async (queries: readonly unknown[]) => {
 		sqlite.run("BEGIN");
 		try {
@@ -69,6 +70,7 @@ export async function makeHarness(options: { through?: string } = {}) {
 	};
 	const db: Db = Object.assign(local, {
 		batch: (queries: readonly unknown[]) => {
+			onBatch();
 			const run = last.then(() => runBatch(queries));
 			last = run.catch(() => {});
 			return run;
@@ -208,6 +210,36 @@ export async function makeHarness(options: { through?: string } = {}) {
 			throw new Error("insertOld takes only INSERT INTO");
 		sqlite.run(sql);
 	};
+	// A race test must let two writes make their reads before either batch
+	// runs, as two D1 requests can; the gate holds every batch until release.
+	const holdBatches = () => {
+		let open = () => {};
+		const gate = new Promise<void>((resolve) => {
+			open = resolve;
+		});
+		last = last.then(() => gate);
+		let queued = 0;
+		let waiters: { n: number; resolve: () => void }[] = [];
+		onBatch = () => {
+			queued++;
+			waiters = waiters.filter((waiter) => {
+				if (queued < waiter.n) return true;
+				waiter.resolve();
+				return false;
+			});
+		};
+		return {
+			queued: (n: number) =>
+				new Promise<void>((resolve) => {
+					if (queued >= n) resolve();
+					else waiters.push({ n, resolve });
+				}),
+			release: () => {
+				onBatch = () => {};
+				open();
+			},
+		};
+	};
 	// Runs a migration again, as a Worker deploy would on a live database.
 	const runMigration = (tag: string) => {
 		for (const statement of migrationStatements(tag)) sqlite.run(statement);
@@ -233,6 +265,7 @@ export async function makeHarness(options: { through?: string } = {}) {
 		storedBytes,
 		addTrigger,
 		insertOld,
+		holdBatches,
 		runMigration,
 	};
 }

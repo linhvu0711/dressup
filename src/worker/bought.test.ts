@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { buyShopLink } from "./owned-item-store";
 import { ALICE, BOB, type Harness, makeHarness } from "./test/harness";
 
 type Ids = Record<string, string>;
@@ -85,6 +86,9 @@ const wishlist = async (h: Harness, headers: Headers) =>
 			wishes: Wish[];
 		}
 	).wishes;
+
+const linkPictures = async (h: Harness, headers: Headers) =>
+	(await wishlist(h, headers))[0]?.shopLinks.map((l) => l.pictureIds);
 
 const buy = (h: Harness, headers: Headers, linkId: string) =>
 	send(h, headers, "POST", `/api/shop-links/${linkId}/bought`);
@@ -308,6 +312,153 @@ describe("POST /api/shop-links/:id/bought", () => {
 			items: [{ quantity: 99, pictureIds: [d, e] }],
 			links: [LINK_ID, OTHER_LINK_ID],
 			keys: [a, b, c, d, e].sort(),
+		});
+	});
+
+	test("refuses Bought at 500 owned items", async () => {
+		// Given
+		const { h, headers, a, b, c } = await alice();
+		await h.seedOwnedItems("alice-id", 500);
+		// When
+		const res = await answer(await buy(h, headers, LINK_ID));
+		// Then
+		expect({
+			res,
+			items: (await closet(h, headers)).length,
+			links: await linkPictures(h, headers),
+			keys: h.pictures.keys(),
+		}).toEqual({
+			res: { status: 409, body: { error: "owned_item_limit" } },
+			items: 500,
+			links: [[a, b], [c]],
+			keys: [a, b, c].sort(),
+		});
+	});
+});
+
+describe("buyShopLink", () => {
+	test("leaves everything as before when the wish delete fails", async () => {
+		// Given
+		const { h, headers, a, b, c } = await alice();
+		h.addTrigger(
+			"CREATE TRIGGER fail_wish_delete BEFORE DELETE ON wish BEGIN SELECT RAISE(ABORT, 'wish delete failed'); END",
+		);
+		// When
+		const thrown = await buyShopLink(
+			h.db,
+			h.env.PICTURES,
+			"alice-id",
+			LINK_ID,
+		).then(
+			() => false,
+			() => true,
+		);
+		// Then
+		expect({
+			thrown,
+			items: await closet(h, headers),
+			links: await linkPictures(h, headers),
+			keys: h.pictures.keys(),
+			stored: await h.storedBytes(),
+		}).toEqual({
+			thrown: true,
+			items: [],
+			links: [[a, b], [c]],
+			keys: [a, b, c].sort(),
+			stored: 300,
+		});
+	});
+
+	test("makes one item from two Boughts on one wish at once", async () => {
+		// Given
+		const { h, headers, cos, a, b } = await alice();
+		const hold = h.holdBatches();
+		// When
+		const both = Promise.all([
+			buyShopLink(h.db, h.env.PICTURES, "alice-id", LINK_ID),
+			buyShopLink(h.db, h.env.PICTURES, "alice-id", OTHER_LINK_ID),
+		]);
+		await hold.queued(2);
+		hold.release();
+		const results = await both;
+		// Then
+		expect({
+			oks: results.map((r) => r.ok).sort(),
+			refusals: results.flatMap((r) => (r.ok ? [] : [r.error])),
+			items: (await closet(h, headers)).map((i) => ({
+				brand: i.brand?.id,
+				quantity: i.quantity,
+			})),
+			wishes: await wishlist(h, headers),
+			keys: h.pictures.keys(),
+		}).toEqual({
+			oks: [false, true],
+			refusals: [{ code: "not_found" }],
+			items: [{ brand: cos, quantity: 1 }],
+			wishes: [],
+			keys: [a, b].sort(),
+		});
+	});
+
+	test("refuses Bought when the quantity changes during it", async () => {
+		// Given
+		const { h, headers, cos, a, b, c, d, e } = await aliceWithItem();
+		const hold = h.holdBatches();
+		// When
+		const bought = buyShopLink(h.db, h.env.PICTURES, "alice-id", LINK_ID);
+		await hold.queued(1);
+		await send(h, headers, "PUT", `/api/owned-items/${ITEM_ID}`, {
+			brandId: cos,
+			quantity: 5,
+		});
+		hold.release();
+		const result = await bought;
+		// Then
+		expect({
+			result,
+			items: (await closet(h, headers)).map((i) => ({
+				quantity: i.quantity,
+				pictureIds: i.pictureIds,
+			})),
+			links: await linkPictures(h, headers),
+			keys: h.pictures.keys(),
+		}).toEqual({
+			result: { ok: false, error: { code: "conflict" } },
+			items: [{ quantity: 5, pictureIds: [d, e] }],
+			links: [[a, b], [c]],
+			keys: [a, b, c, d, e].sort(),
+		});
+	});
+
+	test("refuses Bought when the same item is added during it", async () => {
+		// Given
+		const { h, headers, ids, cos, a, b, c } = await alice();
+		const hold = h.holdBatches();
+		// When
+		const bought = buyShopLink(h.db, h.env.PICTURES, "alice-id", LINK_ID);
+		await hold.queued(1);
+		await send(h, headers, "POST", "/api/owned-items", {
+			id: ITEM_ID,
+			typeId: "wool",
+			colourId: ids.Navy,
+			brandId: cos,
+			quantity: 1,
+		});
+		hold.release();
+		const result = await bought;
+		// Then
+		expect({
+			result,
+			items: (await closet(h, headers)).map((i) => ({
+				id: i.id,
+				quantity: i.quantity,
+				pictureIds: i.pictureIds,
+			})),
+			links: await linkPictures(h, headers),
+		}).toEqual({
+			result: { ok: false, error: { code: "conflict" } },
+			items: [{ id: ITEM_ID, quantity: 1, pictureIds: [] }],
+			links: [[a, b], [c]],
 		});
 	});
 });
