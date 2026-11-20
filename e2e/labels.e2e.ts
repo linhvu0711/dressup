@@ -1,7 +1,11 @@
 import type { Page } from "@playwright/test";
+import { postOwnedItems } from "./closet-helpers";
+import { postCombinations } from "./combination-helpers";
 import { expect, test } from "./fixtures";
 import { COLOURS_EMPTY_FILE, COLOURS_FULL_FILE } from "./global-setup";
+import { colourIds } from "./label-helpers";
 import { sheet, toast } from "./locators";
+import { postWish } from "./wishlist-helpers";
 
 const STARTER = [
 	"White #F4F2ED",
@@ -241,21 +245,14 @@ test("says a colour in a combination is in use and offers no Delete", async ({
 }) => {
 	// Given: a fresh account with a combination of Navy casual pants and a
 	// White long tee, the row "Navy #1F3A5F" open
-	const res = await page.request.get("/api/colours");
-	const { colours } = (await res.json()) as {
-		colours: { id: string; name: string }[];
-	};
-	const id = (name: string) => colours.find((c) => c.name === name)?.id;
-	const saved = await page.request.post("/api/combinations", {
-		data: {
-			id: crypto.randomUUID(),
-			pieces: [
-				{ typeId: "casual_p", colourId: id("Navy") },
-				{ typeId: "tee_l", colourId: id("White") },
-			],
-		},
+	const ids = await colourIds(page);
+	await postCombinations(page, {
+		id: crypto.randomUUID(),
+		pieces: [
+			{ typeId: "casual_p", colourId: ids.Navy },
+			{ typeId: "tee_l", colourId: ids.White },
+		],
 	});
-	expect(saved.status()).toBe(201);
 	await openNavy(page);
 	// When
 	await sheet(page, "Edit colour")
@@ -276,20 +273,13 @@ test("says an item in the closet keeps a colour", async ({ page }) => {
 	// Given: a fresh account with a Navy long button-up in the closet; the
 	// row "Navy #1F3A5F" open
 	await page.goto("/labels");
-	const res = await page.request.get("/api/colours");
-	const { colours } = (await res.json()) as {
-		colours: { id: string; name: string }[];
-	};
-	const saved = await page.request.post("/api/owned-items", {
-		data: {
-			id: crypto.randomUUID(),
-			typeId: "shirt_l",
-			colourId: colours.find((c) => c.name === "Navy")?.id,
-			brandId: null,
-			quantity: 1,
-		},
+	const ids = await colourIds(page);
+	await postOwnedItems(page, {
+		typeId: "shirt_l",
+		colourId: ids.Navy,
+		brandId: null,
+		quantity: 1,
 	});
-	expect(saved.status()).toBe(201);
 	await openNavy(page);
 	// When
 	await sheet(page, "Edit colour")
@@ -419,18 +409,8 @@ test("refuses to delete a colour a wish uses", async ({ page }) => {
 	// Given: a fresh account with an Olive long polo wish and nothing else in
 	// Olive
 	await page.goto("/labels");
-	const res = await page.request.get("/api/colours");
-	const { colours } = (await res.json()) as {
-		colours: { id: string; name: string }[];
-	};
-	const saved = await page.request.post("/api/wishes", {
-		data: {
-			id: crypto.randomUUID(),
-			typeId: "polo_l",
-			colourId: colours.find((c) => c.name === "Olive")?.id,
-		},
-	});
-	expect(saved.status()).toBe(201);
+	const ids = await colourIds(page);
+	await postWish(page, { typeId: "polo_l", colourId: ids.Olive });
 	await page.goto("/labels");
 	await expect(rows(page)).toHaveCount(13);
 	// When

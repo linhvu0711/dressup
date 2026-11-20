@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { postOwnedItems } from "./closet-helpers";
 import { expect, test } from "./fixtures";
 import { WISHLIST_FULL_FILE } from "./global-setup";
 import { colourIds, postBrand } from "./label-helpers";
@@ -388,14 +389,11 @@ test("shows an address that is not http as text", async ({ page }) => {
 async function pieceInBoth(page: Page) {
 	await page.goto("/");
 	const ids = await colourIds(page);
-	await page.request.post("/api/owned-items", {
-		data: {
-			id: crypto.randomUUID(),
-			typeId: "wool",
-			colourId: ids.Charcoal,
-			brandId: null,
-			quantity: 1,
-		},
+	await postOwnedItems(page, {
+		typeId: "wool",
+		colourId: ids.Charcoal,
+		brandId: null,
+		quantity: 1,
 	});
 	await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
 	return `/piece/wool/${ids.Charcoal}`;
@@ -667,14 +665,11 @@ test("removes a wish after a confirm that counts its links", async ({
 	// the wishlist with 2 links, on its piece page
 	await page.goto("/");
 	const ids = await colourIds(page);
-	await page.request.post("/api/owned-items", {
-		data: {
-			id: crypto.randomUUID(),
-			typeId: "wool",
-			colourId: ids.Charcoal,
-			brandId: null,
-			quantity: 1,
-		},
+	await postOwnedItems(page, {
+		typeId: "wool",
+		colourId: ids.Charcoal,
+		brandId: null,
+		quantity: 1,
 	});
 	const wish = await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
 	for (const n of [1, 2])
