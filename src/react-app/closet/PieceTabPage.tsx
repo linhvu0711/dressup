@@ -3,9 +3,10 @@ import { Plus } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import type { Hex } from "@/colour/hex";
 import { Button } from "@/components/ui/button";
-import { ActiveFilters, FilterButton, shownText } from "@/components/ui/filter";
+import { ActiveFilters, FilterButton } from "@/components/ui/filter";
 import { Notice } from "@/components/ui/notice";
 import { useAddressFilter } from "@/components/ui/use-address-filter";
+import { countText } from "@/count-text";
 import type { TypeId } from "@/dress/clothing-types";
 import { useColours } from "@/labels/api";
 import { useBrands } from "@/labels/brand-api";
@@ -180,7 +181,7 @@ export function PieceTabPage<D, E extends TilePiece>({
 				<ActiveFilters
 					chips={pf.chips}
 					onClearAll={pf.clear}
-					shown={shownText(shown.length, "piece")}
+					shown={countText(shown.length, "piece")}
 				/>
 			) : null}
 			{wall}
@@ -189,7 +190,7 @@ export function PieceTabPage<D, E extends TilePiece>({
 				<PieceFilterSheet
 					filter={pf.filter}
 					onChange={pf.set}
-					shownText={shownText(shown.length, "piece")}
+					shownText={countText(shown.length, "piece")}
 					onClose={() => setFiltering(false)}
 				/>
 			) : null}

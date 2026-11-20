@@ -22,9 +22,10 @@ import {
 import { pieceKeys } from "@/combinations/marks";
 import { useWallAddress, wallAddress } from "@/combinations/wall-address";
 import { Button } from "@/components/ui/button";
-import { ActiveFilters, FilterButton, shownText } from "@/components/ui/filter";
+import { ActiveFilters, FilterButton } from "@/components/ui/filter";
 import { Notice } from "@/components/ui/notice";
 import { useAddressFilter } from "@/components/ui/use-address-filter";
+import { countText } from "@/count-text";
 import { TypeFigure } from "@/dress/figure/TypeFigure";
 import { useColours } from "@/labels/api";
 import { useMannequin } from "@/mannequin/api";
@@ -228,7 +229,7 @@ export function CombinationsPage() {
 					<ActiveFilters
 						chips={cf.chips}
 						onClearAll={cf.clear}
-						shown={shownText(matched.length, "combination")}
+						shown={countText(matched.length, "combination")}
 					/>
 				) : null}
 				{wall}
@@ -250,7 +251,7 @@ export function CombinationsPage() {
 					filter={filter}
 					onChange={cf.set}
 					shown={
-						matched ? shownText(matched.length, "combination") : "combinations"
+						matched ? countText(matched.length, "combination") : "combinations"
 					}
 					onClose={() => setFiltering(false)}
 				/>

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { countText } from "@/count-text";
 import { TYPE_IDS } from "@/dress/clothing-types";
 import { brandSchema } from "@/labels/brand";
 import { colourSchema } from "@/labels/colour";
@@ -128,7 +129,7 @@ export function typedPrice(text: string): {
 export function linksLine(wish: Wish): string {
 	const n = wish.shopLinks.length;
 	if (n === 0) return "No link yet";
-	const count = n === 1 ? "1 link" : `${n} links`;
+	const count = countText(n, "link");
 	const prices = wish.shopLinks.flatMap((link) =>
 		link.price === null ? [] : [link.price],
 	);
@@ -140,6 +141,5 @@ export function linksLine(wish: Wish): string {
 // What the remove confirm says goes with the wish.
 export function removeWishText(shopLinks: number): string {
 	if (shopLinks === 0) return "It has no shop link.";
-	if (shopLinks === 1) return "Its 1 shop link goes with it.";
-	return `Its ${shopLinks} shop links go with it.`;
+	return `Its ${countText(shopLinks, "shop link")} ${shopLinks === 1 ? "goes" : "go"} with it.`;
 }

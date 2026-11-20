@@ -4,6 +4,7 @@ import { TypeField, TypeOptions } from "@/closet/TypeOptions";
 import { Button } from "@/components/ui/button";
 import { PanelSheet, usePanel } from "@/components/ui/panel-sheet";
 import { Field } from "@/components/ui/sheet-form";
+import { limitText } from "@/count-text";
 import { RequestError } from "@/data/client";
 import type { TypeId } from "@/dress/clothing-types";
 import { ColourSwatches } from "@/labels/ColourSwatches";
@@ -16,7 +17,7 @@ import { WISH_LIMIT, type WishId } from "./wish";
 type Problem = "full" | "duplicate" | "failed";
 
 const PROBLEM_TEXT: Record<Problem, string> = {
-	full: `You have ${WISH_LIMIT} wishes. That is the limit. Delete one to add a new one.`,
+	full: limitText(WISH_LIMIT, "wishes"),
 	duplicate: "You have this wish already.",
 	failed: "Not saved. Try again.",
 };
