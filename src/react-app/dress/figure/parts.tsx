@@ -7,6 +7,7 @@ import {
 	useId,
 } from "react";
 import type { Hex } from "@/dress/clothing-types";
+import { STARTER_MANNEQUIN } from "@/mannequin/mannequin";
 
 type Figure = {
 	prefix: string;
@@ -18,8 +19,7 @@ type Figure = {
 export const FigureContext = createContext<Figure>({
 	prefix: "f",
 	lite: false,
-	skin: "#D6A27B",
-	hair: "#141418",
+	...STARTER_MANNEQUIN,
 });
 
 export const useFigure = () => useContext(FigureContext);
@@ -229,7 +229,7 @@ export function Piece({
 						height="820"
 						filter={url("grain")}
 						style={{ mixBlendMode: "soft-light" }}
-						opacity={opt.grain || 0.16}
+						opacity={opt.grain ?? 0.16}
 					/>
 				)}
 			</g>
