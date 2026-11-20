@@ -125,7 +125,7 @@ export const prunePieceFilter = (
 		: f.brands,
 });
 
-export type PieceFilterChip = {
+type PieceFilterChip = {
 	key: string;
 	label: string;
 	without: PieceFilter;

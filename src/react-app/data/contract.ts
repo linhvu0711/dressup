@@ -12,7 +12,7 @@ import { wishSchema } from "@/wishlist/wish";
 // The answers the worker sends and the web app reads, so a renamed key or
 // code breaks the check on both sides. Zod only: the worker compiles this.
 
-export const errorCodes = [
+const errorCodes = [
 	"unauthorized",
 	"invalid",
 	"conflict",

@@ -41,7 +41,7 @@ import {
 } from "./picture-store";
 import type { Result } from "./result";
 
-export type OwnedItemField =
+type OwnedItemField =
 	| "id"
 	| "typeId"
 	| "colourId"
@@ -58,7 +58,7 @@ export type OwnedItemError =
 	| { code: "not_found" }
 	| { code: "conflict" };
 
-export type AddedOwnedItem = { ownedItem: OwnedItem; created: boolean };
+type AddedOwnedItem = { ownedItem: OwnedItem; created: boolean };
 
 type Piece = { typeId: TypeId; colourId: string; brandId: string | null };
 

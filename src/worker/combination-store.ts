@@ -37,7 +37,7 @@ import type { Result } from "./result";
 import { listTags } from "./tag-store";
 
 // A combination as a website or an AI app sends it, before the rules ran.
-export type CombinationDraft = {
+type CombinationDraft = {
 	id: string;
 	pieces: { typeId: string; colourId: string }[];
 	tags?: string[];
@@ -45,7 +45,7 @@ export type CombinationDraft = {
 
 // A change to a saved combination: its pieces, whole. The id comes from the
 // address or the tool call; tags left out keep the stored tags.
-export type CombinationChange = {
+type CombinationChange = {
 	pieces: { typeId: string; colourId: string }[];
 	tags?: string[];
 };
@@ -57,7 +57,7 @@ export type CombinationError =
 	| { code: "combination_limit" }
 	| { code: "not_found" };
 
-export type SavedCombination = { combination: Combination; created: boolean };
+type SavedCombination = { combination: Combination; created: boolean };
 
 // The account's combinations, newest first, or the one with this id.
 async function readCombinations(

@@ -76,7 +76,7 @@ function testAuth(
 	});
 }
 
-export type TestTools = {
+type TestTools = {
 	db: ReturnType<typeof drizzle<typeof schema>>;
 	helpers: Awaited<ReturnType<typeof testAuth>["$context"]>["test"];
 	newSessionCookies: () => Promise<

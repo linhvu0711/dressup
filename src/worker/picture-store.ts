@@ -46,7 +46,7 @@ export type PictureError =
 	| { code: "not_found" };
 
 // The one owner of a saved picture.
-export type PictureOwner = { ownedItemId: string } | { shopLinkId: string };
+type PictureOwner = { ownedItemId: string } | { shopLinkId: string };
 
 const ownerIs = (owner: PictureOwner) =>
 	"ownedItemId" in owner
@@ -387,7 +387,7 @@ async function checkPictureList(
 	return held?.n === ids.length ? null : invalid;
 }
 
-export type PictureListSave = {
+type PictureListSave = {
 	userId: string;
 	owner: PictureOwner;
 	// The whole list; undefined keeps the owner's pictures.

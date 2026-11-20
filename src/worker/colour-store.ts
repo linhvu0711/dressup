@@ -31,7 +31,7 @@ export const colourOf = (db: Db, userId: string, colourId: string) =>
 		.from(colour)
 		.where(and(eq(colour.id, colourId), eq(colour.userId, userId)));
 
-export const STARTER_COLOURS: readonly { name: string; hex: Hex }[] = [
+const STARTER_COLOURS: readonly { name: string; hex: Hex }[] = [
 	{ name: "White", hex: "#F4F2ED" },
 	{ name: "Black", hex: "#1B1B1F" },
 	{ name: "Navy", hex: "#1F3A5F" },

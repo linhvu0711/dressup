@@ -32,7 +32,7 @@ export function useUrl() {
 
 const MIR = "translate(400,0) scale(-1,1)";
 
-export function Mir({ children }: { children: ReactNode }) {
+function Mir({ children }: { children: ReactNode }) {
 	return <g transform={MIR}>{children}</g>;
 }
 
@@ -112,7 +112,7 @@ export function Shl({
 	return <Stroke d={d} color="#07070F" op={op} w={w} b={b} />;
 }
 
-export function Hll({
+function Hll({
 	d,
 	op = 0.1,
 	w = 6,
@@ -169,7 +169,7 @@ export function Cyl({
 	);
 }
 
-export function Btn({
+function Btn({
 	x,
 	y,
 	r = 3,
@@ -248,7 +248,7 @@ export function Arm({ children }: { children: ReactNode }) {
 	return <g transform="rotate(-3.4 130 178)">{children}</g>;
 }
 
-export function Layer({ children }: { children: ReactNode }) {
+function Layer({ children }: { children: ReactNode }) {
 	const url = useUrl();
 	return <g filter={url("lay")}>{children}</g>;
 }
@@ -409,7 +409,7 @@ export const arm = (node: ReactNode) => <Arm>{node}</Arm>;
 export const layer = (node: ReactNode) => <Layer>{node}</Layer>;
 
 // A full-canvas rect filled with one of the fabric patterns of the defs.
-export function Fabric({
+function Fabric({
 	name,
 	opacity,
 	transform,

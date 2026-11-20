@@ -4,7 +4,7 @@ import { dropDraft, uploadPicture } from "./api";
 import { ITEM_PICTURE_LIMIT, type PictureId } from "./picture";
 import { shrinkPicture } from "./shrink";
 
-export type Slot = {
+type Slot = {
 	key: string;
 	url: string;
 	// saved: the item's own; uploaded: a draft until Save.

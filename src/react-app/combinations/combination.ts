@@ -19,13 +19,13 @@ export const COMBINATION_LIMIT = 300;
 // parameters (https://developers.cloudflare.com/d1/platform/limits/).
 export const COMBINATION_TAGS_MAX = 50;
 
-export const combinationIdSchema = z.uuid().brand<"CombinationId">();
+const combinationIdSchema = z.uuid().brand<"CombinationId">();
 
 export type CombinationId = z.infer<typeof combinationIdSchema>;
 
 // The one shape of a combination as a website or an AI app sends it, so the
 // server's check and the page's parse are the same.
-export const combinationInputSchema = z
+const combinationInputSchema = z
 	.object({
 		id: combinationIdSchema,
 		pieces: z
@@ -188,7 +188,7 @@ export function combinationTitle(combination: {
 // The pale piece the mannequin wears in place of a missing bottom or top: the
 // bare figure leaves the body from the waist to the knee undrawn
 // (src/react-app/dress/figure/body.tsx). It is never saved.
-export const BLANK: Hex = "#E2DED7";
+const BLANK: Hex = "#E2DED7";
 
 // What the mannequin wears for these pieces, bottom layer first: a pale
 // casual pants with no bottom, and a pale short tee with no inner top and no

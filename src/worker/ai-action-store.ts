@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import type { Db } from "./db";
 import { aiActionCount } from "./db/ai-action-schema";
 
-export const AI_ACTION_LIMIT = 60;
+const AI_ACTION_LIMIT = 60;
 
 // Counts one AI action; false when it is past the limit for this minute. The
 // count and the raise are one statement, so two calls at once cannot both
