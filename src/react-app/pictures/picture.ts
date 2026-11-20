@@ -6,6 +6,8 @@ export const pictureIdSchema = z.uuid().brand<"PictureId">();
 
 export type PictureId = z.infer<typeof pictureIdSchema>;
 
+export const pictureAddress = (id: PictureId) => `/api/pictures/${id}`;
+
 export const ACCOUNT_PICTURE_LIMIT = 1_000;
 
 // 9 GB of R2's 10 GB free; the 1 GB left holds another project's bucket.

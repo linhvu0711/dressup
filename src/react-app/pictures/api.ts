@@ -1,6 +1,6 @@
 import { remove, request } from "@/data/client";
 import { pictureAnswer } from "@/data/contract";
-import type { PictureId } from "./picture";
+import { type PictureId, pictureAddress } from "./picture";
 
 export const uploadPicture = async (blob: Blob): Promise<PictureId> =>
 	(
@@ -12,4 +12,4 @@ export const uploadPicture = async (blob: Blob): Promise<PictureId> =>
 
 // A draft that fails to go is swept by the server a day later.
 export const dropDraft = (id: PictureId) =>
-	remove(`/api/pictures/${id}`).catch(() => {});
+	remove(pictureAddress(id)).catch(() => {});

@@ -3,7 +3,7 @@ import { Dialog } from "radix-ui";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SHEET_OVERLAY } from "@/components/ui/sheet";
-import type { PictureId } from "./picture";
+import { type PictureId, pictureAddress } from "./picture";
 
 // One picture as large as the screen allows, with previous and next when
 // the item has more. Esc or a click outside the picture closes it; it has
@@ -34,7 +34,7 @@ export function PictureViewer({
 						Picture {at + 1} of {total}
 					</Dialog.Title>
 					<img
-						src={`/api/pictures/${ids[at]}`}
+						src={pictureAddress(ids[at])}
 						alt=""
 						className="max-h-[calc(100dvh-8rem)] max-w-full rounded-[14px] bg-muted object-contain"
 					/>

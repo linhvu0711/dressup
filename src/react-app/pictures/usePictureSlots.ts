@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { RequestError, SignedOut } from "@/data/client";
 import { dropDraft, uploadPicture } from "./api";
-import { ITEM_PICTURE_LIMIT, type PictureId } from "./picture";
+import { ITEM_PICTURE_LIMIT, type PictureId, pictureAddress } from "./picture";
 import { shrinkPicture, TooBig } from "./shrink";
 
 type Slot = {
@@ -32,7 +32,7 @@ export function usePictureSlots(saved: readonly PictureId[]) {
 	const slots = useRef<Slot[]>(
 		saved.map((id) => ({
 			key: id,
-			url: `/api/pictures/${id}`,
+			url: pictureAddress(id),
 			state: "saved",
 			id,
 		})),
