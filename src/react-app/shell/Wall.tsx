@@ -2,6 +2,7 @@ import {
 	createContext,
 	type ReactNode,
 	type RefObject,
+	startTransition,
 	useContext,
 	useEffect,
 	useState,
@@ -58,8 +59,13 @@ function nearTiles() {
 			if (root === null) return;
 			const current = new IntersectionObserver(
 				(entries) => {
-					for (const entry of entries)
-						tiles.get(entry.target)?.(entry.isIntersecting);
+					// Drawn at once, the tiles a scroll brings near held the main
+					// thread for seconds and the scroll dropped to a few frames a
+					// second; as a transition React yields to the scroll.
+					startTransition(() => {
+						for (const entry of entries)
+							tiles.get(entry.target)?.(entry.isIntersecting);
+					});
 				},
 				{ root, rootMargin: "100% 0px" },
 			);
