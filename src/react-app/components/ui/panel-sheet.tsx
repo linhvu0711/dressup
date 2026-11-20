@@ -117,6 +117,8 @@ export function PanelSheet<Id extends string>({
 		// The toast once it is deleted.
 		deleted: string;
 		del: PanelDelete<Id>;
+		// The record cannot go, so the ask shows its text alone.
+		blocked?: boolean;
 	};
 	children: ReactNode;
 }) {
@@ -187,20 +189,24 @@ export function PanelSheet<Id extends string>({
 			{remove && del && panel.step === "delete" ? (
 				<>
 					<p className="text-muted-foreground">{remove.text}</p>
-					{remove.del.isError ? (
-						<p role="alert" className="text-[13px] text-destructive">
-							Not deleted. Try again.
-						</p>
-					) : null}
-					<div className="mt-0.5 flex flex-wrap justify-end gap-2 [&>button]:flex-1 wide:[&>button]:flex-none">
-						<Button
-							variant="destructive"
-							disabled={remove.del.isPending}
-							onClick={del}
-						>
-							Delete
-						</Button>
-					</div>
+					{remove.blocked ? null : (
+						<>
+							{remove.del.isError ? (
+								<p role="alert" className="text-[13px] text-destructive">
+									Not deleted. Try again.
+								</p>
+							) : null}
+							<div className="mt-0.5 flex flex-wrap justify-end gap-2 [&>button]:flex-1 wide:[&>button]:flex-none">
+								<Button
+									variant="destructive"
+									disabled={remove.del.isPending}
+									onClick={del}
+								>
+									Delete
+								</Button>
+							</div>
+						</>
+					)}
 				</>
 			) : null}
 		</FormSheet>
