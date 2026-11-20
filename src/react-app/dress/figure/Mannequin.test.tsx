@@ -55,6 +55,26 @@ describe("Mannequin", () => {
 	});
 
 	test.each(TYPE_IDS.map((id) => [id]))(
+		"points each url at an id for each type (%s)",
+		(id) => {
+			// Given: one type in the test colour
+			const markup = renderToStaticMarkup(
+				<Mannequin
+					{...STARTER_MANNEQUIN}
+					layers={[{ typeId: id, color: "#12AB34" }]}
+				/>,
+			);
+			// When
+			const ids = new Set(
+				[...markup.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]),
+			);
+			const used = [...markup.matchAll(/url\(#([^)]+)\)/g)].map((m) => m[1]);
+			// Then
+			expect(used.filter((ref) => !ids.has(ref))).toEqual([]);
+		},
+	);
+
+	test.each(TYPE_IDS.map((id) => [id]))(
 		"draws each type in the given colour (%s)",
 		(id) => {
 			// Given: one type in the test colour

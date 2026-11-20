@@ -266,6 +266,12 @@ export function Defs() {
 	const id = (name: string) => `${prefix}${name}`;
 	return (
 		<defs>
+			<filter id={id("b1")} {...BOX}>
+				<feGaussianBlur stdDeviation="0.8" />
+			</filter>
+			<filter id={id("b1.5")} {...BOX}>
+				<feGaussianBlur stdDeviation="1.2" />
+			</filter>
 			<filter id={id("b2")} {...BOX}>
 				<feGaussianBlur stdDeviation="1.6" />
 			</filter>
