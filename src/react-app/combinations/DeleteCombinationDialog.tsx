@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
-import { CombinationGone, useDeleteCombination } from "./api";
+import { useDeleteCombination } from "./api";
 import { type Combination, combinationTitle } from "./combination";
 import { useLeaveGoneCombination } from "./gone";
 import { useWallAddress } from "./wall-address";
@@ -43,16 +43,18 @@ export function DeleteCombinationDialog({
 							disabled={del.isPending}
 							onClick={() =>
 								del.mutate(combination.id, {
-									onSuccess: () => {
+									onSuccess: (answer) => {
 										onClose();
+										if (answer === "gone") {
+											leaveGoneCombination();
+											return;
+										}
 										navigate(address.wall, { replace: true });
 										toast("Combination deleted");
 									},
-									onError: (error) => {
+									onError: () => {
 										onClose();
-										if (error instanceof CombinationGone)
-											leaveGoneCombination();
-										else toast("Not deleted. Try again.");
+										toast("Not deleted. Try again.");
 									},
 								})
 							}

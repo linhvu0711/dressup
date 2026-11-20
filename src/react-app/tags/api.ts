@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { after, cachedUserId, goneAsDone, keys, request } from "../data/client";
+import { after, cachedUserId, keys, remove, request } from "../data/client";
 import { tagAnswer, tagsAnswer } from "../data/contract";
 import type { Tag, TagId } from "./tag";
 
@@ -51,8 +51,7 @@ export function useRenameTag() {
 export function useDeleteTag() {
 	const userId = cachedUserId();
 	return useMutation({
-		mutationFn: (id: TagId) =>
-			request("DELETE", `/api/tags/${id}`).catch(goneAsDone),
+		mutationFn: (id: TagId) => remove(`/api/tags/${id}`),
 		onSuccess: (_, id) => after.tagDeleted(userId, id),
 	});
 }

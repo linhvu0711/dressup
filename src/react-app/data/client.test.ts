@@ -1,9 +1,9 @@
 import { afterEach, expect, test } from "bun:test";
 import {
-	goneAsDone,
 	keys,
 	queryClient,
-	RequestError,
+	type RequestError,
+	remove,
 	request,
 	SignedOut,
 	signedOut,
@@ -60,27 +60,25 @@ test("keeps no data of the account after sign-out", async () => {
 	}).toEqual({ queries: [[["me"], null]], mutations: 0 });
 });
 
-test("takes a delete answered not found as done", () => {
+test("answers a delete deleted, gone, or refused", async () => {
 	// Given
-	const notFound = new RequestError(
-		404,
-		"not_found",
-		null,
-		"DELETE /api/colours/x",
-	);
-	const failed = new RequestError(500, null, null, "DELETE /api/colours/x");
-	const outcome = (error: unknown) => {
-		try {
-			goneAsDone(error);
-			return "done";
-		} catch {
-			return "thrown";
-		}
-	};
+	globalThis.fetch = (async (input: RequestInfo | URL) => {
+		const path = String(input);
+		if (path === "/api/tags/a") return new Response(null, { status: 204 });
+		if (path === "/api/tags/b")
+			return new Response(JSON.stringify({ error: "not_found" }), {
+				status: 404,
+			});
+		return new Response(null, { status: 500 });
+	}) as unknown as typeof globalThis.fetch;
 	// When
-	const seen = { notFound: outcome(notFound), failed: outcome(failed) };
+	const a = await remove("/api/tags/a");
+	const b = await remove("/api/tags/b");
+	const c = await remove("/api/tags/c").catch(
+		(e: unknown) => (e as RequestError).status,
+	);
 	// Then
-	expect(seen).toEqual({ notFound: "done", failed: "thrown" });
+	expect({ a, b, c }).toEqual({ a: "deleted", b: "gone", c: 500 });
 });
 
 test("sends a Blob body with its own type", async () => {

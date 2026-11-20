@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { after, cachedUserId, goneAsDone, keys, request } from "../data/client";
+import { after, cachedUserId, keys, remove, request } from "../data/client";
 import { brandAnswer, brandsAnswer } from "../data/contract";
 import type { Brand, BrandId } from "./brand";
 
@@ -50,8 +50,7 @@ export function useRenameBrand() {
 export function useDeleteBrand() {
 	const userId = cachedUserId();
 	return useMutation({
-		mutationFn: (id: BrandId) =>
-			request("DELETE", `/api/brands/${id}`).catch(goneAsDone),
+		mutationFn: (id: BrandId) => remove(`/api/brands/${id}`),
 		onSuccess: (_, id) => after.brandDeleted(userId, id),
 	});
 }

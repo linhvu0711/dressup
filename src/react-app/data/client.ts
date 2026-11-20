@@ -302,11 +302,8 @@ export class RequestError extends Error {
 	}
 }
 
-// Not found: deleted on another device already, which is what was asked.
-export const goneAsDone = (error: unknown) => {
-	if (!(error instanceof RequestError && error.code === "not_found"))
-		throw error;
-};
+export const isGone = (error: unknown) =>
+	error instanceof RequestError && error.code === "not_found";
 
 // The account has a label of this name already, in some letter case.
 export const isNameTaken = (error: unknown) =>
@@ -366,6 +363,18 @@ export async function request(
 	if (!answer.success)
 		throw new Error(`${what}: the answer does not match the contract`);
 	return answer.data;
+}
+
+// Not found: deleted on another device already, which is what was asked.
+// The answer says which, for a page that tells the person.
+export async function remove(path: string): Promise<"deleted" | "gone"> {
+	try {
+		await request("DELETE", path);
+		return "deleted";
+	} catch (error) {
+		if (isGone(error)) return "gone";
+		throw error;
+	}
 }
 
 type Me = z.output<typeof meAnswer>;

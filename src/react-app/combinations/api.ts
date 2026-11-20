@@ -2,8 +2,9 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import {
 	after,
 	cachedUserId,
+	isGone,
 	keys,
-	RequestError,
+	remove,
 	request,
 } from "../data/client";
 import { combinationAnswer, combinationsAnswer } from "../data/contract";
@@ -39,24 +40,11 @@ export function useSaveCombination() {
 	});
 }
 
-// The server no longer has the combination: deleted on another device.
-export class CombinationGone extends Error {}
-
-const goneAsCombinationGone = (error: unknown): never => {
-	if (error instanceof RequestError && error.code === "not_found")
-		throw new CombinationGone();
-	throw error;
-};
-
 export function useDeleteCombination() {
 	const userId = cachedUserId();
 	return useMutation({
-		mutationFn: (id: CombinationId) =>
-			request("DELETE", `/api/combinations/${id}`).catch(goneAsCombinationGone),
+		mutationFn: (id: CombinationId) => remove(`/api/combinations/${id}`),
 		onSuccess: (_, id) => after.combinationGone(userId, id),
-		onError: (error, id) => {
-			if (error instanceof CombinationGone) after.combinationGone(userId, id);
-		},
 	});
 }
 
@@ -70,12 +58,11 @@ export function useChangeCombination() {
 				await request("PUT", `/api/combinations/${combination.id}`, {
 					body: combination,
 					answer: combinationAnswer,
-				}).catch(goneAsCombinationGone)
+				})
 			).combination,
 		onSuccess: (combination) => after.combinationSaved(userId, combination),
 		onError: (error, combination) => {
-			if (error instanceof CombinationGone)
-				after.combinationGone(userId, combination.id);
+			if (isGone(error)) after.combinationGone(userId, combination.id);
 			after.tagsMayDiffer(userId);
 		},
 	});

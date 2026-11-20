@@ -6,7 +6,7 @@ import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
-import { request, signedOut } from "../data/client";
+import { remove, signedOut } from "../data/client";
 
 // The "Delete my account" row of the Settings page and its confirm.
 export function DeleteAccount() {
@@ -41,7 +41,7 @@ function DeleteConfirm({ onClose }: { onClose: () => void }) {
 	const navigate = useNavigate();
 	const toast = useToast();
 	const del = useMutation({
-		mutationFn: () => request("DELETE", "/api/account"),
+		mutationFn: () => remove("/api/account"),
 		onSuccess: async () => {
 			toast("Account deleted");
 			// As sign-out: no data of the deleted account stays.
