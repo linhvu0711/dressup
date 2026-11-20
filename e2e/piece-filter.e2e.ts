@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
-import { colourIds, postBrand, postOwnedItems } from "./closet-helpers";
+import { postOwnedItems } from "./closet-helpers";
 import { expect, test } from "./fixtures";
+import { colourIds, postBrand } from "./label-helpers";
 import { postShopLink, postWish } from "./wishlist-helpers";
 
 const mainNav = (page: Page) => page.getByRole("navigation", { name: "Main" });

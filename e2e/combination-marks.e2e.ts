@@ -1,7 +1,8 @@
 import type { Page } from "@playwright/test";
 import { postOwnedItems } from "./closet-helpers";
-import { colourIds, postCombinations } from "./combination-helpers";
+import { postCombinations } from "./combination-helpers";
 import { expect, test } from "./fixtures";
+import { colourIds } from "./label-helpers";
 import { postShopLink, postWish } from "./wishlist-helpers";
 
 const lines = (page: Page) => page.locator('[data-slot="piece-line"]');

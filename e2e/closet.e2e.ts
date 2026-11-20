@@ -1,7 +1,8 @@
 import type { Page } from "@playwright/test";
-import { colourIds, postBrand, postOwnedItems } from "./closet-helpers";
+import { postOwnedItems } from "./closet-helpers";
 import { expect, test } from "./fixtures";
 import { CLOSET_FULL_FILE } from "./global-setup";
+import { colourIds, postBrand } from "./label-helpers";
 
 const mainNav = (page: Page) => page.getByRole("navigation", { name: "Main" });
 

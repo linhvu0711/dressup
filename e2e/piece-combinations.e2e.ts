@@ -1,7 +1,8 @@
 import type { Page } from "@playwright/test";
 import { postOwnedItems } from "./closet-helpers";
-import { colourIds, postCombinations, two } from "./combination-helpers";
+import { postCombinations, two } from "./combination-helpers";
 import { expect, test } from "./fixtures";
+import { colourIds } from "./label-helpers";
 
 const part = (page: Page) =>
 	page.getByRole("region", { name: "Combinations with this piece" });

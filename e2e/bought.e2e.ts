@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
-import { colourIds } from "./closet-helpers";
 import { expect, test } from "./fixtures";
+import { colourIds } from "./label-helpers";
 import { pickFiles, pngFile, uploadPng } from "./picture-helpers";
 import { postShopLink, postWish } from "./wishlist-helpers";
 

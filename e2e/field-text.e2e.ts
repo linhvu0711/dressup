@@ -1,6 +1,7 @@
 import type { Locator, Page } from "@playwright/test";
-import { colourIds, isPhone, pick } from "./combination-helpers";
+import { isPhone, pick } from "./combination-helpers";
 import { expect, test } from "./fixtures";
+import { colourIds } from "./label-helpers";
 import { postWish } from "./wishlist-helpers";
 
 const PHONE_ONLY = "phone layout only";

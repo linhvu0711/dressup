@@ -2,15 +2,6 @@ import { expect, type Page } from "@playwright/test";
 
 export const isPhone = (page: Page) => (page.viewportSize()?.width ?? 0) < 900;
 
-// The account's colour ids by name, through its own session.
-export async function colourIds(page: Page): Promise<Record<string, string>> {
-	const res = await page.request.get("/api/colours");
-	const { colours } = (await res.json()) as {
-		colours: { id: string; name: string }[];
-	};
-	return Object.fromEntries(colours.map((c) => [c.name, c.id]));
-}
-
 // Every e2e account shares one database, so each saved combination gets its
 // own id.
 // Khaki Harrington jacket + Black long tee + Navy casual pants.

@@ -1,12 +1,7 @@
 import type { Page } from "@playwright/test";
-import {
-	colourIds,
-	pick,
-	postCombinations,
-	three,
-	two,
-} from "./combination-helpers";
+import { pick, postCombinations, three, two } from "./combination-helpers";
 import { expect, test } from "./fixtures";
+import { colourIds, postTag } from "./label-helpers";
 
 const saveDialog = (page: Page) =>
 	page.getByRole("dialog", { name: "Save combination" });
@@ -14,13 +9,6 @@ const saveDialog = (page: Page) =>
 const pills = (page: Page) => page.locator('[data-slot="combination-tag"]');
 
 const toast = (page: Page) => page.locator('[data-slot="toast"]');
-
-// Copied from e2e/tags.e2e.ts, which #77 deletes.
-async function postTag(page: Page, name: string) {
-	const res = await page.request.post("/api/tags", { data: { name } });
-	expect(res.status()).toBe(201);
-	return ((await res.json()) as { tag: { id: string } }).tag.id;
-}
 
 const storedCombinations = async (page: Page) =>
 	(
