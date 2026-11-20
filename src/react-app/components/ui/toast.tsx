@@ -35,8 +35,7 @@ function Toaster({ children }: { children: ReactNode }) {
 						{shown.message}
 					</ToastPrimitive.Description>
 				</ToastPrimitive.Root>
-				{/* Taps go through the toast:
-				    on a phone it sits over "Compare 6" of the Looks page. */}
+				{/* Taps go through the toast, so a button under it on a phone still works. */}
 				<ToastPrimitive.Viewport className="-translate-x-1/2 pointer-events-none fixed bottom-[82px] left-1/2 z-40 flex outline-none" />
 			</ToastPrimitive.Provider>
 		</ToastContext.Provider>

@@ -9,7 +9,7 @@ test("draws a jacket alone open", () => {
 		<TypeFigure typeId="harrington" hex="#C9B38C" />,
 	);
 	const wool = renderToStaticMarkup(<TypeFigure typeId="wool" hex="#C9B38C" />);
-	// Then: the Harrington facing and the wool lapel show only when open
+	// Then: the Harrington facing and the wool lapel show
 	expect({
 		harringtonFacing: harrington.includes(
 			"M 181 176 L 186 176 L 186 397 L 183 397 Z",
