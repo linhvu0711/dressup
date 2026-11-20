@@ -1,28 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import { addBrand } from "./brand-store";
-import { BOB, type Harness, withAccount } from "./test/harness";
+import {
+	BOB,
+	colourIds,
+	type Harness,
+	otherTabWrites,
+	postBrand,
+	postBrands,
+	send,
+	withAccount,
+} from "./test/harness";
 
 type Brand = { id: string; name: string };
-
-const send = (
-	{ app, env }: Harness,
-	headers: Headers,
-	method: string,
-	path: string,
-	body?: unknown,
-) =>
-	app.request(
-		path,
-		{
-			method,
-			headers: {
-				...Object.fromEntries(headers),
-				...(body === undefined ? {} : { "content-type": "application/json" }),
-			},
-			body: body === undefined ? undefined : JSON.stringify(body),
-		},
-		env,
-	);
 
 const brandsOf = async (h: Harness, headers: Headers) =>
 	(
@@ -34,22 +23,11 @@ const brandsOf = async (h: Harness, headers: Headers) =>
 const namesOf = async (h: Harness, headers: Headers) =>
 	(await brandsOf(h, headers)).map((b) => b.name);
 
-const postBrand = (h: Harness, headers: Headers, name: string) =>
+const post = (h: Harness, headers: Headers, name: string) =>
 	send(h, headers, "POST", "/api/brands", { name });
-
-const addedId = async (h: Harness, headers: Headers, name: string) =>
-	((await (await postBrand(h, headers, name)).json()) as { brand: Brand }).brand
-		.id;
 
 const putBrand = (h: Harness, headers: Headers, id: string, name: string) =>
 	send(h, headers, "PUT", `/api/brands/${id}`, { id, name });
-
-// alice with n brands, added through the store.
-async function aliceWith(n: number) {
-	const { h, headers } = await withAccount();
-	for (let i = 1; i <= n; i++) await addBrand(h.db, "alice-id", `Brand ${i}`);
-	return { h, headers };
-}
 
 describe("GET /api/brands", () => {
 	test("lists no brands for a new account", async () => {
@@ -68,7 +46,7 @@ describe("GET /api/brands", () => {
 		// Given: alice adds Zara, then acne, then COS
 		const { h, headers } = await withAccount();
 		for (const name of ["Zara", "acne", "COS"])
-			expect((await postBrand(h, headers, name)).status).toBe(201);
+			expect((await post(h, headers, name)).status).toBe(201);
 		// When
 		const names = await namesOf(h, headers);
 		// Then
@@ -80,7 +58,7 @@ describe("GET /api/brands", () => {
 		const { h } = await withAccount();
 		// When
 		const list = await send(h, new Headers(), "GET", "/api/brands");
-		const add = await postBrand(h, new Headers(), "Zara");
+		const add = await post(h, new Headers(), "Zara");
 		// Then
 		expect([
 			{ status: list.status, body: await list.json() },
@@ -97,7 +75,7 @@ describe("POST /api/brands", () => {
 		// Given: alice with no brands
 		const { h, headers } = await withAccount();
 		// When
-		const res = await postBrand(h, headers, "  Uniqlo  ");
+		const res = await post(h, headers, "  Uniqlo  ");
 		// Then
 		expect({
 			status: res.status,
@@ -108,10 +86,10 @@ describe("POST /api/brands", () => {
 
 	test("refuses a name the account has in another case", async () => {
 		// Given: alice with the brand Zara
-		const { h, headers } = await aliceWith(0);
-		await postBrand(h, headers, "Zara");
+		const { h, headers } = await withAccount();
+		await post(h, headers, "Zara");
 		// When
-		const res = await postBrand(h, headers, "zara");
+		const res = await post(h, headers, "zara");
 		// Then
 		expect({
 			status: res.status,
@@ -128,7 +106,7 @@ describe("POST /api/brands", () => {
 		// Given: alice with no brands
 		const { h, headers } = await withAccount();
 		// When
-		const res = await postBrand(h, headers, "   ");
+		const res = await post(h, headers, "   ");
 		// Then
 		expect({ status: res.status, body: await res.json() }).toEqual({
 			status: 400,
@@ -140,7 +118,7 @@ describe("POST /api/brands", () => {
 		// Given: alice with no brands
 		const { h, headers } = await withAccount();
 		// When
-		const res = await postBrand(h, headers, "B".repeat(25));
+		const res = await post(h, headers, "B".repeat(25));
 		// Then
 		expect({ status: res.status, body: await res.json() }).toEqual({
 			status: 400,
@@ -150,9 +128,10 @@ describe("POST /api/brands", () => {
 
 	test("adds brand number 100", async () => {
 		// Given: alice with 99 brands
-		const { h, headers } = await aliceWith(99);
+		const { h, headers } = await withAccount();
+		await postBrands(h, headers, 99);
 		// When
-		const res = await postBrand(h, headers, "Uniqlo");
+		const res = await post(h, headers, "Uniqlo");
 		// Then
 		expect({
 			status: res.status,
@@ -162,9 +141,10 @@ describe("POST /api/brands", () => {
 
 	test("refuses brand number 101", async () => {
 		// Given: alice with 100 brands
-		const { h, headers } = await aliceWith(100);
+		const { h, headers } = await withAccount();
+		await postBrands(h, headers, 100);
 		// When
-		const res = await postBrand(h, headers, "Uniqlo");
+		const res = await post(h, headers, "Uniqlo");
 		// Then
 		expect({
 			status: res.status,
@@ -174,25 +154,14 @@ describe("POST /api/brands", () => {
 	});
 });
 
-// Another tab's save of the same name, written by a trigger just before this
-// request's own write, after its duplicate check has passed.
-const otherTabWrites = (h: Harness, when: "INSERT" | "UPDATE", name: string) =>
-	h.addTrigger(
-		`CREATE TRIGGER other_tab BEFORE ${when} ON brand WHEN NEW.name = '${name}'
-		BEGIN
-			INSERT INTO brand (id, user_id, name, created_at)
-			VALUES ('other-tab', NEW.user_id, lower(NEW.name), 0);
-		END`,
-	);
-
 describe("two writes at the same time", () => {
 	test("answers duplicate when another tab adds the name first", async () => {
 		// Given: alice with no brands; another tab stores "zara" between this
 		// add's check and its write
 		const { h, headers } = await withAccount();
-		otherTabWrites(h, "INSERT", "Zara");
+		otherTabWrites(h, "brand", "INSERT", "Zara");
 		// When
-		const res = await postBrand(h, headers, "Zara");
+		const res = await post(h, headers, "Zara");
 		// Then
 		expect({ status: res.status, body: await res.json() }).toEqual({
 			status: 409,
@@ -202,7 +171,8 @@ describe("two writes at the same time", () => {
 
 	test("adds one of two brands sent at once at 99", async () => {
 		// Given: alice with 99 brands
-		const { h, headers } = await aliceWith(99);
+		const { h, headers } = await withAccount();
+		await postBrands(h, headers, 99);
 		// When
 		const results = await Promise.all([
 			addBrand(h.db, "alice-id", "Uniqlo"),
@@ -225,7 +195,7 @@ describe("PUT and DELETE /api/brands/:id", () => {
 	test("renames a brand", async () => {
 		// Given: alice with the brand Zara
 		const { h, headers } = await withAccount();
-		const id = await addedId(h, headers, "Zara");
+		const id = await postBrand(h, headers, "Zara");
 		// When
 		const res = await putBrand(h, headers, id, "Zara Home");
 		// Then
@@ -239,7 +209,7 @@ describe("PUT and DELETE /api/brands/:id", () => {
 	test("renames a brand to its own name in another case", async () => {
 		// Given: alice with the brand Zara
 		const { h, headers } = await withAccount();
-		const id = await addedId(h, headers, "Zara");
+		const id = await postBrand(h, headers, "Zara");
 		// When
 		const res = await putBrand(h, headers, id, "ZARA");
 		// Then
@@ -252,8 +222,8 @@ describe("PUT and DELETE /api/brands/:id", () => {
 	test("refuses a rename to another brand's name", async () => {
 		// Given: alice with Zara and COS
 		const { h, headers } = await withAccount();
-		await postBrand(h, headers, "Zara");
-		const cos = await addedId(h, headers, "COS");
+		await post(h, headers, "Zara");
+		const cos = await postBrand(h, headers, "COS");
 		// When
 		const res = await putBrand(h, headers, cos, "zara");
 		// Then
@@ -272,7 +242,7 @@ describe("PUT and DELETE /api/brands/:id", () => {
 		// Given: bob with the brand Zara; alice signed in
 		const { h, headers } = await withAccount();
 		const bob = await h.addAccount(BOB);
-		const id = await addedId(h, bob, "Zara");
+		const id = await postBrand(h, bob, "Zara");
 		// When
 		const put = await putBrand(h, headers, id, "Mine");
 		const del = await send(h, headers, "DELETE", `/api/brands/${id}`);
@@ -287,8 +257,8 @@ describe("PUT and DELETE /api/brands/:id", () => {
 	test("deletes a brand", async () => {
 		// Given: alice with Zara and COS
 		const { h, headers } = await withAccount();
-		const id = await addedId(h, headers, "Zara");
-		await postBrand(h, headers, "COS");
+		const id = await postBrand(h, headers, "Zara");
+		await post(h, headers, "COS");
 		// When
 		const first = await send(h, headers, "DELETE", `/api/brands/${id}`);
 		const second = await send(h, headers, "DELETE", `/api/brands/${id}`);
@@ -304,8 +274,8 @@ describe("PUT and DELETE /api/brands/:id", () => {
 		// Given: alice with COS; another tab stores "zara" between this
 		// rename's check and its write
 		const { h, headers } = await withAccount();
-		const cos = await addedId(h, headers, "COS");
-		otherTabWrites(h, "UPDATE", "Zara");
+		const cos = await postBrand(h, headers, "COS");
+		otherTabWrites(h, "brand", "UPDATE", "Zara");
 		// When
 		const res = await putBrand(h, headers, cos, "Zara");
 		// Then
@@ -337,11 +307,7 @@ describe("owned items of a deleted brand", () => {
 	type Item = { id: string; typeId: string; brand: Brand | null };
 
 	const navyId = async (h: Harness, headers: Headers) =>
-		(
-			(await (await send(h, headers, "GET", "/api/colours")).json()) as {
-				colours: { id: string; name: string }[];
-			}
-		).colours.find((c) => c.name === "Navy")?.id;
+		(await colourIds(h, headers)).Navy;
 
 	const addShirt = async (
 		h: Harness,
@@ -368,14 +334,10 @@ describe("owned items of a deleted brand", () => {
 		// Given: alice with Zara and COS; a Navy long button-up, a White short
 		// tee, and a Black long tee, each from Zara
 		const { h, headers } = await withAccount();
-		const zara = await addedId(h, headers, "Zara");
-		await addedId(h, headers, "COS");
-		const colours = (
-			(await (await send(h, headers, "GET", "/api/colours")).json()) as {
-				colours: { id: string; name: string }[];
-			}
-		).colours;
-		const colourId = (name: string) => colours.find((c) => c.name === name)?.id;
+		const zara = await postBrand(h, headers, "Zara");
+		await postBrand(h, headers, "COS");
+		const ids = await colourIds(h, headers);
+		const colourId = (name: string) => ids[name];
 		const pieces = [
 			["11111111-1111-4111-8111-111111111111", "shirt_l", "Navy"],
 			["22222222-2222-4222-8222-222222222222", "tee_s", "White"],
@@ -404,7 +366,7 @@ describe("owned items of a deleted brand", () => {
 	test("clears the brand of its items when the brand goes", async () => {
 		// Given: alice with Zara and a Navy long button-up from Zara
 		const { h, headers } = await withAccount();
-		const zara = await addedId(h, headers, "Zara");
+		const zara = await postBrand(h, headers, "Zara");
 		await addShirt(h, headers, "11111111-1111-4111-8111-111111111111", zara);
 		// When
 		await send(h, headers, "DELETE", `/api/brands/${zara}`);
@@ -415,8 +377,8 @@ describe("owned items of a deleted brand", () => {
 	test("keeps two items of one piece when both lose their brand", async () => {
 		// Given: alice with Zara and COS, a Navy long button-up from each
 		const { h, headers } = await withAccount();
-		const zara = await addedId(h, headers, "Zara");
-		const cos = await addedId(h, headers, "COS");
+		const zara = await postBrand(h, headers, "Zara");
+		const cos = await postBrand(h, headers, "COS");
 		await addShirt(h, headers, "11111111-1111-4111-8111-111111111111", zara);
 		await addShirt(h, headers, "22222222-2222-4222-8222-222222222222", cos);
 		// When
@@ -441,11 +403,8 @@ describe("brands of shop links", () => {
 	// Alice with Zara and a wish for a Navy wool jacket.
 	async function aliceWithWish() {
 		const { h, headers } = await withAccount();
-		const zara = await addedId(h, headers, "Zara");
-		const { colours } = (await (
-			await send(h, headers, "GET", "/api/colours")
-		).json()) as { colours: { id: string; name: string }[] };
-		const navy = colours.find((c) => c.name === "Navy")?.id;
+		const zara = await postBrand(h, headers, "Zara");
+		const navy = (await colourIds(h, headers)).Navy;
 		await send(h, headers, "POST", "/api/wishes", {
 			id: WISH_ID,
 			typeId: "wool",

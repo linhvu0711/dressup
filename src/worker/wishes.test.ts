@@ -1,14 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import {
 	ALICE,
+	alice,
+	answer,
 	BOB,
+	colourIds,
 	type Harness,
+	type Ids,
 	makeHarness,
-	withAccount,
+	postBrand,
+	send,
+	uploadPicture,
 } from "./test/harness";
 import { addShopLink, addWish } from "./wish-store";
-
-type Ids = Record<string, string>;
 
 type Link = {
 	id: string;
@@ -26,34 +30,6 @@ type Listed = {
 	shopLinks: Link[];
 };
 
-const send = (
-	{ app, env }: Harness,
-	headers: Headers,
-	method: string,
-	path: string,
-	body?: unknown,
-) =>
-	app.request(
-		path,
-		{
-			method,
-			headers: {
-				...Object.fromEntries(headers),
-				...(body === undefined ? {} : { "content-type": "application/json" }),
-			},
-			body: body === undefined ? undefined : JSON.stringify(body),
-		},
-		env,
-	);
-
-// The account's colour ids by name, from its first list.
-const colourIds = async (h: Harness, headers: Headers): Promise<Ids> => {
-	const { colours } = (await (
-		await send(h, headers, "GET", "/api/colours")
-	).json()) as { colours: { id: string; name: string }[] };
-	return Object.fromEntries(colours.map((c) => [c.name, c.id]));
-};
-
 const post = (h: Harness, headers: Headers, body: unknown) =>
 	send(h, headers, "POST", "/api/wishes", body);
 
@@ -69,13 +45,6 @@ const SECOND_ID = "22222222-2222-4222-8222-222222222222";
 const LINK_ID = "33333333-3333-4333-8333-333333333333";
 const OTHER_LINK_ID = "44444444-4444-4444-8444-444444444444";
 const ZARA_URL = "https://www.zara.com/vn/en/wool-blend-jacket.html";
-
-const addBrand = async (h: Harness, headers: Headers, name: string) =>
-	(
-		(await (
-			await send(h, headers, "POST", "/api/brands", { name })
-		).json()) as { brand: { id: string } }
-	).brand.id;
 
 // The Zara link to the Navy wool jacket.
 const zaraLink = (brandId: string | null) => ({
@@ -103,36 +72,9 @@ const jacket = (ids: Ids) => ({
 	colourId: ids.Navy,
 });
 
-async function alice() {
-	const { h, headers } = await withAccount();
-	const ids = await colourIds(h, headers);
-	return { h, headers, ids };
-}
-
-const answer = async (res: Response) => ({
-	status: res.status,
-	body: await res.json(),
-});
-
-// A small JPEG uploaded as a draft of the account, by id.
-async function uploaded(h: Harness, headers: Headers): Promise<string> {
-	const body = new Uint8Array(100).fill(0x11);
-	body.set([0xff, 0xd8, 0xff, 0xe0]);
-	const res = await h.app.request(
-		"/api/pictures",
-		{
-			method: "POST",
-			headers: { ...Object.fromEntries(headers), "content-type": "image/jpeg" },
-			body,
-		},
-		h.env,
-	);
-	return ((await res.json()) as { picture: { id: string } }).picture.id;
-}
-
 const uploads = (h: Harness, headers: Headers, n: number) =>
 	Array.from({ length: n }).reduce<Promise<string[]>>(
-		async (ids) => [...(await ids), await uploaded(h, headers)],
+		async (ids) => [...(await ids), await uploadPicture(h, headers)],
 		Promise.resolve([]),
 	);
 
@@ -361,7 +303,7 @@ describe("POST /api/wishes/:id/shop-links", () => {
 	async function aliceWithWish() {
 		const { h, headers, ids } = await alice();
 		await post(h, headers, jacket(ids));
-		const zara = await addBrand(h, headers, "Zara");
+		const zara = await postBrand(h, headers, "Zara");
 		return { h, headers, ids, zara };
 	}
 
@@ -453,7 +395,7 @@ describe("POST /api/wishes/:id/shop-links", () => {
 		// Given: the Zara link with bob's brand
 		const { h, headers } = await aliceWithWish();
 		const bob = await h.addAccount(BOB);
-		const bobZara = await addBrand(h, bob, "Zara");
+		const bobZara = await postBrand(h, bob, "Zara");
 		// When
 		const res = await postLink(h, headers, FIRST_ID, zaraLink(bobZara));
 		// Then
@@ -497,7 +439,7 @@ describe("PUT /api/shop-links/:id", () => {
 		// Given: the Zara link on alice's wish
 		const { h, headers, ids } = await alice();
 		await post(h, headers, jacket(ids));
-		const zara = await addBrand(h, headers, "Zara");
+		const zara = await postBrand(h, headers, "Zara");
 		await postLink(h, headers, FIRST_ID, zaraLink(zara));
 		const change = {
 			url: ZARA_URL,
@@ -613,23 +555,14 @@ describe("shop link adds at once", () => {
 			"CREATE TRIGGER drop_wish BEFORE INSERT ON shop_link BEGIN DELETE FROM wish WHERE id = NEW.wish_id; END",
 		);
 		// When
-		const threw = await addShopLink(
-			h.db,
-			h.env.PICTURES,
-			"alice-id",
-			FIRST_ID,
-			zaraLink(null),
-		).then(
-			() => false,
-			() => true,
-		);
+		const res = await postLink(h, headers, FIRST_ID, zaraLink(null));
 		// Then: the failed insert rolls back the trigger's delete with it, so
 		// the wish stays and no link is left with no wish
 		expect({
-			threw,
+			status: res.status,
 			links: h.accountRows("alice-id").shop_link ?? 0,
 			wishes: (await list(h, headers)).length,
-		}).toEqual({ threw: true, links: 0, wishes: 1 });
+		}).toEqual({ status: 500, links: 0, wishes: 1 });
 	});
 });
 

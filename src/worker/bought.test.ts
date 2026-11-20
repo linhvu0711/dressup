@@ -1,8 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import { buyShopLink } from "./owned-item-store";
-import { ALICE, BOB, type Harness, makeHarness } from "./test/harness";
-
-type Ids = Record<string, string>;
+import {
+	ALICE,
+	answer,
+	BOB,
+	colourIds,
+	type Harness,
+	type Ids,
+	makeHarness,
+	postBrand,
+	send,
+	uploadPicture,
+} from "./test/harness";
 
 type Item = {
 	id: string;
@@ -17,61 +25,6 @@ type Wish = {
 	id: string;
 	shopLinks: { id: string; pictureIds: string[] }[];
 };
-
-const send = (
-	{ app, env }: Harness,
-	headers: Headers,
-	method: string,
-	path: string,
-	body?: unknown,
-) =>
-	app.request(
-		path,
-		{
-			method,
-			headers: {
-				...Object.fromEntries(headers),
-				...(body === undefined ? {} : { "content-type": "application/json" }),
-			},
-			body: body === undefined ? undefined : JSON.stringify(body),
-		},
-		env,
-	);
-
-const answer = async (res: Response) => ({
-	status: res.status,
-	body: await res.json(),
-});
-
-const colourIds = async (h: Harness, headers: Headers): Promise<Ids> => {
-	const { colours } = (await (
-		await send(h, headers, "GET", "/api/colours")
-	).json()) as { colours: { id: string; name: string }[] };
-	return Object.fromEntries(colours.map((c) => [c.name, c.id]));
-};
-
-const addBrand = async (h: Harness, headers: Headers, name: string) =>
-	(
-		(await (
-			await send(h, headers, "POST", "/api/brands", { name })
-		).json()) as { brand: { id: string } }
-	).brand.id;
-
-// A small JPEG uploaded as a draft of the account, by id.
-async function uploaded(h: Harness, headers: Headers): Promise<string> {
-	const body = new Uint8Array(100).fill(0x11);
-	body.set([0xff, 0xd8, 0xff, 0xe0]);
-	const res = await h.app.request(
-		"/api/pictures",
-		{
-			method: "POST",
-			headers: { ...Object.fromEntries(headers), "content-type": "image/jpeg" },
-			body,
-		},
-		h.env,
-	);
-	return ((await res.json()) as { picture: { id: string } }).picture.id;
-}
 
 const closet = async (h: Harness, headers: Headers) =>
 	(
@@ -95,7 +48,7 @@ const buy = (h: Harness, headers: Headers, linkId: string) =>
 
 const uploads = async (h: Harness, headers: Headers, n: number) => {
 	const ids: string[] = [];
-	for (let i = 0; i < n; i++) ids.push(await uploaded(h, headers));
+	for (let i = 0; i < n; i++) ids.push(await uploadPicture(h, headers));
 	return ids;
 };
 
@@ -111,7 +64,7 @@ async function account(): Promise<Account> {
 	const h = await makeHarness();
 	const headers = await h.addAccount(ALICE);
 	const ids = await colourIds(h, headers);
-	return { h, headers, ids, cos: await addBrand(h, headers, "COS") };
+	return { h, headers, ids, cos: await postBrand(h, headers, "COS") };
 }
 
 // The wish FIRST_ID for a Navy wool jacket: LINK_ID is a COS link with
@@ -119,7 +72,7 @@ async function account(): Promise<Account> {
 // picture c.
 async function withLinks({ h, headers, ids, cos }: Account, linkPictures = 2) {
 	const link = await uploads(h, headers, linkPictures);
-	const c = await uploaded(h, headers);
+	const c = await uploadPicture(h, headers);
 	await send(h, headers, "POST", "/api/wishes", {
 		id: FIRST_ID,
 		typeId: "wool",
@@ -163,7 +116,7 @@ async function withItem(
 }
 
 // Alice with the brand COS and the two links, LINK_ID holding a and b.
-async function alice() {
+async function aliceWithLinks() {
 	const owner = await account();
 	const {
 		link: [a = "", b = ""],
@@ -186,7 +139,7 @@ async function aliceWithItem(quantity = 1) {
 describe("POST /api/shop-links/:id/bought", () => {
 	test("moves a shop link to the closet with its brand and pictures", async () => {
 		// Given
-		const { h, headers, ids, cos, a, b } = await alice();
+		const { h, headers, ids, cos, a, b } = await aliceWithLinks();
 		// When
 		const res = await answer(await buy(h, headers, LINK_ID));
 		const items = await closet(h, headers);
@@ -220,7 +173,7 @@ describe("POST /api/shop-links/:id/bought", () => {
 
 	test("answers not_found to a second Bought of one link", async () => {
 		// Given
-		const { h, headers } = await alice();
+		const { h, headers } = await aliceWithLinks();
 		await buy(h, headers, LINK_ID);
 		// When
 		const res = await answer(await buy(h, headers, LINK_ID));
@@ -236,7 +189,7 @@ describe("POST /api/shop-links/:id/bought", () => {
 
 	test("answers not_found for a shop link of another account", async () => {
 		// Given
-		const { h, headers } = await alice();
+		const { h, headers } = await aliceWithLinks();
 		const bob = await h.addAccount(BOB);
 		// When
 		const res = await answer(await buy(h, bob, LINK_ID));
@@ -317,7 +270,7 @@ describe("POST /api/shop-links/:id/bought", () => {
 
 	test("refuses Bought at 500 owned items", async () => {
 		// Given
-		const { h, headers, a, b, c } = await alice();
+		const { h, headers, a, b, c } = await aliceWithLinks();
 		await h.seedOwnedItems("alice-id", 500);
 		// When
 		const res = await answer(await buy(h, headers, LINK_ID));
@@ -336,32 +289,24 @@ describe("POST /api/shop-links/:id/bought", () => {
 	});
 });
 
-describe("buyShopLink", () => {
+describe("Bought while another write runs", () => {
 	test("leaves everything as before when the wish delete fails", async () => {
 		// Given
-		const { h, headers, a, b, c } = await alice();
+		const { h, headers, a, b, c } = await aliceWithLinks();
 		h.addTrigger(
 			"CREATE TRIGGER fail_wish_delete BEFORE DELETE ON wish BEGIN SELECT RAISE(ABORT, 'wish delete failed'); END",
 		);
 		// When
-		const thrown = await buyShopLink(
-			h.db,
-			h.env.PICTURES,
-			"alice-id",
-			LINK_ID,
-		).then(
-			() => false,
-			() => true,
-		);
+		const res = await buy(h, headers, LINK_ID);
 		// Then
 		expect({
-			thrown,
+			status: res.status,
 			items: await closet(h, headers),
 			links: await linkPictures(h, headers),
 			keys: h.pictures.keys(),
 			stored: await h.storedBytes(),
 		}).toEqual({
-			thrown: true,
+			status: 500,
 			items: [],
 			links: [[a, b], [c]],
 			keys: [a, b, c].sort(),
@@ -371,20 +316,20 @@ describe("buyShopLink", () => {
 
 	test("makes one item from two Boughts on one wish at once", async () => {
 		// Given
-		const { h, headers, cos, a, b } = await alice();
+		const { h, headers, cos, a, b } = await aliceWithLinks();
 		const hold = h.holdBatches();
 		// When
 		const both = Promise.all([
-			buyShopLink(h.db, h.env.PICTURES, "alice-id", LINK_ID),
-			buyShopLink(h.db, h.env.PICTURES, "alice-id", OTHER_LINK_ID),
+			buy(h, headers, LINK_ID).then(answer),
+			buy(h, headers, OTHER_LINK_ID).then(answer),
 		]);
 		await hold.queued(2);
 		hold.release();
 		const results = await both;
 		// Then
 		expect({
-			oks: results.map((r) => r.ok).sort(),
-			refusals: results.flatMap((r) => (r.ok ? [] : [r.error])),
+			statuses: results.map((r) => r.status).sort(),
+			refusals: results.flatMap((r) => (r.status === 201 ? [] : [r.body])),
 			items: (await closet(h, headers)).map((i) => ({
 				brand: i.brand?.id,
 				quantity: i.quantity,
@@ -392,8 +337,8 @@ describe("buyShopLink", () => {
 			wishes: await wishlist(h, headers),
 			keys: h.pictures.keys(),
 		}).toEqual({
-			oks: [false, true],
-			refusals: [{ code: "not_found" }],
+			statuses: [201, 404],
+			refusals: [{ error: "not_found" }],
 			items: [{ brand: cos, quantity: 1 }],
 			wishes: [],
 			keys: [a, b].sort(),
@@ -405,7 +350,7 @@ describe("buyShopLink", () => {
 		const { h, headers, cos, a, b, c, d, e } = await aliceWithItem();
 		const hold = h.holdBatches();
 		// When
-		const bought = buyShopLink(h.db, h.env.PICTURES, "alice-id", LINK_ID);
+		const bought = buy(h, headers, LINK_ID).then(answer);
 		await hold.queued(1);
 		await send(h, headers, "PUT", `/api/owned-items/${ITEM_ID}`, {
 			brandId: cos,
@@ -423,7 +368,7 @@ describe("buyShopLink", () => {
 			links: await linkPictures(h, headers),
 			keys: h.pictures.keys(),
 		}).toEqual({
-			result: { ok: false, error: { code: "conflict" } },
+			result: { status: 409, body: { error: "conflict", field: "id" } },
 			items: [{ quantity: 5, pictureIds: [d, e] }],
 			links: [[a, b], [c]],
 			keys: [a, b, c, d, e].sort(),
@@ -432,10 +377,10 @@ describe("buyShopLink", () => {
 
 	test("refuses Bought when the same item is added during it", async () => {
 		// Given
-		const { h, headers, ids, cos, a, b, c } = await alice();
+		const { h, headers, ids, cos, a, b, c } = await aliceWithLinks();
 		const hold = h.holdBatches();
 		// When
-		const bought = buyShopLink(h.db, h.env.PICTURES, "alice-id", LINK_ID);
+		const bought = buy(h, headers, LINK_ID).then(answer);
 		await hold.queued(1);
 		await send(h, headers, "POST", "/api/owned-items", {
 			id: ITEM_ID,
@@ -456,7 +401,7 @@ describe("buyShopLink", () => {
 			})),
 			links: await linkPictures(h, headers),
 		}).toEqual({
-			result: { ok: false, error: { code: "conflict" } },
+			result: { status: 409, body: { error: "conflict", field: "id" } },
 			items: [{ id: ITEM_ID, quantity: 1, pictureIds: [] }],
 			links: [[a, b], [c]],
 		});

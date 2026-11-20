@@ -1,17 +1,17 @@
 import { describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
-import { changeCombination, saveCombination } from "./combination-store";
-import { combination, combinationPiece } from "./db/combination-schema";
-import { deleteTag } from "./tag-store";
+import { saveCombination } from "./combination-store";
+import { combinationPiece } from "./db/combination-schema";
 import {
 	ALICE,
+	alice,
+	answer,
 	BOB,
+	colourIds,
 	type Harness,
+	type Ids,
 	makeHarness,
-	withAccount,
+	send,
 } from "./test/harness";
-
-type Ids = Record<string, string>;
 
 type Listed = {
 	id: string;
@@ -21,34 +21,6 @@ type Listed = {
 		typeId: string;
 		colour: { id: string; name: string; hex: string };
 	}[];
-};
-
-const send = (
-	{ app, env }: Harness,
-	headers: Headers,
-	method: string,
-	path: string,
-	body?: unknown,
-) =>
-	app.request(
-		path,
-		{
-			method,
-			headers: {
-				...Object.fromEntries(headers),
-				...(body === undefined ? {} : { "content-type": "application/json" }),
-			},
-			body: body === undefined ? undefined : JSON.stringify(body),
-		},
-		env,
-	);
-
-// The account's colour ids by name, from its first list.
-const colourIds = async (h: Harness, headers: Headers): Promise<Ids> => {
-	const { colours } = (await (
-		await send(h, headers, "GET", "/api/colours")
-	).json()) as { colours: { id: string; name: string }[] };
-	return Object.fromEntries(colours.map((c) => [c.name, c.id]));
 };
 
 const post = (h: Harness, headers: Headers, body: unknown) =>
@@ -108,12 +80,6 @@ const beigeChinos = (ids: Ids) => [
 	{ typeId: "chino_p", colourId: ids.Beige },
 	{ typeId: "tee_l", colourId: ids.White },
 ];
-
-async function alice() {
-	const { h, headers } = await withAccount();
-	const ids = await colourIds(h, headers);
-	return { h, headers, ids };
-}
 
 describe("POST /api/combinations", () => {
 	test("saves a combination and lists it", async () => {
@@ -316,7 +282,7 @@ describe("duplicate", () => {
 		const batch = db.batch.bind(db);
 		const otherTabFirst: typeof batch = async (items) => {
 			db.batch = batch;
-			await saveCombination(db, "alice-id", {
+			await post(h, headers, {
 				...three(ids),
 				id: "33333333-3333-4333-8333-333333333333",
 			});
@@ -324,16 +290,16 @@ describe("duplicate", () => {
 		};
 		db.batch = otherTabFirst;
 		// When
-		const saved = await saveCombination(db, "alice-id", three(ids));
+		const saved = await answer(await post(h, headers, three(ids)));
 		// Then
 		expect({
-			saved: saved as unknown,
+			saved,
 			ids: (await list(h, headers)).map((c) => c.id),
 		}).toEqual({
 			saved: {
-				ok: false,
-				error: {
-					code: "duplicate",
+				status: 409,
+				body: {
+					error: "duplicate",
 					id: "33333333-3333-4333-8333-333333333333",
 				},
 			},
@@ -343,7 +309,7 @@ describe("duplicate", () => {
 });
 
 describe("combination limit", () => {
-	const count = async (h: Harness, headers: Headers) =>
+	const listed = async (h: Harness, headers: Headers) =>
 		(await list(h, headers)).length;
 
 	test("refuses combination number 301", async () => {
@@ -356,7 +322,7 @@ describe("combination limit", () => {
 		expect({
 			status: res.status,
 			body: await res.json(),
-			count: await count(h, headers),
+			count: await listed(h, headers),
 		}).toEqual({
 			status: 409,
 			body: { error: "combination_limit" },
@@ -371,7 +337,7 @@ describe("combination limit", () => {
 		// When
 		const res = await post(h, headers, three(ids));
 		// Then
-		expect({ status: res.status, count: await count(h, headers) }).toEqual({
+		expect({ status: res.status, count: await listed(h, headers) }).toEqual({
 			status: 201,
 			count: 300,
 		});
@@ -389,7 +355,7 @@ describe("combination limit", () => {
 		]);
 		// Then
 		expect({
-			count: await count(h, headers),
+			count: await listed(h, headers),
 			oks: results.map((r) => r.ok).sort(),
 			refused: results.flatMap((r) => (r.ok ? [] : [r.error as unknown])),
 		}).toEqual({
@@ -467,7 +433,7 @@ describe("PUT /api/combinations/:id", () => {
 		// Given: alice saved THREE, then it was deleted
 		const { h, headers, ids } = await alice();
 		await post(h, headers, three(ids));
-		await h.db.delete(combination).where(eq(combination.id, FIRST_ID));
+		await send(h, headers, "DELETE", `/api/combinations/${FIRST_ID}`);
 		// When
 		const res = await put(h, headers, FIRST_ID, greyPants(ids));
 		// Then
@@ -595,22 +561,26 @@ describe("changes at once", () => {
 		const batch = db.batch.bind(db);
 		const otherTabFirst: typeof batch = async (items) => {
 			db.batch = batch;
-			await changeCombination(db, "alice-id", THIRD_ID, {
+			await put(h, headers, THIRD_ID, {
+				id: THIRD_ID,
 				pieces: beigeChinos(ids),
 			});
 			return batch(items);
 		};
 		db.batch = otherTabFirst;
 		// When
-		const changed = await changeCombination(db, "alice-id", FIRST_ID, {
-			pieces: beigeChinos(ids),
-		});
+		const changed = await answer(
+			await put(h, headers, FIRST_ID, {
+				id: FIRST_ID,
+				pieces: beigeChinos(ids),
+			}),
+		);
 		// Then
 		expect({
-			changed: changed as unknown,
+			changed,
 			pieces: piecesOf((await list(h, headers)).find((c) => c.id === FIRST_ID)),
 		}).toEqual({
-			changed: { ok: false, error: { code: "duplicate", id: THIRD_ID } },
+			changed: { status: 409, body: { error: "duplicate", id: THIRD_ID } },
 			pieces: [
 				["casual_p", "Navy"],
 				["tee_l", "Black"],
@@ -628,23 +598,26 @@ describe("changes at once", () => {
 		const batch = db.batch.bind(db);
 		const otherTabFirst: typeof batch = async (items) => {
 			db.batch = batch;
-			await db.delete(combination).where(eq(combination.id, FIRST_ID));
+			await send(h, headers, "DELETE", `/api/combinations/${FIRST_ID}`);
 			return batch(items);
 		};
 		db.batch = otherTabFirst;
 		// When
-		const changed = await changeCombination(db, "alice-id", FIRST_ID, {
-			pieces: beigeChinos(ids),
-		});
+		const changed = await answer(
+			await put(h, headers, FIRST_ID, {
+				id: FIRST_ID,
+				pieces: beigeChinos(ids),
+			}),
+		);
 		// Then
 		expect({
-			changed: changed as unknown,
+			changed,
 			listed: await list(h, headers),
 			pieces: (await h.rows(combinationPiece)).filter(
 				(p) => p.combinationId === FIRST_ID,
 			),
 		}).toEqual({
-			changed: { ok: false, error: { code: "not_found" } },
+			changed: { status: 404, body: { error: "not_found" } },
 			listed: [],
 			pieces: [],
 		});
@@ -659,7 +632,8 @@ describe("changes at once", () => {
 		const batch = db.batch.bind(db);
 		const otherTabFirst: typeof batch = async (items) => {
 			db.batch = batch;
-			await changeCombination(db, "alice-id", FIRST_ID, {
+			await put(h, headers, FIRST_ID, {
+				id: FIRST_ID,
 				pieces: [
 					{ typeId: "casual_p", colourId: ids.Grey },
 					{ typeId: "tee_l", colourId: ids.Black },
@@ -671,15 +645,16 @@ describe("changes at once", () => {
 		};
 		db.batch = otherTabFirst;
 		// When
-		const changed = await changeCombination(db, "alice-id", FIRST_ID, {
+		const changed = await put(h, headers, FIRST_ID, {
+			id: FIRST_ID,
 			pieces: beigeChinos(ids),
 		});
 		// Then
 		expect({
-			ok: changed.ok,
+			status: changed.status,
 			pieces: piecesOf((await list(h, headers))[0]),
 		}).toEqual({
-			ok: true,
+			status: 200,
 			pieces: [
 				["chino_p", "Beige"],
 				["tee_l", "White"],
@@ -696,15 +671,16 @@ describe("changes at once", () => {
 			`CREATE TRIGGER drop_beige BEFORE INSERT ON combination_piece WHEN NEW.colour_id = '${ids.Beige}' BEGIN DELETE FROM colour WHERE id = NEW.colour_id; END`,
 		);
 		// When
-		const threw = await changeCombination(h.db, "alice-id", FIRST_ID, {
+		const res = await put(h, headers, FIRST_ID, {
+			id: FIRST_ID,
 			pieces: beigeChinos(ids),
-		}).then(
-			() => false,
-			() => true,
-		);
+		});
 		// Then
-		expect({ threw, pieces: piecesOf((await list(h, headers))[0]) }).toEqual({
-			threw: true,
+		expect({
+			status: res.status,
+			pieces: piecesOf((await list(h, headers))[0]),
+		}).toEqual({
+			status: 500,
 			pieces: [
 				["casual_p", "Navy"],
 				["tee_l", "Black"],
@@ -723,13 +699,13 @@ describe("a colour deleted during a save", () => {
 			`CREATE TRIGGER drop_navy BEFORE INSERT ON combination_piece WHEN NEW.colour_id = '${ids.Navy}' BEGIN DELETE FROM colour WHERE id = NEW.colour_id; END`,
 		);
 		// When
-		const threw = await saveCombination(h.db, "alice-id", three(ids)).then(
-			() => false,
-			() => true,
-		);
+		const res = await post(h, headers, three(ids));
 		// Then
-		expect({ threw, combinations: (await list(h, headers)).length }).toEqual({
-			threw: true,
+		expect({
+			status: res.status,
+			combinations: (await list(h, headers)).length,
+		}).toEqual({
+			status: 500,
 			combinations: 0,
 		});
 	});
@@ -966,20 +942,20 @@ describe("tags on a combination", () => {
 		const batch = db.batch.bind(db);
 		const otherTabFirst: typeof batch = async (items) => {
 			db.batch = batch;
-			await deleteTag(db, "alice-id", weekend);
+			await send(h, headers, "DELETE", `/api/tags/${weekend}`);
 			return batch(items);
 		};
 		db.batch = otherTabFirst;
 		// When
-		const saved = await saveCombination(db, "alice-id", {
+		const saved = await post(h, headers, {
 			...three(ids),
 			tags: [work, weekend],
 		});
 		// Then
 		expect({
-			ok: saved.ok,
+			status: saved.status,
 			tags: (await list(h, headers)).map((c) => c.tags),
-		}).toEqual({ ok: true, tags: [[work]] });
+		}).toEqual({ status: 201, tags: [[work]] });
 	});
 
 	test("changes only a combination's tags", async () => {
@@ -1079,20 +1055,16 @@ describe("tags on a combination", () => {
 		const batch = db.batch.bind(db);
 		const otherTabFirst: typeof batch = async (items) => {
 			db.batch = batch;
-			await db.delete(combination).where(eq(combination.id, FIRST_ID));
+			await send(h, headers, "DELETE", `/api/combinations/${FIRST_ID}`);
 			return batch(items);
 		};
 		db.batch = otherTabFirst;
 		// When
-		const changed = await changeCombination(db, "alice-id", FIRST_ID, {
-			pieces: three(ids).pieces,
-			tags: [work],
-		});
+		const changed = await answer(
+			await put(h, headers, FIRST_ID, { ...three(ids), tags: [work] }),
+		);
 		// Then
-		expect(changed as unknown).toEqual({
-			ok: false,
-			error: { code: "not_found" },
-		});
+		expect(changed).toEqual({ status: 404, body: { error: "not_found" } });
 	});
 
 	test("changes a combination without a tag deleted while the change writes", async () => {
@@ -1106,20 +1078,20 @@ describe("tags on a combination", () => {
 		const batch = db.batch.bind(db);
 		const otherTabFirst: typeof batch = async (items) => {
 			db.batch = batch;
-			await deleteTag(db, "alice-id", weekend);
+			await send(h, headers, "DELETE", `/api/tags/${weekend}`);
 			return batch(items);
 		};
 		db.batch = otherTabFirst;
 		// When
-		const changed = await changeCombination(db, "alice-id", FIRST_ID, {
-			pieces: three(ids).pieces,
+		const changed = await put(h, headers, FIRST_ID, {
+			...three(ids),
 			tags: [work, weekend],
 		});
 		// Then
 		expect({
-			ok: changed.ok,
+			status: changed.status,
 			tags: (await list(h, headers)).map((c) => c.tags),
-		}).toEqual({ ok: true, tags: [[work]] });
+		}).toEqual({ status: 200, tags: [[work]] });
 	});
 
 	test("keeps one tab's tags when two tabs change them at once", async () => {
@@ -1133,18 +1105,12 @@ describe("tags on a combination", () => {
 		const batch = db.batch.bind(db);
 		const otherTabFirst: typeof batch = async (items) => {
 			db.batch = batch;
-			await changeCombination(db, "alice-id", FIRST_ID, {
-				pieces: three(ids).pieces,
-				tags: [weekend],
-			});
+			await put(h, headers, FIRST_ID, { ...three(ids), tags: [weekend] });
 			return batch(items);
 		};
 		db.batch = otherTabFirst;
 		// When
-		await changeCombination(db, "alice-id", FIRST_ID, {
-			pieces: three(ids).pieces,
-			tags: [work],
-		});
+		await put(h, headers, FIRST_ID, { ...three(ids), tags: [work] });
 		// Then
 		expect((await list(h, headers)).map((c) => c.tags)).toEqual([[work]]);
 	});

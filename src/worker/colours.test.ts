@@ -1,30 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import { addColour, listColours } from "./colour-store";
-import { saveCombination } from "./combination-store";
 import { schema } from "./db";
-import { BOB, type Harness, makeHarness, withAccount } from "./test/harness";
+import {
+	alice,
+	BOB,
+	type Harness,
+	makeHarness,
+	otherTabWrites,
+	send,
+	withAccount,
+} from "./test/harness";
 
 type Colour = { id: string; name: string; hex: string; inUse?: boolean };
-
-const send = (
-	{ app, env }: Harness,
-	headers: Headers,
-	method: string,
-	path: string,
-	body?: unknown,
-) =>
-	app.request(
-		path,
-		{
-			method,
-			headers: {
-				...Object.fromEntries(headers),
-				...(body === undefined ? {} : { "content-type": "application/json" }),
-			},
-			body: body === undefined ? undefined : JSON.stringify(body),
-		},
-		env,
-	);
 
 const coloursOf = async (h: Harness, headers: Headers) =>
 	(
@@ -41,13 +28,11 @@ const postColour = (
 
 const TEAL = { name: "Teal", hex: "#2A7F7F" };
 
-// alice with the starter set and n more colours, added through the store.
-async function aliceWith(n: number) {
-	const { h, headers } = await withAccount();
+// The starter set and "Colour 1" to "Colour n" more, through the routes.
+async function postColours(h: Harness, headers: Headers, n: number) {
 	await send(h, headers, "GET", "/api/colours");
 	for (let i = 1; i <= n; i++)
-		await addColour(h.db, "alice-id", { name: `Colour ${i}`, hex: "#2A7F7F" });
-	return { h, headers };
+		await postColour(h, headers, { name: `Colour ${i}`, hex: "#2A7F7F" });
 }
 
 const UUID =
@@ -91,7 +76,7 @@ describe("GET /api/colours", () => {
 		await send(h, headers, "GET", "/api/colours");
 		await send(h, headers, "GET", "/api/colours");
 		// Then
-		expect((await h.rows(schema.colour, "alice-id")).length).toEqual(13);
+		expect((await coloursOf(h, headers)).length).toEqual(13);
 	});
 
 	test("writes the starter set once when two lists come at once", async () => {
@@ -126,7 +111,7 @@ describe("GET /api/colours", () => {
 describe("POST /api/colours", () => {
 	test("lists an added colour after the starter set", async () => {
 		// Given: alice signed in, the list read once
-		const { h, headers } = await aliceWith(0);
+		const { h, headers } = await withAccount();
 		// When
 		const res = await postColour(h, headers, TEAL);
 		const { colour } = (await res.json()) as { colour: Colour };
@@ -142,7 +127,7 @@ describe("POST /api/colours", () => {
 
 	test("refuses a name the account has, in any case", async () => {
 		// Given: alice signed in, the list read once
-		const { h, headers } = await aliceWith(0);
+		const { h, headers } = await withAccount();
 		// When
 		const res = await postColour(h, headers, { name: "navy", hex: "#2A7F7F" });
 		// Then
@@ -159,7 +144,7 @@ describe("POST /api/colours", () => {
 
 	test("refuses an empty name", async () => {
 		// Given: alice signed in, the list read once
-		const { h, headers } = await aliceWith(0);
+		const { h, headers } = await withAccount();
 		// When
 		const res = await postColour(h, headers, { name: "   ", hex: "#2A7F7F" });
 		// Then
@@ -171,7 +156,7 @@ describe("POST /api/colours", () => {
 
 	test("refuses a name of 25 characters", async () => {
 		// Given: alice signed in, the list read once
-		const { h, headers } = await aliceWith(0);
+		const { h, headers } = await withAccount();
 		// When
 		const res = await postColour(h, headers, {
 			name: "A".repeat(25),
@@ -186,7 +171,7 @@ describe("POST /api/colours", () => {
 
 	test("refuses a code in small letters", async () => {
 		// Given: alice signed in, the list read once
-		const { h, headers } = await aliceWith(0);
+		const { h, headers } = await withAccount();
 		// When
 		const res = await postColour(h, headers, { name: "Teal", hex: "#2a7f7f" });
 		// Then
@@ -198,7 +183,8 @@ describe("POST /api/colours", () => {
 
 	test("adds colour number 100", async () => {
 		// Given: alice with 99 colours
-		const { h, headers } = await aliceWith(86);
+		const { h, headers } = await withAccount();
+		await postColours(h, headers, 86);
 		// When
 		const res = await postColour(h, headers, TEAL);
 		// Then
@@ -210,7 +196,8 @@ describe("POST /api/colours", () => {
 
 	test("refuses colour number 101", async () => {
 		// Given: alice with 100 colours
-		const { h, headers } = await aliceWith(87);
+		const { h, headers } = await withAccount();
+		await postColours(h, headers, 87);
 		// When
 		const res = await postColour(h, headers, TEAL);
 		// Then
@@ -222,23 +209,12 @@ describe("POST /api/colours", () => {
 	});
 });
 
-// Another tab's save of the same name, written by a trigger just before this
-// request's own write, after its duplicate check has passed.
-const otherTabWrites = (h: Harness, when: "INSERT" | "UPDATE", name: string) =>
-	h.addTrigger(
-		`CREATE TRIGGER other_tab BEFORE ${when} ON colour WHEN NEW.name = '${name}'
-		BEGIN
-			INSERT INTO colour (id, user_id, name, hex, created_at)
-			VALUES ('other-tab', NEW.user_id, lower(NEW.name), NEW.hex, 0);
-		END`,
-	);
-
 describe("two writes at the same time", () => {
 	test("answers duplicate when another tab adds the name first", async () => {
 		// Given: alice signed in, the list read once; another tab stores "teal"
 		// between this add's check and its write
-		const { h, headers } = await aliceWith(0);
-		otherTabWrites(h, "INSERT", "Teal");
+		const { h, headers } = await withAccount();
+		otherTabWrites(h, "colour", "INSERT", "Teal");
 		// When
 		const res = await postColour(h, headers, TEAL);
 		// Then
@@ -250,7 +226,8 @@ describe("two writes at the same time", () => {
 
 	test("adds one of two colours sent at once at 99", async () => {
 		// Given: alice with 99 colours
-		const { h, headers } = await aliceWith(86);
+		const { h, headers } = await withAccount();
+		await postColours(h, headers, 86);
 		// When
 		const results = await Promise.all([
 			addColour(h.db, "alice-id", TEAL),
@@ -271,7 +248,7 @@ describe("two writes at the same time", () => {
 
 // alice with the starter set and "Teal" added; the id is Teal's.
 async function aliceWithTeal() {
-	const { h, headers } = await aliceWith(0);
+	const { h, headers } = await withAccount();
 	const res = await postColour(h, headers, TEAL);
 	const { colour } = (await res.json()) as { colour: Colour };
 	return { h, headers, id: colour.id };
@@ -354,7 +331,7 @@ describe("PUT /api/colours/:id", () => {
 		// Given: alice with "Teal"; another tab stores "sea" between this
 		// change's check and its write
 		const { h, headers, id } = await aliceWithTeal();
-		otherTabWrites(h, "UPDATE", "Sea");
+		otherTabWrites(h, "colour", "UPDATE", "Sea");
 		// When
 		const res = await putColour(h, headers, id, {
 			name: "Sea",
@@ -370,11 +347,8 @@ describe("PUT /api/colours/:id", () => {
 
 // alice with a combination of Navy casual pants and a White long tee.
 async function aliceWithCombination() {
-	const { h, headers } = await aliceWith(0);
-	const ids = Object.fromEntries(
-		(await coloursOf(h, headers)).map((c) => [c.name, c.id]),
-	);
-	await saveCombination(h.db, "alice-id", {
+	const { h, headers, ids } = await alice();
+	await send(h, headers, "POST", "/api/combinations", {
 		id: "11111111-1111-4111-8111-111111111111",
 		pieces: [
 			{ typeId: "casual_p", colourId: ids.Navy },
@@ -421,10 +395,7 @@ describe("colours in the closet", () => {
 	test("refuses to delete a colour an owned item uses", async () => {
 		// Given: alice with a Navy long button-up, no brand, in her closet; no
 		// combination
-		const { h, headers } = await aliceWith(0);
-		const ids = Object.fromEntries(
-			(await coloursOf(h, headers)).map((c) => [c.name, c.id]),
-		);
+		const { h, headers, ids } = await alice();
 		await send(h, headers, "POST", "/api/owned-items", {
 			id: "11111111-1111-4111-8111-111111111111",
 			typeId: "shirt_l",
@@ -476,7 +447,7 @@ describe("DELETE /api/colours/:id", () => {
 
 	test("keeps an emptied list empty", async () => {
 		// Given: alice signed in, each of the 13 starter colours deleted
-		const { h, headers } = await aliceWith(0);
+		const { h, headers } = await withAccount();
 		for (const c of await coloursOf(h, headers))
 			await send(h, headers, "DELETE", `/api/colours/${c.id}`);
 		// When
@@ -493,10 +464,7 @@ describe("colours on the wishlist", () => {
 	// Alice with a wish for a Navy wool jacket, and no owned item or
 	// combination in Navy.
 	async function aliceWithWish() {
-		const { h, headers } = await aliceWith(0);
-		const ids = Object.fromEntries(
-			(await coloursOf(h, headers)).map((c) => [c.name, c.id]),
-		);
+		const { h, headers, ids } = await alice();
 		await send(h, headers, "POST", "/api/wishes", {
 			id: "11111111-1111-4111-8111-111111111111",
 			typeId: "wool",

@@ -1,13 +1,14 @@
-import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
-import type { SQLiteTable } from "drizzle-orm/sqlite-core";
+import { describe, expect, setSystemTime, test } from "bun:test";
 import { schema } from "./db";
 import {
 	AUTHORIZE,
 	connectAiApp,
 	cookie,
+	count,
 	finishGoogleSignIn,
 	type Harness,
 	makeHarness,
+	send,
 	startGoogleSignIn,
 	stubOutside,
 	TEST_APP_ID,
@@ -22,9 +23,6 @@ const withClient = (clientId: string) =>
 		"client_id=https%3A%2F%2Fclient.example%2Fmeta.json",
 		`client_id=${encodeURIComponent(clientId)}`,
 	);
-
-const count = async (h: Harness, table: SQLiteTable) =>
-	(await h.rows(table)).length;
 
 const payload = (jwt: string) =>
 	JSON.parse(Buffer.from(jwt.split(".")[1] ?? "", "base64url").toString()) as {
@@ -78,9 +76,6 @@ async function until(check: () => boolean) {
 
 describe("AI app sign-in", () => {
 	let outside: ReturnType<typeof stubOutside> | undefined;
-	afterEach(() => {
-		setSystemTime();
-	});
 
 	const given = async (
 		documents: Record<string, () => Response | Promise<Response>> = {},
@@ -161,11 +156,14 @@ describe("AI app sign-in", () => {
 		// Given
 		const h = await given();
 		// When
-		const { consent } = await connectAiApp(h, { accept: false });
+		const { consent, jar } = await connectAiApp(h, { accept: false });
 		// Then
+		const { apps } = (await (
+			await send(h, jar, "GET", "/api/ai-apps")
+		).json()) as { apps: unknown[] };
 		expect({
 			url: consent.url,
-			allows: await count(h, schema.oauthConsent),
+			allows: apps.length,
 		}).toEqual({
 			url: "http://127.0.0.1:33418/callback?error=access_denied&error_description=User+denied+access&state=xyz&iss=http%3A%2F%2Flocalhost%3A5173%2Fapi%2Fauth",
 			allows: 0,

@@ -1,27 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { BOB, type Harness, withAccount } from "./test/harness";
+import {
+	BOB,
+	colourIds,
+	type Harness,
+	otherTabWrites,
+	send,
+	withAccount,
+} from "./test/harness";
 
 type Tag = { id: string; name: string; combinations: number };
-
-const send = (
-	{ app, env }: Harness,
-	headers: Headers,
-	method: string,
-	path: string,
-	body?: unknown,
-) =>
-	app.request(
-		path,
-		{
-			method,
-			headers: {
-				...Object.fromEntries(headers),
-				...(body === undefined ? {} : { "content-type": "application/json" }),
-			},
-			body: body === undefined ? undefined : JSON.stringify(body),
-		},
-		env,
-	);
 
 const addTag = (h: Harness, headers: Headers, name: string) =>
 	send(h, headers, "POST", "/api/tags", { name });
@@ -356,13 +343,6 @@ describe("PUT and DELETE /api/tags/:id", () => {
 
 describe("tags and combinations", () => {
 	// The account's colour ids by name, from its first list.
-	const colourIds = async (h: Harness, headers: Headers) => {
-		const { colours } = (await (
-			await send(h, headers, "GET", "/api/colours")
-		).json()) as { colours: { id: string; name: string }[] };
-		return Object.fromEntries(colours.map((c) => [c.name, c.id]));
-	};
-
 	// Khaki Harrington jacket + Black long tee + Navy casual pants.
 	const three = (ids: Record<string, string>, tags: string[]) => ({
 		id: "11111111-1111-4111-8111-111111111111",
@@ -439,23 +419,12 @@ describe("tags and combinations", () => {
 	});
 });
 
-// Another tab's save of the same name, written by a trigger just before this
-// request's own write, after its duplicate check has passed.
-const otherTabWrites = (h: Harness, when: "INSERT" | "UPDATE", name: string) =>
-	h.addTrigger(
-		`CREATE TRIGGER other_tab BEFORE ${when} ON tag WHEN NEW.name = '${name}'
-		BEGIN
-			INSERT INTO tag (id, user_id, name, created_at)
-			VALUES ('other-tab', NEW.user_id, lower(NEW.name), 0);
-		END`,
-	);
-
 describe("a name another tab saves at the same time", () => {
 	test("answers duplicate when another tab adds the name first", async () => {
 		// Given: alice signed in; another tab stores "work" between this add's
 		// check and its write
 		const { h, headers } = await withAccount();
-		otherTabWrites(h, "INSERT", "Work");
+		otherTabWrites(h, "tag", "INSERT", "Work");
 		// When
 		const res = await addTag(h, headers, "Work");
 		// Then
@@ -470,7 +439,7 @@ describe("a name another tab saves at the same time", () => {
 		// rename's check and its write
 		const { h, headers } = await withAccount();
 		const work = await added(h, headers, "Work");
-		otherTabWrites(h, "UPDATE", "Office");
+		otherTabWrites(h, "tag", "UPDATE", "Office");
 		// When
 		const res = await send(h, headers, "PUT", `/api/tags/${work}`, {
 			id: work,

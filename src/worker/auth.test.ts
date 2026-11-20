@@ -8,7 +8,7 @@ import { schema } from "./db";
 import {
 	BOB,
 	cookie,
-	finishGoogleSignIn,
+	googleSignIn,
 	googleUser,
 	type Harness,
 	makeHarness,
@@ -109,9 +109,6 @@ describe("migrations", () => {
 	});
 });
 
-const signIn = async (h: Harness) =>
-	finishGoogleSignIn(h, await startGoogleSignIn(h));
-
 describe("Google sign-in", () => {
 	test("sends sign-in to Google with our callback address", async () => {
 		// Given
@@ -153,13 +150,13 @@ describe("Google sign-in", () => {
 		const h = await makeHarness();
 		stubOutside({ google: googleUser("carol") });
 		// When
-		const { res: first, jar } = await signIn(h);
+		const { res: first, jar } = await googleSignIn(h);
 		const me = await h.app.request(
 			"/api/me",
 			{ headers: { cookie: cookie(jar) } },
 			h.env,
 		);
-		const { res: second, jar: secondJar } = await signIn(h);
+		const { res: second, jar: secondJar } = await googleSignIn(h);
 		// Then
 		const ids = await h.rows(schema.user);
 		const accounts = (await h.rows(schema.account)).map(
@@ -229,7 +226,7 @@ describe("sign-up switch", () => {
 		const h = await makeHarness();
 		stubOutside({ google: googleUser("new") });
 		// When
-		const { res } = await signIn(withSignups(h, "true"));
+		const { res } = await googleSignIn(withSignups(h, "true"));
 		// Then
 		expect({
 			status: res.status,
@@ -246,9 +243,9 @@ describe("sign-up switch", () => {
 		// Given: the account made by a sign-in while sign-up was open
 		const h = await makeHarness();
 		stubOutside({ google: googleUser("old") });
-		expect((await signIn(h)).res.headers.get("location")).toBe("/");
+		expect((await googleSignIn(h)).res.headers.get("location")).toBe("/");
 		// When
-		const { res, jar } = await signIn(withSignups(h, "true"));
+		const { res, jar } = await googleSignIn(withSignups(h, "true"));
 		// Then
 		const me = await h.app.request(
 			"/api/me",
@@ -272,7 +269,7 @@ describe("sign-up switch", () => {
 		stubOutside({ google: googleUser("new") });
 		await h.app.request("/api/auth/get-session", {}, h.env);
 		// When
-		const { res } = await signIn(withSignups(h, "true"));
+		const { res } = await googleSignIn(withSignups(h, "true"));
 		// Then
 		expect({
 			status: res.status,
@@ -292,7 +289,7 @@ describe("sign-up switch", () => {
 			const h = await makeHarness();
 			stubOutside({ google: googleUser("new") });
 			// When
-			const { res } = await signIn(withSignups(h, value));
+			const { res } = await googleSignIn(withSignups(h, value));
 			results.push({
 				value: value ?? "not set",
 				status: res.status,

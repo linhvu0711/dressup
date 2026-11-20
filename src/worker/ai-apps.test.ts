@@ -1,25 +1,24 @@
 import { describe, expect, test } from "bun:test";
-import type { SQLiteTable } from "drizzle-orm/sqlite-core";
 import { schema } from "./db";
 import {
 	BOB,
 	cookie,
+	count,
 	type Harness,
 	INITIALIZE,
 	post,
+	send,
 	TEST_APP_ID,
 	withAiApp,
 } from "./test/harness";
 
-const send = (
-	h: Harness,
-	method: string,
-	path: string,
-	headers: HeadersInit = {},
-) => h.app.request(path, { method, headers }, h.env);
-
-const count = async (h: Harness, table: SQLiteTable) =>
-	(await h.rows(table)).length;
+// The AI apps the account lists.
+const appsOf = async (h: Harness, auth: Record<string, string>) =>
+	(
+		(await (await send(h, auth, "GET", "/api/ai-apps")).json()) as {
+			apps: unknown[];
+		}
+	).apps.length;
 
 describe("/api/ai-apps", () => {
 	// Alice connected the test app on 2026-11-14 at 12:00 UTC; its allow row
@@ -41,7 +40,7 @@ describe("/api/ai-apps", () => {
 		// Given
 		const { h, alice } = await aliceConnected();
 		// When
-		const res = await send(h, "GET", "/api/ai-apps", alice);
+		const res = await send(h, alice, "GET", "/api/ai-apps");
 		// Then
 		expect({ status: res.status, body: await res.json() }).toEqual({
 			status: 200,
@@ -63,7 +62,7 @@ describe("/api/ai-apps", () => {
 		const { h, alice } = await aliceConnected();
 		await h.db.update(schema.oauthClient).set({ name: null, icon: null });
 		// When
-		const res = await send(h, "GET", "/api/ai-apps", alice);
+		const res = await send(h, alice, "GET", "/api/ai-apps");
 		// Then
 		expect(await res.json()).toEqual({
 			apps: [
@@ -82,7 +81,7 @@ describe("/api/ai-apps", () => {
 		const { h } = await aliceConnected();
 		const bob = await h.addAccount(BOB);
 		// When
-		const res = await send(h, "GET", "/api/ai-apps", bob);
+		const res = await send(h, bob, "GET", "/api/ai-apps");
 		// Then
 		expect({ status: res.status, body: await res.json() }).toEqual({
 			status: 200,
@@ -94,19 +93,17 @@ describe("/api/ai-apps", () => {
 		// Given
 		const { h, alice, bearer } = await aliceConnected();
 		// When
-		const res = await send(h, "DELETE", "/api/ai-apps/allow-1", alice);
+		const res = await send(h, alice, "DELETE", "/api/ai-apps/allow-1");
 		// Then
-		const list = await send(h, "GET", "/api/ai-apps", alice);
+		const list = await send(h, alice, "GET", "/api/ai-apps");
 		const mcp = await post(h, INITIALIZE, bearer);
 		expect({
 			status: res.status,
-			allows: await count(h, schema.oauthConsent),
 			refreshTokens: await count(h, schema.oauthRefreshToken),
 			apps: ((await list.json()) as { apps: unknown[] }).apps,
 			mcp: mcp.status,
 		}).toEqual({
 			status: 204,
-			allows: 0,
 			refreshTokens: 0,
 			apps: [],
 			mcp: 401,
@@ -115,15 +112,15 @@ describe("/api/ai-apps", () => {
 
 	test("answers 404 for a disconnect of another account's AI app", async () => {
 		// Given: alice connected the app; bob signed in
-		const { h } = await aliceConnected();
+		const { h, alice } = await aliceConnected();
 		const bob = await h.addAccount(BOB);
 		// When
-		const res = await send(h, "DELETE", "/api/ai-apps/allow-1", bob);
+		const res = await send(h, bob, "DELETE", "/api/ai-apps/allow-1");
 		// Then
 		expect({
 			status: res.status,
 			body: await res.json(),
-			allows: await count(h, schema.oauthConsent),
+			allows: await appsOf(h, alice),
 			refreshTokens: await count(h, schema.oauthRefreshToken),
 		}).toEqual({
 			status: 404,
@@ -137,13 +134,13 @@ describe("/api/ai-apps", () => {
 		// Given
 		const { h, alice } = await aliceConnected();
 		// When
-		const first = await send(h, "DELETE", "/api/ai-apps/allow-1", alice);
-		const second = await send(h, "DELETE", "/api/ai-apps/allow-1", alice);
+		const first = await send(h, alice, "DELETE", "/api/ai-apps/allow-1");
+		const second = await send(h, alice, "DELETE", "/api/ai-apps/allow-1");
 		// Then
 		expect({
 			first: first.status,
 			second: second.status,
-			allows: await count(h, schema.oauthConsent),
+			allows: await appsOf(h, alice),
 			refreshTokens: await count(h, schema.oauthRefreshToken),
 		}).toEqual({ first: 204, second: 404, allows: 0, refreshTokens: 0 });
 	});
@@ -174,7 +171,7 @@ describe("/api/ai-apps", () => {
 				token("rt-bob-test", TEST_APP_ID, "bob-id"),
 			]);
 		// When
-		await send(h, "DELETE", "/api/ai-apps/allow-1", alice);
+		await send(h, alice, "DELETE", "/api/ai-apps/allow-1");
 		// Then
 		const left = (await h.rows(schema.oauthRefreshToken))
 			.map((row) => row.id)
@@ -184,14 +181,14 @@ describe("/api/ai-apps", () => {
 
 	test("refuses DELETE /api/ai-apps/:id without a session", async () => {
 		// Given
-		const { h } = await aliceConnected();
+		const { h, alice } = await aliceConnected();
 		// When
-		const res = await send(h, "DELETE", "/api/ai-apps/allow-1");
+		const res = await send(h, {}, "DELETE", "/api/ai-apps/allow-1");
 		// Then
 		expect({
 			status: res.status,
 			body: await res.json(),
-			allows: await count(h, schema.oauthConsent),
+			allows: await appsOf(h, alice),
 		}).toEqual({ status: 401, body: { error: "unauthorized" }, allows: 1 });
 	});
 
@@ -199,7 +196,7 @@ describe("/api/ai-apps", () => {
 		// Given
 		const { h } = await aliceConnected();
 		// When
-		const res = await send(h, "GET", "/api/ai-apps");
+		const res = await send(h, {}, "GET", "/api/ai-apps");
 		// Then
 		expect({ status: res.status, body: await res.json() }).toEqual({
 			status: 401,

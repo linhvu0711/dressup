@@ -1,19 +1,19 @@
 import { describe, expect, test } from "bun:test";
 import { picture } from "./db/picture-schema";
-import {
-	addOwnedItem,
-	changeOwnedItem,
-	deleteOwnedItem,
-} from "./owned-item-store";
+import { addOwnedItem, changeOwnedItem } from "./owned-item-store";
 import {
 	ALICE,
+	alice,
+	answer,
 	BOB,
+	colourIds,
 	type Harness,
+	type Ids,
 	makeHarness,
-	withAccount,
+	postBrand,
+	send,
+	uploadPicture,
 } from "./test/harness";
-
-type Ids = Record<string, string>;
 
 type Listed = {
 	id: string;
@@ -23,43 +23,6 @@ type Listed = {
 	quantity: number;
 	pictureIds: string[];
 };
-
-const send = (
-	{ app, env }: Harness,
-	headers: Headers,
-	method: string,
-	path: string,
-	body?: unknown,
-) =>
-	app.request(
-		path,
-		{
-			method,
-			headers: {
-				...Object.fromEntries(headers),
-				...(body === undefined ? {} : { "content-type": "application/json" }),
-			},
-			body: body === undefined ? undefined : JSON.stringify(body),
-		},
-		env,
-	);
-
-// The account's colour ids by name, from its first list.
-const colourIds = async (h: Harness, headers: Headers): Promise<Ids> => {
-	const { colours } = (await (
-		await send(h, headers, "GET", "/api/colours")
-	).json()) as { colours: { id: string; name: string }[] };
-	return Object.fromEntries(colours.map((c) => [c.name, c.id]));
-};
-
-const addBrand = async (h: Harness, headers: Headers, name: string) =>
-	(
-		(await (
-			await send(h, headers, "POST", "/api/brands", { name })
-		).json()) as {
-			brand: { id: string };
-		}
-	).brand.id;
 
 const post = (h: Harness, headers: Headers, body: unknown) =>
 	send(h, headers, "POST", "/api/owned-items", body);
@@ -85,17 +48,6 @@ const shirt = (ids: Ids) => ({
 	colourId: ids.Navy,
 	brandId: null as string | null,
 	quantity: 2,
-});
-
-async function alice() {
-	const { h, headers } = await withAccount();
-	const ids = await colourIds(h, headers);
-	return { h, headers, ids };
-}
-
-const answer = async (res: Response) => ({
-	status: res.status,
-	body: await res.json(),
 });
 
 describe("POST /api/owned-items", () => {
@@ -169,7 +121,7 @@ describe("POST /api/owned-items", () => {
 	test("refuses the same piece and brand a second time", async () => {
 		// Given: alice has Zara and a Navy long button-up from Zara
 		const { h, headers, ids } = await alice();
-		const zara = await addBrand(h, headers, "Zara");
+		const zara = await postBrand(h, headers, "Zara");
 		await post(h, headers, { ...shirt(ids), brandId: zara, quantity: 1 });
 		// When
 		const res = await post(h, headers, {
@@ -205,8 +157,8 @@ describe("POST /api/owned-items", () => {
 	test("adds the same piece with another brand", async () => {
 		// Given: alice has Zara and COS, and a Navy long button-up from Zara
 		const { h, headers, ids } = await alice();
-		const zara = await addBrand(h, headers, "Zara");
-		const cos = await addBrand(h, headers, "COS");
+		const zara = await postBrand(h, headers, "Zara");
+		const cos = await postBrand(h, headers, "COS");
 		await post(h, headers, { ...shirt(ids), brandId: zara });
 		// When
 		const res = await post(h, headers, {
@@ -290,7 +242,7 @@ describe("POST /api/owned-items", () => {
 		// Given: the passing body; bob has Zara
 		const { h, headers, ids } = await alice();
 		const bob = await h.addAccount(BOB);
-		const bobZara = await addBrand(h, bob, "Zara");
+		const bobZara = await postBrand(h, bob, "Zara");
 		// When
 		const res = await post(h, headers, { ...shirt(ids), brandId: bobZara });
 		// Then
@@ -335,7 +287,7 @@ describe("PUT and DELETE /api/owned-items/:id", () => {
 	test("changes an item's brand and quantity", async () => {
 		// Given: brand Zara; item A shirt_l, Navy, no brand, quantity 2
 		const { h, headers, ids } = await alice();
-		const zara = await addBrand(h, headers, "Zara");
+		const zara = await postBrand(h, headers, "Zara");
 		await post(h, headers, shirt(ids));
 		// When
 		const res = await put(h, headers, FIRST_ID, { brandId: zara, quantity: 3 });
@@ -379,7 +331,7 @@ describe("PUT and DELETE /api/owned-items/:id", () => {
 	test("refuses a change to a brand another item of the piece has", async () => {
 		// Given: brand Zara; item A shirt_l Navy Zara; item B shirt_l Navy no brand
 		const { h, headers, ids } = await alice();
-		const zara = await addBrand(h, headers, "Zara");
+		const zara = await postBrand(h, headers, "Zara");
 		await post(h, headers, { ...shirt(ids), brandId: zara });
 		await post(h, headers, { ...shirt(ids), id: SECOND_ID });
 		// When
@@ -398,8 +350,8 @@ describe("PUT and DELETE /api/owned-items/:id", () => {
 		// Given: brands Zara and COS; items A shirt_l Navy Zara and B shirt_l
 		// Navy COS; Zara and COS deleted, so A and B both have no brand
 		const { h, headers, ids } = await alice();
-		const zara = await addBrand(h, headers, "Zara");
-		const cos = await addBrand(h, headers, "COS");
+		const zara = await postBrand(h, headers, "Zara");
+		const cos = await postBrand(h, headers, "COS");
 		await post(h, headers, { ...shirt(ids), brandId: zara });
 		await post(h, headers, { ...shirt(ids), id: SECOND_ID, brandId: cos });
 		await send(h, headers, "DELETE", `/api/brands/${zara}`);
@@ -540,44 +492,17 @@ describe("adds at once", () => {
 			`CREATE TRIGGER drop_navy BEFORE INSERT ON owned_item WHEN NEW.colour_id = '${ids.Navy}' BEGIN DELETE FROM colour WHERE id = NEW.colour_id; END`,
 		);
 		// When
-		const threw = await addOwnedItem(
-			h.db,
-			bucket(h),
-			"alice-id",
-			shirt(ids),
-		).then(
-			() => false,
-			() => true,
-		);
+		const res = await post(h, headers, shirt(ids));
 		// Then
-		expect({ threw, count: (await list(h, headers)).length }).toEqual({
-			threw: true,
+		expect({
+			status: res.status,
+			count: (await list(h, headers)).length,
+		}).toEqual({
+			status: 500,
 			count: 0,
 		});
 	});
 });
-
-const JPEG = new Uint8Array(100).fill(0x11);
-JPEG.set([0xff, 0xd8, 0xff, 0xe0]);
-
-// Uploads a draft picture and gives its id.
-const uploadPicture = async ({ app, env }: Harness, headers: Headers) =>
-	(
-		(await (
-			await app.request(
-				"/api/pictures",
-				{
-					method: "POST",
-					headers: {
-						...Object.fromEntries(headers),
-						"content-type": "image/jpeg",
-					},
-					body: JPEG,
-				},
-				env,
-			)
-		).json()) as { picture: { id: string } }
-	).picture.id;
 
 const uploads = async (h: Harness, headers: Headers, n: number) => {
 	const ids: string[] = [];
@@ -662,7 +587,7 @@ describe("pictures of an item", () => {
 		// Given: a Zara shirt, and a no-brand shirt of the same piece with two
 		// pictures
 		const { h, headers, ids } = await alice();
-		const zara = await addBrand(h, headers, "Zara");
+		const zara = await postBrand(h, headers, "Zara");
 		await post(h, headers, { ...shirt(ids), brandId: zara });
 		const [a, b] = await uploads(h, headers, 2);
 		await post(h, headers, {
@@ -843,20 +768,22 @@ describe("picture lists at once", () => {
 		const batch = db.batch;
 		const otherTabFirst: typeof batch = async (items) => {
 			db.batch = batch;
-			await deleteOwnedItem(db, bucket(h), "alice-id", FIRST_ID);
+			await send(h, headers, "DELETE", `/api/owned-items/${FIRST_ID}`);
 			return batch(items);
 		};
 		db.batch = otherTabFirst;
 		// When
-		const changed = await changeOwnedItem(db, bucket(h), "alice-id", FIRST_ID, {
-			brandId: null,
-			quantity: 1,
-			pictureIds: [a],
-		});
+		const changed = await answer(
+			await put(h, headers, FIRST_ID, {
+				brandId: null,
+				quantity: 1,
+				pictureIds: [a],
+			}),
+		);
 		const [row] = await h.rows(picture);
 		// Then
-		expect({ changed: changed as unknown, owner: row?.ownedItemId }).toEqual({
-			changed: { ok: false, error: { code: "not_found" } },
+		expect({ changed, owner: row?.ownedItemId }).toEqual({
+			changed: { status: 404, body: { error: "not_found" } },
 			owner: null,
 		});
 	});

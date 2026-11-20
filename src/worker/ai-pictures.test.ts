@@ -1,25 +1,21 @@
-import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
+import { describe, expect, setSystemTime, test } from "bun:test";
 import { schema } from "./db";
 import {
 	type aiSession,
+	answer,
 	BOB,
+	bytes,
 	type Harness,
+	JPEG,
+	PDF,
+	PNG,
+	send,
+	uploadPicture,
 	withAiSession,
 } from "./test/harness";
 import { claimUploadAddress, giveUploadAddress } from "./upload-address-store";
 
 type Session = Awaited<ReturnType<typeof aiSession>>;
-
-// The server checks only the first bytes, so these are not whole pictures.
-const bytes = (head: number[], length: number) => {
-	const body = new Uint8Array(length).fill(0x11);
-	body.set(head);
-	return body;
-};
-
-const JPEG = bytes([0xff, 0xd8, 0xff, 0xe0], 100);
-const PNG = bytes([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 100);
-const PDF = bytes([...new TextEncoder().encode("%PDF-1.7")], 100);
 
 const NO_SUCH_ID = "5b1f2c3d-0000-4000-8000-000000000000";
 
@@ -29,8 +25,6 @@ const GONE = {
 		"This upload address was used or has expired. get_upload_address gives a new one.",
 };
 
-afterEach(() => setSystemTime());
-
 const addressOf = async (ai: Session) => {
 	const { data } = await ai.call("get_upload_address");
 	return (data as { address: string }).address;
@@ -39,11 +33,6 @@ const addressOf = async (ai: Session) => {
 // An AI app sends the bytes as they are, with no sign-in.
 const postTo = (h: Harness, address: string, body: Uint8Array = JPEG) =>
 	h.app.request(address, { method: "POST", body }, h.env);
-
-const answer = async (response: Response) => ({
-	status: response.status,
-	body: await response.json(),
-});
 
 const uploadByAddress = async (h: Harness, address: string, body = JPEG) => {
 	const res = await postTo(h, address, body);
@@ -325,7 +314,11 @@ describe("owned item pictures", () => {
 		expect({
 			isError,
 			text,
-			items: await h.rows(schema.ownedItem),
+			items: (
+				(await (await send(h, ai.jar, "GET", "/api/owned-items")).json()) as {
+					ownedItems: unknown[];
+				}
+			).ownedItems,
 		}).toEqual({
 			isError: true,
 			text: "An owned item has at most 8 pictures.",
@@ -416,7 +409,10 @@ describe("shop link pictures", () => {
 			pictureIds: nine,
 		});
 		// Then
-		expect({ isError, text, links: await h.rows(schema.shopLink) }).toEqual({
+		const { wishes } = (await (
+			await send(h, ai.jar, "GET", "/api/wishes")
+		).json()) as { wishes: { shopLinks: unknown[] }[] };
+		expect({ isError, text, links: wishes[0]?.shopLinks }).toEqual({
 			isError: true,
 			text: "A shop link has at most 8 pictures.",
 			links: [],
@@ -550,17 +546,7 @@ describe("show_picture", () => {
 		// Given
 		const { h, ai } = await withAiSession();
 		const bob = await h.addAccount(BOB);
-		const uploaded = await h.app.request(
-			"/api/pictures",
-			{
-				method: "POST",
-				headers: { ...Object.fromEntries(bob), "content-type": "image/png" },
-				body: PNG,
-			},
-			h.env,
-		);
-		const p = ((await uploaded.json()) as { picture: { id: string } }).picture
-			.id;
+		const p = await uploadPicture(h, bob, PNG);
 		// When
 		const shown = await ai.show("show_picture", { id: p });
 		// Then

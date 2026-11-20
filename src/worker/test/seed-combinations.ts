@@ -3,6 +3,7 @@ import { LAYER_OF, type TypeId } from "@/dress/clothing-types";
 import { listColours } from "../colour-store";
 import type { Db } from "../db";
 import { combination, combinationPiece } from "../db/combination-schema";
+import { insertInChunks } from "./insert-in-chunks";
 
 const BOTTOMS: TypeId[] = [
 	"casual_sh",
@@ -14,10 +15,6 @@ const BOTTOMS: TypeId[] = [
 ];
 
 const TOPS: TypeId[] = ["tee_s", "tee_l", "polo_s", "polo_l"];
-
-// D1 takes at most 100 bound values in one statement; a combination binds 3
-// and its two pieces 10, so 9 combinations go in each pair of inserts.
-const CHUNK = 9;
 
 // Writes n combinations for the account, each with other pieces and no
 // jacket, so a test or the e2e setup can reach the limit without n requests.
@@ -41,25 +38,22 @@ export async function seedCombinations(db: Db, userId: string, n: number) {
 			pieces,
 		};
 	});
-	for (let i = 0; i < all.length; i += CHUNK) {
-		const chunk = all.slice(i, i + CHUNK);
-		await db.insert(combination).values(
-			chunk.map(({ id, pieces }) => ({
-				id,
+	await insertInChunks(
+		db,
+		combination,
+		all.map(({ id, pieces }) => ({ id, userId, key: combinationKey(pieces) })),
+	);
+	await insertInChunks(
+		db,
+		combinationPiece,
+		all.flatMap(({ id, pieces }) =>
+			pieces.map((p) => ({
+				combinationId: id,
 				userId,
-				key: combinationKey(pieces),
+				layer: LAYER_OF[p.typeId],
+				typeId: p.typeId,
+				colourId: p.colourId,
 			})),
-		);
-		await db.insert(combinationPiece).values(
-			chunk.flatMap(({ id, pieces }) =>
-				pieces.map((p) => ({
-					combinationId: id,
-					userId,
-					layer: LAYER_OF[p.typeId],
-					typeId: p.typeId,
-					colourId: p.colourId,
-				})),
-			),
-		);
-	}
+		),
+	);
 }

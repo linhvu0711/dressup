@@ -3,9 +3,7 @@ import { addBrand } from "../brand-store";
 import { listColours } from "../colour-store";
 import type { Db } from "../db";
 import { ownedItem } from "../db/owned-item-schema";
-
-// D1 takes at most 100 bound values in one statement; an owned item binds 7.
-const CHUNK = 12;
+import { insertInChunks } from "./insert-in-chunks";
 
 // Writes n owned items for the account, so a test or the e2e setup can reach
 // the limit without n requests. Each piece gets three items, one for each of
@@ -32,6 +30,5 @@ export async function seedOwnedItems(db: Db, userId: string, n: number) {
 			createdAt: new Date(Date.UTC(2026, 0, 1) - i * 1000),
 		};
 	});
-	for (let i = 0; i < all.length; i += CHUNK)
-		await db.insert(ownedItem).values(all.slice(i, i + CHUNK));
+	await insertInChunks(db, ownedItem, all);
 }

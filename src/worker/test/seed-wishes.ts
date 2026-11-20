@@ -2,9 +2,7 @@ import { TYPE_IDS } from "@/dress/clothing-types";
 import { listColours } from "../colour-store";
 import type { Db } from "../db";
 import { shopLink, wish } from "../db/wish-schema";
-
-// D1 takes at most 100 bound values in one statement; a wish binds 5.
-const CHUNK = 20;
+import { insertInChunks } from "./insert-in-chunks";
 
 // Writes n wishes for the account, so a test or the e2e setup can reach the
 // limit without n requests. Wish i is type i of the 17 in colour i / 17 of
@@ -19,8 +17,7 @@ export async function seedWishes(db: Db, userId: string, n: number) {
 		colourId: colours[Math.floor(i / TYPE_IDS.length)].id,
 		createdAt: new Date(Date.UTC(2026, 0, 1) - i * 1000),
 	}));
-	for (let i = 0; i < all.length; i += CHUNK)
-		await db.insert(wish).values(all.slice(i, i + CHUNK));
+	await insertInChunks(db, wish, all);
 }
 
 // Writes n shop links on the wish, named "Link 1" to "Link n", link i one
@@ -40,5 +37,5 @@ export async function seedShopLinks(
 		price: (i + 1) * 100000,
 		createdAt: new Date(Date.UTC(2026, 0, 1) + i * 1000),
 	}));
-	if (all.length > 0) await db.insert(shopLink).values(all);
+	await insertInChunks(db, shopLink, all);
 }

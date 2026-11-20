@@ -2,18 +2,19 @@ import { Database } from "bun:sqlite";
 import { readdirSync, readFileSync } from "node:fs";
 import { betterAuth } from "better-auth";
 import { testUtils } from "better-auth/plugins";
-import { eq, sql } from "drizzle-orm";
+import { eq, getTableName, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 import { createApp } from "../app";
 import { type AuthSettings, authOptions, createClientDiscovery } from "../auth";
 import { type Db, schema } from "../db";
+import { insertInChunks } from "./insert-in-chunks";
 import { MemoryBucket } from "./memory-bucket";
 import { seedCombinations } from "./seed-combinations";
 import { seedOwnedItems } from "./seed-owned-items";
 import { seedShopLinks, seedWishes } from "./seed-wishes";
 
-export const testEnv = {
+const testEnv = {
 	GOOGLE_CLIENT_ID: "test-client",
 	GOOGLE_CLIENT_SECRET: "test-secret",
 	BETTER_AUTH_SECRET: "test-secret-at-least-32-characters-long",
@@ -112,7 +113,9 @@ export async function makeHarness(options: { through?: string } = {}) {
 		userId?: string,
 	) {
 		const query = db.select().from(table);
-		if (userId === undefined || !table.userId) return query;
+		if (userId === undefined) return query;
+		if (!table.userId)
+			throw new Error(`rows: ${getTableName(table)} has no user column`);
 		return query.where(eq(table.userId, userId));
 	}
 	const tables = () =>
@@ -147,9 +150,7 @@ export async function makeHarness(options: { through?: string } = {}) {
 			bytes,
 			createdAt: new Date(),
 		}));
-		// D1 takes at most 100 bound values in one statement; a picture binds 5.
-		for (let i = 0; i < all.length; i += 20)
-			await db.insert(schema.picture).values(all.slice(i, i + 20));
+		await insertInChunks(db, schema.picture, all);
 		await db
 			.insert(schema.pictureStorage)
 			.values({ id: 1, bytes: n * bytes })
@@ -254,7 +255,6 @@ export async function makeHarness(options: { through?: string } = {}) {
 	return {
 		app,
 		env,
-		helpers,
 		settings,
 		db,
 		pictures,
@@ -294,12 +294,42 @@ export const BOB: Person = {
 	name: "Bob",
 };
 
-// A fresh harness with one signed-in account, Alice unless named.
-export async function withAccount(person: Person = ALICE) {
+// A fresh harness with Alice signed in.
+export async function withAccount() {
 	const h = await makeHarness();
-	const headers = await h.addAccount(person);
+	const headers = await h.addAccount(ALICE);
 	return { h, headers };
 }
+
+// Another tab's save of the same name, written by a trigger just before this
+// request's own write, after its duplicate check has passed.
+export const otherTabWrites = (
+	h: Harness,
+	table: "brand" | "colour" | "tag",
+	when: "INSERT" | "UPDATE",
+	name: string,
+) => {
+	const hex = table === "colour" ? ["hex"] : [];
+	const columns = ["id", "user_id", "name", ...hex, "created_at"].join(", ");
+	const values = [
+		"'other-tab'",
+		"NEW.user_id",
+		"lower(NEW.name)",
+		...hex.map((c) => `NEW.${c}`),
+		"0",
+	].join(", ");
+	h.addTrigger(
+		`CREATE TRIGGER other_tab BEFORE ${when} ON ${table} WHEN NEW.name = '${name}'
+		BEGIN
+			INSERT INTO ${table} (${columns})
+			VALUES (${values});
+		END`,
+	);
+};
+
+// Every row of a table.
+export const count = async (h: Harness, table: SQLiteTable) =>
+	(await h.rows(table)).length;
 
 const base64url = (value: unknown) =>
 	Buffer.from(JSON.stringify(value)).toString("base64url");
@@ -465,6 +495,10 @@ export async function finishGoogleSignIn(
 	return { res, jar: store(new Map(), res) };
 }
 
+// A browser's whole Google sign-in, as the stubbed Google user.
+export const googleSignIn = async (h: Harness) =>
+	finishGoogleSignIn(h, await startGoogleSignIn(h));
+
 // The PKCE pair is RFC 7636's example. The port is one the document does not
 // list: a loopback address may use any port.
 export const AUTHORIZE =
@@ -503,7 +537,7 @@ export async function connectAiApp(
 		h.env,
 	);
 	const consent = (await consentRes.json()) as { url: string };
-	if (!accept) return { jar, allowUrl, consent };
+	if (!accept) return { jar, consent };
 	const code = new URL(consent.url).searchParams.get("code") ?? "";
 	const tokenRes = await h.app.request(
 		"/api/auth/oauth2/token",
@@ -529,26 +563,98 @@ export async function connectAiApp(
 			expires_in: number;
 		},
 	};
-	return { jar, allowUrl, consent, token };
+	return { jar, consent, token };
 }
 
-export const send = (
+// A request as a signed-in account (its headers) or as a browser (its
+// cookies). Bytes go as an upload; any other body goes as JSON.
+// A signed-in account's headers, or a browser's cookies.
+type Auth = Headers | Record<string, string> | Jar;
+
+export const send = async (
 	h: Harness,
-	jar: Jar,
+	auth: Auth,
+	method: string,
 	path: string,
-	init: RequestInit = {},
-) =>
-	h.app.request(
+	body?: unknown,
+): Promise<Response> => {
+	const headers = new Headers(
+		auth instanceof Map ? (auth.size ? { cookie: cookie(auth) } : {}) : auth,
+	);
+	if (body instanceof Uint8Array) headers.set("content-type", "image/jpeg");
+	else if (body !== undefined) headers.set("content-type", "application/json");
+	return h.app.request(
 		path,
 		{
-			...init,
-			headers: {
-				...(init.headers as Record<string, string>),
-				...(jar.size ? { cookie: cookie(jar) } : {}),
-			},
+			method,
+			headers,
+			body:
+				body === undefined || body instanceof Uint8Array
+					? (body as BodyInit | undefined)
+					: JSON.stringify(body),
 		},
 		h.env,
 	);
+};
+
+export const answer = async (res: Response) => ({
+	status: res.status,
+	body: await res.json(),
+});
+
+// The server checks only the first bytes, so these are not whole pictures.
+export const bytes = (head: number[], length: number) => {
+	const body = new Uint8Array(length).fill(0x11);
+	body.set(head);
+	return body;
+};
+
+export const JPEG = bytes([0xff, 0xd8, 0xff, 0xe0], 100);
+export const PNG = bytes([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 100);
+export const PDF = bytes([...new TextEncoder().encode("%PDF-1.7")], 100);
+
+// Uploads a draft picture and gives its id.
+export const uploadPicture = async (
+	h: Harness,
+	auth: Auth,
+	body: Uint8Array = JPEG,
+) =>
+	(
+		(await (await send(h, auth, "POST", "/api/pictures", body)).json()) as {
+			picture: { id: string };
+		}
+	).picture.id;
+
+// Colour ids by name.
+export type Ids = Record<string, string>;
+
+export const colourIds = async (h: Harness, auth: Auth): Promise<Ids> => {
+	const { colours } = (await (
+		await send(h, auth, "GET", "/api/colours")
+	).json()) as { colours: { id: string; name: string }[] };
+	return Object.fromEntries(colours.map((c) => [c.name, c.id]));
+};
+
+// Alice signed in, with her colour ids.
+export async function alice() {
+	const { h, headers } = await withAccount();
+	const ids = await colourIds(h, headers);
+	return { h, headers, ids };
+}
+
+// Adds a brand through the route and gives its id.
+export const postBrand = async (h: Harness, auth: Auth, name: string) =>
+	(
+		(await (await send(h, auth, "POST", "/api/brands", { name })).json()) as {
+			brand: { id: string };
+		}
+	).brand.id;
+
+// Adds "Brand 1" to "Brand n" through the route.
+export async function postBrands(h: Harness, auth: Auth, n: number) {
+	for (let i = 1; i <= n; i++)
+		await send(h, auth, "POST", "/api/brands", { name: `Brand ${i}` });
+}
 
 export const INITIALIZE = {
 	jsonrpc: "2.0",
@@ -594,7 +700,7 @@ type ToolResult = {
 	structuredContent?: Record<string, unknown>;
 };
 
-export type ListedTool = {
+type ListedTool = {
 	name: string;
 	title?: string;
 	annotations?: Record<string, unknown>;
@@ -663,7 +769,7 @@ export async function aiSession(h: Harness) {
 }
 
 const accountId = async (h: Harness, jar: Jar) =>
-	((await (await send(h, jar, "/api/me")).json()) as { id: string }).id;
+	((await (await send(h, jar, "GET", "/api/me")).json()) as { id: string }).id;
 
 // Alice, through Google, with the test app connected and allowed: its pass in
 // bearer, her browser in jar.

@@ -1,56 +1,34 @@
-import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
-import { addBrand } from "./brand-store";
-import { saveCombination } from "./combination-store";
+import { describe, expect, setSystemTime, test } from "bun:test";
 import { schema } from "./db";
 import {
 	type aiSession,
 	BOB,
+	bytes,
 	type Harness,
+	postBrands,
 	send,
+	uploadPicture,
 	withAiSession,
 } from "./test/harness";
 
 type Session = Awaited<ReturnType<typeof aiSession>>;
 
-const sendJson = (
-	h: Harness,
-	ai: Session,
-	method: string,
-	path: string,
-	body: unknown,
-) =>
-	send(h, ai.jar, path, {
-		method,
-		headers: { "content-type": "application/json" },
-		body: JSON.stringify(body),
-	});
-
 const addTag = async (h: Harness, ai: Session, name: string) => {
-	const res = await sendJson(h, ai, "POST", "/api/tags", { name });
+	const res = await send(h, ai.jar, "POST", "/api/tags", { name });
 	expect(res.status).toBe(201);
 	return ((await res.json()) as { tag: { id: string } }).tag.id;
 };
 
 // A second account, bob, and a way to send as him.
 async function asBob(h: Harness) {
-	const headers = Object.fromEntries(await h.addAccount(BOB));
+	const headers = await h.addAccount(BOB);
 	return (method: string, path: string, body?: unknown) =>
-		h.app.request(
-			path,
-			body === undefined
-				? { method, headers }
-				: {
-						method,
-						headers: { ...headers, "content-type": "application/json" },
-						body: JSON.stringify(body),
-					},
-			h.env,
-		);
+		send(h, headers, method, path, body);
 }
 
 const tags = async (h: Harness, ai: Session) =>
 	(
-		(await (await send(h, ai.jar, "/api/tags")).json()) as {
+		(await (await send(h, ai.jar, "GET", "/api/tags")).json()) as {
 			tags: { id: string; name: string; combinations: number }[];
 		}
 	).tags;
@@ -240,9 +218,9 @@ describe("tags", () => {
 		// Given
 		const { h, ai } = await withAiSession();
 		const work = await addTag(h, ai, "Work");
-		expect(
-			(await send(h, ai.jar, `/api/tags/${work}`, { method: "DELETE" })).status,
-		).toBe(204);
+		expect((await send(h, ai.jar, "DELETE", `/api/tags/${work}`)).status).toBe(
+			204,
+		);
 		// When
 		const { isError, text } = await ai.call("rename_tag", {
 			id: work,
@@ -294,7 +272,7 @@ type Colour = { id: string; name: string; hex: string; inUse?: boolean };
 
 const colours = async (h: Harness, ai: Session) =>
 	(
-		(await (await send(h, ai.jar, "/api/colours")).json()) as {
+		(await (await send(h, ai.jar, "GET", "/api/colours")).json()) as {
 			colours: Colour[];
 		}
 	).colours;
@@ -408,11 +386,11 @@ describe("colours", () => {
 
 	test("refuses to delete a colour a combination uses", async () => {
 		// Given: the account saved Navy casual pants and a White long tee
-		const { h, ai, userId } = await withAiSession();
+		const { h, ai } = await withAiSession();
 		const listed = await colours(h, ai);
 		const idOf = (name: string) =>
 			listed.find((c) => c.name === name)?.id ?? "";
-		await saveCombination(h.db, userId, {
+		await send(h, ai.jar, "POST", "/api/combinations", {
 			id: "11111111-1111-4111-8111-111111111111",
 			pieces: [
 				{ typeId: "casual_p", colourId: idOf("Navy") },
@@ -510,9 +488,9 @@ describe("brands", () => {
 	});
 
 	test("refuses brand number 101", async () => {
-		// Given: 100 brands, added through the store
-		const { h, ai, userId } = await withAiSession();
-		for (let i = 1; i <= 100; i++) await addBrand(h.db, userId, `Brand ${i}`);
+		// Given: 100 brands, added through the routes
+		const { h, ai } = await withAiSession();
+		await postBrands(h, ai.jar, 100);
 		// When
 		const { isError, text } = await ai.call("add_brand", { name: "Uniqlo" });
 		// Then
@@ -565,8 +543,6 @@ describe("brands", () => {
 });
 
 describe("AI action limit", () => {
-	afterEach(() => setSystemTime());
-
 	// Starts a clock minute so the 61 calls cannot cross into the next one.
 	async function sixtyActions() {
 		const { h, ai } = await withAiSession();
@@ -640,7 +616,7 @@ describe("AI action limit", () => {
 		// When
 		const statuses: number[] = [];
 		for (let i = 0; i < 61; i++)
-			statuses.push((await send(h, ai.jar, "/api/tags")).status);
+			statuses.push((await send(h, ai.jar, "GET", "/api/tags")).status);
 		// Then
 		expect({
 			count: statuses.length,
@@ -1383,17 +1359,6 @@ describe("owned items", () => {
 	});
 
 	// A draft picture uploaded as the session's browser, by id.
-	const uploadPicture = async (h: Harness, ai: Session) => {
-		const body = new Uint8Array(100).fill(0x11);
-		body.set([0xff, 0xd8, 0xff, 0xe0]);
-		const res = await send(h, ai.jar, "/api/pictures", {
-			method: "POST",
-			headers: { "content-type": "image/jpeg" },
-			body,
-		});
-		return ((await res.json()) as { picture: { id: string } }).picture.id;
-	};
-
 	// The shirt with these pictures, added as the website adds it, by id.
 	const addWithPictures = async (
 		h: Harness,
@@ -1401,7 +1366,7 @@ describe("owned items", () => {
 		pictureIds: string[],
 	) => {
 		const id = crypto.randomUUID();
-		const res = await sendJson(h, ai, "POST", "/api/owned-items", {
+		const res = await send(h, ai.jar, "POST", "/api/owned-items", {
 			...(await shirt(ai)),
 			id,
 			brandId: null,
@@ -1414,7 +1379,7 @@ describe("owned items", () => {
 	test("deletes an owned item with its pictures", async () => {
 		// Given
 		const { h, ai } = await withAiSession();
-		const a = await uploadPicture(h, ai);
+		const a = await uploadPicture(h, ai.jar);
 		const id = await addWithPictures(h, ai, [a]);
 		// When
 		await ai.call("delete_owned_item", { id });
@@ -1425,8 +1390,8 @@ describe("owned items", () => {
 	test("lists the picture ids of each item in upload order", async () => {
 		// Given
 		const { h, ai } = await withAiSession();
-		const a = await uploadPicture(h, ai);
-		const b = await uploadPicture(h, ai);
+		const a = await uploadPicture(h, ai.jar);
+		const b = await uploadPicture(h, ai.jar);
 		await addWithPictures(h, ai, [a, b]);
 		// When
 		const { data } = await ai.call("list_owned_items");
@@ -1630,18 +1595,10 @@ describe("wishes", () => {
 	) {
 		const pictureIds: string[] = [];
 		for (let i = 0; i < n; i++) {
-			const body = new Uint8Array(100).fill(0x11 + i);
-			body.set([0xff, 0xd8, 0xff, 0xe0]);
-			const res = await send(h, ai.jar, "/api/pictures", {
-				method: "POST",
-				headers: { "content-type": "image/jpeg" },
-				body,
-			});
-			pictureIds.push(
-				((await res.json()) as { picture: { id: string } }).picture.id,
-			);
+			const body = bytes([0xff, 0xd8, 0xff, 0xe0], 100).fill(0x11 + i, 4);
+			pictureIds.push(await uploadPicture(h, ai.jar, body));
 		}
-		await sendJson(h, ai, "PUT", `/api/shop-links/${id}`, {
+		await send(h, ai.jar, "PUT", `/api/shop-links/${id}`, {
 			url: "https://cos.com/jacket",
 			brandId: null,
 			name: "Wool jacket",
