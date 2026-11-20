@@ -2,14 +2,14 @@ import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
 import { WISHLIST_FULL_FILE } from "./global-setup";
 import { colourIds, postBrand } from "./label-helpers";
+import { sheet, toast } from "./locators";
 import { postShopLink, postWish } from "./wishlist-helpers";
 
 const mainNav = (page: Page) => page.getByRole("navigation", { name: "Main" });
 
 const tiles = (page: Page) => page.locator('[data-slot="wish-tile"]');
 
-const addSheet = (page: Page) =>
-	page.getByRole("dialog", { name: "Add to wishlist" });
+const addSheet = (page: Page) => sheet(page, "Add to wishlist");
 
 // The header's "+", which comes before the empty notice's button.
 const openAddSheet = (page: Page) =>
@@ -21,8 +21,7 @@ const openAddSheet = (page: Page) =>
 // Picks a type and a colour in the open add sheet.
 async function pickPiece(page: Page, type: string, colour: string) {
 	await addSheet(page).getByRole("button", { name: "Pick a type" }).click();
-	await page
-		.getByRole("dialog", { name: "Pick a type" })
+	await sheet(page, "Pick a type")
 		.getByRole("button", { name: type, exact: true })
 		.click();
 	await addSheet(page)
@@ -254,9 +253,7 @@ test("adds a wish from the form and opens its piece page", async ({ page }) => {
 	await pickPiece(page, "Wool jacket", "Charcoal");
 	await addSheet(page).getByRole("button", { name: "Save" }).click();
 	// Then
-	await expect(page.locator('[data-slot="toast"]')).toHaveText(
-		"Added to your wishlist",
-	);
+	await expect(toast(page)).toHaveText("Added to your wishlist");
 	await expect(page).toHaveURL(`/piece/wool/${ids.Charcoal}`);
 	await expect(
 		page.getByRole("heading", { name: "Charcoal wool jacket" }),
@@ -498,8 +495,7 @@ test("sends a piece page with no item and no wish back to the wishlist", async (
 	}).toPass();
 });
 
-const linkSheet = (page: Page, name = "Add a shop link") =>
-	page.getByRole("dialog", { name });
+const linkSheet = (page: Page, name = "Add a shop link") => sheet(page, name);
 
 // A fresh account with a Charcoal wool jacket wish, on its piece page.
 async function onJacketPage(page: Page) {
@@ -529,9 +525,7 @@ test("adds a shop link from the sheet", async ({ page }) => {
 		.pressSequentially("2990000");
 	await linkSheet(page).getByRole("button", { name: "Save" }).click();
 	// Then
-	await expect(page.locator('[data-slot="toast"]')).toHaveText(
-		"Shop link added",
-	);
+	await expect(toast(page)).toHaveText("Shop link added");
 	expect(await cards(page).first().locator("p, a").allInnerTexts()).toEqual([
 		"zara.com",
 		"Wool blend jacket",
@@ -557,24 +551,24 @@ test("refuses an address without http and a link with no name", async ({
 	// Given: the sheet open, the name Shirt
 	await onJacketPage(page);
 	await page.getByRole("button", { name: "Add a shop link" }).click();
-	const sheet = linkSheet(page);
-	await sheet.getByRole("textbox", { name: "Name" }).fill("Shirt");
+	const dialog = linkSheet(page);
+	await dialog.getByRole("textbox", { name: "Name" }).fill("Shirt");
 	// When
-	await sheet.getByRole("textbox", { name: "Address" }).fill("zara.com/shirt");
-	await sheet.getByRole("button", { name: "Save" }).click();
+	await dialog.getByRole("textbox", { name: "Address" }).fill("zara.com/shirt");
+	await dialog.getByRole("button", { name: "Save" }).click();
 	// Then
-	await expect(sheet.getByRole("alert")).toHaveText(
+	await expect(dialog.getByRole("alert")).toHaveText(
 		"Enter a web address that starts with https://.",
 	);
 	// When
-	await sheet
+	await dialog
 		.getByRole("textbox", { name: "Address" })
 		.fill("https://zara.com/shirt");
-	await sheet.getByRole("textbox", { name: "Name" }).fill("");
-	await sheet.getByRole("button", { name: "Save" }).click();
+	await dialog.getByRole("textbox", { name: "Name" }).fill("");
+	await dialog.getByRole("button", { name: "Save" }).click();
 	// Then
-	await expect(sheet.getByRole("alert")).toHaveText("Enter a name.");
-	await expect(sheet).toBeVisible();
+	await expect(dialog.getByRole("alert")).toHaveText("Enter a name.");
+	await expect(dialog).toBeVisible();
 });
 
 // The jacket page with the Zara link at 2.990.000.
@@ -596,11 +590,11 @@ test("changes a shop link", async ({ page }) => {
 	await onJacketWithLink(page);
 	// When
 	await page.getByRole("button", { name: "Change shop link" }).click();
-	const sheet = linkSheet(page, "Edit shop link");
-	await sheet.getByRole("textbox", { name: "Price in ₫" }).fill("2490000");
-	await sheet.getByRole("button", { name: "Save" }).click();
+	const dialog = linkSheet(page, "Edit shop link");
+	await dialog.getByRole("textbox", { name: "Price in ₫" }).fill("2490000");
+	await dialog.getByRole("button", { name: "Save" }).click();
 	// Then
-	await expect(page.locator('[data-slot="toast"]')).toHaveText("Changes saved");
+	await expect(toast(page)).toHaveText("Changes saved");
 	await expect(cards(page).first()).toContainText("2.490.000 ₫");
 });
 
@@ -618,9 +612,7 @@ test("deletes a shop link after its confirm", async ({ page }) => {
 	// When
 	await confirm.getByRole("button", { name: "Delete" }).click();
 	// Then
-	await expect(page.locator('[data-slot="toast"]')).toHaveText(
-		"Shop link deleted",
-	);
+	await expect(toast(page)).toHaveText("Shop link deleted");
 	await expect(page.getByText("No shop link yet.")).toBeVisible();
 });
 
@@ -703,9 +695,7 @@ test("removes a wish after a confirm that counts its links", async ({
 	// When
 	await confirm.getByRole("button", { name: "Remove" }).click();
 	// Then
-	await expect(page.locator('[data-slot="toast"]')).toHaveText(
-		"Removed from your wishlist",
-	);
+	await expect(toast(page)).toHaveText("Removed from your wishlist");
 	await expect(page.getByRole("heading", { level: 2 })).toHaveText([
 		"In your closet",
 	]);

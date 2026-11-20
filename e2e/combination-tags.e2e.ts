@@ -2,13 +2,11 @@ import type { Page } from "@playwright/test";
 import { pick, postCombinations, three, two } from "./combination-helpers";
 import { expect, test } from "./fixtures";
 import { colourIds, postTag } from "./label-helpers";
+import { sheet, toast } from "./locators";
 
-const saveDialog = (page: Page) =>
-	page.getByRole("dialog", { name: "Save combination" });
+const saveDialog = (page: Page) => sheet(page, "Save combination");
 
 const pills = (page: Page) => page.locator('[data-slot="combination-tag"]');
-
-const toast = (page: Page) => page.locator('[data-slot="toast"]');
 
 const storedCombinations = async (page: Page) =>
 	(
@@ -179,11 +177,10 @@ const tagRowNames = (page: Page) =>
 
 const notes = (page: Page) => page.locator('[data-slot="label-note"]');
 
-const sheet = (page: Page, name = "New tag") =>
-	page.getByRole("dialog", { name });
+const addSheet = (page: Page) => sheet(page, "New tag");
 
 const nameBox = (page: Page) =>
-	page.getByRole("dialog").getByRole("textbox", { name: "Name" });
+	sheet(page).getByRole("textbox", { name: "Name" });
 
 const mainNav = (page: Page) => page.getByRole("navigation", { name: "Main" });
 
@@ -203,15 +200,9 @@ async function renameFromRow(page: Page, from: string, to: string) {
 
 async function deleteFromRow(page: Page, name: string) {
 	await tagRows(page).filter({ hasText: name }).click();
-	await page
-		.getByRole("dialog")
-		.getByRole("button", { name: "Delete" })
-		.click();
-	await page
-		.getByRole("dialog")
-		.getByRole("button", { name: "Delete" })
-		.click();
-	await expect(page.getByRole("dialog")).toHaveCount(0);
+	await sheet(page).getByRole("button", { name: "Delete" }).click();
+	await sheet(page).getByRole("button", { name: "Delete" }).click();
+	await expect(sheet(page)).toHaveCount(0);
 }
 
 // From the Labels page to the combination's page.
@@ -267,7 +258,9 @@ test("adds a tag from the + form", async ({ page }) => {
 	// When
 	await page.getByRole("button", { name: "Add a tag" }).click();
 	await nameBox(page).fill("work");
-	await sheet(page).getByRole("button", { name: "Save", exact: true }).click();
+	await addSheet(page)
+		.getByRole("button", { name: "Save", exact: true })
+		.click();
 	// Then
 	await expect(toast(page)).toHaveText("Tag saved");
 	await expect(tagRows(page)).toHaveCount(1);
@@ -285,9 +278,11 @@ test("asks for a tag name and sends nothing", async ({ page }) => {
 	await openTags(page);
 	// When
 	await page.getByRole("button", { name: "Add a tag" }).click();
-	await sheet(page).getByRole("button", { name: "Save", exact: true }).click();
+	await addSheet(page)
+		.getByRole("button", { name: "Save", exact: true })
+		.click();
 	// Then
-	await expect(sheet(page).getByRole("alert")).toHaveText("Enter a name.");
+	await expect(addSheet(page).getByRole("alert")).toHaveText("Enter a name.");
 	expect(posts).toBe(0);
 });
 
@@ -299,12 +294,14 @@ test("says a taken tag name is taken, in any case", async ({ page }) => {
 	// When
 	await page.getByRole("button", { name: "Add a tag" }).click();
 	await nameBox(page).fill("WORK");
-	await sheet(page).getByRole("button", { name: "Save", exact: true }).click();
+	await addSheet(page)
+		.getByRole("button", { name: "Save", exact: true })
+		.click();
 	// Then
-	await expect(sheet(page).getByRole("alert")).toHaveText(
+	await expect(addSheet(page).getByRole("alert")).toHaveText(
 		"You have this tag already.",
 	);
-	await expect(sheet(page)).toBeVisible();
+	await expect(addSheet(page)).toBeVisible();
 });
 
 test("keeps a tag name to 24 characters", async ({ page }) => {
@@ -349,7 +346,7 @@ test("deletes a tag from the confirm step", async ({ page }) => {
 	await tagRows(page).filter({ hasText: "work" }).click();
 	await sheet(page, "Edit tag").getByRole("button", { name: "Delete" }).click();
 	// Then
-	const confirm = page.getByRole("dialog", { name: "Delete this tag?" });
+	const confirm = sheet(page, "Delete this tag?");
 	await expect(confirm.getByRole("button", { name: "Back" })).toBeVisible();
 	await expect(confirm).toContainText("It comes off 1 combination.");
 	// When

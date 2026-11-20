@@ -3,13 +3,13 @@ import { postOwnedItems } from "./closet-helpers";
 import { expect, test } from "./fixtures";
 import { CLOSET_FULL_FILE } from "./global-setup";
 import { colourIds, postBrand } from "./label-helpers";
+import { sheet, toast } from "./locators";
 
 const mainNav = (page: Page) => page.getByRole("navigation", { name: "Main" });
 
 const tiles = (page: Page) => page.locator('[data-slot="closet-tile"]');
 
-const addSheet = (page: Page) =>
-	page.getByRole("dialog", { name: "Add to closet" });
+const addSheet = (page: Page) => sheet(page, "Add to closet");
 
 // The header's "+", which comes before the empty notice's button.
 const openAddSheet = (page: Page) =>
@@ -21,8 +21,7 @@ const openAddSheet = (page: Page) =>
 // Picks Long button-up and Navy in the open add sheet.
 async function pickNavyShirt(page: Page) {
 	await addSheet(page).getByRole("button", { name: "Pick a type" }).click();
-	await page
-		.getByRole("dialog", { name: "Pick a type" })
+	await sheet(page, "Pick a type")
 		.getByRole("button", { name: "Long button-up", exact: true })
 		.click();
 	await addSheet(page)
@@ -167,7 +166,7 @@ test("swaps the sheet to the type list and back", async ({ page }) => {
 	await openAddSheet(page);
 	await addSheet(page).getByRole("button", { name: "Pick a type" }).click();
 	// Then
-	const types = page.getByRole("dialog", { name: "Pick a type" });
+	const types = sheet(page, "Pick a type");
 	const typeButtons = types.locator('[data-slot="type-option"]');
 	await expect(typeButtons).toHaveCount(17);
 	await expect(typeButtons.first()).toHaveAccessibleName("Short tee");
@@ -183,9 +182,7 @@ test("adds an item from the form and shows its tile", async ({ page }) => {
 	await addSheet(page).getByRole("button", { name: "More" }).click();
 	await addSheet(page).getByRole("button", { name: "Save" }).click();
 	// Then
-	await expect(page.locator('[data-slot="toast"]')).toHaveText(
-		"Added to your closet",
-	);
+	await expect(toast(page)).toHaveText("Added to your closet");
 	await expect(tiles(page)).toHaveCount(1);
 	await expect(tiles(page)).toHaveAccessibleName("Navy long button-up, 2");
 });
@@ -355,8 +352,7 @@ test("sends a piece page with no item back to the closet", async ({ page }) => {
 	await expect(page).toHaveURL("/closet");
 });
 
-const editSheet = (page: Page) =>
-	page.getByRole("dialog", { name: "Edit item" });
+const editSheet = (page: Page) => sheet(page, "Edit item");
 
 test("changes an item's quantity", async ({ page }) => {
 	// Given: a fresh account with a Navy long button-up, no brand, 2; the
@@ -375,7 +371,7 @@ test("changes an item's quantity", async ({ page }) => {
 	await editSheet(page).getByRole("button", { name: "More" }).click();
 	await editSheet(page).getByRole("button", { name: "Save" }).click();
 	// Then
-	await expect(page.locator('[data-slot="toast"]')).toHaveText("Changes saved");
+	await expect(toast(page)).toHaveText("Changes saved");
 	await expect(itemRows(page)).toHaveCount(1);
 	await expect(itemRows(page)).toHaveAccessibleName("No brand × 3");
 });
@@ -396,14 +392,11 @@ test("deletes the last item of a piece and the tile leaves", async ({
 	// When
 	await page.getByRole("button", { name: "No brand × 2" }).click();
 	await editSheet(page).getByRole("button", { name: "Delete" }).click();
-	await page
-		.getByRole("dialog", { name: "Remove this item?" })
+	await sheet(page, "Remove this item?")
 		.getByRole("button", { name: "Delete" })
 		.click();
 	// Then
-	await expect(page.locator('[data-slot="toast"]')).toHaveText(
-		"Removed from your closet",
-	);
+	await expect(toast(page)).toHaveText("Removed from your closet");
 	await expect(page).toHaveURL("/closet");
 	await expect(tiles(page)).toHaveCount(1);
 	await expect(tiles(page)).toHaveAccessibleName("White short tee, 1");
@@ -425,7 +418,7 @@ test("shows Could not load your brands and loads them on Retry", async ({
 	await openAddSheet(page);
 	// When
 	await addSheet(page).getByRole("button", { name: "No brand" }).click();
-	const brandStep = page.getByRole("dialog", { name: "Pick a brand" });
+	const brandStep = sheet(page, "Pick a brand");
 	await expect(brandStep.getByRole("alert")).toHaveText(
 		"Could not load your brands",
 	);
@@ -470,7 +463,7 @@ test("keeps a changed quantity when an older closet load ends after the save", a
 	await page.getByRole("button", { name: "No brand × 2" }).click();
 	await editSheet(page).getByRole("button", { name: "More" }).click();
 	await editSheet(page).getByRole("button", { name: "Save" }).click();
-	await expect(page.locator('[data-slot="toast"]')).toHaveText("Changes saved");
+	await expect(toast(page)).toHaveText("Changes saved");
 	release();
 	await page.waitForLoadState("networkidle");
 	// Then
@@ -503,8 +496,6 @@ test("saves a new pick after a save whose answer was lost", async ({
 		.click();
 	await addSheet(page).getByRole("button", { name: "Save" }).click();
 	// Then
-	await expect(page.locator('[data-slot="toast"]')).toHaveText(
-		"Added to your closet",
-	);
+	await expect(toast(page)).toHaveText("Added to your closet");
 	await expect(tiles(page)).toHaveCount(2);
 });

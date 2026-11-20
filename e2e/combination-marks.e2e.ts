@@ -3,6 +3,7 @@ import { postOwnedItems } from "./closet-helpers";
 import { postCombinations } from "./combination-helpers";
 import { expect, test } from "./fixtures";
 import { colourIds } from "./label-helpers";
+import { sheet } from "./locators";
 import { postShopLink, postWish } from "./wishlist-helpers";
 
 const lines = (page: Page) => page.locator('[data-slot="piece-line"]');
@@ -78,18 +79,17 @@ test("shows Own after an owned item is added, with no reload", async ({
 	// When: the Navy casual pants go into the closet
 	await mainNav(page).getByRole("link", { name: "Closet" }).click();
 	await page.getByRole("button", { name: "Add to closet" }).click();
-	const sheet = page.getByRole("dialog", { name: "Add to closet" });
-	await sheet.getByRole("button", { name: "Pick a type" }).click();
-	await page
-		.getByRole("dialog", { name: "Pick a type" })
+	const dialog = sheet(page, "Add to closet");
+	await dialog.getByRole("button", { name: "Pick a type" }).click();
+	await sheet(page, "Pick a type")
 		.getByRole("button", { name: "Casual pants", exact: true })
 		.click();
-	await sheet
+	await dialog
 		.getByRole("radiogroup", { name: "Colour" })
 		.getByRole("radio", { name: "Navy", exact: true })
 		.click();
-	await sheet.getByRole("button", { name: "Save" }).click();
-	await expect(sheet).toBeHidden();
+	await dialog.getByRole("button", { name: "Save" }).click();
+	await expect(dialog).toBeHidden();
 	await mainNav(page).getByRole("link", { name: "Combinations" }).click();
 	await page.locator('[data-slot="combination-card"]').first().click();
 	// Then

@@ -3,6 +3,7 @@ import { postOwnedItems } from "./closet-helpers";
 import { expect, test } from "./fixtures";
 import { BRANDS_FULL_FILE } from "./global-setup";
 import { colourIds, postBrand } from "./label-helpers";
+import { sheet, toast } from "./locators";
 import { postShopLink, postWish } from "./wishlist-helpers";
 
 const rows = (page: Page) =>
@@ -13,13 +14,10 @@ const rowNames = (page: Page) =>
 		buttons.map((b) => b.getAttribute("aria-label")),
 	);
 
-const sheet = (page: Page, name = "New brand") =>
-	page.getByRole("dialog", { name });
+const addSheet = (page: Page) => sheet(page, "New brand");
 
 const nameBox = (page: Page) =>
-	page.getByRole("dialog").getByRole("textbox", { name: "Name" });
-
-const toast = (page: Page) => page.locator('[data-slot="toast"]');
+	sheet(page).getByRole("textbox", { name: "Name" });
 
 async function openBrands(page: Page) {
 	await page.goto("/labels");
@@ -29,7 +27,9 @@ async function openBrands(page: Page) {
 async function addThroughForm(page: Page, name: string) {
 	await page.getByRole("button", { name: "Add a brand" }).click();
 	await nameBox(page).fill(name);
-	await sheet(page).getByRole("button", { name: "Save", exact: true }).click();
+	await addSheet(page)
+		.getByRole("button", { name: "Save", exact: true })
+		.click();
 }
 
 test("shows Colours, Brands, and Tags in one row of the switch", async ({
@@ -71,7 +71,7 @@ test("adds brands and lists them A to Z", async ({ page }) => {
 	// When
 	for (const name of ["Zara", "acne", "COS"]) {
 		await addThroughForm(page, name);
-		await expect(sheet(page)).toHaveCount(0);
+		await expect(addSheet(page)).toHaveCount(0);
 	}
 	// Then
 	await expect(toast(page)).toHaveText("Brand added");
@@ -87,7 +87,7 @@ test("says a taken name is taken, in any case", async ({ page }) => {
 	// When
 	await addThroughForm(page, "zara");
 	// Then
-	await expect(sheet(page).getByRole("alert")).toHaveText(
+	await expect(addSheet(page).getByRole("alert")).toHaveText(
 		"You have this brand already.",
 	);
 	// The open sheet hides the page from roles, so the rows are read as items.
@@ -105,9 +105,11 @@ test("asks for a name and sends nothing", async ({ page }) => {
 	await openBrands(page);
 	// When
 	await page.getByRole("button", { name: "Add a brand" }).click();
-	await sheet(page).getByRole("button", { name: "Save", exact: true }).click();
+	await addSheet(page)
+		.getByRole("button", { name: "Save", exact: true })
+		.click();
 	// Then
-	await expect(sheet(page).getByRole("alert")).toHaveText("Enter a name.");
+	await expect(addSheet(page).getByRole("alert")).toHaveText("Enter a name.");
 	expect(posts).toBe(0);
 });
 
@@ -132,7 +134,7 @@ test("keeps the form open with Not saved when Save fails", async ({ page }) => {
 	// When
 	await addThroughForm(page, "Zara");
 	// Then
-	await expect(sheet(page).getByRole("alert")).toHaveText(
+	await expect(addSheet(page).getByRole("alert")).toHaveText(
 		"Not saved. Try again.",
 	);
 	await expect(nameBox(page)).toHaveValue("Zara");
@@ -143,7 +145,7 @@ test("renames a brand", async ({ page }) => {
 	await openBrands(page);
 	for (const name of ["Zara", "COS"]) {
 		await addThroughForm(page, name);
-		await expect(sheet(page)).toHaveCount(0);
+		await expect(addSheet(page)).toHaveCount(0);
 	}
 	// When
 	await page.getByRole("button", { name: "Zara" }).click();
@@ -221,11 +223,11 @@ test.describe("an account with 100 brands", () => {
 		// When
 		await page.getByRole("button", { name: "Add a brand" }).click();
 		// Then
-		await expect(sheet(page).getByRole("alert")).toHaveText(
+		await expect(addSheet(page).getByRole("alert")).toHaveText(
 			"You have 100 brands. That is the limit. Delete one to add a new one.",
 		);
 		await expect(
-			sheet(page).getByRole("button", { name: "Save", exact: true }),
+			addSheet(page).getByRole("button", { name: "Save", exact: true }),
 		).toBeDisabled();
 	});
 

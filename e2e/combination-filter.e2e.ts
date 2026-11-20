@@ -3,6 +3,7 @@ import { postOwnedItems } from "./closet-helpers";
 import { isPhone, postCombinations, three, two } from "./combination-helpers";
 import { expect, test } from "./fixtures";
 import { colourIds, postTag } from "./label-helpers";
+import { sheet, toast } from "./locators";
 
 const FOUR_TITLE = "White short tee + Navy chino pants";
 const TWO_TITLE = "White short tee + Grey training shorts";
@@ -10,8 +11,6 @@ const THREE_TITLE =
 	"Khaki Harrington jacket + Black long tee + Navy casual pants";
 
 const titles = (page: Page) => page.locator('[data-slot="combination-title"]');
-
-const sheet = (page: Page) => page.getByRole("dialog");
 
 const rows = (page: Page) => page.locator('[data-slot="piece-row"]');
 
@@ -257,15 +256,11 @@ test("drops a deleted tag from the filter", async ({ page }) => {
 		.getByRole("button")
 		.filter({ hasText: "weekend" })
 		.click();
-	await page
-		.getByRole("dialog", { name: "Edit tag" })
+	await sheet(page, "Edit tag").getByRole("button", { name: "Delete" }).click();
+	await sheet(page, "Delete this tag?")
 		.getByRole("button", { name: "Delete" })
 		.click();
-	await page
-		.getByRole("dialog", { name: "Delete this tag?" })
-		.getByRole("button", { name: "Delete" })
-		.click();
-	await expect(page.locator('[data-slot="toast"]')).toHaveText("Tag deleted");
+	await expect(toast(page)).toHaveText("Tag deleted");
 	await page.goBack();
 	// Then
 	await expect(page.locator('[data-slot="filter-chip"]')).toHaveText([

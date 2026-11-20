@@ -1,13 +1,11 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
 import { colourIds } from "./label-helpers";
+import { sheet, toast } from "./locators";
 import { pickFiles, pngFile, uploadPng } from "./picture-helpers";
 import { postShopLink, postWish } from "./wishlist-helpers";
 
-const linkSheet = (page: Page, name = "Add a shop link") =>
-	page.getByRole("dialog", { name });
-
-const toast = (page: Page) => page.locator('[data-slot="toast"]');
+const linkSheet = (page: Page, name = "Add a shop link") => sheet(page, name);
 
 const slot = (page: Page, n: number) =>
 	page.getByRole("listitem", { name: `Picture ${n}`, exact: true });
@@ -94,12 +92,12 @@ test("stops at 8 pictures on one shop link", async ({ page }) => {
 	// When
 	await page.getByRole("button", { name: "Change shop link" }).click();
 	// Then
-	const sheet = linkSheet(page, "Edit shop link");
-	await expect(sheet.getByRole("button", { name: "Add pictures" })).toHaveCount(
-		0,
-	);
+	const dialog = linkSheet(page, "Edit shop link");
 	await expect(
-		sheet.getByText("8 pictures is the limit for one item."),
+		dialog.getByRole("button", { name: "Add pictures" }),
+	).toHaveCount(0);
+	await expect(
+		dialog.getByText("8 pictures is the limit for one item."),
 	).toBeVisible();
 });
 

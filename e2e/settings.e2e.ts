@@ -4,6 +4,7 @@ import { postCombinations, two } from "./combination-helpers";
 import { expect, test } from "./fixtures";
 import { aiAppFile, type aiAppTests } from "./global-setup";
 import { colourIds } from "./label-helpers";
+import { sheet, toast } from "./locators";
 
 const preview = (page: Page) =>
 	page.locator('svg[aria-label="Mannequin preview"]');
@@ -14,7 +15,7 @@ const row = (page: Page, name: string) =>
 async function openSkinPicker(page: Page) {
 	await page.goto("/settings");
 	await row(page, "Skin colour #D6A27B").click();
-	return page.getByRole("dialog", { name: "Skin colour" });
+	return sheet(page, "Skin colour");
 }
 
 const storedChange = (page: Page) =>
@@ -79,9 +80,7 @@ test("sets the skin colour and keeps it", async ({
 	await dialog.getByRole("button", { name: "Set", exact: true }).click();
 	await stored;
 	// Then
-	await expect(page.locator('[data-slot="toast"]')).toHaveText(
-		"Skin colour set",
-	);
+	await expect(toast(page)).toHaveText("Skin colour set");
 	// When
 	await page.reload();
 	const second = await browser.newContext({
@@ -144,13 +143,11 @@ test("sets the hair colour and says so", async ({ page }) => {
 	await page.goto("/settings");
 	// When
 	await row(page, "Hair colour #141418").click();
-	const dialog = page.getByRole("dialog", { name: "Hair colour" });
+	const dialog = sheet(page, "Hair colour");
 	await dialog.getByRole("textbox", { name: "Colour code" }).fill("B55239");
 	await dialog.getByRole("button", { name: "Set", exact: true }).click();
 	// Then
-	await expect(page.locator('[data-slot="toast"]')).toHaveText(
-		"Hair colour set",
-	);
+	await expect(toast(page)).toHaveText("Hair colour set");
 	await expect(row(page, "Hair colour #B55239")).toBeVisible();
 });
 
@@ -194,13 +191,11 @@ test("puts the old skin back and says Not set when the save fails", async ({
 	await page.route("**/api/mannequin/skin", (route) => route.abort());
 	// When
 	await row(page, "Skin colour #D6A27B").click();
-	const dialog = page.getByRole("dialog", { name: "Skin colour" });
+	const dialog = sheet(page, "Skin colour");
 	await dialog.getByRole("textbox", { name: "Colour code" }).fill("8D5524");
 	await dialog.getByRole("button", { name: "Set", exact: true }).click();
 	// Then
-	await expect(page.locator('[data-slot="toast"]')).toHaveText(
-		"Not set. Try again.",
-	);
+	await expect(toast(page)).toHaveText("Not set. Try again.");
 	await expect(row(page, "Skin colour #D6A27B")).toBeVisible();
 });
 
@@ -228,11 +223,11 @@ test("keeps a hair colour set while an older skin save answers late", async ({
 	);
 	// When
 	await row(page, "Skin colour #D6A27B").click();
-	const skin = page.getByRole("dialog", { name: "Skin colour" });
+	const skin = sheet(page, "Skin colour");
 	await skin.getByRole("textbox", { name: "Colour code" }).fill("8D5524");
 	await skin.getByRole("button", { name: "Set", exact: true }).click();
 	await row(page, "Hair colour #141418").click();
-	const hair = page.getByRole("dialog", { name: "Hair colour" });
+	const hair = sheet(page, "Hair colour");
 	await hair.getByRole("textbox", { name: "Colour code" }).fill("B55239");
 	await hair.getByRole("button", { name: "Set", exact: true }).click();
 	await hairAnswer;
@@ -324,9 +319,7 @@ test("deletes the account and shows the sign-in screen", async ({ page }) => {
 	await expect(
 		page.getByRole("button", { name: "Sign in with Google" }),
 	).toBeVisible();
-	await expect(page.locator('[data-slot="toast"]')).toHaveText(
-		"Account deleted",
-	);
+	await expect(toast(page)).toHaveText("Account deleted");
 	expect((await page.request.get("/api/me")).status()).toBe(401);
 });
 
@@ -432,9 +425,9 @@ test.describe("AI app address on the clipboard", () => {
 		// When
 		await page.getByRole("button", { name: "Copy", exact: true }).click();
 		// Then
-		await expect(page.locator('[data-slot="toast"]')).toHaveText("Copied");
+		await expect(toast(page)).toHaveText("Copied");
 		expect({
-			toast: await page.locator('[data-slot="toast"]').textContent(),
+			toast: await toast(page).textContent(),
 			clipboard: await page.evaluate(() => navigator.clipboard.readText()),
 		}).toEqual({ toast: "Copied", clipboard: AI_ADDRESS });
 	});
@@ -448,9 +441,9 @@ test.describe("AI app address on the clipboard", () => {
 		// When
 		await page.getByRole("button", { name: "Copy command" }).click();
 		// Then
-		await expect(page.locator('[data-slot="toast"]')).toHaveText("Copied");
+		await expect(toast(page)).toHaveText("Copied");
 		expect({
-			toast: await page.locator('[data-slot="toast"]').textContent(),
+			toast: await toast(page).textContent(),
 			clipboard: await page.evaluate(() => navigator.clipboard.readText()),
 		}).toEqual({
 			toast: "Copied",
@@ -536,11 +529,10 @@ test("disconnects an AI app", async ({ page, context }, testInfo) => {
 		.getByRole("button", { name: "Disconnect Test App", exact: true })
 		.click();
 	// Then
-	const toast = page.locator('[data-slot="toast"]');
-	await expect(toast).toHaveText("Disconnected");
+	await expect(toast(page)).toHaveText("Disconnected");
 	await expect(aiAppRow(page)).toHaveCount(0);
 	expect({
-		toast: await toast.textContent(),
+		toast: await toast(page).textContent(),
 		rows: await aiAppRow(page).count(),
 		empty: await page.getByText(NO_AI_APPS, { exact: true }).textContent(),
 		stored: await (await page.request.get("/api/ai-apps")).json(),

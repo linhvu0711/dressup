@@ -2,6 +2,7 @@ import type { Locator, Page } from "@playwright/test";
 import { isPhone, pick } from "./combination-helpers";
 import { expect, test } from "./fixtures";
 import { colourIds } from "./label-helpers";
+import { sheet } from "./locators";
 import { postWish } from "./wishlist-helpers";
 
 const PHONE_ONLY = "phone layout only";
@@ -15,9 +16,7 @@ async function openBrandSheet(page: Page) {
 	await page.goto("/labels");
 	await page.getByRole("tab", { name: "Brands" }).click();
 	await page.getByRole("button", { name: "Add a brand" }).click();
-	return page
-		.getByRole("dialog", { name: "New brand" })
-		.getByRole("textbox", { name: "Name" });
+	return sheet(page, "New brand").getByRole("textbox", { name: "Name" });
 }
 
 test("shows the brand Name box text at 16px on a phone", async ({ page }) => {
@@ -38,9 +37,7 @@ test("shows the tag Name box text at 16px on a phone", async ({ page }) => {
 	await page.getByRole("button", { name: "Add a tag" }).click();
 	// Then
 	expect(
-		await fontSize(
-			page.getByRole("dialog").getByRole("textbox", { name: "Name" }),
-		),
+		await fontSize(sheet(page).getByRole("textbox", { name: "Name" })),
 	).toBe("16px");
 });
 
@@ -91,12 +88,12 @@ test("shows the colour sheet boxes text at 16px on a phone", async ({
 	// When
 	await page.goto("/labels");
 	await page.getByRole("button", { name: "Add a colour" }).click();
-	const sheet = page.getByRole("dialog");
+	const dialog = sheet(page);
 	// Then
 	expect(
 		await fontSizes([
-			sheet.getByRole("textbox", { name: "Name" }),
-			sheet.getByRole("textbox", { name: "Colour code" }),
+			dialog.getByRole("textbox", { name: "Name" }),
+			dialog.getByRole("textbox", { name: "Colour code" }),
 		]),
 	).toEqual(["16px", "16px"]);
 });
@@ -113,9 +110,7 @@ test("shows the Quantity box text at 16px on a phone", async ({ page }) => {
 	// Then
 	expect(
 		await fontSize(
-			page
-				.getByRole("dialog", { name: "Add to closet" })
-				.getByRole("textbox", { name: "Quantity" }),
+			sheet(page, "Add to closet").getByRole("textbox", { name: "Quantity" }),
 		),
 	).toBe("16px");
 });
@@ -129,13 +124,13 @@ test("shows the shop link boxes text at 16px on a phone", async ({ page }) => {
 	// When
 	await page.goto(`/piece/wool/${ids.Charcoal}`);
 	await page.getByRole("button", { name: "Add a shop link" }).click();
-	const sheet = page.getByRole("dialog", { name: "Add a shop link" });
+	const dialog = sheet(page, "Add a shop link");
 	// Then
 	expect(
 		await fontSizes([
-			sheet.getByRole("textbox", { name: "Address" }),
-			sheet.getByRole("textbox", { name: "Name" }),
-			sheet.getByRole("textbox", { name: "Price in ₫" }),
+			dialog.getByRole("textbox", { name: "Address" }),
+			dialog.getByRole("textbox", { name: "Name" }),
+			dialog.getByRole("textbox", { name: "Price in ₫" }),
 		]),
 	).toEqual(["16px", "16px", "16px"]);
 });
@@ -148,7 +143,7 @@ test("shows the New tag box text at 16px on a phone", async ({ page }) => {
 	await pick(page, "Bottom", "Casual pants", "Navy");
 	await pick(page, "Inner top", "Long tee", "Black");
 	await page.getByRole("button", { name: "Save" }).click();
-	const dialog = page.getByRole("dialog", { name: "Save combination" });
+	const dialog = sheet(page, "Save combination");
 	// When
 	await dialog.getByRole("button", { name: "+ New tag" }).click();
 	// Then
