@@ -18,7 +18,11 @@ import { type ErrorCode, errorAnswer, meAnswer } from "./contract";
 // Every request the web app sends to the worker goes through request(), so
 // the 401 rule, the error codes, and the contract check live here once.
 
-export const queryClient = new QueryClient();
+// "Retry" or "Try again" on the page is the person's way to try again;
+// three silent retries would hold the placeholders for about 7 s first.
+export const queryClient = new QueryClient({
+	defaultOptions: { queries: { retry: false } },
+});
 
 export const keys = {
 	me: ["me"] as const,

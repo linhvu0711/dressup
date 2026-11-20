@@ -10,8 +10,6 @@ export function useBrands() {
 		queryFn: async () =>
 			(await request("GET", "/api/brands", { answer: brandsAnswer })).brands,
 		enabled: userId !== null,
-		// "Retry" on the page is the person's way to try again, as for colours.
-		retry: false,
 	});
 }
 

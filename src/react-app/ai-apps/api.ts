@@ -9,8 +9,6 @@ export function useAiApps() {
 		queryFn: async () =>
 			(await request("GET", "/api/ai-apps", { answer: aiAppsAnswer })).apps,
 		enabled: userId !== null,
-		// "Try again" on the page is the person's way to try again, as for tags.
-		retry: false,
 	});
 }
 

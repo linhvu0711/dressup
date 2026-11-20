@@ -17,7 +17,7 @@ const SHOWN = 4;
 export function PieceCombinations({ piece }: { piece: PieceRef }) {
 	const title = useId();
 	const combinations = useCombinations();
-	// A failed first load has no data: retry is off for this list.
+	// A failed first load has no data: retry is off for every list.
 	if (combinations.isError && !combinations.data)
 		return (
 			<PartError

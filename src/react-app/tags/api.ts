@@ -10,8 +10,6 @@ export function useTags() {
 		queryFn: async () =>
 			(await request("GET", "/api/tags", { answer: tagsAnswer })).tags,
 		enabled: userId !== null,
-		// "Retry" on the page is the person's way to try again.
-		retry: false,
 	});
 }
 

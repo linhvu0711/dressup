@@ -17,8 +17,6 @@ export function useColours() {
 		queryFn: async () =>
 			(await request("GET", "/api/colours", { answer: coloursAnswer })).colours,
 		enabled: userId !== null,
-		// "Retry" on the page is the person's way to try again.
-		retry: false,
 	});
 }
 
