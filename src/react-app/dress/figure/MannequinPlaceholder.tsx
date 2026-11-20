@@ -1,15 +1,22 @@
-// The grey figure the stage shows while the account's colours load.
+// The grey figure the stage shows while the account's colours load, pulsing.
+// Not loading, it is still and hidden from screen readers: a wall card far
+// from the screen shows it in place of its mannequin.
 export function MannequinPlaceholder({
 	viewBox = "0 10 400 800",
+	loading = true,
 }: {
 	viewBox?: string;
+	loading?: boolean;
 }) {
 	return (
 		<svg
 			viewBox={viewBox}
-			role="img"
-			aria-label="Loading"
-			className="animate-placeholder motion-reduce:animate-none"
+			role={loading ? "img" : undefined}
+			aria-label={loading ? "Loading" : undefined}
+			aria-hidden={loading ? undefined : true}
+			className={
+				loading ? "animate-placeholder motion-reduce:animate-none" : undefined
+			}
 		>
 			<g fill="#000" opacity=".16">
 				<ellipse cx="200" cy="95" rx="40" ry="50" />

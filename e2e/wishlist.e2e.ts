@@ -199,6 +199,49 @@ test.describe("at the wishlist limit", () => {
 			addSheet(page).getByRole("button", { name: "Save" }),
 		).toBeDisabled();
 	});
+	const openWall = async (page: Page) => {
+		await page.goto("/wishlist");
+		await expect(tiles(page).first().locator("svg")).toHaveCount(1);
+	};
+
+	test("draws only the tiles near the screen", async ({ page }) => {
+		// Given: both projects, the account with 200 wishes
+		// When
+		await openWall(page);
+		// Then
+		const count = await tiles(page)
+			.filter({ has: page.locator("svg") })
+			.count();
+		expect(count).toBeGreaterThanOrEqual(1);
+		expect(count).toBeLessThanOrEqual(60);
+	});
+
+	test("draws a far tile when it scrolls near and drops the first one", async ({
+		page,
+	}) => {
+		// Given: both projects, the account with 200 wishes, the wall open with the first tile
+		// drawn
+		await openWall(page);
+		const last = page.getByRole("link", {
+			name: "Burgundy chino pants, No link yet",
+		});
+		// When
+		await last.scrollIntoViewIfNeeded();
+		// Then
+		await expect(last.locator("svg")).toHaveCount(1);
+		await expect(tiles(page).first().locator("svg")).toHaveCount(0);
+	});
+
+	test("keeps every tile on the page", async ({ page }) => {
+		// Given: both projects, the account with 200 wishes
+		// When
+		await openWall(page);
+		// Then
+		await expect(tiles(page)).toHaveCount(200);
+		await expect(
+			page.getByRole("link", { name: "Burgundy chino pants, No link yet" }),
+		).toBeAttached();
+	});
 });
 
 test("adds a wish from the form and opens its piece page", async ({ page }) => {

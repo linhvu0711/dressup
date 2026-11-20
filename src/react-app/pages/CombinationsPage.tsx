@@ -32,9 +32,7 @@ import { useMannequin } from "@/mannequin/api";
 import { MannequinFailed } from "@/mannequin/MannequinFailed";
 import { useTags } from "@/tags/api";
 import { PageHeader } from "../shell/PageHeader";
-
-const WALL =
-	"grid min-h-0 flex-1 auto-rows-min grid-cols-2 gap-x-3.5 gap-y-5 overflow-auto px-4 pt-[5px] pb-24 wide:grid-cols-[repeat(auto-fill,minmax(176px,1fr))] wide:gap-x-[18px] wide:gap-y-[26px] wide:px-6";
+import { Wall } from "../shell/Wall";
 
 const PULSE = "animate-placeholder motion-reduce:animate-none";
 
@@ -114,7 +112,7 @@ export function CombinationsPage() {
 	let wall: ReactNode;
 	if (combinations.isPending || (waitsForCloset && closet.isPending)) {
 		wall = (
-			<div className={WALL}>
+			<Wall>
 				{Array.from({ length: 6 }, (_, i) => (
 					<div
 						// biome-ignore lint/suspicious/noArrayIndexKey: the cards are all alike and never move.
@@ -130,7 +128,7 @@ export function CombinationsPage() {
 						/>
 					</div>
 				))}
-			</div>
+			</Wall>
 		);
 	} else if (combinations.isError) {
 		// Checked before the data: a failed refetch keeps the old list.
@@ -170,7 +168,7 @@ export function CombinationsPage() {
 		);
 	} else {
 		wall = (
-			<div data-slot="combination-wall" className={WALL}>
+			<Wall slot="combination-wall">
 				{visible.map((combination) => (
 					<CombinationCard
 						key={combination.id}
@@ -178,7 +176,7 @@ export function CombinationsPage() {
 						marked={combination.id === combinationId}
 					/>
 				))}
-			</div>
+			</Wall>
 		);
 	}
 	return (

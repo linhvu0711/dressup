@@ -4,7 +4,7 @@ import { after, cachedUserId, keys, request } from "../data/client";
 import { mannequinAnswer } from "../data/contract";
 import type { MannequinPart } from "./mannequin";
 
-export function useMannequin() {
+export function useMannequin({ refetchOnMount = true } = {}) {
 	const userId = cachedUserId();
 	return useQuery({
 		queryKey: keys.mannequin(userId),
@@ -15,6 +15,7 @@ export function useMannequin() {
 		// "Try again" on the page is the person's way to try again, as for
 		// brands.
 		retry: false,
+		refetchOnMount,
 	});
 }
 
