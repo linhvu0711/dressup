@@ -4,9 +4,11 @@ import { schema } from "./db";
 import {
 	type aiSession,
 	BOB,
+	bytes,
 	type Harness,
 	postBrands,
 	send,
+	uploadPicture,
 	withAiSession,
 } from "./test/harness";
 
@@ -1360,13 +1362,6 @@ describe("owned items", () => {
 	});
 
 	// A draft picture uploaded as the session's browser, by id.
-	const uploadPicture = async (h: Harness, ai: Session) => {
-		const body = new Uint8Array(100).fill(0x11);
-		body.set([0xff, 0xd8, 0xff, 0xe0]);
-		const res = await send(h, ai.jar, "POST", "/api/pictures", body);
-		return ((await res.json()) as { picture: { id: string } }).picture.id;
-	};
-
 	// The shirt with these pictures, added as the website adds it, by id.
 	const addWithPictures = async (
 		h: Harness,
@@ -1387,7 +1382,7 @@ describe("owned items", () => {
 	test("deletes an owned item with its pictures", async () => {
 		// Given
 		const { h, ai } = await withAiSession();
-		const a = await uploadPicture(h, ai);
+		const a = await uploadPicture(h, ai.jar);
 		const id = await addWithPictures(h, ai, [a]);
 		// When
 		await ai.call("delete_owned_item", { id });
@@ -1398,8 +1393,8 @@ describe("owned items", () => {
 	test("lists the picture ids of each item in upload order", async () => {
 		// Given
 		const { h, ai } = await withAiSession();
-		const a = await uploadPicture(h, ai);
-		const b = await uploadPicture(h, ai);
+		const a = await uploadPicture(h, ai.jar);
+		const b = await uploadPicture(h, ai.jar);
 		await addWithPictures(h, ai, [a, b]);
 		// When
 		const { data } = await ai.call("list_owned_items");
@@ -1603,12 +1598,8 @@ describe("wishes", () => {
 	) {
 		const pictureIds: string[] = [];
 		for (let i = 0; i < n; i++) {
-			const body = new Uint8Array(100).fill(0x11 + i);
-			body.set([0xff, 0xd8, 0xff, 0xe0]);
-			const res = await send(h, ai.jar, "POST", "/api/pictures", body);
-			pictureIds.push(
-				((await res.json()) as { picture: { id: string } }).picture.id,
-			);
+			const body = bytes([0xff, 0xd8, 0xff, 0xe0], 100).fill(0x11 + i, 4);
+			pictureIds.push(await uploadPicture(h, ai.jar, body));
 		}
 		await send(h, ai.jar, "PUT", `/api/shop-links/${id}`, {
 			url: "https://cos.com/jacket",

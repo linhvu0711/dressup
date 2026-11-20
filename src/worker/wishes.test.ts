@@ -10,6 +10,7 @@ import {
 	makeHarness,
 	postBrand,
 	send,
+	uploadPicture,
 } from "./test/harness";
 import { addShopLink, addWish } from "./wish-store";
 
@@ -71,25 +72,9 @@ const jacket = (ids: Ids) => ({
 	colourId: ids.Navy,
 });
 
-// A small JPEG uploaded as a draft of the account, by id.
-async function uploaded(h: Harness, headers: Headers): Promise<string> {
-	const body = new Uint8Array(100).fill(0x11);
-	body.set([0xff, 0xd8, 0xff, 0xe0]);
-	const res = await h.app.request(
-		"/api/pictures",
-		{
-			method: "POST",
-			headers: { ...Object.fromEntries(headers), "content-type": "image/jpeg" },
-			body,
-		},
-		h.env,
-	);
-	return ((await res.json()) as { picture: { id: string } }).picture.id;
-}
-
 const uploads = (h: Harness, headers: Headers, n: number) =>
 	Array.from({ length: n }).reduce<Promise<string[]>>(
-		async (ids) => [...(await ids), await uploaded(h, headers)],
+		async (ids) => [...(await ids), await uploadPicture(h, headers)],
 		Promise.resolve([]),
 	);
 

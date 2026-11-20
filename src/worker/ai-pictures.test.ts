@@ -4,23 +4,17 @@ import {
 	type aiSession,
 	answer,
 	BOB,
+	bytes,
 	type Harness,
+	JPEG,
+	PDF,
+	PNG,
+	uploadPicture,
 	withAiSession,
 } from "./test/harness";
 import { claimUploadAddress, giveUploadAddress } from "./upload-address-store";
 
 type Session = Awaited<ReturnType<typeof aiSession>>;
-
-// The server checks only the first bytes, so these are not whole pictures.
-const bytes = (head: number[], length: number) => {
-	const body = new Uint8Array(length).fill(0x11);
-	body.set(head);
-	return body;
-};
-
-const JPEG = bytes([0xff, 0xd8, 0xff, 0xe0], 100);
-const PNG = bytes([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 100);
-const PDF = bytes([...new TextEncoder().encode("%PDF-1.7")], 100);
 
 const NO_SUCH_ID = "5b1f2c3d-0000-4000-8000-000000000000";
 
@@ -546,17 +540,7 @@ describe("show_picture", () => {
 		// Given
 		const { h, ai } = await withAiSession();
 		const bob = await h.addAccount(BOB);
-		const uploaded = await h.app.request(
-			"/api/pictures",
-			{
-				method: "POST",
-				headers: { ...Object.fromEntries(bob), "content-type": "image/png" },
-				body: PNG,
-			},
-			h.env,
-		);
-		const p = ((await uploaded.json()) as { picture: { id: string } }).picture
-			.id;
+		const p = await uploadPicture(h, bob, PNG);
 		// When
 		const shown = await ai.show("show_picture", { id: p });
 		// Then

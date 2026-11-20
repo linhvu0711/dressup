@@ -4,38 +4,27 @@ import { addPicture } from "./picture-store";
 import {
 	answer,
 	BOB,
+	bytes,
 	colourIds,
 	type Harness,
+	JPEG,
 	makeHarness,
+	PDF,
+	PNG,
 	send,
+	uploadPicture,
 	withAccount,
 } from "./test/harness";
 
-const bytes = (head: number[], length: number) => {
-	const body = new Uint8Array(length).fill(0x11);
-	body.set(head);
-	return body;
-};
-
-const JPEG = bytes([0xff, 0xd8, 0xff, 0xe0], 100);
-const PNG = bytes([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 100);
 const WEBP = bytes(
 	[0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50],
 	100,
 );
-const PDF = bytes([...new TextEncoder().encode("%PDF-1.7")], 100);
 
 const NO_SUCH_ID = "5b1f2c3d-0000-4000-8000-000000000000";
 
 const upload = (h: Harness, headers: Headers, body: Uint8Array = JPEG) =>
 	send(h, headers, "POST", "/api/pictures", body);
-
-const uploadedId = async (h: Harness, headers: Headers, body = JPEG) =>
-	(
-		(await (await upload(h, headers, body)).json()) as {
-			picture: { id: string };
-		}
-	).picture.id;
 
 describe("upload and load", () => {
 	test("uploads a JPEG and loads it back", async () => {
@@ -132,7 +121,7 @@ describe("upload and load", () => {
 		// Given
 		const { h, headers } = await withAccount();
 		const bob = await h.addAccount(BOB);
-		const bobs = await uploadedId(h, bob);
+		const bobs = await uploadPicture(h, bob);
 		// When
 		const asAlice = await answer(
 			await send(h, headers, "GET", `/api/pictures/${bobs}`),
@@ -239,7 +228,7 @@ describe("limits and the storage stop", () => {
 		// Given
 		const { h, headers } = await withAccount();
 		await h.seedPictures("alice-id", 999);
-		await addLinks(h, headers, [[await uploadedId(h, headers)]]);
+		await addLinks(h, headers, [[await uploadPicture(h, headers)]]);
 		// When
 		const refused = await answer(await upload(h, headers));
 		// Then
@@ -448,7 +437,7 @@ describe("drafts", () => {
 	test("deletes a draft picture", async () => {
 		// Given
 		const { h, headers } = await withAccount();
-		const a = await uploadedId(h, headers);
+		const a = await uploadPicture(h, headers);
 		// When
 		const deleted = await send(h, headers, "DELETE", `/api/pictures/${a}`);
 		const loaded = await send(h, headers, "GET", `/api/pictures/${a}`);
@@ -463,7 +452,7 @@ describe("drafts", () => {
 	test("keeps a saved picture on a draft delete", async () => {
 		// Given
 		const { h, headers } = await withAccount();
-		const a = await uploadedId(h, headers);
+		const a = await uploadPicture(h, headers);
 		await addItem(h, headers, [a]);
 		// When
 		const refused = await answer(
@@ -481,10 +470,10 @@ describe("drafts", () => {
 		// Given
 		const { h, headers } = await withAccount();
 		setSystemTime(new Date("2026-11-17T10:00:00Z"));
-		const old = await uploadedId(h, headers);
+		const old = await uploadPicture(h, headers);
 		setSystemTime(new Date("2026-11-18T11:00:00Z"));
 		// When
-		const fresh = await uploadedId(h, headers);
+		const fresh = await uploadPicture(h, headers);
 		const loaded = await send(h, headers, "GET", `/api/pictures/${old}`);
 		// Then
 		expect({ loaded: loaded.status, keys: h.pictures.keys() }).toEqual({
@@ -497,11 +486,11 @@ describe("drafts", () => {
 		// Given
 		const { h, headers } = await withAccount();
 		setSystemTime(new Date("2026-11-17T10:00:00Z"));
-		const old = await uploadedId(h, headers);
+		const old = await uploadPicture(h, headers);
 		await addLinks(h, headers, [[old]]);
 		setSystemTime(new Date("2026-11-18T11:00:00Z"));
 		// When
-		const fresh = await uploadedId(h, headers);
+		const fresh = await uploadPicture(h, headers);
 		const loaded = await send(h, headers, "GET", `/api/pictures/${old}`);
 		// Then
 		expect({ loaded: loaded.status, keys: h.pictures.keys() }).toEqual({
@@ -514,10 +503,10 @@ describe("drafts", () => {
 		// Given
 		const { h, headers } = await withAccount();
 		setSystemTime(new Date("2026-11-17T10:00:00Z"));
-		const old = await uploadedId(h, headers);
+		const old = await uploadPicture(h, headers);
 		setSystemTime(new Date("2026-11-18T09:00:00Z"));
 		// When
-		const fresh = await uploadedId(h, headers);
+		const fresh = await uploadPicture(h, headers);
 		// Then
 		expect(h.pictures.keys()).toEqual([old, fresh].sort());
 	});
@@ -527,9 +516,9 @@ describe("deletes and the stored bytes", () => {
 	test("keeps the stored bytes equal to the pictures' bytes", async () => {
 		// Given: three uploads of 100 bytes; a and b on an item, c a draft
 		const { h, headers } = await withAccount();
-		const a = await uploadedId(h, headers);
-		const b = await uploadedId(h, headers);
-		const c = await uploadedId(h, headers);
+		const a = await uploadPicture(h, headers);
+		const b = await uploadPicture(h, headers);
+		const c = await uploadPicture(h, headers);
 		const item = await addItem(h, headers, [a, b]);
 		const steps: { stored: number; rows: number }[] = [];
 		const record = async () =>
@@ -560,9 +549,9 @@ describe("deletes and the stored bytes", () => {
 		// Given: three uploads of 100 bytes; a and b on one link, c on another
 		// link of the same wish
 		const { h, headers } = await withAccount();
-		const a = await uploadedId(h, headers);
-		const b = await uploadedId(h, headers);
-		const c = await uploadedId(h, headers);
+		const a = await uploadPicture(h, headers);
+		const b = await uploadPicture(h, headers);
+		const c = await uploadPicture(h, headers);
 		const { wishId, linkIds } = await addLinks(h, headers, [[a, b], [c]]);
 		const steps: { stored: number; rows: number }[] = [];
 		const record = async () =>

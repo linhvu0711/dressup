@@ -9,6 +9,7 @@ import {
 	startGoogleSignIn,
 	store,
 	stubOutside,
+	uploadPicture,
 	withAiSession,
 } from "./test/harness";
 
@@ -22,16 +23,6 @@ const me = async (h: Harness, jar: Jar) => {
 	const res = await send(h, jar, "GET", "/api/me");
 	return { status: res.status, body: await res.json() };
 };
-
-const JPEG = new Uint8Array(100).fill(0x11);
-JPEG.set([0xff, 0xd8, 0xff, 0xe0]);
-
-const uploadPicture = async (h: Harness, jar: Jar) =>
-	(
-		(await (await send(h, jar, "POST", "/api/pictures", JPEG)).json()) as {
-			picture: { id: string };
-		}
-	).picture.id;
 
 // The account's colours, brands, mannequin, one tag, one combination with
 // that tag, one owned item with one picture, one draft picture, and one wish

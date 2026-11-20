@@ -10,6 +10,7 @@ import {
 	makeHarness,
 	postBrand,
 	send,
+	uploadPicture,
 } from "./test/harness";
 
 type Item = {
@@ -25,22 +26,6 @@ type Wish = {
 	id: string;
 	shopLinks: { id: string; pictureIds: string[] }[];
 };
-
-// A small JPEG uploaded as a draft of the account, by id.
-async function uploaded(h: Harness, headers: Headers): Promise<string> {
-	const body = new Uint8Array(100).fill(0x11);
-	body.set([0xff, 0xd8, 0xff, 0xe0]);
-	const res = await h.app.request(
-		"/api/pictures",
-		{
-			method: "POST",
-			headers: { ...Object.fromEntries(headers), "content-type": "image/jpeg" },
-			body,
-		},
-		h.env,
-	);
-	return ((await res.json()) as { picture: { id: string } }).picture.id;
-}
 
 const closet = async (h: Harness, headers: Headers) =>
 	(
@@ -64,7 +49,7 @@ const buy = (h: Harness, headers: Headers, linkId: string) =>
 
 const uploads = async (h: Harness, headers: Headers, n: number) => {
 	const ids: string[] = [];
-	for (let i = 0; i < n; i++) ids.push(await uploaded(h, headers));
+	for (let i = 0; i < n; i++) ids.push(await uploadPicture(h, headers));
 	return ids;
 };
 
@@ -88,7 +73,7 @@ async function account(): Promise<Account> {
 // picture c.
 async function withLinks({ h, headers, ids, cos }: Account, linkPictures = 2) {
 	const link = await uploads(h, headers, linkPictures);
-	const c = await uploaded(h, headers);
+	const c = await uploadPicture(h, headers);
 	await send(h, headers, "POST", "/api/wishes", {
 		id: FIRST_ID,
 		typeId: "wool",

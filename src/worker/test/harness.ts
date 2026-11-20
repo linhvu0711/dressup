@@ -567,6 +567,29 @@ export const answer = async (res: Response) => ({
 	body: await res.json(),
 });
 
+// The server checks only the first bytes, so these are not whole pictures.
+export const bytes = (head: number[], length: number) => {
+	const body = new Uint8Array(length).fill(0x11);
+	body.set(head);
+	return body;
+};
+
+export const JPEG = bytes([0xff, 0xd8, 0xff, 0xe0], 100);
+export const PNG = bytes([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 100);
+export const PDF = bytes([...new TextEncoder().encode("%PDF-1.7")], 100);
+
+// Uploads a draft picture and gives its id.
+export const uploadPicture = async (
+	h: Harness,
+	auth: Auth,
+	body: Uint8Array = JPEG,
+) =>
+	(
+		(await (await send(h, auth, "POST", "/api/pictures", body)).json()) as {
+			picture: { id: string };
+		}
+	).picture.id;
+
 // Colour ids by name.
 export type Ids = Record<string, string>;
 

@@ -16,6 +16,7 @@ import {
 	makeHarness,
 	postBrand,
 	send,
+	uploadPicture,
 } from "./test/harness";
 
 type Listed = {
@@ -511,28 +512,6 @@ describe("adds at once", () => {
 		});
 	});
 });
-
-const JPEG = new Uint8Array(100).fill(0x11);
-JPEG.set([0xff, 0xd8, 0xff, 0xe0]);
-
-// Uploads a draft picture and gives its id.
-const uploadPicture = async ({ app, env }: Harness, headers: Headers) =>
-	(
-		(await (
-			await app.request(
-				"/api/pictures",
-				{
-					method: "POST",
-					headers: {
-						...Object.fromEntries(headers),
-						"content-type": "image/jpeg",
-					},
-					body: JPEG,
-				},
-				env,
-			)
-		).json()) as { picture: { id: string } }
-	).picture.id;
 
 const uploads = async (h: Harness, headers: Headers, n: number) => {
 	const ids: string[] = [];
