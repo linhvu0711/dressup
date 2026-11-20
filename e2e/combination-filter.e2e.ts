@@ -267,6 +267,7 @@ test("drops a deleted tag from the filter", async ({ page }) => {
 		"Short tee",
 	]);
 	await expect(titles(page)).toHaveText([FOUR_TITLE, TWO_TITLE]);
+	await expect(page).toHaveURL(/\/combinations\?piece=tee_s\.$/);
 });
 
 test("keeps the filter when a combination opens, on Back, and after the builder", async ({

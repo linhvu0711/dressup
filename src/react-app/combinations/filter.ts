@@ -74,11 +74,6 @@ export const filterCombinations = <T extends Filtered>(
 	owned: ReadonlySet<string>,
 ): T[] => list.filter((c) => matchesFilter(c, f, owned));
 
-export const filterSize = (f: CombinationFilter) =>
-	f.pieces.filter((row) => !isBlank(row)).length +
-	f.tags.length +
-	(f.own === "any" ? 0 : 1);
-
 // The rows an AI app sends, before the account's colours are checked.
 export function checkPieceRows(
 	rows: readonly { typeId?: string; colourId?: string }[],

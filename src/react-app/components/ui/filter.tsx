@@ -84,7 +84,7 @@ export function FilterSheet({
 	);
 }
 
-type ActiveFilter = {
+export type ActiveFilter = {
 	key: string;
 	label: string;
 	icon?: ReactNode;

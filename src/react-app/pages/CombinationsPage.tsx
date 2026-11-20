@@ -14,7 +14,6 @@ import {
 	type CombinationFilter,
 	filterChips,
 	filterCombinations,
-	filterSize,
 	NO_FILTER,
 	pruneCombinationFilter,
 	readCombinationFilter,
@@ -26,6 +25,7 @@ import { useWallAddress, wallAddress } from "@/combinations/wall-address";
 import { Button } from "@/components/ui/button";
 import { ActiveFilters, FilterButton } from "@/components/ui/filter";
 import { Notice } from "@/components/ui/notice";
+import { useAddressFilter } from "@/components/ui/use-address-filter";
 import { TypeFigure } from "@/dress/figure/TypeFigure";
 import { useColours } from "@/labels/api";
 import { useMannequin } from "@/mannequin/api";
@@ -49,11 +49,23 @@ export function CombinationsPage() {
 	const [params, setParams] = useSearchParams();
 	const navigate = useNavigate();
 	const address = useWallAddress();
-	const filter = pruneCombinationFilter(
-		readCombinationFilter(params),
-		tags.data,
-		colours.data,
+	const cf = useAddressFilter(
+		{
+			none: NO_FILTER,
+			read: readCombinationFilter,
+			write: writeCombinationFilter,
+			prune: (f) => pruneCombinationFilter(f, tags.data, colours.data),
+			chips: (f) =>
+				filterChips(f, tags.data, colours.data).map((chip) => ({
+					key: chip.key,
+					label: chip.label,
+					icon: chip.typeId ? <TypeFigure typeId={chip.typeId} /> : undefined,
+					without: chip.without,
+				})),
+		},
+		pick,
 	);
+	const filter = cf.filter;
 	// The wall opens the app, and Any never reads the closet, so the closet
 	// loads only for Pieces I own.
 	const waitsForCloset = filter.own !== "any";
@@ -85,7 +97,10 @@ export function CombinationsPage() {
 	// The check holds the search it waits for: the address changes a render
 	// after the pick, and the old filter must not answer for the new one.
 	const [checkFor, setCheckFor] = useState<string | null>(null);
-	function setFilter(next: CombinationFilter) {
+	function pick(
+		next: CombinationFilter,
+		write: (next: CombinationFilter) => void,
+	) {
 		const search = writeCombinationFilter(next).toString();
 		const nextMatched = matching(next);
 		const hidden =
@@ -95,7 +110,7 @@ export function CombinationsPage() {
 			combinationId !== undefined && nextMatched === undefined ? search : null,
 		);
 		if (hidden) navigate(wallAddress(next), { replace: true });
-		else setParams(search, { replace: true });
+		else write(next);
 	}
 	const current = params.toString();
 	useEffect(() => {
@@ -161,7 +176,7 @@ export function CombinationsPage() {
 				<p className="max-w-[30ch] text-muted-foreground">
 					No combination matches all of your filters.
 				</p>
-				<Button className="mt-2" onClick={() => setFilter(NO_FILTER)}>
+				<Button className="mt-2" onClick={cf.clear}>
 					Clear all
 				</Button>
 			</Notice>
@@ -199,7 +214,7 @@ export function CombinationsPage() {
 						<div className="flex items-center gap-3">
 							{combinations.data?.length ? (
 								<FilterButton
-									count={filterSize(filter)}
+									count={cf.count}
 									onClick={() => setFiltering(true)}
 								/>
 							) : null}
@@ -217,15 +232,8 @@ export function CombinationsPage() {
 				/>
 				{combinations.data?.length && matched ? (
 					<ActiveFilters
-						chips={filterChips(filter, tags.data, colours.data).map((chip) => ({
-							key: chip.key,
-							label: chip.label,
-							icon: chip.typeId ? (
-								<TypeFigure typeId={chip.typeId} />
-							) : undefined,
-							onRemove: () => setFilter(chip.without),
-						}))}
-						onClearAll={() => setFilter(NO_FILTER)}
+						chips={cf.chips}
+						onClearAll={cf.clear}
 						shown={shownText(matched.length)}
 					/>
 				) : null}
@@ -246,7 +254,7 @@ export function CombinationsPage() {
 			{filtering ? (
 				<CombinationFilterSheet
 					filter={filter}
-					onChange={setFilter}
+					onChange={cf.set}
 					shown={matched ? shownText(matched.length) : "combinations"}
 					onClose={() => setFiltering(false)}
 				/>
