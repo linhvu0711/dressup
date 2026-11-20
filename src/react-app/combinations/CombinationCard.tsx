@@ -1,6 +1,8 @@
 import { cn } from "cn";
 import { useEffect, useRef } from "react";
 import { Link } from "react-router";
+import { MannequinPlaceholder } from "@/dress/figure/MannequinPlaceholder";
+import { useNearScreen } from "@/shell/Wall";
 import { CombinationFigure } from "./CombinationFigure";
 import { type Combination, combinationTitle } from "./combination";
 import { useWallAddress } from "./wall-address";
@@ -18,6 +20,7 @@ export function CombinationCard({
 	marked?: boolean;
 }) {
 	const ref = useRef<HTMLAnchorElement>(null);
+	const near = useNearScreen(ref);
 	const address = useWallAddress();
 	useEffect(() => {
 		if (marked) ref.current?.scrollIntoView({ block: "nearest" });
@@ -36,14 +39,18 @@ export function CombinationCard({
 					marked && "outline-2 outline-foreground outline-offset-[2.5px]",
 				)}
 			>
-				<CombinationFigure
-					pieces={combination.pieces.map((p) => ({
-						typeId: p.typeId,
-						hex: p.colour.hex,
-					}))}
-					viewBox={VIEW_BOX}
-					lite
-				/>
+				{near ? (
+					<CombinationFigure
+						pieces={combination.pieces.map((p) => ({
+							typeId: p.typeId,
+							hex: p.colour.hex,
+						}))}
+						viewBox={VIEW_BOX}
+						lite
+					/>
+				) : (
+					<MannequinPlaceholder viewBox={VIEW_BOX} loading={false} />
+				)}
 			</span>
 			<span
 				data-slot="combination-title"

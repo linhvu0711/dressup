@@ -1041,3 +1041,106 @@ test("says Could not load your combinations in the builder and loads on Retry", 
 		stage(page).locator('[data-type-id="harrington"]'),
 	).toBeAttached();
 });
+
+test.describe("on the full wall", () => {
+	test.use({ storageState: COMBINATIONS_FULL_FILE });
+
+	const FIRST = "White long polo + Cream training pants";
+	const LAST = "White short tee + White casual shorts";
+
+	const card = (page: Page, title: string) =>
+		cards(page).filter({ has: page.getByText(title, { exact: true }) });
+
+	const drawn = (page: Page) => page.locator("[data-type-id]");
+
+	const openWall = async (page: Page) => {
+		await page.goto("/combinations");
+		await expect(card(page, FIRST).locator("[data-type-id]")).not.toHaveCount(
+			0,
+		);
+	};
+
+	test("draws a mannequin only on the cards near the screen", async ({
+		page,
+	}) => {
+		// Given: both projects, the account with 300 combinations
+		// When
+		await openWall(page);
+		// Then
+		const count = await cards(page)
+			.filter({ has: drawn(page) })
+			.count();
+		expect(count).toBeGreaterThanOrEqual(1);
+		expect(count).toBeLessThanOrEqual(40);
+	});
+
+	test("shows the grey mannequin shape on a far card", async ({ page }) => {
+		// Given: both projects, the account with 300 combinations
+		// When
+		await openWall(page);
+		// Then
+		const last = card(page, LAST);
+		await expect(last.locator('svg[aria-hidden="true"]')).toHaveCount(1);
+		await expect(last.locator("[data-type-id]")).toHaveCount(0);
+	});
+
+	test("draws a far card when it scrolls near and drops the first one", async ({
+		page,
+	}) => {
+		// Given: both projects, the account with 300 combinations, the wall
+		// open with the first card drawn
+		await openWall(page);
+		// When
+		await card(page, LAST).scrollIntoViewIfNeeded();
+		// Then
+		await expect(card(page, LAST).locator("[data-type-id]")).not.toHaveCount(0);
+		await expect(card(page, FIRST).locator("[data-type-id]")).toHaveCount(0);
+		await expect(
+			card(page, FIRST).locator('svg[aria-hidden="true"]'),
+		).toHaveCount(1);
+	});
+
+	test("keeps every card and title on the page", async ({ page }) => {
+		// Given: both projects, the account with 300 combinations
+		// When
+		await openWall(page);
+		// Then
+		await expect(cards(page)).toHaveCount(300);
+		await expect(page.getByText(LAST, { exact: true }).first()).toBeAttached();
+	});
+
+	test("draws the far card the address names", async ({ page }) => {
+		// Given: laptop only, since below 900 px an open card hides the wall;
+		// the account with 300 combinations
+		test.skip(isPhone(page), "the open card hides the wall on a phone");
+		// When
+		await page.goto("/combinations/00000000-0000-4000-8000-000000000001");
+		// Then
+		const marked = page.locator(
+			'[data-slot="combination-card"][aria-current="true"]',
+		);
+		await expect(marked.locator('[data-slot="combination-title"]')).toHaveText(
+			LAST,
+		);
+		await expect(marked).toBeInViewport();
+		await expect(marked.locator("[data-type-id]")).not.toHaveCount(0);
+	});
+
+	test("keeps a waiting card the size of a drawn one", async ({ page }) => {
+		// Given: both projects, the account with 300 combinations, the wall
+		// open with the first card drawn; the first card's height and the
+		// wall's scroll height read
+		await openWall(page);
+		const wall = page.locator('[data-slot="combination-wall"]');
+		const height = (await card(page, FIRST).boundingBox())?.height;
+		const scrollHeight = await wall.evaluate((el) => el.scrollHeight);
+		// When
+		await card(page, LAST).scrollIntoViewIfNeeded();
+		await expect(card(page, FIRST).locator("[data-type-id]")).toHaveCount(0);
+		// Then
+		expect({
+			height: (await card(page, FIRST).boundingBox())?.height,
+			scrollHeight: await wall.evaluate((el) => el.scrollHeight),
+		}).toEqual({ height, scrollHeight });
+	});
+});
