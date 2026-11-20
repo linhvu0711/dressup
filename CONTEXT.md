@@ -18,6 +18,7 @@
 - Upload address: a web address that takes the bytes of one picture from an AI app, once, within 15 minutes, with no sign-in.
 - Tag: a label the user makes and puts on combinations. The user renames and deletes tags on the Labels page.
 - Sign-up switch: one on/off environment variable that stops new sign-ups. People with an account can still sign in.
+- Label: a colour, a brand, or a tag. The account makes it once on the Labels page and uses it everywhere.
 - Labels page: the page with the lists that the account makes once and uses everywhere.
 - Closet: the pieces the account owns, shown as one tile for each piece. The user filters it by type, colour, and brand.
 - Wishlist: the pieces the account wants to buy, shown as one tile for each piece. The user filters it by type, colour, and brand.

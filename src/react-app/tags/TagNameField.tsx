@@ -6,33 +6,26 @@ import { INPUT } from "@/components/ui/sheet-form";
 import { isNameTaken } from "@/data/client";
 import { sameLabelName } from "@/labels/name";
 import { useTags } from "./api";
-import { TAG_NAME_MAX, type TagId } from "./tag";
+import { TAG_NAME_MAX } from "./tag";
 
-// One box for a tag name: the add box of the save form and of Edit tags,
-// and the rename box. Return saves; Escape is left to the dialog, which
-// closes.
+// One box for a tag name: the add box of the save form and of Edit tags.
+// Return saves; Escape is left to the dialog, which closes.
 export function TagNameField({
 	label,
 	saveLabel,
-	initial = "",
-	except,
-	className,
 	boxClassName,
 	onSave,
 	onCancel,
 }: {
 	label: string;
 	saveLabel: string;
-	initial?: string;
-	except?: TagId;
-	className?: string;
 	boxClassName?: string;
 	// Rejects with the server's duplicate refusal when it finds the name
 	// taken; the caller handles every other failure.
 	onSave: (name: string) => Promise<void>;
 	onCancel: () => void;
 }) {
-	const [name, setName] = useState(initial);
+	const [name, setName] = useState("");
 	const [taken, setTaken] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const box = useRef<HTMLInputElement>(null);
@@ -45,11 +38,9 @@ export function TagNameField({
 		// Enter is not held off by the disabled button.
 		if (saving) return;
 		const trimmed = name.trim();
-		// An empty or unchanged name sends nothing.
-		if (!trimmed || trimmed === initial) return onCancel();
-		if (
-			tags.data?.some((t) => t.id !== except && sameLabelName(t.name, trimmed))
-		) {
+		// An empty name sends nothing.
+		if (!trimmed) return onCancel();
+		if (tags.data?.some((t) => sameLabelName(t.name, trimmed))) {
 			setTaken(true);
 			return;
 		}
@@ -64,7 +55,7 @@ export function TagNameField({
 	};
 
 	return (
-		<div className={cn("flex flex-col gap-1", className)}>
+		<div className="flex flex-col gap-1">
 			<div className="flex items-center gap-1">
 				<input
 					ref={box}
