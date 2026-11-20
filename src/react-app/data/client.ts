@@ -41,14 +41,17 @@ export const keys = {
 	allowApp: (clientId: string) => ["allow-app", clientId] as const,
 };
 
-const refresh = (queryKey: readonly unknown[]) => {
-	// A list with no data yet keeps a load already under way, and that load
-	// may have read the server before this change: drop it, then load again.
-	// Not returned: a returned promise holds the caller's callbacks, such as
-	// the save form's close, until the list has loaded again.
-	void queryClient
+// A list with no data yet keeps a load already under way, and that load
+// may have read the server before this change: drop it, then load again.
+const reload = (queryKey: readonly unknown[]) =>
+	queryClient
 		.cancelQueries({ queryKey })
 		.then(() => queryClient.invalidateQueries({ queryKey }));
+
+const refresh = (queryKey: readonly unknown[]) => {
+	// Not returned: a returned promise holds the caller's callbacks, such as
+	// the save form's close, until the list has loaded again.
+	void reload(queryKey);
 };
 
 // The item in the closet list, in place or first.
@@ -281,7 +284,7 @@ export const after = {
 	// it. The closet loads first, so a piece bought there is in the closet
 	// before its wish leaves the wishlist, and the piece page stays.
 	async shopLinkGone(userId: string | null, id: string) {
-		await queryClient.invalidateQueries({ queryKey: keys.closet(userId) });
+		await reload(keys.closet(userId));
 		after.shopLinkDeleted(userId, id);
 	},
 	aiAppGone(userId: string | null, id: string) {
