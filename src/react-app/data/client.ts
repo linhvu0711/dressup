@@ -16,7 +16,10 @@ import type { Wish } from "@/wishlist/wish";
 import { type ErrorCode, errorAnswer, meAnswer } from "./contract";
 
 // Every request the web app sends to the worker goes through request(), so
-// the 401 rule, the error codes, and the contract check live here once.
+// the 401 rule, the error codes, and the contract check live here once. Two
+// senders are left out: the session check, fetchMe, whose 401 means no
+// session, and the sign-in calls of authClient, which Better Auth sends
+// itself.
 
 // "Retry" or "Try again" on the page is the person's way to try again;
 // three silent retries would hold the placeholders for about 7 s first.

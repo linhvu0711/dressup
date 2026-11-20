@@ -137,8 +137,8 @@ export function SaveCombinationDialog({
 							</div>
 						) : alert === "full" ? (
 							<p role="alert" className="text-[12.5px] text-destructive">
-								You have 300 combinations. That is the limit. Delete one to save
-								a new one.
+								You have {COMBINATION_LIMIT} combinations. That is the limit.
+								Delete one to save a new one.
 							</p>
 						) : alert === "failed" ? (
 							<p role="alert" className="text-[13px] text-destructive">
