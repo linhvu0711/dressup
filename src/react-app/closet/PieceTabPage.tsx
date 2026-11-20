@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import type { Hex } from "@/colour/hex";
 import { Button } from "@/components/ui/button";
-import { ActiveFilters, FilterButton } from "@/components/ui/filter";
+import { ActiveFilters, FilterButton, shownText } from "@/components/ui/filter";
 import { Notice } from "@/components/ui/notice";
 import { useAddressFilter } from "@/components/ui/use-address-filter";
 import type { TypeId } from "@/dress/clothing-types";
@@ -77,7 +77,6 @@ export function PieceTabPage<D, E extends TilePiece>({
 		chips: (f) => pieceFilterChips(f, colours.data, brands.data),
 	});
 	const shown = all.filter((e) => matchesPieceFilter(pf.filter, toPiece(e)));
-	const shownText = shown.length === 1 ? "1 piece" : `${shown.length} pieces`;
 	// An empty list still shows picks left in the address, so a piece added
 	// later is not hidden by a filter the user cannot see.
 	const filterable =
@@ -181,7 +180,7 @@ export function PieceTabPage<D, E extends TilePiece>({
 				<ActiveFilters
 					chips={pf.chips}
 					onClearAll={pf.clear}
-					shown={shownText}
+					shown={shownText(shown.length, "piece")}
 				/>
 			) : null}
 			{wall}
@@ -190,7 +189,7 @@ export function PieceTabPage<D, E extends TilePiece>({
 				<PieceFilterSheet
 					filter={pf.filter}
 					onChange={pf.set}
-					shownText={shownText}
+					shownText={shownText(shown.length, "piece")}
 					onClose={() => setFiltering(false)}
 				/>
 			) : null}

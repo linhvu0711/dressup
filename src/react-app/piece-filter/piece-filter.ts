@@ -1,5 +1,6 @@
 import type { ClosetPiece, OwnedItem } from "@/closet/owned-item";
 import {
+	isTypeId,
 	LAYER_GROUP_NAMES,
 	LAYER_OF,
 	LAYERS,
@@ -81,15 +82,12 @@ const unique = <T>(values: T[]) => [...new Set(values)];
 const isLayer = (value: string): value is Layer =>
 	(LAYERS as readonly string[]).includes(value);
 
-const isType = (value: string): value is TypeId =>
-	(TYPE_IDS as readonly string[]).includes(value);
-
 // The address is typed by hand or kept from an old link, so a layer or a
 // type that is not one is left out. Layers and types come out in the app's
 // order, so the chips keep one order whatever order the picks came in.
 export function readPieceFilter(params: URLSearchParams): PieceFilter {
 	const layers = params.getAll("layer").filter(isLayer);
-	const types = params.getAll("type").filter(isType);
+	const types = params.getAll("type").filter(isTypeId);
 	return {
 		layers: LAYERS.filter((l) => layers.includes(l)),
 		types: TYPE_IDS.filter((t) => types.includes(t)),

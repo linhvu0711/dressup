@@ -17,13 +17,12 @@ import {
 	NO_FILTER,
 	pruneCombinationFilter,
 	readCombinationFilter,
-	shownText,
 	writeCombinationFilter,
 } from "@/combinations/filter";
 import { pieceKeys } from "@/combinations/marks";
 import { useWallAddress, wallAddress } from "@/combinations/wall-address";
 import { Button } from "@/components/ui/button";
-import { ActiveFilters, FilterButton } from "@/components/ui/filter";
+import { ActiveFilters, FilterButton, shownText } from "@/components/ui/filter";
 import { Notice } from "@/components/ui/notice";
 import { useAddressFilter } from "@/components/ui/use-address-filter";
 import { TypeFigure } from "@/dress/figure/TypeFigure";
@@ -229,7 +228,7 @@ export function CombinationsPage() {
 					<ActiveFilters
 						chips={cf.chips}
 						onClearAll={cf.clear}
-						shown={shownText(matched.length)}
+						shown={shownText(matched.length, "combination")}
 					/>
 				) : null}
 				{wall}
@@ -250,7 +249,9 @@ export function CombinationsPage() {
 				<CombinationFilterSheet
 					filter={filter}
 					onChange={cf.set}
-					shown={matched ? shownText(matched.length) : "combinations"}
+					shown={
+						matched ? shownText(matched.length, "combination") : "combinations"
+					}
 					onClose={() => setFiltering(false)}
 				/>
 			) : null}

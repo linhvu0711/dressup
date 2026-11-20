@@ -1,4 +1,4 @@
-import { TYPE_IDS, TYPE_NAMES, type TypeId } from "@/dress/clothing-types";
+import { isTypeId, TYPE_NAMES, type TypeId } from "@/dress/clothing-types";
 import type { ColourId } from "@/labels/colour";
 import type { Tag, TagId } from "@/tags/tag";
 import { type CombinationProblem, pieceName } from "./combination";
@@ -28,9 +28,6 @@ export const BLANK_ROW: PieceRow = { typeId: null, colourId: null };
 
 export const isBlank = (row: PieceRow) =>
 	row.typeId === null && row.colourId === null;
-
-const isTypeId = (value: string): value is TypeId =>
-	(TYPE_IDS as readonly string[]).includes(value);
 
 type Filtered = {
 	pieces: readonly PieceRef[];
@@ -239,6 +236,3 @@ export function filterChips(
 				];
 	return [...rows, ...ownChip, ...tagChips];
 }
-
-export const shownText = (n: number) =>
-	n === 1 ? "1 combination" : `${n} combinations`;
