@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
-import { saveCombination } from "./combination-store";
 import { schema } from "./db";
 import {
 	type aiSession,
@@ -387,11 +386,11 @@ describe("colours", () => {
 
 	test("refuses to delete a colour a combination uses", async () => {
 		// Given: the account saved Navy casual pants and a White long tee
-		const { h, ai, userId } = await withAiSession();
+		const { h, ai } = await withAiSession();
 		const listed = await colours(h, ai);
 		const idOf = (name: string) =>
 			listed.find((c) => c.name === name)?.id ?? "";
-		await saveCombination(h.db, userId, {
+		await send(h, ai.jar, "POST", "/api/combinations", {
 			id: "11111111-1111-4111-8111-111111111111",
 			pieces: [
 				{ typeId: "casual_p", colourId: idOf("Navy") },

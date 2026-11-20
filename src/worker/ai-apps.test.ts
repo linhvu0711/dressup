@@ -4,12 +4,21 @@ import {
 	BOB,
 	cookie,
 	count,
+	type Harness,
 	INITIALIZE,
 	post,
 	send,
 	TEST_APP_ID,
 	withAiApp,
 } from "./test/harness";
+
+// The AI apps the account lists.
+const appsOf = async (h: Harness, auth: Record<string, string>) =>
+	(
+		(await (await send(h, auth, "GET", "/api/ai-apps")).json()) as {
+			apps: unknown[];
+		}
+	).apps.length;
 
 describe("/api/ai-apps", () => {
 	// Alice connected the test app on 2026-11-14 at 12:00 UTC; its allow row
@@ -90,13 +99,11 @@ describe("/api/ai-apps", () => {
 		const mcp = await post(h, INITIALIZE, bearer);
 		expect({
 			status: res.status,
-			allows: await count(h, schema.oauthConsent),
 			refreshTokens: await count(h, schema.oauthRefreshToken),
 			apps: ((await list.json()) as { apps: unknown[] }).apps,
 			mcp: mcp.status,
 		}).toEqual({
 			status: 204,
-			allows: 0,
 			refreshTokens: 0,
 			apps: [],
 			mcp: 401,
@@ -105,7 +112,7 @@ describe("/api/ai-apps", () => {
 
 	test("answers 404 for a disconnect of another account's AI app", async () => {
 		// Given: alice connected the app; bob signed in
-		const { h } = await aliceConnected();
+		const { h, alice } = await aliceConnected();
 		const bob = await h.addAccount(BOB);
 		// When
 		const res = await send(h, bob, "DELETE", "/api/ai-apps/allow-1");
@@ -113,7 +120,7 @@ describe("/api/ai-apps", () => {
 		expect({
 			status: res.status,
 			body: await res.json(),
-			allows: await count(h, schema.oauthConsent),
+			allows: await appsOf(h, alice),
 			refreshTokens: await count(h, schema.oauthRefreshToken),
 		}).toEqual({
 			status: 404,
@@ -133,7 +140,7 @@ describe("/api/ai-apps", () => {
 		expect({
 			first: first.status,
 			second: second.status,
-			allows: await count(h, schema.oauthConsent),
+			allows: await appsOf(h, alice),
 			refreshTokens: await count(h, schema.oauthRefreshToken),
 		}).toEqual({ first: 204, second: 404, allows: 0, refreshTokens: 0 });
 	});
@@ -174,14 +181,14 @@ describe("/api/ai-apps", () => {
 
 	test("refuses DELETE /api/ai-apps/:id without a session", async () => {
 		// Given
-		const { h } = await aliceConnected();
+		const { h, alice } = await aliceConnected();
 		// When
 		const res = await send(h, {}, "DELETE", "/api/ai-apps/allow-1");
 		// Then
 		expect({
 			status: res.status,
 			body: await res.json(),
-			allows: await count(h, schema.oauthConsent),
+			allows: await appsOf(h, alice),
 		}).toEqual({ status: 401, body: { error: "unauthorized" }, allows: 1 });
 	});
 

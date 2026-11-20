@@ -8,6 +8,7 @@ import {
 	finishGoogleSignIn,
 	type Harness,
 	makeHarness,
+	send,
 	startGoogleSignIn,
 	stubOutside,
 	TEST_APP_ID,
@@ -158,11 +159,14 @@ describe("AI app sign-in", () => {
 		// Given
 		const h = await given();
 		// When
-		const { consent } = await connectAiApp(h, { accept: false });
+		const { consent, jar } = await connectAiApp(h, { accept: false });
 		// Then
+		const { apps } = (await (
+			await send(h, jar, "GET", "/api/ai-apps")
+		).json()) as { apps: unknown[] };
 		expect({
 			url: consent.url,
-			allows: await count(h, schema.oauthConsent),
+			allows: apps.length,
 		}).toEqual({
 			url: "http://127.0.0.1:33418/callback?error=access_denied&error_description=User+denied+access&state=xyz&iss=http%3A%2F%2Flocalhost%3A5173%2Fapi%2Fauth",
 			allows: 0,

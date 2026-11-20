@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { addColour, listColours } from "./colour-store";
-import { saveCombination } from "./combination-store";
 import { schema } from "./db";
 import {
 	alice,
@@ -77,7 +76,7 @@ describe("GET /api/colours", () => {
 		await send(h, headers, "GET", "/api/colours");
 		await send(h, headers, "GET", "/api/colours");
 		// Then
-		expect((await h.rows(schema.colour, "alice-id")).length).toEqual(13);
+		expect((await coloursOf(h, headers)).length).toEqual(13);
 	});
 
 	test("writes the starter set once when two lists come at once", async () => {
@@ -349,7 +348,7 @@ describe("PUT /api/colours/:id", () => {
 // alice with a combination of Navy casual pants and a White long tee.
 async function aliceWithCombination() {
 	const { h, headers, ids } = await alice();
-	await saveCombination(h.db, "alice-id", {
+	await send(h, headers, "POST", "/api/combinations", {
 		id: "11111111-1111-4111-8111-111111111111",
 		pieces: [
 			{ typeId: "casual_p", colourId: ids.Navy },

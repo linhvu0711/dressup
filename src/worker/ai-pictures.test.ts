@@ -9,6 +9,7 @@ import {
 	JPEG,
 	PDF,
 	PNG,
+	send,
 	uploadPicture,
 	withAiSession,
 } from "./test/harness";
@@ -315,7 +316,11 @@ describe("owned item pictures", () => {
 		expect({
 			isError,
 			text,
-			items: await h.rows(schema.ownedItem),
+			items: (
+				(await (await send(h, ai.jar, "GET", "/api/owned-items")).json()) as {
+					ownedItems: unknown[];
+				}
+			).ownedItems,
 		}).toEqual({
 			isError: true,
 			text: "An owned item has at most 8 pictures.",
@@ -406,7 +411,10 @@ describe("shop link pictures", () => {
 			pictureIds: nine,
 		});
 		// Then
-		expect({ isError, text, links: await h.rows(schema.shopLink) }).toEqual({
+		const { wishes } = (await (
+			await send(h, ai.jar, "GET", "/api/wishes")
+		).json()) as { wishes: { shopLinks: unknown[] }[] };
+		expect({ isError, text, links: wishes[0]?.shopLinks }).toEqual({
 			isError: true,
 			text: "A shop link has at most 8 pictures.",
 			links: [],

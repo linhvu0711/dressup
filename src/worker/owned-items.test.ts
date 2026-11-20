@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { picture } from "./db/picture-schema";
-import {
-	addOwnedItem,
-	changeOwnedItem,
-	deleteOwnedItem,
-} from "./owned-item-store";
+import { addOwnedItem, changeOwnedItem } from "./owned-item-store";
 import {
 	ALICE,
 	alice,
@@ -496,18 +492,13 @@ describe("adds at once", () => {
 			`CREATE TRIGGER drop_navy BEFORE INSERT ON owned_item WHEN NEW.colour_id = '${ids.Navy}' BEGIN DELETE FROM colour WHERE id = NEW.colour_id; END`,
 		);
 		// When
-		const threw = await addOwnedItem(
-			h.db,
-			bucket(h),
-			"alice-id",
-			shirt(ids),
-		).then(
-			() => false,
-			() => true,
-		);
+		const res = await post(h, headers, shirt(ids));
 		// Then
-		expect({ threw, count: (await list(h, headers)).length }).toEqual({
-			threw: true,
+		expect({
+			status: res.status,
+			count: (await list(h, headers)).length,
+		}).toEqual({
+			status: 500,
 			count: 0,
 		});
 	});
@@ -777,20 +768,22 @@ describe("picture lists at once", () => {
 		const batch = db.batch;
 		const otherTabFirst: typeof batch = async (items) => {
 			db.batch = batch;
-			await deleteOwnedItem(db, bucket(h), "alice-id", FIRST_ID);
+			await send(h, headers, "DELETE", `/api/owned-items/${FIRST_ID}`);
 			return batch(items);
 		};
 		db.batch = otherTabFirst;
 		// When
-		const changed = await changeOwnedItem(db, bucket(h), "alice-id", FIRST_ID, {
-			brandId: null,
-			quantity: 1,
-			pictureIds: [a],
-		});
+		const changed = await answer(
+			await put(h, headers, FIRST_ID, {
+				brandId: null,
+				quantity: 1,
+				pictureIds: [a],
+			}),
+		);
 		const [row] = await h.rows(picture);
 		// Then
-		expect({ changed: changed as unknown, owner: row?.ownedItemId }).toEqual({
-			changed: { ok: false, error: { code: "not_found" } },
+		expect({ changed, owner: row?.ownedItemId }).toEqual({
+			changed: { status: 404, body: { error: "not_found" } },
 			owner: null,
 		});
 	});

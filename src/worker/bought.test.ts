@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { buyShopLink } from "./owned-item-store";
 import {
 	ALICE,
 	answer,
@@ -290,7 +289,7 @@ describe("POST /api/shop-links/:id/bought", () => {
 	});
 });
 
-describe("buyShopLink", () => {
+describe("Bought while another write runs", () => {
 	test("leaves everything as before when the wish delete fails", async () => {
 		// Given
 		const { h, headers, a, b, c } = await aliceWithLinks();
@@ -298,24 +297,16 @@ describe("buyShopLink", () => {
 			"CREATE TRIGGER fail_wish_delete BEFORE DELETE ON wish BEGIN SELECT RAISE(ABORT, 'wish delete failed'); END",
 		);
 		// When
-		const thrown = await buyShopLink(
-			h.db,
-			h.env.PICTURES,
-			"alice-id",
-			LINK_ID,
-		).then(
-			() => false,
-			() => true,
-		);
+		const res = await buy(h, headers, LINK_ID);
 		// Then
 		expect({
-			thrown,
+			status: res.status,
 			items: await closet(h, headers),
 			links: await linkPictures(h, headers),
 			keys: h.pictures.keys(),
 			stored: await h.storedBytes(),
 		}).toEqual({
-			thrown: true,
+			status: 500,
 			items: [],
 			links: [[a, b], [c]],
 			keys: [a, b, c].sort(),
@@ -329,16 +320,16 @@ describe("buyShopLink", () => {
 		const hold = h.holdBatches();
 		// When
 		const both = Promise.all([
-			buyShopLink(h.db, h.env.PICTURES, "alice-id", LINK_ID),
-			buyShopLink(h.db, h.env.PICTURES, "alice-id", OTHER_LINK_ID),
+			buy(h, headers, LINK_ID).then(answer),
+			buy(h, headers, OTHER_LINK_ID).then(answer),
 		]);
 		await hold.queued(2);
 		hold.release();
 		const results = await both;
 		// Then
 		expect({
-			oks: results.map((r) => r.ok).sort(),
-			refusals: results.flatMap((r) => (r.ok ? [] : [r.error])),
+			statuses: results.map((r) => r.status).sort(),
+			refusals: results.flatMap((r) => (r.status === 201 ? [] : [r.body])),
 			items: (await closet(h, headers)).map((i) => ({
 				brand: i.brand?.id,
 				quantity: i.quantity,
@@ -346,8 +337,8 @@ describe("buyShopLink", () => {
 			wishes: await wishlist(h, headers),
 			keys: h.pictures.keys(),
 		}).toEqual({
-			oks: [false, true],
-			refusals: [{ code: "not_found" }],
+			statuses: [201, 404],
+			refusals: [{ error: "not_found" }],
 			items: [{ brand: cos, quantity: 1 }],
 			wishes: [],
 			keys: [a, b].sort(),
@@ -359,7 +350,7 @@ describe("buyShopLink", () => {
 		const { h, headers, cos, a, b, c, d, e } = await aliceWithItem();
 		const hold = h.holdBatches();
 		// When
-		const bought = buyShopLink(h.db, h.env.PICTURES, "alice-id", LINK_ID);
+		const bought = buy(h, headers, LINK_ID).then(answer);
 		await hold.queued(1);
 		await send(h, headers, "PUT", `/api/owned-items/${ITEM_ID}`, {
 			brandId: cos,
@@ -377,7 +368,7 @@ describe("buyShopLink", () => {
 			links: await linkPictures(h, headers),
 			keys: h.pictures.keys(),
 		}).toEqual({
-			result: { ok: false, error: { code: "conflict" } },
+			result: { status: 409, body: { error: "conflict", field: "id" } },
 			items: [{ quantity: 5, pictureIds: [d, e] }],
 			links: [[a, b], [c]],
 			keys: [a, b, c, d, e].sort(),
@@ -389,7 +380,7 @@ describe("buyShopLink", () => {
 		const { h, headers, ids, cos, a, b, c } = await aliceWithLinks();
 		const hold = h.holdBatches();
 		// When
-		const bought = buyShopLink(h.db, h.env.PICTURES, "alice-id", LINK_ID);
+		const bought = buy(h, headers, LINK_ID).then(answer);
 		await hold.queued(1);
 		await send(h, headers, "POST", "/api/owned-items", {
 			id: ITEM_ID,
@@ -410,7 +401,7 @@ describe("buyShopLink", () => {
 			})),
 			links: await linkPictures(h, headers),
 		}).toEqual({
-			result: { ok: false, error: { code: "conflict" } },
+			result: { status: 409, body: { error: "conflict", field: "id" } },
 			items: [{ id: ITEM_ID, quantity: 1, pictureIds: [] }],
 			links: [[a, b], [c]],
 		});

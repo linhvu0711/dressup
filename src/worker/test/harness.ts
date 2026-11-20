@@ -570,13 +570,13 @@ export async function connectAiApp(
 // A signed-in account's headers, or a browser's cookies.
 type Auth = Headers | Record<string, string> | Jar;
 
-export const send = (
+export const send = async (
 	h: Harness,
 	auth: Auth,
 	method: string,
 	path: string,
 	body?: unknown,
-) => {
+): Promise<Response> => {
 	const headers = new Headers(
 		auth instanceof Map ? (auth.size ? { cookie: cookie(auth) } : {}) : auth,
 	);

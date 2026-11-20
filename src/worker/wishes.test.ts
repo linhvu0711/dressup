@@ -555,23 +555,14 @@ describe("shop link adds at once", () => {
 			"CREATE TRIGGER drop_wish BEFORE INSERT ON shop_link BEGIN DELETE FROM wish WHERE id = NEW.wish_id; END",
 		);
 		// When
-		const threw = await addShopLink(
-			h.db,
-			h.env.PICTURES,
-			"alice-id",
-			FIRST_ID,
-			zaraLink(null),
-		).then(
-			() => false,
-			() => true,
-		);
+		const res = await postLink(h, headers, FIRST_ID, zaraLink(null));
 		// Then: the failed insert rolls back the trigger's delete with it, so
 		// the wish stays and no link is left with no wish
 		expect({
-			threw,
+			status: res.status,
 			links: h.accountRows("alice-id").shop_link ?? 0,
 			wishes: (await list(h, headers)).length,
-		}).toEqual({ threw: true, links: 0, wishes: 1 });
+		}).toEqual({ status: 500, links: 0, wishes: 1 });
 	});
 });
 
