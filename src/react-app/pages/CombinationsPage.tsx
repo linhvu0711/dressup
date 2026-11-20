@@ -13,14 +13,14 @@ import { DeleteCombinationDialog } from "@/combinations/DeleteCombinationDialog"
 import {
 	type CombinationFilter,
 	filterChips,
-	filterCombinations,
+	matchingCombinations,
 	NO_FILTER,
 	pruneCombinationFilter,
 	readCombinationFilter,
 	shownText,
 	writeCombinationFilter,
 } from "@/combinations/filter";
-import { NO_PIECES, pieceKeys } from "@/combinations/marks";
+import { pieceKeys } from "@/combinations/marks";
 import { useWallAddress, wallAddress } from "@/combinations/wall-address";
 import { Button } from "@/components/ui/button";
 import { ActiveFilters, FilterButton } from "@/components/ui/filter";
@@ -71,13 +71,8 @@ export function CombinationsPage() {
 	const waitsForCloset = filter.own !== "any";
 	const closet = useCloset({ enabled: waitsForCloset });
 	const owned = closet.data && pieceKeys(closet.data);
-	// With no closet every combination would look Not all, so Pieces I own
-	// matches nothing until the closet is in: undefined, not an empty list.
-	// Any never waits.
 	const matching = (f: CombinationFilter) =>
-		combinations.data && (f.own === "any" || owned)
-			? filterCombinations(combinations.data, f, owned ?? NO_PIECES)
-			: undefined;
+		matchingCombinations(combinations.data, f, owned);
 	const matched = matching(filter);
 	const visible = matched ?? [];
 	const [filtering, setFiltering] = useState(false);

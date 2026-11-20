@@ -2,7 +2,7 @@ import { TYPE_IDS, TYPE_NAMES, type TypeId } from "@/dress/clothing-types";
 import type { ColourId } from "@/labels/colour";
 import type { Tag, TagId } from "@/tags/tag";
 import { type CombinationProblem, pieceName } from "./combination";
-import { type PieceRef, pieceKey } from "./marks";
+import { NO_PIECES, type PieceRef, pieceKey } from "./marks";
 
 // A piece row: a type, a colour, or both. A row with neither filters nothing.
 export type PieceRow = { typeId: TypeId | null; colourId: ColourId | null };
@@ -73,6 +73,18 @@ export const filterCombinations = <T extends Filtered>(
 	f: CombinationFilter,
 	owned: ReadonlySet<string>,
 ): T[] => list.filter((c) => matchesFilter(c, f, owned));
+
+// With no closet every combination would look Not all, so Pieces I own
+// matches nothing until the closet is in: undefined, not an empty list. Any
+// never waits.
+export const matchingCombinations = <T extends Filtered>(
+	list: T[] | undefined,
+	f: CombinationFilter,
+	owned: ReadonlySet<string> | undefined,
+): T[] | undefined =>
+	list && (f.own === "any" || owned)
+		? filterCombinations(list, f, owned ?? NO_PIECES)
+		: undefined;
 
 // The rows an AI app sends, before the account's colours are checked.
 export function checkPieceRows(
