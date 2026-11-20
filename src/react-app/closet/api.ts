@@ -1,8 +1,12 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
+import type { z } from "zod";
 import { after, cachedUserId, keys, remove, request } from "../data/client";
 import { ownedItemAnswer, ownedItemsAnswer } from "../data/contract";
-import type { PictureId } from "../pictures/picture";
-import type { OwnedItemId } from "./owned-item";
+import type {
+	OwnedItemId,
+	ownedItemChangeSchema,
+	ownedItemInputSchema,
+} from "./owned-item";
 
 export function useCloset({ enabled = true }: { enabled?: boolean } = {}) {
 	const userId = cachedUserId();
@@ -21,14 +25,7 @@ export function useCloset({ enabled = true }: { enabled?: boolean } = {}) {
 export function useAddOwnedItem() {
 	const userId = cachedUserId();
 	return useMutation({
-		mutationFn: async (item: {
-			id: OwnedItemId;
-			typeId: string;
-			colourId: string;
-			brandId: string | null;
-			quantity: number;
-			pictureIds: PictureId[];
-		}) =>
+		mutationFn: async (item: z.infer<typeof ownedItemInputSchema>) =>
 			(
 				await request("POST", "/api/owned-items", {
 					body: item,
@@ -45,12 +42,7 @@ export function useChangeOwnedItem() {
 		mutationFn: async ({
 			id,
 			...change
-		}: {
-			id: OwnedItemId;
-			brandId: string | null;
-			quantity: number;
-			pictureIds: PictureId[];
-		}) =>
+		}: { id: OwnedItemId } & z.infer<typeof ownedItemChangeSchema>) =>
 			(
 				await request("PUT", `/api/owned-items/${id}`, {
 					body: change,

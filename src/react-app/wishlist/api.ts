@@ -1,7 +1,14 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
+import type { z } from "zod";
 import { after, cachedUserId, keys, remove, request } from "../data/client";
 import { ownedItemAnswer, wishAnswer, wishesAnswer } from "../data/contract";
-import type { ShopLinkId, WishId } from "./wish";
+import type {
+	ShopLinkId,
+	shopLinkChangeSchema,
+	shopLinkInputSchema,
+	WishId,
+	wishInputSchema,
+} from "./wish";
 
 export function useWishlist() {
 	const userId = cachedUserId();
@@ -16,11 +23,7 @@ export function useWishlist() {
 export function useAddWish() {
 	const userId = cachedUserId();
 	return useMutation({
-		mutationFn: async (wish: {
-			id: WishId;
-			typeId: string;
-			colourId: string;
-		}) =>
+		mutationFn: async (wish: z.infer<typeof wishInputSchema>) =>
 			(
 				await request("POST", "/api/wishes", {
 					body: wish,
@@ -31,21 +34,13 @@ export function useAddWish() {
 	});
 }
 
-type ShopLinkFields = {
-	url: string;
-	brandId: string | null;
-	name: string;
-	price: number | null;
-	pictureIds: string[];
-};
-
 export function useAddShopLink() {
 	const userId = cachedUserId();
 	return useMutation({
 		mutationFn: async ({
 			wishId,
 			...link
-		}: ShopLinkFields & { wishId: WishId; id: ShopLinkId }) =>
+		}: z.infer<typeof shopLinkInputSchema> & { wishId: WishId }) =>
 			(
 				await request("POST", `/api/wishes/${wishId}/shop-links`, {
 					body: link,
@@ -62,7 +57,7 @@ export function useChangeShopLink() {
 		mutationFn: async ({
 			id,
 			...change
-		}: ShopLinkFields & { id: ShopLinkId }) =>
+		}: z.infer<typeof shopLinkChangeSchema> & { id: ShopLinkId }) =>
 			(
 				await request("PUT", `/api/shop-links/${id}`, {
 					body: change,
