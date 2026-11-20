@@ -47,6 +47,12 @@ export function usePanel<Id extends string>({
 		toast(message);
 		onClose();
 	};
+	// The Delete button: on the form it asks, on the ask it runs.
+	const remove = (run: () => void) => {
+		const { deletes } = nextPanel(state, { type: "delete" }, fresh);
+		send({ type: "delete" });
+		if (deletes) run();
+	};
 	return {
 		id: state.id,
 		step: state.step,
@@ -59,6 +65,12 @@ export function usePanel<Id extends string>({
 		checked,
 		check: (text: string) => setChecked(text),
 		done,
+		remove,
+		// The record is deleted, so what was picked for it goes too.
+		gone: (message: string) => {
+			discard?.();
+			done(message);
+		},
 		close: () => {
 			discard?.();
 			onClose();
@@ -68,9 +80,18 @@ export function usePanel<Id extends string>({
 
 export type Panel<Id extends string> = ReturnType<typeof usePanel<Id>>;
 
+// The panel's own delete mutation, which the frame runs from its ask.
+export type PanelDelete<Id extends string> = {
+	mutate: (id: Id, options: { onSuccess: () => void }) => void;
+	isPending: boolean;
+	isError: boolean;
+	reset: () => void;
+};
+
 // The form of an add or change panel in a sheet: the panel's fields, its
-// problem line, Cancel and Save. A step from `steps` swaps in over the
-// form; the form stays mounted behind it, so Back finds what was typed.
+// problem line, Delete when it has `remove`, Cancel and Save. A step from
+// `steps`, or the delete ask, swaps in over the form; the form stays
+// mounted behind it, so Back finds what was typed.
 export function PanelSheet<Id extends string>({
 	panel,
 	title,
@@ -79,6 +100,7 @@ export function PanelSheet<Id extends string>({
 	problem,
 	problemAction,
 	save,
+	remove,
 	children,
 }: {
 	panel: Panel<Id>;
@@ -89,9 +111,29 @@ export function PanelSheet<Id extends string>({
 	// A button beside the problem line, such as a link to what the save hit.
 	problemAction?: ReactNode;
 	save: { label?: string; disabled: boolean; run: () => void };
+	remove?: {
+		title: string;
+		text: ReactNode;
+		// The toast once it is deleted.
+		deleted: string;
+		del: PanelDelete<Id>;
+	};
 	children: ReactNode;
 }) {
-	const open = panel.step === "form" ? null : steps[panel.step];
+	const open =
+		panel.step === "form"
+			? null
+			: panel.step === "delete"
+				? remove && { title: remove.title, body: null }
+				: steps[panel.step];
+	const del = remove
+		? () =>
+				panel.remove(() =>
+					remove.del.mutate(panel.id, {
+						onSuccess: () => panel.gone(remove.deleted),
+					}),
+				)
+		: undefined;
 	const shown = panel.checked ?? problem;
 	const line = shown ? (
 		<p role="alert" className="text-[13px] text-destructive">
@@ -102,7 +144,10 @@ export function PanelSheet<Id extends string>({
 		<FormSheet
 			title={title}
 			step={open?.title ?? null}
-			onBack={panel.back}
+			onBack={() => {
+				panel.back();
+				remove?.del.reset();
+			}}
 			focus={focus}
 			onClose={panel.close}
 		>
@@ -125,6 +170,11 @@ export function PanelSheet<Id extends string>({
 					line
 				)}
 				<div className="mt-0.5 flex flex-wrap justify-end gap-2 [&>button]:flex-1 wide:[&>button]:flex-none">
+					{del ? (
+						<Button type="button" variant="destructive" onClick={del}>
+							Delete
+						</Button>
+					) : null}
 					<Button type="button" onClick={panel.close}>
 						Cancel
 					</Button>
@@ -134,6 +184,25 @@ export function PanelSheet<Id extends string>({
 				</div>
 			</form>
 			{open?.body}
+			{remove && del && panel.step === "delete" ? (
+				<>
+					<p className="text-muted-foreground">{remove.text}</p>
+					{remove.del.isError ? (
+						<p role="alert" className="text-[13px] text-destructive">
+							Not deleted. Try again.
+						</p>
+					) : null}
+					<div className="mt-0.5 flex flex-wrap justify-end gap-2 [&>button]:flex-1 wide:[&>button]:flex-none">
+						<Button
+							variant="destructive"
+							disabled={remove.del.isPending}
+							onClick={del}
+						>
+							Delete
+						</Button>
+					</div>
+				</>
+			) : null}
 		</FormSheet>
 	);
 }
