@@ -324,6 +324,43 @@ test("refuses a file that is not a picture before any upload", async ({
 	expect(sent).toEqual([]);
 });
 
+test("says a picture is too big when it cannot shrink under 1 MB", async ({
+	page,
+}) => {
+	// Given: every JPEG the page's canvas makes is one byte over 1 MB, since
+	// no real picture stays that big in Chrome (plan P1); an item's edit sheet
+	// open
+	await page.addInitScript(() => {
+		HTMLCanvasElement.prototype.toBlob = (done) => {
+			done(new Blob([new Uint8Array(1_048_577)], { type: "image/jpeg" }));
+		};
+	});
+	await openEditSheet(page);
+	// When
+	await pickFiles(page, addButton(page), [pngFile("front.png")]);
+	// Then
+	await expect(editSheet(page).getByRole("alert")).toHaveText(
+		"This picture is too big, even after shrinking. Try a smaller one.",
+	);
+});
+
+test("says a file the browser cannot read cannot be read", async ({ page }) => {
+	// Given: an item's edit sheet open
+	await openEditSheet(page);
+	// When
+	await pickFiles(page, addButton(page), [
+		{
+			name: "broken.png",
+			mimeType: "image/png",
+			buffer: Buffer.from("not a picture"),
+		},
+	]);
+	// Then
+	await expect(editSheet(page).getByRole("alert")).toHaveText(
+		"This picture cannot be read. Try a JPEG or PNG.",
+	);
+});
+
 test("stops at 8 pictures on one item", async ({ page }) => {
 	// Given: an item's edit sheet open
 	await openEditSheet(page);
