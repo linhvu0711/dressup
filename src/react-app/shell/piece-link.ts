@@ -3,7 +3,9 @@ import { z } from "zod";
 
 // The tabs that open a piece page; its Back goes to the one the user came
 // from, with that tab's filter.
-export type PieceTab = "/closet" | "/wishlist";
+export const PIECE_TABS = ["/closet", "/wishlist"] as const;
+
+export type PieceTab = (typeof PIECE_TABS)[number];
 
 // A combination's page opens a piece page too; its address carries the wall's
 // filter, so Back brings the wall back filtered.
@@ -26,7 +28,7 @@ export function usePieceLink(from: PieceFrom) {
 // and goes back to the closet.
 const pieceState = z.object({
 	from: z.union([
-		z.enum(["/closet", "/wishlist"]),
+		z.enum(PIECE_TABS),
 		z.string().regex(/^\/combinations\/[^/?#]+$/),
 	]),
 	search: z
