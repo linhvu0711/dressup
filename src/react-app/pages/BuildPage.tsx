@@ -26,8 +26,6 @@ import { Stage } from "@/dress/Stage";
 import { useColours } from "@/labels/api";
 import { ColourSwatches } from "@/labels/ColourSwatches";
 import type { Colour, ColourId } from "@/labels/colour";
-import { useMannequin } from "@/mannequin/api";
-import { MannequinFailed } from "@/mannequin/MannequinFailed";
 import { PageHeader } from "../shell/PageHeader";
 
 type Picks = Partial<Record<Layer, { typeId: TypeId; colourId: ColourId }>>;
@@ -96,7 +94,6 @@ const picksOf = (combination: Combination | undefined): Picks =>
 // The mannequin on top, the picker below it (beside it from 900 px). A pick
 // shows on the mannequin at once; nothing is saved until Save.
 function Builder({ combination }: { combination?: Combination }) {
-	const mannequin = useMannequin();
 	const colours = useColours();
 	const [picks, setPicks] = useState<Picks>(() => picksOf(combination));
 	const [layer, setLayer] = useState<Layer>("bottom");
@@ -158,17 +155,13 @@ function Builder({ combination }: { combination?: Combination }) {
 					className="flex min-h-0 flex-[0_0_46%] flex-col wide:mx-6 wide:mb-4 wide:flex-1"
 				>
 					<Stage className="min-h-0 flex-1 rounded-b-[24px] wide:rounded-[26px]">
-						{mannequin.isError ? (
-							<MannequinFailed onLoadAgain={() => mannequin.refetch()} />
-						) : (
-							<CombinationFigure
-								pieces={pieces.map((p) => ({
-									typeId: p.typeId,
-									hex: p.colour.hex,
-								}))}
-								label="Mannequin in the combination"
-							/>
-						)}
+						<CombinationFigure
+							pieces={pieces.map((p) => ({
+								typeId: p.typeId,
+								hex: p.colour.hex,
+							}))}
+							label="Mannequin in the combination"
+						/>
 					</Stage>
 				</div>
 				<Tabs

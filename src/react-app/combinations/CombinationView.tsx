@@ -4,8 +4,6 @@ import { useCloset } from "@/closet/api";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { Stage } from "@/dress/Stage";
-import { useMannequin } from "@/mannequin/api";
-import { MannequinFailed } from "@/mannequin/MannequinFailed";
 import { usePieceLink } from "@/shell/piece-link";
 import { useTags } from "@/tags/api";
 import { useWishlist } from "@/wishlist/api";
@@ -35,7 +33,6 @@ export function CombinationView({
 }) {
 	const toast = useToast();
 	const address = useWallAddress();
-	const mannequin = useMannequin();
 	const linkTo = usePieceLink(`/combinations/${combination.id}`);
 	const title = combinationTitle(combination);
 	// In the tag list's order; a tag deleted on another device is skipped.
@@ -78,17 +75,13 @@ export function CombinationView({
 				</Button>
 			</div>
 			<Stage className="mx-3 flex-[0_0_52%] rounded-[24px] wide:-order-1 wide:mx-4 wide:mt-4 wide:flex-[0_0_50%] wide:rounded-[22px]">
-				{mannequin.isError ? (
-					<MannequinFailed onLoadAgain={() => mannequin.refetch()} />
-				) : (
-					<CombinationFigure
-						pieces={combination.pieces.map((p) => ({
-							typeId: p.typeId,
-							hex: p.colour.hex,
-						}))}
-						label={title}
-					/>
-				)}
+				<CombinationFigure
+					pieces={combination.pieces.map((p) => ({
+						typeId: p.typeId,
+						hex: p.colour.hex,
+					}))}
+					label={title}
+				/>
 			</Stage>
 			<div className="min-h-0 flex-1 overflow-auto px-4 pb-24 wide:px-6 wide:pb-6">
 				{tags.length ? (
