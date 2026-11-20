@@ -1,7 +1,7 @@
 import { AlertDialog } from "radix-ui";
 import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
-import { SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
+import { FOOTER_ROW, SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
 import { useDeleteCombination } from "./api";
 import { type Combination, combinationTitle } from "./combination";
@@ -34,7 +34,7 @@ export function DeleteCombinationDialog({
 						"{combinationTitle(combination)}" goes away for good. Your colours
 						stay.
 					</AlertDialog.Description>
-					<div className="mt-0.5 flex flex-wrap justify-end gap-2 [&>button]:flex-1 wide:[&>button]:flex-none">
+					<div className={FOOTER_ROW}>
 						<AlertDialog.Cancel asChild>
 							<Button>Cancel</Button>
 						</AlertDialog.Cancel>

@@ -1,3 +1,4 @@
+import { PULSE } from "@/components/ui/placeholder";
 // The grey figure the stage shows while the account's colours load, pulsing.
 // Not loading, it is still and hidden from screen readers: a wall card far
 // from the screen shows it in place of its mannequin.
@@ -14,9 +15,7 @@ export function MannequinPlaceholder({
 			role={loading ? "img" : undefined}
 			aria-label={loading ? "Loading" : undefined}
 			aria-hidden={loading ? undefined : true}
-			className={
-				loading ? "animate-placeholder motion-reduce:animate-none" : undefined
-			}
+			className={loading ? PULSE : undefined}
 		>
 			<g fill="#000" opacity=".16">
 				<ellipse cx="200" cy="95" rx="40" ry="50" />

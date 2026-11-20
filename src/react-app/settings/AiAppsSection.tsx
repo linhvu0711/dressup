@@ -1,9 +1,11 @@
+import { cn } from "cn";
 import { AppLogo } from "@/ai-apps/AppLogo";
 import type { AiApp } from "@/ai-apps/ai-app";
 import { useAiApps, useDisconnectAiApp } from "@/ai-apps/api";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { AiAppGuide, useCopy } from "./AiAppGuide";
+import { SETTINGS_HEADING, SETTINGS_ROW } from "./settings-row";
 
 // The page and /api/mcp come from the same Worker, so the page's origin is
 // the address an AI app connects to.
@@ -18,15 +20,13 @@ export function AiAppsSection() {
 
 	return (
 		<>
-			<h2 className="mt-[26px] mb-1.5 font-sans text-[12.5px] font-medium text-muted-foreground">
-				Connected AI apps
-			</h2>
+			<h2 className={cn(SETTINGS_HEADING, "mt-[26px]")}>Connected AI apps</h2>
 			{apps.data?.length === 0 ? (
 				<p className="py-[11px] text-muted-foreground">
 					No AI apps connected yet.
 				</p>
 			) : null}
-			<div className="flex min-h-[58px] min-w-0 items-center gap-2.5 border-b border-border py-[11px]">
+			<div className={SETTINGS_ROW}>
 				<div className="min-w-0">
 					<div
 						data-slot="ai-app-address"
@@ -72,7 +72,7 @@ function AiAppRow({ app }: { app: AiApp }) {
 	const toast = useToast();
 	return (
 		<div data-slot="ai-app">
-			<div className="flex min-h-[58px] min-w-0 items-center gap-2.5 border-b border-border py-[11px]">
+			<div className={SETTINGS_ROW}>
 				<AppLogo name={app.name} logo={app.logo ?? undefined} size={34} />
 				<div data-slot="ai-app-name" className="min-w-0 truncate">
 					{app.name}

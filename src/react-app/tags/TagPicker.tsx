@@ -1,6 +1,7 @@
 import { cn } from "cn";
 import { type Dispatch, type SetStateAction, useState } from "react";
 import { CHIP, CHIP_DASHED } from "@/components/ui/chip";
+import { LABEL } from "@/components/ui/sheet-form";
 import { isNameTaken } from "@/data/client";
 import { useAddTag, useTags } from "./api";
 import { TagChips } from "./TagChips";
@@ -23,9 +24,7 @@ export function TagPicker({
 
 	return (
 		<div className="flex flex-col gap-1.5">
-			<span className="font-medium text-[12.5px] text-muted-foreground">
-				Tags
-			</span>
+			<span className={LABEL}>Tags</span>
 			<div className="flex flex-wrap gap-[7px]">
 				{tags.data?.length ? (
 					<TagChips tags={tags.data} picked={picked} onChange={onChange} />

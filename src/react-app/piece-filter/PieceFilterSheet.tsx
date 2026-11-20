@@ -1,9 +1,11 @@
+import { cn } from "cn";
 import { Check, ChevronRight } from "lucide-react";
 import { ToggleGroup } from "radix-ui";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { CHIP } from "@/components/ui/chip";
 import { FilterSheet } from "@/components/ui/filter";
+import { PLACEHOLDER } from "@/components/ui/placeholder";
 import { LABEL, LIST_ROW, ROW } from "@/components/ui/sheet-form";
 import {
 	LAYER_GROUP_NAMES,
@@ -168,7 +170,7 @@ function BrandChips({
 						// biome-ignore lint/suspicious/noArrayIndexKey: the chips are all alike and never move.
 						key={i}
 						data-slot="brand-skeleton"
-						className="h-8 w-20 rounded-full bg-muted animate-placeholder motion-reduce:animate-none"
+						className={cn("h-8 w-20 rounded-full", PLACEHOLDER)}
 					/>
 				))}
 			</div>

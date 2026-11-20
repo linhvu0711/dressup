@@ -10,6 +10,7 @@ import { SaveCombinationDialog } from "@/combinations/SaveCombinationDialog";
 import { useWallAddress } from "@/combinations/wall-address";
 import { Button } from "@/components/ui/button";
 import { CHIP } from "@/components/ui/chip";
+import { LABEL } from "@/components/ui/sheet-form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
 	LAYER_NAMES,
@@ -29,8 +30,6 @@ import type { Colour, ColourId } from "@/labels/colour";
 import { PageHeader } from "../shell/PageHeader";
 
 type Picks = Partial<Record<Layer, { typeId: TypeId; colourId: ColourId }>>;
-
-const LABEL = "font-medium text-[12.5px] text-muted-foreground";
 
 const NONE = "none";
 

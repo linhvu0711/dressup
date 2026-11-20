@@ -9,6 +9,7 @@ import {
 	readHexInput,
 } from "@/colour/hex";
 import { Button } from "@/components/ui/button";
+import { FOOTER_ROW } from "@/components/ui/sheet";
 import { focusWhenWide, INPUT } from "@/components/ui/sheet-form";
 
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
@@ -191,7 +192,7 @@ export function ColourPicker({
 						}}
 						onEnter={onDone}
 					/>
-					<div className="mt-0.5 flex flex-wrap justify-end gap-2 [&>button]:flex-1 wide:[&>button]:flex-none">
+					<div className={FOOTER_ROW}>
 						<Button onClick={onCancel}>Cancel</Button>
 						<Button
 							variant="primary"

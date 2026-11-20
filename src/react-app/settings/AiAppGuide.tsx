@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import {
 	Check,
 	ChevronDown,
@@ -9,6 +10,7 @@ import {
 } from "lucide-react";
 import { Accordion } from "radix-ui";
 import { type ReactNode, useEffect, useState } from "react";
+import { LABEL } from "@/components/ui/sheet-form";
 import { useToast } from "@/components/ui/toast";
 
 // How long the copy icon shows a tick after a copy.
@@ -184,9 +186,7 @@ const guides = (address: string): Guide[] => {
 export function AiAppGuide({ address }: { address: string }) {
 	return (
 		<div data-slot="ai-app-guide" className="mt-[18px] mb-2.5">
-			<p className="mb-2 font-medium text-[12.5px] text-muted-foreground">
-				Set up an AI app
-			</p>
+			<p className={cn(LABEL, "mb-2")}>Set up an AI app</p>
 			<Accordion.Root type="single" collapsible className="flex flex-col gap-2">
 				{guides(address).map(({ name, where, Icon, steps }) => (
 					<Accordion.Item

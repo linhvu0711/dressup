@@ -3,7 +3,7 @@ import { Dialog } from "radix-ui";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
-import { SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
+import { FOOTER_ROW, SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
 import { isGone, keys, RequestError } from "@/data/client";
 import type { TypeId } from "@/dress/clothing-types";
@@ -145,7 +145,7 @@ export function SaveCombinationDialog({
 								Not saved. Try again.
 							</p>
 						) : null}
-						<div className="mt-0.5 flex flex-wrap justify-end gap-2 [&>button]:flex-1 wide:[&>button]:flex-none">
+						<div className={FOOTER_ROW}>
 							<Button type="button" onClick={onClose}>
 								Cancel
 							</Button>

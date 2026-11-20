@@ -1,8 +1,10 @@
+import { cn } from "cn";
 import { useLocation, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { AiAppsSection } from "@/settings/AiAppsSection";
 import { DeleteAccount } from "@/settings/DeleteAccount";
 import { MannequinSection } from "@/settings/MannequinSection";
+import { SETTINGS_HEADING, SETTINGS_ROW } from "@/settings/settings-row";
 import { authClient } from "../auth-client";
 import { signedOut } from "../data/client";
 import { useMe } from "../session";
@@ -32,10 +34,8 @@ export function SettingsPage() {
 				<div className="mx-auto flex w-full max-w-[560px] flex-col px-[18px] pt-1.5 pb-11">
 					<MannequinSection />
 					<AiAppsSection />
-					<h2 className="mt-[26px] mb-1.5 font-sans text-[12.5px] font-medium text-muted-foreground">
-						Account
-					</h2>
-					<div className="flex min-h-[58px] min-w-0 items-center gap-2.5 border-b border-border py-[11px]">
+					<h2 className={cn(SETTINGS_HEADING, "mt-[26px]")}>Account</h2>
+					<div className={SETTINGS_ROW}>
 						<div className="min-w-0 truncate">
 							{me.data?.email}
 							<small className="block text-xs text-muted-foreground">

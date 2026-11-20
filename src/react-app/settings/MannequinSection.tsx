@@ -9,6 +9,7 @@ import { MannequinPlaceholder } from "@/dress/figure/MannequinPlaceholder";
 import { useMannequin, useSetMannequinColour } from "@/mannequin/api";
 import { MannequinFailed } from "@/mannequin/MannequinFailed";
 import { MANNEQUIN_PARTS, type MannequinPart } from "@/mannequin/mannequin";
+import { SETTINGS_HEADING, SETTINGS_ROW } from "./settings-row";
 
 const NAMES: Record<MannequinPart, string> = {
 	skin: "Skin colour",
@@ -41,9 +42,7 @@ export function MannequinSection() {
 
 	return (
 		<>
-			<h2 className="mt-1.5 mb-1.5 font-sans text-[12.5px] font-medium text-muted-foreground">
-				Mannequin
-			</h2>
+			<h2 className={cn(SETTINGS_HEADING, "mt-1.5")}>Mannequin</h2>
 			{mannequin.isError ? (
 				<MannequinFailed onLoadAgain={() => mannequin.refetch()} />
 			) : (
@@ -67,11 +66,7 @@ export function MannequinSection() {
 					</div>
 					<div className="min-w-0 flex-1">
 						{MANNEQUIN_PARTS.map((part) => (
-							<div
-								key={part}
-								data-part={part}
-								className="flex min-h-[58px] min-w-0 items-center gap-2.5 border-b border-border py-[11px]"
-							>
+							<div key={part} data-part={part} className={SETTINGS_ROW}>
 								<button
 									type="button"
 									disabled={!stored}

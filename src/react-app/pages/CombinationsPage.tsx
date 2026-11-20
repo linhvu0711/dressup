@@ -24,6 +24,7 @@ import { useWallAddress, wallAddress } from "@/combinations/wall-address";
 import { Button } from "@/components/ui/button";
 import { ActiveFilters, FilterButton } from "@/components/ui/filter";
 import { Notice } from "@/components/ui/notice";
+import { PLACEHOLDER, PULSE } from "@/components/ui/placeholder";
 import { useAddressFilter } from "@/components/ui/use-address-filter";
 import { countText } from "@/count-text";
 import { TypeFigure } from "@/dress/figure/TypeFigure";
@@ -33,8 +34,6 @@ import { MannequinFailed } from "@/mannequin/MannequinFailed";
 import { useTags } from "@/tags/api";
 import { PageHeader } from "../shell/PageHeader";
 import { Wall } from "../shell/Wall";
-
-const PULSE = "animate-placeholder motion-reduce:animate-none";
 
 // The wall of saved combinations, newest first. The address may name one,
 // which opens beside the wall from 900 px and as its own page under it, with
@@ -134,7 +133,7 @@ export function CombinationsPage() {
 							className={`block aspect-[2/3] w-full rounded-[14px] bg-[#D3CFC9] ${PULSE}`}
 						/>
 						<span
-							className={`block h-3.5 w-[70%] rounded-[12px] bg-muted ${PULSE}`}
+							className={`block h-3.5 w-[70%] rounded-[12px] ${PLACEHOLDER}`}
 						/>
 					</div>
 				))}

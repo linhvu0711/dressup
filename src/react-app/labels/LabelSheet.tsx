@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { type ReactNode, useRef, useState } from "react";
 import { PanelSheet, usePanel } from "@/components/ui/panel-sheet";
-import { INPUT } from "@/components/ui/sheet-form";
+import { INPUT, LABEL } from "@/components/ui/sheet-form";
 import { isNameTaken, RequestError } from "@/data/client";
 import type { ErrorCode } from "@/data/contract";
 import { sameLabelName } from "./name";
@@ -115,10 +115,7 @@ export function LabelSheet<Id extends string>({
 			}
 		>
 			<div className="flex flex-col gap-1.5">
-				<label
-					htmlFor="label-name"
-					className="font-medium text-[12.5px] text-muted-foreground"
-				>
+				<label htmlFor="label-name" className={LABEL}>
 					Name
 				</label>
 				<input

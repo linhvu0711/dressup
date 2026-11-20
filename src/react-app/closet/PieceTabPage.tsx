@@ -5,6 +5,7 @@ import type { Hex } from "@/colour/hex";
 import { Button } from "@/components/ui/button";
 import { ActiveFilters, FilterButton } from "@/components/ui/filter";
 import { Notice } from "@/components/ui/notice";
+import { PLACEHOLDER, PULSE } from "@/components/ui/placeholder";
 import { useAddressFilter } from "@/components/ui/use-address-filter";
 import { countText } from "@/count-text";
 import type { TypeId } from "@/dress/clothing-types";
@@ -24,8 +25,6 @@ import type { PieceTab } from "@/shell/piece-link";
 import { PageHeader } from "../shell/PageHeader";
 import { Wall } from "../shell/Wall";
 import { PieceTile } from "./PieceTile";
-
-const PULSE = "animate-placeholder motion-reduce:animate-none";
 
 type TilePiece = {
 	typeId: TypeId;
@@ -97,7 +96,7 @@ export function PieceTabPage<D, E extends TilePiece>({
 							className={`block aspect-square w-full rounded-[14px] bg-[#D3CFC9] ${PULSE}`}
 						/>
 						<span
-							className={`block h-3.5 w-[70%] rounded-[12px] bg-muted ${PULSE}`}
+							className={`block h-3.5 w-[70%] rounded-[12px] ${PLACEHOLDER}`}
 						/>
 					</div>
 				))}
