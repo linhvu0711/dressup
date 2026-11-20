@@ -9,9 +9,9 @@ import {
 	typeChip,
 } from "./combination-helpers";
 import { expect, test } from "./fixtures";
-import { COMBINATIONS_FULL_FILE } from "./global-setup";
 import { colourIds } from "./label-helpers";
 import { sheet, toast } from "./locators";
+import { COMBINATIONS_FULL_FILE } from "./paths";
 
 const LONG_TITLE =
 	"Khaki Harrington jacket + Black long tee + Navy casual pants";

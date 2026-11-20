@@ -1,6 +1,6 @@
 import { closeSync, openSync, readdirSync } from "node:fs";
 import { test as base, expect } from "@playwright/test";
-import { CLAIMS_DIR, claimFile, POOL_DIR, poolFile } from "./global-setup";
+import { CLAIMS_DIR, claimFile, POOL_DIR, poolFile } from "./paths";
 
 // A fresh account from the pool, as its storage state file. A claim file
 // made with "wx" is taken by one test only, across all workers.

@@ -18,6 +18,23 @@ import { seedCombinations } from "../src/worker/test/seed-combinations";
 import { seedOwnedItems } from "../src/worker/test/seed-owned-items";
 import { seedShopLinks, seedWishes } from "../src/worker/test/seed-wishes";
 import {
+	AUTH_DIR,
+	aiAppFile,
+	aiAppTests,
+	BRANDS_FULL_FILE,
+	CLAIMS_DIR,
+	CLOSET_FULL_FILE,
+	COLOURS_EMPTY_FILE,
+	COLOURS_FULL_FILE,
+	COMBINATIONS_FULL_FILE,
+	POOL_DIR,
+	poolFile,
+	SESSION_FILE,
+	signOutFile,
+	signOutTests,
+	WISHLIST_FULL_FILE,
+} from "./paths";
+import {
 	BRANDS_FULL_USER,
 	CLOSET_FULL_USER,
 	COLOURS_EMPTY_USER,
@@ -27,30 +44,6 @@ import {
 	WISHLIST_FULL_USER,
 	withTestAuth,
 } from "./sessions";
-
-export const SESSION_FILE = "e2e/.auth/session.json";
-export const COLOURS_FULL_FILE = "e2e/.auth/colours-full.json";
-export const COLOURS_EMPTY_FILE = "e2e/.auth/colours-empty.json";
-export const BRANDS_FULL_FILE = "e2e/.auth/brands-full.json";
-export const COMBINATIONS_FULL_FILE = "e2e/.auth/combinations-full.json";
-export const CLOSET_FULL_FILE = "e2e/.auth/closet-full.json";
-export const WISHLIST_FULL_FILE = "e2e/.auth/wishlist-full.json";
-export const POOL_DIR = "e2e/.auth/pool";
-export const CLAIMS_DIR = "e2e/.auth/claims";
-export const poolFile = (n: number) => `${POOL_DIR}/${n}.json`;
-export const claimFile = (n: number) => `${CLAIMS_DIR}/${n}`;
-
-export const signOutTests = ["settings", "late-check"] as const;
-export const signOutFile = (
-	project: string,
-	test: (typeof signOutTests)[number],
-) => `e2e/.auth/signout-${test}-${project}.json`;
-
-// Per project, one account for the list case and one for Disconnect: cases
-// run in parallel, and Disconnect removes the row the list case reads.
-export const aiAppTests = ["list", "disconnect"] as const;
-export const aiAppFile = (project: string, test: (typeof aiAppTests)[number]) =>
-	`e2e/.auth/ai-app-${test}-${project}.json`;
 
 const TEST_APP_ID = "https://client.example/meta.json";
 
@@ -106,7 +99,7 @@ export default async function globalSetup(config: FullConfig) {
 		// Delete first, so a second run ends in the same state.
 		await db.delete(schema.user).where(eq(schema.user.id, E2E_USER.id));
 		await helpers.saveUser(helpers.createUser(E2E_USER));
-		mkdirSync("e2e/.auth", { recursive: true });
+		mkdirSync(AUTH_DIR, { recursive: true });
 		const cookies = await newSessionCookies();
 		writeFileSync(SESSION_FILE, JSON.stringify({ cookies, origins: [] }));
 		// Filled through the colour store, so the seed mark and the ids are the

@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import { SESSION_FILE } from "./e2e/paths";
 
 export default defineConfig({
 	testDir: "e2e",
@@ -8,7 +9,7 @@ export default defineConfig({
 	globalSetup: "./e2e/global-setup.ts",
 	use: {
 		baseURL: "http://localhost:5173",
-		storageState: "e2e/.auth/session.json",
+		storageState: SESSION_FILE,
 	},
 	webServer: {
 		command: "bun run dev",

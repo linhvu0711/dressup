@@ -1,9 +1,9 @@
 import type { Page } from "@playwright/test";
 import { postOwnedItems } from "./closet-helpers";
 import { expect, test } from "./fixtures";
-import { WISHLIST_FULL_FILE } from "./global-setup";
 import { colourIds, postBrand } from "./label-helpers";
 import { sheet, toast } from "./locators";
+import { WISHLIST_FULL_FILE } from "./paths";
 import { postShopLink, postWish } from "./wishlist-helpers";
 
 const mainNav = (page: Page) => page.getByRole("navigation", { name: "Main" });

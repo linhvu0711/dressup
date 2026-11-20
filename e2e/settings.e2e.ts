@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import type { BrowserContext, Locator, Page } from "@playwright/test";
 import { postCombinations, two } from "./combination-helpers";
 import { expect, test } from "./fixtures";
-import { aiAppFile, type aiAppTests } from "./global-setup";
 import { colourIds } from "./label-helpers";
 import { sheet, toast } from "./locators";
+import { aiAppFile, type aiAppTests } from "./paths";
 
 const preview = (page: Page) =>
 	page.locator('svg[aria-label="Mannequin preview"]');

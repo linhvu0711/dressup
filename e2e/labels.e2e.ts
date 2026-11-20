@@ -2,9 +2,9 @@ import type { Page } from "@playwright/test";
 import { postOwnedItems } from "./closet-helpers";
 import { postCombinations } from "./combination-helpers";
 import { expect, test } from "./fixtures";
-import { COLOURS_EMPTY_FILE, COLOURS_FULL_FILE } from "./global-setup";
 import { colourIds } from "./label-helpers";
 import { sheet, toast } from "./locators";
+import { COLOURS_EMPTY_FILE, COLOURS_FULL_FILE } from "./paths";
 import { postWish } from "./wishlist-helpers";
 
 const STARTER = [
