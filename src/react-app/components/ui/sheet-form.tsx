@@ -15,9 +15,19 @@ export const INPUT =
 export const LIST_ROW =
 	"flex h-11 min-w-0 items-center gap-2.5 rounded-[12px] px-2 text-left text-[14px] hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring";
 
+// The open focus of a sheet: the phone keeps its keyboard closed until a
+// box is tapped; a wide screen focuses `focus`.
+export function focusWhenWide(focus: RefObject<HTMLElement | null>) {
+	return (e: Event) => {
+		e.preventDefault();
+		if (window.matchMedia("(min-width: 56.25rem)").matches) {
+			focus.current?.focus();
+		}
+	};
+}
+
 // A form in a sheet. A list or a confirm swaps into the same sheet as a
-// step: `step` is its title, and Back calls `onBack`. The phone keeps its
-// keyboard closed until a box is tapped; a wide screen focuses `focus`.
+// step: `step` is its title, and Back calls `onBack`.
 export function FormSheet({
 	title,
 	step,
@@ -39,12 +49,7 @@ export function FormSheet({
 				<Dialog.Overlay className={SHEET_OVERLAY} />
 				<Dialog.Content
 					aria-describedby={undefined}
-					onOpenAutoFocus={(e) => {
-						e.preventDefault();
-						if (window.matchMedia("(min-width: 56.25rem)").matches) {
-							focus.current?.focus();
-						}
-					}}
+					onOpenAutoFocus={focusWhenWide(focus)}
 					className={SHEET}
 				>
 					{step === null ? (

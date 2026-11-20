@@ -9,7 +9,7 @@ import {
 	readHexInput,
 } from "@/colour/hex";
 import { Button } from "@/components/ui/button";
-import { INPUT } from "@/components/ui/sheet-form";
+import { focusWhenWide, INPUT } from "@/components/ui/sheet-form";
 
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 
@@ -176,13 +176,7 @@ export function ColourPicker({
 				<Dialog.Overlay className="fixed inset-0 z-20" />
 				<Dialog.Content
 					aria-describedby={undefined}
-					onOpenAutoFocus={(e) => {
-						// The phone keeps its keyboard closed until the box is tapped.
-						e.preventDefault();
-						if (window.matchMedia("(min-width: 56.25rem)").matches) {
-							box.current?.focus();
-						}
-					}}
+					onOpenAutoFocus={focusWhenWide(box)}
 					className="fixed inset-x-0 bottom-0 z-[21] flex max-h-[88%] flex-col gap-4 overflow-auto scrollbar-quiet rounded-t-[26px] border border-border border-b-0 bg-card p-5 pb-[22px] shadow-float outline-none duration-[260ms] ease-soft data-[state=open]:slide-in-from-bottom-8 data-[state=open]:animate-in wide:inset-x-auto wide:top-[84px] wide:right-6 wide:bottom-auto wide:w-[324px] wide:rounded-[22px] wide:border-b wide:pb-5"
 				>
 					<Dialog.Title className="text-[22px] leading-tight">
