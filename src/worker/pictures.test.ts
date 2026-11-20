@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
+import { describe, expect, setSystemTime, test } from "bun:test";
 import { picture, pictureUploadMonth } from "./db/picture-schema";
 import { addPicture } from "./picture-store";
 import {
@@ -196,8 +196,6 @@ describe("upload and load", () => {
 });
 
 describe("limits and the storage stop", () => {
-	afterEach(() => setSystemTime());
-
 	const months = (h: Harness) => h.rows(pictureUploadMonth);
 
 	test("takes picture 1,000 of an account", async () => {
@@ -432,8 +430,6 @@ async function addLinks(h: Harness, headers: Headers, lists: string[][]) {
 }
 
 describe("drafts", () => {
-	afterEach(() => setSystemTime());
-
 	test("deletes a draft picture", async () => {
 		// Given
 		const { h, headers } = await withAccount();

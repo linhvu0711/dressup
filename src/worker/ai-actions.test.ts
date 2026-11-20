@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
+import { describe, expect, setSystemTime, test } from "bun:test";
 import { schema } from "./db";
 import {
 	type aiSession,
@@ -543,8 +543,6 @@ describe("brands", () => {
 });
 
 describe("AI action limit", () => {
-	afterEach(() => setSystemTime());
-
 	// Starts a clock minute so the 61 calls cannot cross into the next one.
 	async function sixtyActions() {
 		const { h, ai } = await withAiSession();

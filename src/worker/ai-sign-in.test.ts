@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
+import { describe, expect, setSystemTime, test } from "bun:test";
 import { schema } from "./db";
 import {
 	AUTHORIZE,
@@ -76,9 +76,6 @@ async function until(check: () => boolean) {
 
 describe("AI app sign-in", () => {
 	let outside: ReturnType<typeof stubOutside> | undefined;
-	afterEach(() => {
-		setSystemTime();
-	});
 
 	const given = async (
 		documents: Record<string, () => Response | Promise<Response>> = {},

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
+import { describe, expect, setSystemTime, test } from "bun:test";
 import { schema } from "./db";
 import {
 	type aiSession,
@@ -24,8 +24,6 @@ const GONE = {
 	message:
 		"This upload address was used or has expired. get_upload_address gives a new one.",
 };
-
-afterEach(() => setSystemTime());
 
 const addressOf = async (ai: Session) => {
 	const { data } = await ai.call("get_upload_address");
