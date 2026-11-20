@@ -266,6 +266,49 @@ test.describe("at the closet limit", () => {
 			addSheet(page).getByRole("button", { name: "Save" }),
 		).toBeDisabled();
 	});
+	const openWall = async (page: Page) => {
+		await page.goto("/closet");
+		await expect(tiles(page).first().locator("svg")).toHaveCount(1);
+	};
+
+	test("draws only the tiles near the screen", async ({ page }) => {
+		// Given: both projects, the account with 500 items in 167 tiles
+		// When
+		await openWall(page);
+		// Then
+		const count = await tiles(page)
+			.filter({ has: page.locator("svg") })
+			.count();
+		expect(count).toBeGreaterThanOrEqual(1);
+		expect(count).toBeLessThanOrEqual(60);
+	});
+
+	test("draws a far tile when it scrolls near and drops the first one", async ({
+		page,
+	}) => {
+		// Given: both projects, the account with 500 items in 167 tiles, the wall open with the first tile
+		// drawn
+		await openWall(page);
+		const last = page.getByRole("link", { name: "Brown casual shorts, 2" });
+		// When
+		await last.scrollIntoViewIfNeeded();
+		// Then
+		await expect(last.locator("svg")).toHaveCount(1);
+		await expect(
+			page.getByRole("link", { name: "White short tee, 3" }).locator("svg"),
+		).toHaveCount(0);
+	});
+
+	test("keeps every tile on the page", async ({ page }) => {
+		// Given: both projects, the account with 500 items in 167 tiles
+		// When
+		await openWall(page);
+		// Then
+		await expect(tiles(page)).toHaveCount(167);
+		await expect(
+			page.getByRole("link", { name: "Brown casual shorts, 2" }),
+		).toBeAttached();
+	});
 });
 
 const itemRows = (page: Page) =>

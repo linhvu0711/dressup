@@ -11,10 +11,8 @@ import type { FilterPiece } from "@/piece-filter/piece-filter";
 import { usePieceFilter } from "@/piece-filter/use-piece-filter";
 import type { PieceTab } from "@/shell/piece-link";
 import { PageHeader } from "../shell/PageHeader";
+import { Wall } from "../shell/Wall";
 import { PieceTile } from "./PieceTile";
-
-const WALL =
-	"grid min-h-0 flex-1 auto-rows-min grid-cols-2 gap-x-3.5 gap-y-5 overflow-auto px-4 pt-[5px] pb-24 wide:grid-cols-[repeat(auto-fill,minmax(176px,1fr))] wide:gap-x-[18px] wide:gap-y-[26px] wide:px-6";
 
 const PULSE = "animate-placeholder motion-reduce:animate-none";
 
@@ -67,7 +65,7 @@ export function PieceTabPage<D, E extends TilePiece>({
 	let wall: ReactNode;
 	if (query.isPending) {
 		wall = (
-			<div className={WALL}>
+			<Wall>
 				{Array.from({ length: 6 }, (_, i) => (
 					<div
 						// biome-ignore lint/suspicious/noArrayIndexKey: the tiles are all alike and never move.
@@ -83,7 +81,7 @@ export function PieceTabPage<D, E extends TilePiece>({
 						/>
 					</div>
 				))}
-			</div>
+			</Wall>
 		);
 	} else if (query.isError) {
 		// Checked before the data: a failed refetch keeps the old list.
@@ -119,7 +117,7 @@ export function PieceTabPage<D, E extends TilePiece>({
 		);
 	} else {
 		wall = (
-			<div data-slot={`${slot}-wall`} className={WALL}>
+			<Wall slot={`${slot}-wall`}>
 				{pf.shown.map((entry) => {
 					const { key, ...shown } = tile(entry);
 					return (
@@ -132,7 +130,7 @@ export function PieceTabPage<D, E extends TilePiece>({
 						/>
 					);
 				})}
-			</div>
+			</Wall>
 		);
 	}
 	return (
