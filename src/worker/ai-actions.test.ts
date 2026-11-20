@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
-import { addBrand } from "./brand-store";
 import { saveCombination } from "./combination-store";
 import { schema } from "./db";
 import {
 	type aiSession,
 	BOB,
 	type Harness,
+	postBrands,
 	send,
 	withAiSession,
 } from "./test/harness";
@@ -487,9 +487,9 @@ describe("brands", () => {
 	});
 
 	test("refuses brand number 101", async () => {
-		// Given: 100 brands, added through the store
-		const { h, ai, userId } = await withAiSession();
-		for (let i = 1; i <= 100; i++) await addBrand(h.db, userId, `Brand ${i}`);
+		// Given: 100 brands, added through the routes
+		const { h, ai } = await withAiSession();
+		await postBrands(h, ai.jar, 100);
 		// When
 		const { isError, text } = await ai.call("add_brand", { name: "Uniqlo" });
 		// Then

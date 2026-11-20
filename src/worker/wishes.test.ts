@@ -1,16 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import {
 	ALICE,
+	alice,
 	answer,
 	BOB,
+	colourIds,
 	type Harness,
+	type Ids,
 	makeHarness,
+	postBrand,
 	send,
-	withAccount,
 } from "./test/harness";
 import { addShopLink, addWish } from "./wish-store";
-
-type Ids = Record<string, string>;
 
 type Link = {
 	id: string;
@@ -28,14 +29,6 @@ type Listed = {
 	shopLinks: Link[];
 };
 
-// The account's colour ids by name, from its first list.
-const colourIds = async (h: Harness, headers: Headers): Promise<Ids> => {
-	const { colours } = (await (
-		await send(h, headers, "GET", "/api/colours")
-	).json()) as { colours: { id: string; name: string }[] };
-	return Object.fromEntries(colours.map((c) => [c.name, c.id]));
-};
-
 const post = (h: Harness, headers: Headers, body: unknown) =>
 	send(h, headers, "POST", "/api/wishes", body);
 
@@ -51,13 +44,6 @@ const SECOND_ID = "22222222-2222-4222-8222-222222222222";
 const LINK_ID = "33333333-3333-4333-8333-333333333333";
 const OTHER_LINK_ID = "44444444-4444-4444-8444-444444444444";
 const ZARA_URL = "https://www.zara.com/vn/en/wool-blend-jacket.html";
-
-const addBrand = async (h: Harness, headers: Headers, name: string) =>
-	(
-		(await (
-			await send(h, headers, "POST", "/api/brands", { name })
-		).json()) as { brand: { id: string } }
-	).brand.id;
 
 // The Zara link to the Navy wool jacket.
 const zaraLink = (brandId: string | null) => ({
@@ -84,12 +70,6 @@ const jacket = (ids: Ids) => ({
 	typeId: "wool",
 	colourId: ids.Navy,
 });
-
-async function alice() {
-	const { h, headers } = await withAccount();
-	const ids = await colourIds(h, headers);
-	return { h, headers, ids };
-}
 
 // A small JPEG uploaded as a draft of the account, by id.
 async function uploaded(h: Harness, headers: Headers): Promise<string> {
@@ -338,7 +318,7 @@ describe("POST /api/wishes/:id/shop-links", () => {
 	async function aliceWithWish() {
 		const { h, headers, ids } = await alice();
 		await post(h, headers, jacket(ids));
-		const zara = await addBrand(h, headers, "Zara");
+		const zara = await postBrand(h, headers, "Zara");
 		return { h, headers, ids, zara };
 	}
 
@@ -430,7 +410,7 @@ describe("POST /api/wishes/:id/shop-links", () => {
 		// Given: the Zara link with bob's brand
 		const { h, headers } = await aliceWithWish();
 		const bob = await h.addAccount(BOB);
-		const bobZara = await addBrand(h, bob, "Zara");
+		const bobZara = await postBrand(h, bob, "Zara");
 		// When
 		const res = await postLink(h, headers, FIRST_ID, zaraLink(bobZara));
 		// Then
@@ -474,7 +454,7 @@ describe("PUT /api/shop-links/:id", () => {
 		// Given: the Zara link on alice's wish
 		const { h, headers, ids } = await alice();
 		await post(h, headers, jacket(ids));
-		const zara = await addBrand(h, headers, "Zara");
+		const zara = await postBrand(h, headers, "Zara");
 		await postLink(h, headers, FIRST_ID, zaraLink(zara));
 		const change = {
 			url: ZARA_URL,

@@ -7,15 +7,16 @@ import {
 } from "./owned-item-store";
 import {
 	ALICE,
+	alice,
 	answer,
 	BOB,
+	colourIds,
 	type Harness,
+	type Ids,
 	makeHarness,
+	postBrand,
 	send,
-	withAccount,
 } from "./test/harness";
-
-type Ids = Record<string, string>;
 
 type Listed = {
 	id: string;
@@ -25,23 +26,6 @@ type Listed = {
 	quantity: number;
 	pictureIds: string[];
 };
-
-// The account's colour ids by name, from its first list.
-const colourIds = async (h: Harness, headers: Headers): Promise<Ids> => {
-	const { colours } = (await (
-		await send(h, headers, "GET", "/api/colours")
-	).json()) as { colours: { id: string; name: string }[] };
-	return Object.fromEntries(colours.map((c) => [c.name, c.id]));
-};
-
-const addBrand = async (h: Harness, headers: Headers, name: string) =>
-	(
-		(await (
-			await send(h, headers, "POST", "/api/brands", { name })
-		).json()) as {
-			brand: { id: string };
-		}
-	).brand.id;
 
 const post = (h: Harness, headers: Headers, body: unknown) =>
 	send(h, headers, "POST", "/api/owned-items", body);
@@ -68,12 +52,6 @@ const shirt = (ids: Ids) => ({
 	brandId: null as string | null,
 	quantity: 2,
 });
-
-async function alice() {
-	const { h, headers } = await withAccount();
-	const ids = await colourIds(h, headers);
-	return { h, headers, ids };
-}
 
 describe("POST /api/owned-items", () => {
 	test("adds an owned item and lists it", async () => {
@@ -146,7 +124,7 @@ describe("POST /api/owned-items", () => {
 	test("refuses the same piece and brand a second time", async () => {
 		// Given: alice has Zara and a Navy long button-up from Zara
 		const { h, headers, ids } = await alice();
-		const zara = await addBrand(h, headers, "Zara");
+		const zara = await postBrand(h, headers, "Zara");
 		await post(h, headers, { ...shirt(ids), brandId: zara, quantity: 1 });
 		// When
 		const res = await post(h, headers, {
@@ -182,8 +160,8 @@ describe("POST /api/owned-items", () => {
 	test("adds the same piece with another brand", async () => {
 		// Given: alice has Zara and COS, and a Navy long button-up from Zara
 		const { h, headers, ids } = await alice();
-		const zara = await addBrand(h, headers, "Zara");
-		const cos = await addBrand(h, headers, "COS");
+		const zara = await postBrand(h, headers, "Zara");
+		const cos = await postBrand(h, headers, "COS");
 		await post(h, headers, { ...shirt(ids), brandId: zara });
 		// When
 		const res = await post(h, headers, {
@@ -267,7 +245,7 @@ describe("POST /api/owned-items", () => {
 		// Given: the passing body; bob has Zara
 		const { h, headers, ids } = await alice();
 		const bob = await h.addAccount(BOB);
-		const bobZara = await addBrand(h, bob, "Zara");
+		const bobZara = await postBrand(h, bob, "Zara");
 		// When
 		const res = await post(h, headers, { ...shirt(ids), brandId: bobZara });
 		// Then
@@ -312,7 +290,7 @@ describe("PUT and DELETE /api/owned-items/:id", () => {
 	test("changes an item's brand and quantity", async () => {
 		// Given: brand Zara; item A shirt_l, Navy, no brand, quantity 2
 		const { h, headers, ids } = await alice();
-		const zara = await addBrand(h, headers, "Zara");
+		const zara = await postBrand(h, headers, "Zara");
 		await post(h, headers, shirt(ids));
 		// When
 		const res = await put(h, headers, FIRST_ID, { brandId: zara, quantity: 3 });
@@ -356,7 +334,7 @@ describe("PUT and DELETE /api/owned-items/:id", () => {
 	test("refuses a change to a brand another item of the piece has", async () => {
 		// Given: brand Zara; item A shirt_l Navy Zara; item B shirt_l Navy no brand
 		const { h, headers, ids } = await alice();
-		const zara = await addBrand(h, headers, "Zara");
+		const zara = await postBrand(h, headers, "Zara");
 		await post(h, headers, { ...shirt(ids), brandId: zara });
 		await post(h, headers, { ...shirt(ids), id: SECOND_ID });
 		// When
@@ -375,8 +353,8 @@ describe("PUT and DELETE /api/owned-items/:id", () => {
 		// Given: brands Zara and COS; items A shirt_l Navy Zara and B shirt_l
 		// Navy COS; Zara and COS deleted, so A and B both have no brand
 		const { h, headers, ids } = await alice();
-		const zara = await addBrand(h, headers, "Zara");
-		const cos = await addBrand(h, headers, "COS");
+		const zara = await postBrand(h, headers, "Zara");
+		const cos = await postBrand(h, headers, "COS");
 		await post(h, headers, { ...shirt(ids), brandId: zara });
 		await post(h, headers, { ...shirt(ids), id: SECOND_ID, brandId: cos });
 		await send(h, headers, "DELETE", `/api/brands/${zara}`);
@@ -639,7 +617,7 @@ describe("pictures of an item", () => {
 		// Given: a Zara shirt, and a no-brand shirt of the same piece with two
 		// pictures
 		const { h, headers, ids } = await alice();
-		const zara = await addBrand(h, headers, "Zara");
+		const zara = await postBrand(h, headers, "Zara");
 		await post(h, headers, { ...shirt(ids), brandId: zara });
 		const [a, b] = await uploads(h, headers, 2);
 		await post(h, headers, {

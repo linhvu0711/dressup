@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { BOB, type Harness, send, withAccount } from "./test/harness";
+import {
+	BOB,
+	colourIds,
+	type Harness,
+	send,
+	withAccount,
+} from "./test/harness";
 
 type Tag = { id: string; name: string; combinations: number };
 
@@ -336,13 +342,6 @@ describe("PUT and DELETE /api/tags/:id", () => {
 
 describe("tags and combinations", () => {
 	// The account's colour ids by name, from its first list.
-	const colourIds = async (h: Harness, headers: Headers) => {
-		const { colours } = (await (
-			await send(h, headers, "GET", "/api/colours")
-		).json()) as { colours: { id: string; name: string }[] };
-		return Object.fromEntries(colours.map((c) => [c.name, c.id]));
-	};
-
 	// Khaki Harrington jacket + Black long tee + Navy casual pants.
 	const three = (ids: Record<string, string>, tags: string[]) => ({
 		id: "11111111-1111-4111-8111-111111111111",

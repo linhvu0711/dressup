@@ -4,6 +4,7 @@ import { addPicture } from "./picture-store";
 import {
 	answer,
 	BOB,
+	colourIds,
 	type Harness,
 	makeHarness,
 	send,
@@ -396,10 +397,7 @@ describe("limits and the storage stop", () => {
 
 // An owned item with these pictures: a Navy long button-up, no brand.
 async function addItem(h: Harness, headers: Headers, pictureIds: string[]) {
-	const { colours } = (await (
-		await send(h, headers, "GET", "/api/colours")
-	).json()) as { colours: { id: string; name: string }[] };
-	const navy = colours.find((c) => c.name === "Navy")?.id;
+	const navy = (await colourIds(h, headers)).Navy;
 	const id = crypto.randomUUID();
 	await send(h, headers, "POST", "/api/owned-items", {
 		id,
@@ -414,10 +412,7 @@ async function addItem(h: Harness, headers: Headers, pictureIds: string[]) {
 
 // A Navy wool jacket wish with one shop link for each list of pictures.
 async function addLinks(h: Harness, headers: Headers, lists: string[][]) {
-	const { colours } = (await (
-		await send(h, headers, "GET", "/api/colours")
-	).json()) as { colours: { id: string; name: string }[] };
-	const navy = colours.find((c) => c.name === "Navy")?.id;
+	const navy = (await colourIds(h, headers)).Navy;
 	const wishId = crypto.randomUUID();
 	await send(h, headers, "POST", "/api/wishes", {
 		id: wishId,

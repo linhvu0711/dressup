@@ -5,14 +5,14 @@ import { combination, combinationPiece } from "./db/combination-schema";
 import { deleteTag } from "./tag-store";
 import {
 	ALICE,
+	alice,
 	BOB,
+	colourIds,
 	type Harness,
+	type Ids,
 	makeHarness,
 	send,
-	withAccount,
 } from "./test/harness";
-
-type Ids = Record<string, string>;
 
 type Listed = {
 	id: string;
@@ -22,14 +22,6 @@ type Listed = {
 		typeId: string;
 		colour: { id: string; name: string; hex: string };
 	}[];
-};
-
-// The account's colour ids by name, from its first list.
-const colourIds = async (h: Harness, headers: Headers): Promise<Ids> => {
-	const { colours } = (await (
-		await send(h, headers, "GET", "/api/colours")
-	).json()) as { colours: { id: string; name: string }[] };
-	return Object.fromEntries(colours.map((c) => [c.name, c.id]));
 };
 
 const post = (h: Harness, headers: Headers, body: unknown) =>
@@ -89,12 +81,6 @@ const beigeChinos = (ids: Ids) => [
 	{ typeId: "chino_p", colourId: ids.Beige },
 	{ typeId: "tee_l", colourId: ids.White },
 ];
-
-async function alice() {
-	const { h, headers } = await withAccount();
-	const ids = await colourIds(h, headers);
-	return { h, headers, ids };
-}
 
 describe("POST /api/combinations", () => {
 	test("saves a combination and lists it", async () => {

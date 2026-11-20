@@ -4,12 +4,13 @@ import {
 	ALICE,
 	answer,
 	BOB,
+	colourIds,
 	type Harness,
+	type Ids,
 	makeHarness,
+	postBrand,
 	send,
 } from "./test/harness";
-
-type Ids = Record<string, string>;
 
 type Item = {
 	id: string;
@@ -24,20 +25,6 @@ type Wish = {
 	id: string;
 	shopLinks: { id: string; pictureIds: string[] }[];
 };
-
-const colourIds = async (h: Harness, headers: Headers): Promise<Ids> => {
-	const { colours } = (await (
-		await send(h, headers, "GET", "/api/colours")
-	).json()) as { colours: { id: string; name: string }[] };
-	return Object.fromEntries(colours.map((c) => [c.name, c.id]));
-};
-
-const addBrand = async (h: Harness, headers: Headers, name: string) =>
-	(
-		(await (
-			await send(h, headers, "POST", "/api/brands", { name })
-		).json()) as { brand: { id: string } }
-	).brand.id;
 
 // A small JPEG uploaded as a draft of the account, by id.
 async function uploaded(h: Harness, headers: Headers): Promise<string> {
@@ -93,7 +80,7 @@ async function account(): Promise<Account> {
 	const h = await makeHarness();
 	const headers = await h.addAccount(ALICE);
 	const ids = await colourIds(h, headers);
-	return { h, headers, ids, cos: await addBrand(h, headers, "COS") };
+	return { h, headers, ids, cos: await postBrand(h, headers, "COS") };
 }
 
 // The wish FIRST_ID for a Navy wool jacket: LINK_ID is a COS link with
@@ -145,7 +132,7 @@ async function withItem(
 }
 
 // Alice with the brand COS and the two links, LINK_ID holding a and b.
-async function alice() {
+async function aliceWithLinks() {
 	const owner = await account();
 	const {
 		link: [a = "", b = ""],
@@ -168,7 +155,7 @@ async function aliceWithItem(quantity = 1) {
 describe("POST /api/shop-links/:id/bought", () => {
 	test("moves a shop link to the closet with its brand and pictures", async () => {
 		// Given
-		const { h, headers, ids, cos, a, b } = await alice();
+		const { h, headers, ids, cos, a, b } = await aliceWithLinks();
 		// When
 		const res = await answer(await buy(h, headers, LINK_ID));
 		const items = await closet(h, headers);
@@ -202,7 +189,7 @@ describe("POST /api/shop-links/:id/bought", () => {
 
 	test("answers not_found to a second Bought of one link", async () => {
 		// Given
-		const { h, headers } = await alice();
+		const { h, headers } = await aliceWithLinks();
 		await buy(h, headers, LINK_ID);
 		// When
 		const res = await answer(await buy(h, headers, LINK_ID));
@@ -218,7 +205,7 @@ describe("POST /api/shop-links/:id/bought", () => {
 
 	test("answers not_found for a shop link of another account", async () => {
 		// Given
-		const { h, headers } = await alice();
+		const { h, headers } = await aliceWithLinks();
 		const bob = await h.addAccount(BOB);
 		// When
 		const res = await answer(await buy(h, bob, LINK_ID));
@@ -299,7 +286,7 @@ describe("POST /api/shop-links/:id/bought", () => {
 
 	test("refuses Bought at 500 owned items", async () => {
 		// Given
-		const { h, headers, a, b, c } = await alice();
+		const { h, headers, a, b, c } = await aliceWithLinks();
 		await h.seedOwnedItems("alice-id", 500);
 		// When
 		const res = await answer(await buy(h, headers, LINK_ID));
@@ -321,7 +308,7 @@ describe("POST /api/shop-links/:id/bought", () => {
 describe("buyShopLink", () => {
 	test("leaves everything as before when the wish delete fails", async () => {
 		// Given
-		const { h, headers, a, b, c } = await alice();
+		const { h, headers, a, b, c } = await aliceWithLinks();
 		h.addTrigger(
 			"CREATE TRIGGER fail_wish_delete BEFORE DELETE ON wish BEGIN SELECT RAISE(ABORT, 'wish delete failed'); END",
 		);
@@ -353,7 +340,7 @@ describe("buyShopLink", () => {
 
 	test("makes one item from two Boughts on one wish at once", async () => {
 		// Given
-		const { h, headers, cos, a, b } = await alice();
+		const { h, headers, cos, a, b } = await aliceWithLinks();
 		const hold = h.holdBatches();
 		// When
 		const both = Promise.all([
@@ -414,7 +401,7 @@ describe("buyShopLink", () => {
 
 	test("refuses Bought when the same item is added during it", async () => {
 		// Given
-		const { h, headers, ids, cos, a, b, c } = await alice();
+		const { h, headers, ids, cos, a, b, c } = await aliceWithLinks();
 		const hold = h.holdBatches();
 		// When
 		const bought = buyShopLink(h.db, h.env.PICTURES, "alice-id", LINK_ID);

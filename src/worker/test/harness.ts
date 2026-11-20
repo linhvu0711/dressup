@@ -533,9 +533,12 @@ export async function connectAiApp(
 
 // A request as a signed-in account (its headers) or as a browser (its
 // cookies). Bytes go as an upload; any other body goes as JSON.
+// A signed-in account's headers, or a browser's cookies.
+type Auth = Headers | Record<string, string> | Jar;
+
 export const send = (
 	h: Harness,
-	auth: Headers | Record<string, string> | Jar,
+	auth: Auth,
 	method: string,
 	path: string,
 	body?: unknown,
@@ -563,6 +566,37 @@ export const answer = async (res: Response) => ({
 	status: res.status,
 	body: await res.json(),
 });
+
+// Colour ids by name.
+export type Ids = Record<string, string>;
+
+export const colourIds = async (h: Harness, auth: Auth): Promise<Ids> => {
+	const { colours } = (await (
+		await send(h, auth, "GET", "/api/colours")
+	).json()) as { colours: { id: string; name: string }[] };
+	return Object.fromEntries(colours.map((c) => [c.name, c.id]));
+};
+
+// Alice signed in, with her colour ids.
+export async function alice() {
+	const { h, headers } = await withAccount();
+	const ids = await colourIds(h, headers);
+	return { h, headers, ids };
+}
+
+// Adds a brand through the route and gives its id.
+export const postBrand = async (h: Harness, auth: Auth, name: string) =>
+	(
+		(await (await send(h, auth, "POST", "/api/brands", { name })).json()) as {
+			brand: { id: string };
+		}
+	).brand.id;
+
+// Adds "Brand 1" to "Brand n" through the route.
+export async function postBrands(h: Harness, auth: Auth, n: number) {
+	for (let i = 1; i <= n; i++)
+		await send(h, auth, "POST", "/api/brands", { name: `Brand ${i}` });
+}
 
 export const INITIALIZE = {
 	jsonrpc: "2.0",
