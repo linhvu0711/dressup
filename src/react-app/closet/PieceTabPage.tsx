@@ -5,10 +5,20 @@ import type { Hex } from "@/colour/hex";
 import { Button } from "@/components/ui/button";
 import { ActiveFilters, FilterButton } from "@/components/ui/filter";
 import { Notice } from "@/components/ui/notice";
+import { useAddressFilter } from "@/components/ui/use-address-filter";
 import type { TypeId } from "@/dress/clothing-types";
+import { useColours } from "@/labels/api";
+import { useBrands } from "@/labels/brand-api";
 import { PieceFilterSheet } from "@/piece-filter/PieceFilterSheet";
-import type { FilterPiece } from "@/piece-filter/piece-filter";
-import { usePieceFilter } from "@/piece-filter/use-piece-filter";
+import {
+	type FilterPiece,
+	matchesPieceFilter,
+	NO_FILTER,
+	pieceFilterChips,
+	prunePieceFilter,
+	readPieceFilter,
+	writePieceFilter,
+} from "@/piece-filter/piece-filter";
 import type { PieceTab } from "@/shell/piece-link";
 import { PageHeader } from "../shell/PageHeader";
 import { Wall } from "../shell/Wall";
@@ -57,7 +67,17 @@ export function PieceTabPage<D, E extends TilePiece>({
 	const [adding, setAdding] = useState(false);
 	const [filtering, setFiltering] = useState(false);
 	const all = query.data === undefined ? [] : entries(query.data);
-	const pf = usePieceFilter(all, toPiece);
+	const colours = useColours();
+	const brands = useBrands();
+	const pf = useAddressFilter({
+		none: NO_FILTER,
+		read: readPieceFilter,
+		write: writePieceFilter,
+		prune: (f) => prunePieceFilter(f, colours.data, brands.data),
+		chips: (f) => pieceFilterChips(f, colours.data, brands.data),
+	});
+	const shown = all.filter((e) => matchesPieceFilter(pf.filter, toPiece(e)));
+	const shownText = shown.length === 1 ? "1 piece" : `${shown.length} pieces`;
 	// An empty list still shows picks left in the address, so a piece added
 	// later is not hidden by a filter the user cannot see.
 	const filterable =
@@ -105,7 +125,7 @@ export function PieceTabPage<D, E extends TilePiece>({
 				</Button>
 			</Notice>
 		);
-	} else if (pf.shown.length === 0) {
+	} else if (shown.length === 0) {
 		wall = (
 			<div data-slot="no-match" className="flex flex-1 flex-col">
 				<Notice title="Nothing here">
@@ -118,7 +138,7 @@ export function PieceTabPage<D, E extends TilePiece>({
 	} else {
 		wall = (
 			<Wall slot={`${slot}-wall`}>
-				{pf.shown.map((entry) => {
+				{shown.map((entry) => {
 					const { key, ...shown } = tile(entry);
 					return (
 						<PieceTile
@@ -161,7 +181,7 @@ export function PieceTabPage<D, E extends TilePiece>({
 				<ActiveFilters
 					chips={pf.chips}
 					onClearAll={pf.clear}
-					shown={pf.shownText}
+					shown={shownText}
 				/>
 			) : null}
 			{wall}
@@ -170,7 +190,7 @@ export function PieceTabPage<D, E extends TilePiece>({
 				<PieceFilterSheet
 					filter={pf.filter}
 					onChange={pf.set}
-					shownText={pf.shownText}
+					shownText={shownText}
 					onClose={() => setFiltering(false)}
 				/>
 			) : null}
