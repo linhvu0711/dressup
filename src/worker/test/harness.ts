@@ -13,7 +13,7 @@ import { seedCombinations } from "./seed-combinations";
 import { seedOwnedItems } from "./seed-owned-items";
 import { seedShopLinks, seedWishes } from "./seed-wishes";
 
-export const testEnv = {
+const testEnv = {
 	GOOGLE_CLIENT_ID: "test-client",
 	GOOGLE_CLIENT_SECRET: "test-secret",
 	BETTER_AUTH_SECRET: "test-secret-at-least-32-characters-long",
@@ -254,7 +254,6 @@ export async function makeHarness(options: { through?: string } = {}) {
 	return {
 		app,
 		env,
-		helpers,
 		settings,
 		db,
 		pictures,
@@ -294,10 +293,10 @@ export const BOB: Person = {
 	name: "Bob",
 };
 
-// A fresh harness with one signed-in account, Alice unless named.
-export async function withAccount(person: Person = ALICE) {
+// A fresh harness with Alice signed in.
+export async function withAccount() {
 	const h = await makeHarness();
-	const headers = await h.addAccount(person);
+	const headers = await h.addAccount(ALICE);
 	return { h, headers };
 }
 
@@ -503,7 +502,7 @@ export async function connectAiApp(
 		h.env,
 	);
 	const consent = (await consentRes.json()) as { url: string };
-	if (!accept) return { jar, allowUrl, consent };
+	if (!accept) return { jar, consent };
 	const code = new URL(consent.url).searchParams.get("code") ?? "";
 	const tokenRes = await h.app.request(
 		"/api/auth/oauth2/token",
@@ -529,7 +528,7 @@ export async function connectAiApp(
 			expires_in: number;
 		},
 	};
-	return { jar, allowUrl, consent, token };
+	return { jar, consent, token };
 }
 
 export const send = (
@@ -594,7 +593,7 @@ type ToolResult = {
 	structuredContent?: Record<string, unknown>;
 };
 
-export type ListedTool = {
+type ListedTool = {
 	name: string;
 	title?: string;
 	annotations?: Record<string, unknown>;
