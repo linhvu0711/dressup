@@ -1126,6 +1126,28 @@ test.describe("on the full wall", () => {
 		await expect(marked.locator("[data-type-id]")).not.toHaveCount(0);
 	});
 
+	test("loads the mannequin colours once while the wall scrolls", async ({
+		page,
+	}) => {
+		// Given: both projects, the account with 300 combinations, the wall
+		// open with the first card drawn; the colour loads counted
+		let loads = 0;
+		page.on("request", (r) => {
+			if (r.method() === "GET" && r.url().endsWith("/api/mannequin")) loads++;
+		});
+		await openWall(page);
+		const before = loads;
+		// When
+		await card(page, LAST).scrollIntoViewIfNeeded();
+		await expect(card(page, LAST).locator("[data-type-id]")).not.toHaveCount(0);
+		await card(page, FIRST).scrollIntoViewIfNeeded();
+		await expect(card(page, FIRST).locator("[data-type-id]")).not.toHaveCount(
+			0,
+		);
+		// Then
+		expect(loads).toBe(before);
+	});
+
 	test("keeps a waiting card the size of a drawn one", async ({ page }) => {
 		// Given: both projects, the account with 300 combinations, the wall
 		// open with the first card drawn; the first card's height and the

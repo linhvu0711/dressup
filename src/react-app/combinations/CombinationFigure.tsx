@@ -19,7 +19,10 @@ export function CombinationFigure({
 	lite?: boolean;
 	label?: string;
 }) {
-	const colours = useMannequin().data;
+	// Every page that shows a figure loads the colours itself and keeps them
+	// fresh. A wall's figures mount as they scroll near, and a load for each
+	// would ask the server again on every scroll.
+	const colours = useMannequin({ refetchOnMount: false }).data;
 	if (!colours) return <MannequinPlaceholder viewBox={viewBox} />;
 	return (
 		<Mannequin
