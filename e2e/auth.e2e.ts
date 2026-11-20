@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "./fixtures";
-import { SESSION_FILE, signOutFile } from "./global-setup";
+import { SESSION_FILE, signOutFile } from "./paths";
 
 const signedOut = { cookies: [], origins: [] };
 

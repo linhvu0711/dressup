@@ -1,6 +1,8 @@
 import type { Page } from "@playwright/test";
-import { colourIds, postBrand, postOwnedItems } from "./closet-helpers";
+import { postOwnedItems } from "./closet-helpers";
 import { expect, test } from "./fixtures";
+import { colourIds, postBrand } from "./label-helpers";
+import { sheet, toast } from "./locators";
 import { postShopLink, postWish } from "./wishlist-helpers";
 
 const mainNav = (page: Page) => page.getByRole("navigation", { name: "Main" });
@@ -18,9 +20,6 @@ const noMatch = (page: Page) => page.locator('[data-slot="no-match"]');
 
 const tileNames = (tiles: ReturnType<typeof closetTiles>) =>
 	tiles.evaluateAll((links) => links.map((l) => l.getAttribute("aria-label")));
-
-// The sheet keeps one dialog; its name is the step's title.
-const sheet = (page: Page) => page.getByRole("dialog");
 
 // A Radix toggle group with more than one pick is a toolbar.
 const group = (page: Page, name: "Type" | "Colour" | "Brand") =>
@@ -216,15 +215,13 @@ test("drops a deleted brand from the closet filter", async ({ page }) => {
 	await mainNav(page).getByRole("link", { name: "Labels" }).click();
 	await page.getByRole("tab", { name: "Brands" }).click();
 	await page.getByRole("button", { name: "COS" }).click();
-	await page
-		.getByRole("dialog", { name: "Edit brand" })
+	await sheet(page, "Edit brand")
 		.getByRole("button", { name: "Delete" })
 		.click();
-	await page
-		.getByRole("dialog", { name: "Delete this brand?" })
+	await sheet(page, "Delete this brand?")
 		.getByRole("button", { name: "Delete" })
 		.click();
-	await expect(page.locator('[data-slot="toast"]')).toHaveText("Brand deleted");
+	await expect(toast(page)).toHaveText("Brand deleted");
 	await page.goBack();
 	await expect(closetTiles(page)).toHaveCount(2);
 	await expect(page).toHaveURL(/\/closet$/);

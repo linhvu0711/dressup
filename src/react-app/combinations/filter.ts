@@ -58,7 +58,7 @@ const matchesOwn = (
 
 // The owned set is an argument, not part of the filter: the filter is the
 // user's choice, and what the account owns is data the caller loaded.
-export const matchesFilter = (
+const matchesFilter = (
 	c: Filtered,
 	f: CombinationFilter,
 	owned: ReadonlySet<string>,
@@ -165,7 +165,7 @@ export function pruneCombinationFilter(
 	};
 }
 
-export type FilterChip = {
+type FilterChip = {
 	key: string;
 	label: string;
 	// Only a row with a type alone draws its type's figure, as the chips frame

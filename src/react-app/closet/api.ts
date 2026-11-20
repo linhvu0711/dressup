@@ -15,7 +15,7 @@ export function useCloset({ enabled = true }: { enabled?: boolean } = {}) {
 				})
 			).ownedItems,
 		enabled: enabled && userId !== null,
-		// "Retry" on the page is the person's way to try again, as on Looks.
+		// "Retry" on the page is the person's way to try again.
 		retry: false,
 	});
 }

@@ -37,7 +37,7 @@ import type { Result } from "./result";
 import { listTags } from "./tag-store";
 
 // A combination as a website or an AI app sends it, before the rules ran.
-export type CombinationDraft = {
+type CombinationDraft = {
 	id: string;
 	pieces: { typeId: string; colourId: string }[];
 	tags?: string[];
@@ -45,7 +45,7 @@ export type CombinationDraft = {
 
 // A change to a saved combination: its pieces, whole. The id comes from the
 // address or the tool call; tags left out keep the stored tags.
-export type CombinationChange = {
+type CombinationChange = {
 	pieces: { typeId: string; colourId: string }[];
 	tags?: string[];
 };
@@ -57,7 +57,7 @@ export type CombinationError =
 	| { code: "combination_limit" }
 	| { code: "not_found" };
 
-export type SavedCombination = { combination: Combination; created: boolean };
+type SavedCombination = { combination: Combination; created: boolean };
 
 // The account's combinations, newest first, or the one with this id.
 async function readCombinations(
@@ -200,11 +200,7 @@ async function notYourColour(
 
 // One insert for each piece, written only while the combination is the
 // account's (ours), so a combination deleted meanwhile gets no pieces.
-const pieceWrites = (
-	db: Db,
-	pieces: CombinationInput["pieces"],
-	ours: SQL | undefined,
-) =>
+const pieceWrites = (db: Db, pieces: CombinationInput["pieces"], ours: SQL) =>
 	pieces.map((piece) =>
 		db
 			.insert(combinationPiece)
@@ -244,7 +240,7 @@ const tagLinks = (
 	userId: string,
 	id: string,
 	tags: readonly string[],
-	ours: SQL | undefined,
+	ours: SQL,
 ) =>
 	db
 		.insert(combinationTag)
@@ -273,7 +269,7 @@ const replaceTags = (
 	userId: string,
 	id: string,
 	tags: readonly string[],
-	ours: SQL | undefined,
+	ours: SQL,
 ) =>
 	[
 		db
@@ -312,10 +308,7 @@ export async function saveCombination(
 		.select({ userId: combination.userId, key: combination.key })
 		.from(combination)
 		.where(eq(combination.id, input.id));
-	const ours = and(
-		eq(combination.id, input.id),
-		eq(combination.userId, userId),
-	);
+	const ours = sql`${eq(combination.id, input.id)} and ${eq(combination.userId, userId)}`;
 	if (before) {
 		if (before.userId !== userId || before.key !== key) return conflict;
 		await db.batch(replaceTags(db, userId, input.id, input.tags, ours));
@@ -387,7 +380,7 @@ export async function changeCombination(
 	id: string,
 	change: CombinationChange,
 ): Promise<Result<Combination, CombinationError>> {
-	const ours = and(eq(combination.id, id), eq(combination.userId, userId));
+	const ours = sql`${eq(combination.id, id)} and ${eq(combination.userId, userId)}`;
 	const notFound = { ok: false, error: { code: "not_found" } } as const;
 	const [stored] = await db
 		.select({ key: combination.key })

@@ -364,7 +364,7 @@ export async function request(
 	return answer.data;
 }
 
-export type Me = z.output<typeof meAnswer>;
+type Me = z.output<typeof meAnswer>;
 
 // The session check. Its 401 means "no session", so it answers null and
 // never runs the 401 rule, which would make this same check run again.

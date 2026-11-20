@@ -14,7 +14,7 @@ export const SHOP_LINK_NAME_MAX = 80;
 
 export const PRICE_MAX = 999_999_999;
 
-export const wishIdSchema = z.uuid().brand<"WishId">();
+const wishIdSchema = z.uuid().brand<"WishId">();
 
 export type WishId = z.infer<typeof wishIdSchema>;
 
@@ -27,13 +27,13 @@ export const wishInputSchema = z.object({
 	colourId: z.string(),
 });
 
-export const shopLinkIdSchema = z.uuid().brand<"ShopLinkId">();
+const shopLinkIdSchema = z.uuid().brand<"ShopLinkId">();
 
 export type ShopLinkId = z.infer<typeof shopLinkIdSchema>;
 
 // Only an http or https address that parses with a host: the page draws a
 // saved address as a link, so a script address must never be saved.
-export const webAddressSchema = z
+const webAddressSchema = z
 	.string()
 	.trim()
 	.max(ADDRESS_MAX)
@@ -46,7 +46,7 @@ export const webAddressSchema = z
 	);
 
 // A price in whole VND; null when the user leaves it empty.
-export const priceSchema = z.number().int().min(1).max(PRICE_MAX).nullable();
+const priceSchema = z.number().int().min(1).max(PRICE_MAX).nullable();
 
 // The rules for a shop link as a website or an AI app sends it. The brand is
 // an id here; the store checks that it is the account's.
@@ -63,7 +63,7 @@ export const shopLinkInputSchema = z.object({
 
 export const shopLinkChangeSchema = shopLinkInputSchema.omit({ id: true });
 
-export const shopLinkSchema = z.object({
+const shopLinkSchema = z.object({
 	id: shopLinkIdSchema,
 	url: z.string(),
 	brand: brandSchema.nullable(),

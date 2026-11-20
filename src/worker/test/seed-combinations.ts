@@ -15,13 +15,14 @@ const BOTTOMS: TypeId[] = [
 
 const TOPS: TypeId[] = ["tee_s", "tee_l", "polo_s", "polo_l"];
 
-// D1 takes at most 100 bound values in one statement; a combination binds 4
+// D1 takes at most 100 bound values in one statement; a combination binds 3
 // and its two pieces 10, so 9 combinations go in each pair of inserts.
 const CHUNK = 9;
 
 // Writes n combinations for the account, each with other pieces and no
 // jacket, so a test or the e2e setup can reach the limit without n requests.
-// Combination i has a bottom and a top in the account's first colour.
+// Combination i has a top in the account's first colour, and a bottom whose
+// colour moves on every 6 combinations.
 export async function seedCombinations(db: Db, userId: string, n: number) {
 	const colours = await listColours(db, userId);
 	const all = Array.from({ length: n }, (_, i) => {

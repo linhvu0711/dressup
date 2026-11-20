@@ -1,6 +1,11 @@
 import type { Page } from "@playwright/test";
+import { postOwnedItems } from "./closet-helpers";
+import { postCombinations } from "./combination-helpers";
 import { expect, test } from "./fixtures";
-import { COLOURS_EMPTY_FILE, COLOURS_FULL_FILE } from "./global-setup";
+import { colourIds } from "./label-helpers";
+import { sheet, toast } from "./locators";
+import { COLOURS_EMPTY_FILE, COLOURS_FULL_FILE } from "./paths";
+import { postWish } from "./wishlist-helpers";
 
 const STARTER = [
 	"White #F4F2ED",
@@ -59,14 +64,13 @@ test("lists the starter colours with swatch, name, and code", async ({
 	}).toEqual({ names: STARTER, swatch: "rgb(244, 242, 237)" });
 });
 
-const sheet = (page: Page, name = "Add a colour") =>
-	page.getByRole("dialog", { name });
+const addSheet = (page: Page) => sheet(page, "Add a colour");
 
 const nameBox = (page: Page) =>
-	page.getByRole("dialog").getByRole("textbox", { name: "Name" });
+	sheet(page).getByRole("textbox", { name: "Name" });
 
 const codeBox = (page: Page) =>
-	page.getByRole("dialog").getByRole("textbox", { name: "Colour code" });
+	sheet(page).getByRole("textbox", { name: "Colour code" });
 
 async function openAdd(page: Page) {
 	await page.goto("/labels");
@@ -80,12 +84,14 @@ test("adds a colour with the + form", async ({ page }) => {
 	// When
 	await nameBox(page).fill("Teal");
 	await codeBox(page).fill("#2A7F7F");
-	await sheet(page).getByRole("button", { name: "Add", exact: true }).click();
+	await addSheet(page)
+		.getByRole("button", { name: "Add", exact: true })
+		.click();
 	// Then
-	await expect(page.locator('[data-slot="toast"]')).toHaveText("Colour added");
+	await expect(toast(page)).toHaveText("Colour added");
 	await expect(rows(page)).toHaveCount(14);
 	expect({
-		dialogs: await page.getByRole("dialog").count(),
+		dialogs: await sheet(page).count(),
 		last: (await rowNames(page)).at(-1),
 	}).toEqual({ dialogs: 0, last: "Teal #2A7F7F" });
 });
@@ -98,9 +104,11 @@ test("asks for a name and sends nothing", async ({ page }) => {
 	});
 	await openAdd(page);
 	// When
-	await sheet(page).getByRole("button", { name: "Add", exact: true }).click();
+	await addSheet(page)
+		.getByRole("button", { name: "Add", exact: true })
+		.click();
 	// Then
-	await expect(sheet(page).getByRole("alert")).toHaveText("Enter a name.");
+	await expect(addSheet(page).getByRole("alert")).toHaveText("Enter a name.");
 	expect(posts).toBe(0);
 });
 
@@ -109,9 +117,11 @@ test("says a taken name is taken, in any case", async ({ page }) => {
 	await openAdd(page);
 	await nameBox(page).fill("navy");
 	// When
-	await sheet(page).getByRole("button", { name: "Add", exact: true }).click();
+	await addSheet(page)
+		.getByRole("button", { name: "Add", exact: true })
+		.click();
 	// Then
-	await expect(sheet(page).getByRole("alert")).toHaveText(
+	await expect(addSheet(page).getByRole("alert")).toHaveText(
 		"You have this colour already.",
 	);
 	// The open sheet hides the page from roles, so the rows are counted as items.
@@ -137,9 +147,11 @@ test("keeps the form open with Not saved when Add fails", async ({ page }) => {
 			: route.fallback(),
 	);
 	// When
-	await sheet(page).getByRole("button", { name: "Add", exact: true }).click();
+	await addSheet(page)
+		.getByRole("button", { name: "Add", exact: true })
+		.click();
 	// Then
-	await expect(sheet(page).getByRole("alert")).toHaveText(
+	await expect(addSheet(page).getByRole("alert")).toHaveText(
 		"Not saved. Try again.",
 	);
 	await expect(nameBox(page)).toHaveValue("Teal");
@@ -155,11 +167,11 @@ test.describe("an account with 100 colours", () => {
 		// When
 		await page.getByRole("button", { name: "Add a colour" }).click();
 		// Then
-		await expect(sheet(page).getByRole("alert")).toHaveText(
+		await expect(addSheet(page).getByRole("alert")).toHaveText(
 			"You have 100 colours. That is the limit. Delete one to add a new one.",
 		);
 		await expect(
-			sheet(page).getByRole("button", { name: "Add", exact: true }),
+			addSheet(page).getByRole("button", { name: "Add", exact: true }),
 		).toBeDisabled();
 	});
 });
@@ -178,7 +190,7 @@ test("changes a colour's name and code", async ({ page }) => {
 		.getByRole("button", { name: "Save", exact: true })
 		.click();
 	// Then
-	await expect(page.locator('[data-slot="toast"]')).toHaveText("Changes saved");
+	await expect(toast(page)).toHaveText("Changes saved");
 	await expect(rows(page).nth(2)).toHaveAccessibleName("Ink #22304A");
 });
 
@@ -196,15 +208,15 @@ test("swaps the form to the confirm step and back", async ({ page }) => {
 		.getByRole("button", { name: "Delete" })
 		.click();
 	const confirm = {
-		dialogs: await page.getByRole("dialog").count(),
-		title: await page.getByRole("dialog").getByRole("heading").textContent(),
+		dialogs: await sheet(page).count(),
+		title: await sheet(page).getByRole("heading").textContent(),
 	};
 	await page.getByRole("button", { name: "Back" }).click();
 	// Then
 	expect({
 		confirm,
-		dialogs: await page.getByRole("dialog").count(),
-		title: await page.getByRole("dialog").getByRole("heading").textContent(),
+		dialogs: await sheet(page).count(),
+		title: await sheet(page).getByRole("heading").textContent(),
 		name: await nameBox(page).inputValue(),
 	}).toEqual({
 		confirm: { dialogs: 1, title: 'Delete the colour "Navy"?' },
@@ -221,14 +233,9 @@ test("deletes a colour from the confirm step", async ({ page }) => {
 	await sheet(page, "Edit colour")
 		.getByRole("button", { name: "Delete" })
 		.click();
-	await page
-		.getByRole("dialog")
-		.getByRole("button", { name: "Delete" })
-		.click();
+	await sheet(page).getByRole("button", { name: "Delete" }).click();
 	// Then
-	await expect(page.locator('[data-slot="toast"]')).toHaveText(
-		"Colour deleted",
-	);
+	await expect(toast(page)).toHaveText("Colour deleted");
 	await expect(rows(page)).toHaveCount(12);
 	expect(await rowNames(page)).not.toContain("Navy #1F3A5F");
 });
@@ -238,28 +245,21 @@ test("says a colour in a combination is in use and offers no Delete", async ({
 }) => {
 	// Given: a fresh account with a combination of Navy casual pants and a
 	// White long tee, the row "Navy #1F3A5F" open
-	const res = await page.request.get("/api/colours");
-	const { colours } = (await res.json()) as {
-		colours: { id: string; name: string }[];
-	};
-	const id = (name: string) => colours.find((c) => c.name === name)?.id;
-	const saved = await page.request.post("/api/combinations", {
-		data: {
-			id: crypto.randomUUID(),
-			pieces: [
-				{ typeId: "casual_p", colourId: id("Navy") },
-				{ typeId: "tee_l", colourId: id("White") },
-			],
-		},
+	const ids = await colourIds(page);
+	await postCombinations(page, {
+		id: crypto.randomUUID(),
+		pieces: [
+			{ typeId: "casual_p", colourId: ids.Navy },
+			{ typeId: "tee_l", colourId: ids.White },
+		],
 	});
-	expect(saved.status()).toBe(201);
 	await openNavy(page);
 	// When
 	await sheet(page, "Edit colour")
 		.getByRole("button", { name: "Delete" })
 		.click();
 	// Then
-	const dialog = page.getByRole("dialog");
+	const dialog = sheet(page);
 	await expect(
 		dialog.getByText(
 			"A combination, an item in your closet, or a wish uses this colour, so you cannot delete it.",
@@ -273,27 +273,20 @@ test("says an item in the closet keeps a colour", async ({ page }) => {
 	// Given: a fresh account with a Navy long button-up in the closet; the
 	// row "Navy #1F3A5F" open
 	await page.goto("/labels");
-	const res = await page.request.get("/api/colours");
-	const { colours } = (await res.json()) as {
-		colours: { id: string; name: string }[];
-	};
-	const saved = await page.request.post("/api/owned-items", {
-		data: {
-			id: crypto.randomUUID(),
-			typeId: "shirt_l",
-			colourId: colours.find((c) => c.name === "Navy")?.id,
-			brandId: null,
-			quantity: 1,
-		},
+	const ids = await colourIds(page);
+	await postOwnedItems(page, {
+		typeId: "shirt_l",
+		colourId: ids.Navy,
+		brandId: null,
+		quantity: 1,
 	});
-	expect(saved.status()).toBe(201);
 	await openNavy(page);
 	// When
 	await sheet(page, "Edit colour")
 		.getByRole("button", { name: "Delete" })
 		.click();
 	// Then
-	const dialog = page.getByRole("dialog");
+	const dialog = sheet(page);
 	await expect(
 		dialog.getByText(
 			"A combination, an item in your closet, or a wish uses this colour, so you cannot delete it.",
@@ -317,12 +310,9 @@ test("says a colour is in use when the delete answers colour_in_use", async ({
 	await sheet(page, "Edit colour")
 		.getByRole("button", { name: "Delete" })
 		.click();
-	await page
-		.getByRole("dialog")
-		.getByRole("button", { name: "Delete" })
-		.click();
+	await sheet(page).getByRole("button", { name: "Delete" }).click();
 	// Then
-	const dialog = page.getByRole("dialog");
+	const dialog = sheet(page);
 	await expect(
 		dialog.getByText(
 			"A combination, an item in your closet, or a wish uses this colour, so you cannot delete it.",
@@ -419,18 +409,8 @@ test("refuses to delete a colour a wish uses", async ({ page }) => {
 	// Given: a fresh account with an Olive long polo wish and nothing else in
 	// Olive
 	await page.goto("/labels");
-	const res = await page.request.get("/api/colours");
-	const { colours } = (await res.json()) as {
-		colours: { id: string; name: string }[];
-	};
-	const saved = await page.request.post("/api/wishes", {
-		data: {
-			id: crypto.randomUUID(),
-			typeId: "polo_l",
-			colourId: colours.find((c) => c.name === "Olive")?.id,
-		},
-	});
-	expect(saved.status()).toBe(201);
+	const ids = await colourIds(page);
+	await postWish(page, { typeId: "polo_l", colourId: ids.Olive });
 	await page.goto("/labels");
 	await expect(rows(page)).toHaveCount(13);
 	// When
@@ -439,7 +419,7 @@ test("refuses to delete a colour a wish uses", async ({ page }) => {
 		.getByRole("button", { name: "Delete" })
 		.click();
 	// Then
-	const dialog = page.getByRole("dialog");
+	const dialog = sheet(page);
 	await expect(
 		dialog.getByText(
 			"A combination, an item in your closet, or a wish uses this colour, so you cannot delete it.",

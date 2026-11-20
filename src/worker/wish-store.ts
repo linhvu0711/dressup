@@ -30,7 +30,7 @@ import {
 } from "./picture-store";
 import type { Result } from "./result";
 
-export type WishField =
+type WishField =
 	| "id"
 	| "typeId"
 	| "colourId"
@@ -50,7 +50,7 @@ export type WishError =
 	| { code: "conflict" }
 	| { code: "not_found" };
 
-export type AddedWish = { wish: Wish; created: boolean };
+type AddedWish = { wish: Wish; created: boolean };
 
 type Piece = { typeId: TypeId; colourId: string };
 
@@ -322,7 +322,7 @@ export async function deleteWish(
 		: { ok: false, error: { code: "not_found" } };
 }
 
-export type AddedShopLink = AddedWish;
+type AddedShopLink = AddedWish;
 
 const linksOfWish = (db: Db, wishId: string) =>
 	db.select({ n: count() }).from(shopLink).where(eq(shopLink.wishId, wishId));

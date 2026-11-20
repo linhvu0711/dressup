@@ -1,6 +1,6 @@
 import { PICTURE_BYTES_MAX } from "./picture";
 
-export const PICTURE_LONG_SIDE = 1600;
+const PICTURE_LONG_SIDE = 1600;
 
 // The quality steps for JPEG, from good to small.
 const QUALITIES = [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3];
@@ -9,7 +9,7 @@ const QUALITIES = [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3];
 export class TooBig extends Error {}
 
 // The browser cannot decode the file, as HEIC in Chrome.
-export class Unreadable extends Error {}
+class Unreadable extends Error {}
 
 // The size with the long side at most max, never larger than the picture.
 export function fitLongSide(width: number, height: number, max: number) {

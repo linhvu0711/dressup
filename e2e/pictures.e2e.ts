@@ -1,6 +1,8 @@
 import type { Page, Request } from "@playwright/test";
-import { colourIds, postBrand, postOwnedItems } from "./closet-helpers";
+import { postOwnedItems } from "./closet-helpers";
 import { expect, test } from "./fixtures";
+import { colourIds, postBrand } from "./label-helpers";
+import { sheet, toast } from "./locators";
 import {
 	bigJpeg,
 	imageSize,
@@ -11,13 +13,9 @@ import {
 	uprightTestJpeg,
 } from "./picture-helpers";
 
-const addSheet = (page: Page) =>
-	page.getByRole("dialog", { name: "Add to closet" });
+const addSheet = (page: Page) => sheet(page, "Add to closet");
 
-const editSheet = (page: Page) =>
-	page.getByRole("dialog", { name: "Edit item" });
-
-const toast = (page: Page) => page.locator('[data-slot="toast"]');
+const editSheet = (page: Page) => sheet(page, "Edit item");
 
 const addButton = (page: Page) =>
 	page.getByRole("button", { name: "Add pictures" });
@@ -40,8 +38,7 @@ const openAddSheet = (page: Page) =>
 // Picks Long button-up and Navy in the open add sheet.
 async function pickNavyShirt(page: Page) {
 	await addSheet(page).getByRole("button", { name: "Pick a type" }).click();
-	await page
-		.getByRole("dialog", { name: "Pick a type" })
+	await sheet(page, "Pick a type")
 		.getByRole("button", { name: "Long button-up", exact: true })
 		.click();
 	await addSheet(page)

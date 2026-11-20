@@ -6,13 +6,9 @@ import type { ReactNode } from "react";
 export function Stage({
 	className,
 	children,
-	corner,
-	action,
 }: {
 	className?: string;
 	children: ReactNode;
-	corner?: ReactNode;
-	action?: ReactNode;
 }) {
 	return (
 		<div
@@ -23,12 +19,6 @@ export function Stage({
 			)}
 		>
 			{children}
-			{corner ? (
-				<div className="absolute top-3 left-3 flex max-w-[calc(100%-80px)] items-center gap-2">
-					{corner}
-				</div>
-			) : null}
-			{action ? <div className="absolute top-3 right-3">{action}</div> : null}
 		</div>
 	);
 }

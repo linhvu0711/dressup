@@ -215,13 +215,13 @@ export const notStored =
 export const uploadAddressText = (address: string) =>
 	`Send the picture within ${UPLOAD_ADDRESS_AGE_MS / 60_000} minutes, once: curl -X POST --data-binary @photo.jpg ${address}. It answers with the picture's id.`;
 
-export const noTag = "No tag with this id.";
+const noTag = "No tag with this id.";
 
-export const noColour = "No colour with this id.";
+const noColour = "No colour with this id.";
 
-export const noBrand = "No brand with this id.";
+const noBrand = "No brand with this id.";
 
-export const noCombination = "No combination with this id.";
+const noCombination = "No combination with this id.";
 
 export const noPicture = "No picture with this id.";
 

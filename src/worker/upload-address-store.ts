@@ -7,7 +7,7 @@ export const UPLOAD_ADDRESS_AGE_MS = 900_000;
 
 const uploadAddressIdSchema = z.uuid().brand<"UploadAddressId">();
 
-export type UploadAddressId = z.infer<typeof uploadAddressIdSchema>;
+type UploadAddressId = z.infer<typeof uploadAddressIdSchema>;
 
 // The app has no cron, so an account's expired addresses go when it asks for
 // a new one.

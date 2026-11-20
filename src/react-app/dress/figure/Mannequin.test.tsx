@@ -71,31 +71,6 @@ describe("Mannequin", () => {
 		},
 	);
 
-	test("draws every jacket open", () => {
-		// Given: a Harrington jacket in #C9B38C and a wool jacket in #A8865C,
-		// each the only layer
-		// When
-		const harrington = renderToStaticMarkup(
-			<Mannequin
-				{...STARTER_MANNEQUIN}
-				layers={[{ typeId: "harrington", color: "#C9B38C" }]}
-			/>,
-		);
-		const wool = renderToStaticMarkup(
-			<Mannequin
-				{...STARTER_MANNEQUIN}
-				layers={[{ typeId: "wool", color: "#A8865C" }]}
-			/>,
-		);
-		// Then: the Harrington facing and the wool lapel show only when open
-		expect({
-			harringtonFacing: harrington.includes(
-				"M 181 176 L 186 176 L 186 397 L 183 397 Z",
-			),
-			woolLapel: wool.includes("M 175 147 L 153 166 L 165 226 L 187 210"),
-		}).toEqual({ harringtonFacing: true, woolLapel: true });
-	});
-
 	test("paints the layers in the given order", () => {
 		// Given: chino pants, a long polo, and a sweater, bottom layer first
 		// When

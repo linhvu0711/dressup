@@ -9,11 +9,11 @@ export const OWNED_ITEM_LIMIT = 500;
 
 export const QUANTITY_MAX = 99;
 
-export const ownedItemIdSchema = z.uuid().brand<"OwnedItemId">();
+const ownedItemIdSchema = z.uuid().brand<"OwnedItemId">();
 
 export type OwnedItemId = z.infer<typeof ownedItemIdSchema>;
 
-export const quantitySchema = z.number().int().min(1).max(QUANTITY_MAX);
+const quantitySchema = z.number().int().min(1).max(QUANTITY_MAX);
 
 // The rules for an owned item as a website or an AI app sends it, so the
 // server's check and the page's form agree. The colour and the brand are

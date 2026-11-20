@@ -1,6 +1,5 @@
 import type { Page } from "@playwright/test";
 import {
-	colourIds,
 	isPhone,
 	pick,
 	postCombinations,
@@ -10,7 +9,9 @@ import {
 	typeChip,
 } from "./combination-helpers";
 import { expect, test } from "./fixtures";
-import { COMBINATIONS_FULL_FILE } from "./global-setup";
+import { colourIds } from "./label-helpers";
+import { sheet, toast } from "./locators";
+import { COMBINATIONS_FULL_FILE } from "./paths";
 
 const LONG_TITLE =
 	"Khaki Harrington jacket + Black long tee + Navy casual pants";
@@ -247,8 +248,6 @@ test("shows the sign-in screen when the combinations answer 401", async ({
 		page.getByRole("button", { name: "Sign in with Google" }),
 	).toBeVisible();
 });
-
-const toast = (page: Page) => page.locator('[data-slot="toast"]');
 
 const view = (page: Page) => page.locator('[data-slot="combination-view"]');
 
@@ -680,8 +679,7 @@ test("turns Save on at 2 pieces", async ({ page }) => {
 	await expect(save).toBeEnabled();
 });
 
-const saveDialog = (page: Page) =>
-	page.getByRole("dialog", { name: "Save combination" });
+const saveDialog = (page: Page) => sheet(page, "Save combination");
 
 const LIMIT_TEXT =
 	"You have 300 combinations. That is the limit. Delete one to save a new one.";
@@ -713,9 +711,7 @@ test("saves a combination and opens the wall", async ({ page }) => {
 	await saveDialog(page).getByRole("button", { name: "Save" }).click();
 	// Then
 	await expect(page).toHaveURL("/combinations");
-	await expect(page.locator('[data-slot="toast"]')).toHaveText(
-		"Saved to Combinations",
-	);
+	await expect(toast(page)).toHaveText("Saved to Combinations");
 	await expect(page.locator('[data-slot="combination-title"]')).toHaveText([
 		LONG_TITLE,
 	]);
@@ -832,10 +828,10 @@ test("shows a colour's new name on its combination", async ({ page }) => {
 	await postCombinations(page, three(await colourIds(page)));
 	// When
 	await page.getByRole("button", { name: "Khaki #B8A57C" }).click();
-	const sheet = page.getByRole("dialog", { name: "Edit colour" });
-	await sheet.getByLabel("Name").fill("Sand");
-	await sheet.getByRole("button", { name: "Save", exact: true }).click();
-	await expect(sheet).toHaveCount(0);
+	const dialog = sheet(page, "Edit colour");
+	await dialog.getByLabel("Name").fill("Sand");
+	await dialog.getByRole("button", { name: "Save", exact: true }).click();
+	await expect(dialog).toHaveCount(0);
 	await mainNav(page).getByRole("link", { name: "Combinations" }).click();
 	// Then
 	await expect(

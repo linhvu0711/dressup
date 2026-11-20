@@ -18,6 +18,23 @@ import { seedCombinations } from "../src/worker/test/seed-combinations";
 import { seedOwnedItems } from "../src/worker/test/seed-owned-items";
 import { seedShopLinks, seedWishes } from "../src/worker/test/seed-wishes";
 import {
+	AUTH_DIR,
+	aiAppFile,
+	aiAppTests,
+	BRANDS_FULL_FILE,
+	CLAIMS_DIR,
+	CLOSET_FULL_FILE,
+	COLOURS_EMPTY_FILE,
+	COLOURS_FULL_FILE,
+	COMBINATIONS_FULL_FILE,
+	POOL_DIR,
+	poolFile,
+	SESSION_FILE,
+	signOutFile,
+	signOutTests,
+	WISHLIST_FULL_FILE,
+} from "./paths";
+import {
 	BRANDS_FULL_USER,
 	CLOSET_FULL_USER,
 	COLOURS_EMPTY_USER,
@@ -27,30 +44,6 @@ import {
 	WISHLIST_FULL_USER,
 	withTestAuth,
 } from "./sessions";
-
-export const SESSION_FILE = "e2e/.auth/session.json";
-export const COLOURS_FULL_FILE = "e2e/.auth/colours-full.json";
-export const COLOURS_EMPTY_FILE = "e2e/.auth/colours-empty.json";
-export const BRANDS_FULL_FILE = "e2e/.auth/brands-full.json";
-export const COMBINATIONS_FULL_FILE = "e2e/.auth/combinations-full.json";
-export const CLOSET_FULL_FILE = "e2e/.auth/closet-full.json";
-export const WISHLIST_FULL_FILE = "e2e/.auth/wishlist-full.json";
-export const POOL_DIR = "e2e/.auth/pool";
-export const CLAIMS_DIR = "e2e/.auth/claims";
-export const poolFile = (n: number) => `${POOL_DIR}/${n}.json`;
-export const claimFile = (n: number) => `${CLAIMS_DIR}/${n}`;
-
-export const signOutTests = ["settings", "late-check"] as const;
-export const signOutFile = (
-	project: string,
-	test: (typeof signOutTests)[number],
-) => `e2e/.auth/signout-${test}-${project}.json`;
-
-// Per project, one account for the list case and one for Disconnect: cases
-// run in parallel, and Disconnect removes the row the list case reads.
-export const aiAppTests = ["list", "disconnect"] as const;
-export const aiAppFile = (project: string, test: (typeof aiAppTests)[number]) =>
-	`e2e/.auth/ai-app-${test}-${project}.json`;
 
 const TEST_APP_ID = "https://client.example/meta.json";
 
@@ -104,116 +97,64 @@ export default async function globalSetup(config: FullConfig) {
 		await db.delete(schema.pictureUploadMonth);
 		await db.delete(schema.pictureStorage);
 		// Delete first, so a second run ends in the same state.
-		await db.delete(schema.user).where(eq(schema.user.id, E2E_USER.id));
-		await helpers.saveUser(helpers.createUser(E2E_USER));
-		mkdirSync("e2e/.auth", { recursive: true });
-		const cookies = await newSessionCookies();
-		writeFileSync(SESSION_FILE, JSON.stringify({ cookies, origins: [] }));
+		const reset = async (
+			user: { id: string; email: string; name: string },
+			file: string,
+			fill?: () => Promise<unknown>,
+		) => {
+			await db.delete(schema.user).where(eq(schema.user.id, user.id));
+			await helpers.saveUser(helpers.createUser(user));
+			await fill?.();
+			writeFileSync(
+				file,
+				JSON.stringify({
+					cookies: await helpers.getCookies({
+						userId: user.id,
+						domain: "localhost",
+					}),
+					origins: [],
+				}),
+			);
+		};
+		mkdirSync(AUTH_DIR, { recursive: true });
+		await reset(E2E_USER, SESSION_FILE);
 		// Filled through the colour store, so the seed mark and the ids are the
 		// store's own; its colours go with the user row.
-		await db
-			.delete(schema.user)
-			.where(eq(schema.user.id, COLOURS_FULL_USER.id));
-		await helpers.saveUser(helpers.createUser(COLOURS_FULL_USER));
-		const starter = await listColours(db, COLOURS_FULL_USER.id);
-		for (let n = 1; n <= COLOUR_LIMIT - starter.length; n++)
-			await addColour(db, COLOURS_FULL_USER.id, {
-				name: `Colour ${n}`,
-				hex: "#2A7F7F",
-			});
-		writeFileSync(
-			COLOURS_FULL_FILE,
-			JSON.stringify({
-				cookies: await helpers.getCookies({
-					userId: COLOURS_FULL_USER.id,
-					domain: "localhost",
-				}),
-				origins: [],
-			}),
-		);
-		await db
-			.delete(schema.user)
-			.where(eq(schema.user.id, COLOURS_EMPTY_USER.id));
-		await helpers.saveUser(helpers.createUser(COLOURS_EMPTY_USER));
-		for (const c of await listColours(db, COLOURS_EMPTY_USER.id))
-			await deleteColour(db, COLOURS_EMPTY_USER.id, c.id);
-		writeFileSync(
-			COLOURS_EMPTY_FILE,
-			JSON.stringify({
-				cookies: await helpers.getCookies({
-					userId: COLOURS_EMPTY_USER.id,
-					domain: "localhost",
-				}),
-				origins: [],
-			}),
-		);
+		await reset(COLOURS_FULL_USER, COLOURS_FULL_FILE, async () => {
+			const starter = await listColours(db, COLOURS_FULL_USER.id);
+			for (let n = 1; n <= COLOUR_LIMIT - starter.length; n++)
+				await addColour(db, COLOURS_FULL_USER.id, {
+					name: `Colour ${n}`,
+					hex: "#2A7F7F",
+				});
+		});
+		await reset(COLOURS_EMPTY_USER, COLOURS_EMPTY_FILE, async () => {
+			for (const c of await listColours(db, COLOURS_EMPTY_USER.id))
+				await deleteColour(db, COLOURS_EMPTY_USER.id, c.id);
+		});
 		// Filled through the brand store; its brands go with the user row.
-		await db.delete(schema.user).where(eq(schema.user.id, BRANDS_FULL_USER.id));
-		await helpers.saveUser(helpers.createUser(BRANDS_FULL_USER));
-		for (let n = 1; n <= BRAND_LIMIT; n++)
-			await addBrand(db, BRANDS_FULL_USER.id, `Brand ${n}`);
-		writeFileSync(
-			BRANDS_FULL_FILE,
-			JSON.stringify({
-				cookies: await helpers.getCookies({
-					userId: BRANDS_FULL_USER.id,
-					domain: "localhost",
-				}),
-				origins: [],
-			}),
-		);
+		await reset(BRANDS_FULL_USER, BRANDS_FULL_FILE, async () => {
+			for (let n = 1; n <= BRAND_LIMIT; n++)
+				await addBrand(db, BRANDS_FULL_USER.id, `Brand ${n}`);
+		});
 		// Its combinations go with the user row.
-		await db
-			.delete(schema.user)
-			.where(eq(schema.user.id, COMBINATIONS_FULL_USER.id));
-		await helpers.saveUser(helpers.createUser(COMBINATIONS_FULL_USER));
-		await seedCombinations(db, COMBINATIONS_FULL_USER.id, COMBINATION_LIMIT);
-		writeFileSync(
-			COMBINATIONS_FULL_FILE,
-			JSON.stringify({
-				cookies: await helpers.getCookies({
-					userId: COMBINATIONS_FULL_USER.id,
-					domain: "localhost",
-				}),
-				origins: [],
-			}),
+		await reset(COMBINATIONS_FULL_USER, COMBINATIONS_FULL_FILE, () =>
+			seedCombinations(db, COMBINATIONS_FULL_USER.id, COMBINATION_LIMIT),
 		);
 		// Its owned items and the brands they name go with the user row.
-		await db.delete(schema.user).where(eq(schema.user.id, CLOSET_FULL_USER.id));
-		await helpers.saveUser(helpers.createUser(CLOSET_FULL_USER));
-		await seedOwnedItems(db, CLOSET_FULL_USER.id, OWNED_ITEM_LIMIT);
-		writeFileSync(
-			CLOSET_FULL_FILE,
-			JSON.stringify({
-				cookies: await helpers.getCookies({
-					userId: CLOSET_FULL_USER.id,
-					domain: "localhost",
-				}),
-				origins: [],
-			}),
+		await reset(CLOSET_FULL_USER, CLOSET_FULL_FILE, () =>
+			seedOwnedItems(db, CLOSET_FULL_USER.id, OWNED_ITEM_LIMIT),
 		);
 		// Its wishes and their shop links go with the user row.
-		await db
-			.delete(schema.user)
-			.where(eq(schema.user.id, WISHLIST_FULL_USER.id));
-		await helpers.saveUser(helpers.createUser(WISHLIST_FULL_USER));
-		await seedWishes(db, WISHLIST_FULL_USER.id, WISH_LIMIT);
-		await seedShopLinks(
-			db,
-			WISHLIST_FULL_USER.id,
-			"00000000-0000-4000-a000-000000000001",
-			SHOP_LINK_LIMIT,
-		);
-		writeFileSync(
-			WISHLIST_FULL_FILE,
-			JSON.stringify({
-				cookies: await helpers.getCookies({
-					userId: WISHLIST_FULL_USER.id,
-					domain: "localhost",
-				}),
-				origins: [],
-			}),
-		);
+		await reset(WISHLIST_FULL_USER, WISHLIST_FULL_FILE, async () => {
+			await seedWishes(db, WISHLIST_FULL_USER.id, WISH_LIMIT);
+			await seedShopLinks(
+				db,
+				WISHLIST_FULL_USER.id,
+				"00000000-0000-4000-a000-000000000001",
+				SHOP_LINK_LIMIT,
+			);
+		});
 		// Its allows and tokens go with the client row.
 		await db
 			.delete(schema.oauthClient)
@@ -230,29 +171,22 @@ export default async function globalSetup(config: FullConfig) {
 		for (const project of ["phone", "laptop"])
 			for (const test of aiAppTests) {
 				const userId = `e2e-ai-${test}-${project}`;
-				await db.delete(schema.user).where(eq(schema.user.id, userId));
-				await helpers.saveUser(
-					helpers.createUser({
+				await reset(
+					{
 						id: userId,
 						email: `ai-${test}-${project}@dressup.test`,
 						name: `AI App Person ${test} ${project}`,
-					}),
-				);
-				await db.insert(schema.oauthConsent).values({
-					id: userId,
-					clientId: TEST_APP_ID,
-					userId,
-					scopes: ["openid", "offline_access"],
-					createdAt: connectedAt,
-					updatedAt: connectedAt,
-				});
-				const aiCookies = await helpers.getCookies({
-					userId,
-					domain: "localhost",
-				});
-				writeFileSync(
+					},
 					aiAppFile(project, test),
-					JSON.stringify({ cookies: aiCookies, origins: [] }),
+					() =>
+						db.insert(schema.oauthConsent).values({
+							id: userId,
+							clientId: TEST_APP_ID,
+							userId,
+							scopes: ["openid", "offline_access"],
+							createdAt: connectedAt,
+							updatedAt: connectedAt,
+						}),
 				);
 			}
 		// The pool's rows go with its users.
