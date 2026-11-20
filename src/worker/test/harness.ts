@@ -8,6 +8,7 @@ import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 import { createApp } from "../app";
 import { type AuthSettings, authOptions, createClientDiscovery } from "../auth";
 import { type Db, schema } from "../db";
+import { insertInChunks } from "./insert-in-chunks";
 import { MemoryBucket } from "./memory-bucket";
 import { seedCombinations } from "./seed-combinations";
 import { seedOwnedItems } from "./seed-owned-items";
@@ -147,9 +148,7 @@ export async function makeHarness(options: { through?: string } = {}) {
 			bytes,
 			createdAt: new Date(),
 		}));
-		// D1 takes at most 100 bound values in one statement; a picture binds 5.
-		for (let i = 0; i < all.length; i += 20)
-			await db.insert(schema.picture).values(all.slice(i, i + 20));
+		await insertInChunks(db, schema.picture, all);
 		await db
 			.insert(schema.pictureStorage)
 			.values({ id: 1, bytes: n * bytes })
