@@ -7,6 +7,7 @@ import {
 	BOB,
 	type Harness,
 	makeHarness,
+	otherTabWrites,
 	send,
 	withAccount,
 } from "./test/harness";
@@ -209,23 +210,12 @@ describe("POST /api/colours", () => {
 	});
 });
 
-// Another tab's save of the same name, written by a trigger just before this
-// request's own write, after its duplicate check has passed.
-const otherTabWrites = (h: Harness, when: "INSERT" | "UPDATE", name: string) =>
-	h.addTrigger(
-		`CREATE TRIGGER other_tab BEFORE ${when} ON colour WHEN NEW.name = '${name}'
-		BEGIN
-			INSERT INTO colour (id, user_id, name, hex, created_at)
-			VALUES ('other-tab', NEW.user_id, lower(NEW.name), NEW.hex, 0);
-		END`,
-	);
-
 describe("two writes at the same time", () => {
 	test("answers duplicate when another tab adds the name first", async () => {
 		// Given: alice signed in, the list read once; another tab stores "teal"
 		// between this add's check and its write
 		const { h, headers } = await withAccount();
-		otherTabWrites(h, "INSERT", "Teal");
+		otherTabWrites(h, "colour", "INSERT", "Teal");
 		// When
 		const res = await postColour(h, headers, TEAL);
 		// Then
@@ -342,7 +332,7 @@ describe("PUT /api/colours/:id", () => {
 		// Given: alice with "Teal"; another tab stores "sea" between this
 		// change's check and its write
 		const { h, headers, id } = await aliceWithTeal();
-		otherTabWrites(h, "UPDATE", "Sea");
+		otherTabWrites(h, "colour", "UPDATE", "Sea");
 		// When
 		const res = await putColour(h, headers, id, {
 			name: "Sea",

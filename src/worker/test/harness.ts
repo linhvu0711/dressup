@@ -300,6 +300,36 @@ export async function withAccount() {
 	return { h, headers };
 }
 
+// Another tab's save of the same name, written by a trigger just before this
+// request's own write, after its duplicate check has passed.
+export const otherTabWrites = (
+	h: Harness,
+	table: "brand" | "colour" | "tag",
+	when: "INSERT" | "UPDATE",
+	name: string,
+) => {
+	const hex = table === "colour" ? ["hex"] : [];
+	const columns = ["id", "user_id", "name", ...hex, "created_at"].join(", ");
+	const values = [
+		"'other-tab'",
+		"NEW.user_id",
+		"lower(NEW.name)",
+		...hex.map((c) => `NEW.${c}`),
+		"0",
+	].join(", ");
+	h.addTrigger(
+		`CREATE TRIGGER other_tab BEFORE ${when} ON ${table} WHEN NEW.name = '${name}'
+		BEGIN
+			INSERT INTO ${table} (${columns})
+			VALUES (${values});
+		END`,
+	);
+};
+
+// Every row of a table.
+export const count = async (h: Harness, table: SQLiteTable) =>
+	(await h.rows(table)).length;
+
 const base64url = (value: unknown) =>
 	Buffer.from(JSON.stringify(value)).toString("base64url");
 
@@ -463,6 +493,10 @@ export async function finishGoogleSignIn(
 	);
 	return { res, jar: store(new Map(), res) };
 }
+
+// A browser's whole Google sign-in, as the stubbed Google user.
+export const googleSignIn = async (h: Harness) =>
+	finishGoogleSignIn(h, await startGoogleSignIn(h));
 
 // The PKCE pair is RFC 7636's example. The port is one the document does not
 // list: a loopback address may use any port.

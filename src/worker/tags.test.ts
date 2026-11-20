@@ -3,6 +3,7 @@ import {
 	BOB,
 	colourIds,
 	type Harness,
+	otherTabWrites,
 	send,
 	withAccount,
 } from "./test/harness";
@@ -418,23 +419,12 @@ describe("tags and combinations", () => {
 	});
 });
 
-// Another tab's save of the same name, written by a trigger just before this
-// request's own write, after its duplicate check has passed.
-const otherTabWrites = (h: Harness, when: "INSERT" | "UPDATE", name: string) =>
-	h.addTrigger(
-		`CREATE TRIGGER other_tab BEFORE ${when} ON tag WHEN NEW.name = '${name}'
-		BEGIN
-			INSERT INTO tag (id, user_id, name, created_at)
-			VALUES ('other-tab', NEW.user_id, lower(NEW.name), 0);
-		END`,
-	);
-
 describe("a name another tab saves at the same time", () => {
 	test("answers duplicate when another tab adds the name first", async () => {
 		// Given: alice signed in; another tab stores "work" between this add's
 		// check and its write
 		const { h, headers } = await withAccount();
-		otherTabWrites(h, "INSERT", "Work");
+		otherTabWrites(h, "tag", "INSERT", "Work");
 		// When
 		const res = await addTag(h, headers, "Work");
 		// Then
@@ -449,7 +439,7 @@ describe("a name another tab saves at the same time", () => {
 		// rename's check and its write
 		const { h, headers } = await withAccount();
 		const work = await added(h, headers, "Work");
-		otherTabWrites(h, "UPDATE", "Office");
+		otherTabWrites(h, "tag", "UPDATE", "Office");
 		// When
 		const res = await send(h, headers, "PUT", `/api/tags/${work}`, {
 			id: work,

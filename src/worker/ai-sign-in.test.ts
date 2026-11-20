@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
-import type { SQLiteTable } from "drizzle-orm/sqlite-core";
 import { schema } from "./db";
 import {
 	AUTHORIZE,
 	connectAiApp,
 	cookie,
+	count,
 	finishGoogleSignIn,
 	type Harness,
 	makeHarness,
@@ -22,9 +22,6 @@ const withClient = (clientId: string) =>
 		"client_id=https%3A%2F%2Fclient.example%2Fmeta.json",
 		`client_id=${encodeURIComponent(clientId)}`,
 	);
-
-const count = async (h: Harness, table: SQLiteTable) =>
-	(await h.rows(table)).length;
 
 const payload = (jwt: string) =>
 	JSON.parse(Buffer.from(jwt.split(".")[1] ?? "", "base64url").toString()) as {

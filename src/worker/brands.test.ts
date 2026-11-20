@@ -4,6 +4,7 @@ import {
 	BOB,
 	colourIds,
 	type Harness,
+	otherTabWrites,
 	postBrand,
 	postBrands,
 	send,
@@ -153,23 +154,12 @@ describe("POST /api/brands", () => {
 	});
 });
 
-// Another tab's save of the same name, written by a trigger just before this
-// request's own write, after its duplicate check has passed.
-const otherTabWrites = (h: Harness, when: "INSERT" | "UPDATE", name: string) =>
-	h.addTrigger(
-		`CREATE TRIGGER other_tab BEFORE ${when} ON brand WHEN NEW.name = '${name}'
-		BEGIN
-			INSERT INTO brand (id, user_id, name, created_at)
-			VALUES ('other-tab', NEW.user_id, lower(NEW.name), 0);
-		END`,
-	);
-
 describe("two writes at the same time", () => {
 	test("answers duplicate when another tab adds the name first", async () => {
 		// Given: alice with no brands; another tab stores "zara" between this
 		// add's check and its write
 		const { h, headers } = await withAccount();
-		otherTabWrites(h, "INSERT", "Zara");
+		otherTabWrites(h, "brand", "INSERT", "Zara");
 		// When
 		const res = await post(h, headers, "Zara");
 		// Then
@@ -285,7 +275,7 @@ describe("PUT and DELETE /api/brands/:id", () => {
 		// rename's check and its write
 		const { h, headers } = await withAccount();
 		const cos = await postBrand(h, headers, "COS");
-		otherTabWrites(h, "UPDATE", "Zara");
+		otherTabWrites(h, "brand", "UPDATE", "Zara");
 		// When
 		const res = await putBrand(h, headers, cos, "Zara");
 		// Then

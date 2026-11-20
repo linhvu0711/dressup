@@ -1,19 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import type { SQLiteTable } from "drizzle-orm/sqlite-core";
 import { schema } from "./db";
 import {
 	BOB,
 	cookie,
-	type Harness,
+	count,
 	INITIALIZE,
 	post,
 	send,
 	TEST_APP_ID,
 	withAiApp,
 } from "./test/harness";
-
-const count = async (h: Harness, table: SQLiteTable) =>
-	(await h.rows(table)).length;
 
 describe("/api/ai-apps", () => {
 	// Alice connected the test app on 2026-11-14 at 12:00 UTC; its allow row

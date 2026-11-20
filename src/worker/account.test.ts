@@ -1,20 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import {
-	finishGoogleSignIn,
+	googleSignIn,
 	googleUser,
 	type Harness,
 	type Jar,
 	makeHarness,
 	send,
-	startGoogleSignIn,
 	store,
 	stubOutside,
 	uploadPicture,
 	withAiSession,
 } from "./test/harness";
-
-const googleSignIn = async (h: Harness): Promise<Jar> =>
-	(await finishGoogleSignIn(h, await startGoogleSignIn(h))).jar;
 
 const deleteAccount = (h: Harness, jar: Jar) =>
 	send(h, jar, "DELETE", "/api/account");
@@ -99,7 +95,7 @@ describe("DELETE /api/account", () => {
 	async function aliceWithRows() {
 		const h = await makeHarness();
 		stubOutside();
-		const jar = await googleSignIn(h);
+		const jar = (await googleSignIn(h)).jar;
 		const { body } = await me(h, jar);
 		const aliceId = (body as { id: string }).id;
 		await fillAccount(h, jar);
@@ -148,7 +144,7 @@ describe("DELETE /api/account", () => {
 		// Given: alice and bob signed in through Google, each with rows
 		const { h, jar: alice } = await aliceWithRows();
 		stubOutside({ google: googleUser("bob") });
-		const bob = await googleSignIn(h);
+		const bob = (await googleSignIn(h)).jar;
 		const bobId = ((await me(h, bob)).body as { id: string }).id;
 		await fillAccount(
 			h,
@@ -219,12 +215,12 @@ describe("DELETE /api/account", () => {
 		// Given: alice's first sign-in, then rows, then the delete
 		const h = await makeHarness();
 		stubOutside();
-		const first = await googleSignIn(h);
+		const first = (await googleSignIn(h)).jar;
 		const firstId = ((await me(h, first)).body as { id: string }).id;
 		await fillAccount(h, first);
 		expect((await deleteAccount(h, first)).status).toBe(204);
 		// When
-		const again = await googleSignIn(h);
+		const again = (await googleSignIn(h)).jar;
 		// Then
 		const now = (await me(h, again)).body as { id: string; email: string };
 		expect({

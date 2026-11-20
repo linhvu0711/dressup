@@ -310,7 +310,7 @@ describe("duplicate", () => {
 });
 
 describe("combination limit", () => {
-	const count = async (h: Harness, headers: Headers) =>
+	const listed = async (h: Harness, headers: Headers) =>
 		(await list(h, headers)).length;
 
 	test("refuses combination number 301", async () => {
@@ -323,7 +323,7 @@ describe("combination limit", () => {
 		expect({
 			status: res.status,
 			body: await res.json(),
-			count: await count(h, headers),
+			count: await listed(h, headers),
 		}).toEqual({
 			status: 409,
 			body: { error: "combination_limit" },
@@ -338,7 +338,7 @@ describe("combination limit", () => {
 		// When
 		const res = await post(h, headers, three(ids));
 		// Then
-		expect({ status: res.status, count: await count(h, headers) }).toEqual({
+		expect({ status: res.status, count: await listed(h, headers) }).toEqual({
 			status: 201,
 			count: 300,
 		});
@@ -356,7 +356,7 @@ describe("combination limit", () => {
 		]);
 		// Then
 		expect({
-			count: await count(h, headers),
+			count: await listed(h, headers),
 			oks: results.map((r) => r.ok).sort(),
 			refused: results.flatMap((r) => (r.ok ? [] : [r.error as unknown])),
 		}).toEqual({
