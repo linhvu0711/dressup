@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite";
 import { readdirSync, readFileSync } from "node:fs";
 import { betterAuth } from "better-auth";
 import { testUtils } from "better-auth/plugins";
-import { eq, sql } from "drizzle-orm";
+import { eq, getTableName, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 import { createApp } from "../app";
@@ -113,7 +113,9 @@ export async function makeHarness(options: { through?: string } = {}) {
 		userId?: string,
 	) {
 		const query = db.select().from(table);
-		if (userId === undefined || !table.userId) return query;
+		if (userId === undefined) return query;
+		if (!table.userId)
+			throw new Error(`rows: ${getTableName(table)} has no user column`);
 		return query.where(eq(table.userId, userId));
 	}
 	const tables = () =>
