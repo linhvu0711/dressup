@@ -9,7 +9,7 @@
 		"cf-typegen": "wrangler types",
 		"check": "biome check . && tsc -b",
 		"prepare": "sh scripts/setup-git-hooks.sh",
-		"db:generate": "drizzle-kit generate",
+		"db:generate": "bun scripts/db-generate.ts",
 		"db:migrate:local": "wrangler d1 migrations apply dressup --local",
 		"deploy": "bun run build && wrangler d1 migrations apply dressup --remote && wrangler deploy",
 		"dev": "vite",
