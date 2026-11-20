@@ -1,6 +1,6 @@
 import { cn } from "cn";
 import { ToggleGroup } from "radix-ui";
-import { Button } from "@/components/ui/button";
+import { PartError } from "@/components/ui/part-error";
 import { PLACEHOLDER } from "@/components/ui/placeholder";
 import { useColours } from "./api";
 import type { ColourId } from "./colour";
@@ -30,12 +30,9 @@ export function ColourSwatches(picks: Picks) {
 		);
 	if (colours.isError)
 		return (
-			<div className="flex items-center gap-3">
-				<p role="alert" className="text-[13px] text-destructive">
-					Could not load your colours
-				</p>
-				<Button onClick={() => void colours.refetch()}>Retry</Button>
-			</div>
+			<PartError onRetry={() => void colours.refetch()}>
+				Could not load your colours
+			</PartError>
 		);
 	const picked = (id: ColourId) =>
 		"values" in picks ? picks.values.includes(id) : id === picks.value;

@@ -6,7 +6,6 @@ import { useCloset } from "@/closet/api";
 import { useCombinations } from "@/combinations/api";
 import { CombinationCard } from "@/combinations/CombinationCard";
 import { CombinationFilterSheet } from "@/combinations/CombinationFilterSheet";
-import { CombinationsFailed } from "@/combinations/CombinationsFailed";
 import { CombinationView } from "@/combinations/CombinationView";
 import type { Combination } from "@/combinations/combination";
 import { DeleteCombinationDialog } from "@/combinations/DeleteCombinationDialog";
@@ -24,6 +23,7 @@ import { useWallAddress, wallAddress } from "@/combinations/wall-address";
 import { Button } from "@/components/ui/button";
 import { ActiveFilters, FilterButton } from "@/components/ui/filter";
 import { Notice } from "@/components/ui/notice";
+import { PageError } from "@/components/ui/page-error";
 import { PLACEHOLDER, PULSE } from "@/components/ui/placeholder";
 import { useAddressFilter } from "@/components/ui/use-address-filter";
 import { countText } from "@/count-text";
@@ -141,14 +141,18 @@ export function CombinationsPage() {
 		);
 	} else if (combinations.isError) {
 		// Checked before the data: a failed refetch keeps the old list.
-		wall = <CombinationsFailed onRetry={() => void combinations.refetch()} />;
+		wall = (
+			<PageError
+				title="Could not load your combinations"
+				onRetry={() => void combinations.refetch()}
+			/>
+		);
 	} else if (waitsForCloset && closet.isError && !closet.data) {
 		wall = (
-			<Notice title="Could not load your closet">
-				<Button className="mt-2" onClick={() => void closet.refetch()}>
-					Retry
-				</Button>
-			</Notice>
+			<PageError
+				title="Could not load your closet"
+				onRetry={() => void closet.refetch()}
+			/>
 		);
 	} else if (combinations.data.length === 0) {
 		wall = (

@@ -910,6 +910,28 @@ test("keeps the saved pieces in the builder when the colours do not load", async
 	await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
 });
 
+test("shows Could not load your colours under Colour in the builder and loads on Retry", async ({
+	page,
+}) => {
+	// Given: both projects, THREE then TWO saved; THREE open; the first
+	// colours load answers 500, the next ones go through
+	await threeOpenBesideTwo(page);
+	let failed = false;
+	await page.route("**/api/colours", (route) => {
+		if (route.request().method() !== "GET" || failed) return route.fallback();
+		failed = true;
+		return route.fulfill({ status: 500 });
+	});
+	// When
+	await changeButton(page).click();
+	// Then
+	await expect(page.getByRole("alert")).toHaveText(
+		"Could not load your colours",
+	);
+	await page.getByRole("button", { name: "Retry" }).click();
+	await expect(page.getByRole("radiogroup", { name: "Colour" })).toBeVisible();
+});
+
 test("refuses a change into a combination the account has", async ({
 	page,
 }) => {

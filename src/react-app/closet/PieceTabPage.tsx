@@ -5,6 +5,7 @@ import type { Hex } from "@/colour/hex";
 import { Button } from "@/components/ui/button";
 import { ActiveFilters, FilterButton } from "@/components/ui/filter";
 import { Notice } from "@/components/ui/notice";
+import { PageError } from "@/components/ui/page-error";
 import { PLACEHOLDER, PULSE } from "@/components/ui/placeholder";
 import { useAddressFilter } from "@/components/ui/use-address-filter";
 import { countText } from "@/count-text";
@@ -105,11 +106,7 @@ export function PieceTabPage<D, E extends TilePiece>({
 	} else if (query.isError) {
 		// Checked before the data: a failed refetch keeps the old list.
 		wall = (
-			<Notice title={failedTitle}>
-				<Button className="mt-2" onClick={() => void query.refetch()}>
-					Retry
-				</Button>
-			</Notice>
+			<PageError title={failedTitle} onRetry={() => void query.refetch()} />
 		);
 	} else if (query.data.length === 0) {
 		wall = (

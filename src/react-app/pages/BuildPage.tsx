@@ -4,12 +4,12 @@ import { type ReactNode, useState } from "react";
 import { Link, Navigate, useParams } from "react-router";
 import { useCombinations } from "@/combinations/api";
 import { CombinationFigure } from "@/combinations/CombinationFigure";
-import { CombinationsFailed } from "@/combinations/CombinationsFailed";
 import type { Combination } from "@/combinations/combination";
 import { SaveCombinationDialog } from "@/combinations/SaveCombinationDialog";
 import { useWallAddress } from "@/combinations/wall-address";
 import { Button } from "@/components/ui/button";
 import { CHIP } from "@/components/ui/chip";
+import { PageError } from "@/components/ui/page-error";
 import { LABEL } from "@/components/ui/sheet-form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -46,7 +46,10 @@ export function BuildPage() {
 	if (combinations.isError)
 		return (
 			<ChangeShell id={combinationId}>
-				<CombinationsFailed onRetry={() => void combinations.refetch()} />
+				<PageError
+					title="Could not load your combinations"
+					onRetry={() => void combinations.refetch()}
+				/>
 			</ChangeShell>
 		);
 	if (combinations.isPending)

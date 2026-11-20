@@ -2,8 +2,8 @@ import type { UseQueryResult } from "@tanstack/react-query";
 import { cn } from "cn";
 import { ChevronRight } from "lucide-react";
 import { type ReactNode, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
+import { PageError } from "@/components/ui/page-error";
 import { PLACEHOLDER } from "@/components/ui/placeholder";
 import { LIST } from "./list";
 
@@ -87,11 +87,7 @@ export function NamesPart<T extends Named>({
 				</ul>
 			) : query.isError ? (
 				// Checked before the data: a failed refetch keeps the old labels.
-				<Notice title={words.failed}>
-					<Button className="mt-2" onClick={() => void query.refetch()}>
-						Retry
-					</Button>
-				</Notice>
+				<PageError title={words.failed} onRetry={() => void query.refetch()} />
 			) : query.data.length === 0 ? (
 				<Notice title={words.empty}>
 					<p className="max-w-[30ch] text-muted-foreground">

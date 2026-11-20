@@ -2,8 +2,8 @@ import type { UseQueryResult } from "@tanstack/react-query";
 import { cn } from "cn";
 import { ChevronRight } from "lucide-react";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
+import { PageError } from "@/components/ui/page-error";
 import { PLACEHOLDER } from "@/components/ui/placeholder";
 import { ColourSheet } from "./ColourSheet";
 import type { Colour, ListedColour } from "./colour";
@@ -86,11 +86,10 @@ export function ColoursPart({
 				</ul>
 			) : colours.isError ? (
 				// Checked before the data: a failed refetch keeps the old colours.
-				<Notice title="Could not load your colours">
-					<Button className="mt-2" onClick={() => void colours.refetch()}>
-						Retry
-					</Button>
-				</Notice>
+				<PageError
+					title="Could not load your colours"
+					onRetry={() => void colours.refetch()}
+				/>
 			) : colours.data.length === 0 ? (
 				<Notice title="No colours yet">
 					<p className="max-w-[30ch] text-muted-foreground">

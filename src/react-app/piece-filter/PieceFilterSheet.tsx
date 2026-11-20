@@ -2,9 +2,9 @@ import { cn } from "cn";
 import { Check, ChevronRight } from "lucide-react";
 import { ToggleGroup } from "radix-ui";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { CHIP } from "@/components/ui/chip";
 import { FilterSheet } from "@/components/ui/filter";
+import { PartError } from "@/components/ui/part-error";
 import { PLACEHOLDER } from "@/components/ui/placeholder";
 import { LABEL, LIST_ROW, ROW } from "@/components/ui/sheet-form";
 import {
@@ -177,12 +177,9 @@ function BrandChips({
 		);
 	if (brands.isError)
 		return (
-			<div className="flex items-center gap-3">
-				<p role="alert" className="text-[13px] text-destructive">
-					Could not load your brands
-				</p>
-				<Button onClick={() => void brands.refetch()}>Retry</Button>
-			</div>
+			<PartError onRetry={() => void brands.refetch()}>
+				Could not load your brands
+			</PartError>
 		);
 	return (
 		<ToggleGroup.Root
