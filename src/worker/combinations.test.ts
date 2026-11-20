@@ -8,6 +8,7 @@ import {
 	BOB,
 	type Harness,
 	makeHarness,
+	send,
 	withAccount,
 } from "./test/harness";
 
@@ -22,26 +23,6 @@ type Listed = {
 		colour: { id: string; name: string; hex: string };
 	}[];
 };
-
-const send = (
-	{ app, env }: Harness,
-	headers: Headers,
-	method: string,
-	path: string,
-	body?: unknown,
-) =>
-	app.request(
-		path,
-		{
-			method,
-			headers: {
-				...Object.fromEntries(headers),
-				...(body === undefined ? {} : { "content-type": "application/json" }),
-			},
-			body: body === undefined ? undefined : JSON.stringify(body),
-		},
-		env,
-	);
 
 // The account's colour ids by name, from its first list.
 const colourIds = async (h: Harness, headers: Headers): Promise<Ids> => {

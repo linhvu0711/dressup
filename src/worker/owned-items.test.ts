@@ -7,9 +7,11 @@ import {
 } from "./owned-item-store";
 import {
 	ALICE,
+	answer,
 	BOB,
 	type Harness,
 	makeHarness,
+	send,
 	withAccount,
 } from "./test/harness";
 
@@ -23,26 +25,6 @@ type Listed = {
 	quantity: number;
 	pictureIds: string[];
 };
-
-const send = (
-	{ app, env }: Harness,
-	headers: Headers,
-	method: string,
-	path: string,
-	body?: unknown,
-) =>
-	app.request(
-		path,
-		{
-			method,
-			headers: {
-				...Object.fromEntries(headers),
-				...(body === undefined ? {} : { "content-type": "application/json" }),
-			},
-			body: body === undefined ? undefined : JSON.stringify(body),
-		},
-		env,
-	);
 
 // The account's colour ids by name, from its first list.
 const colourIds = async (h: Harness, headers: Headers): Promise<Ids> => {
@@ -92,11 +74,6 @@ async function alice() {
 	const ids = await colourIds(h, headers);
 	return { h, headers, ids };
 }
-
-const answer = async (res: Response) => ({
-	status: res.status,
-	body: await res.json(),
-});
 
 describe("POST /api/owned-items", () => {
 	test("adds an owned item and lists it", async () => {

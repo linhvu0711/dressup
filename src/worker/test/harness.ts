@@ -531,23 +531,38 @@ export async function connectAiApp(
 	return { jar, consent, token };
 }
 
+// A request as a signed-in account (its headers) or as a browser (its
+// cookies). Bytes go as an upload; any other body goes as JSON.
 export const send = (
 	h: Harness,
-	jar: Jar,
+	auth: Headers | Record<string, string> | Jar,
+	method: string,
 	path: string,
-	init: RequestInit = {},
-) =>
-	h.app.request(
+	body?: unknown,
+) => {
+	const headers = new Headers(
+		auth instanceof Map ? (auth.size ? { cookie: cookie(auth) } : {}) : auth,
+	);
+	if (body instanceof Uint8Array) headers.set("content-type", "image/jpeg");
+	else if (body !== undefined) headers.set("content-type", "application/json");
+	return h.app.request(
 		path,
 		{
-			...init,
-			headers: {
-				...(init.headers as Record<string, string>),
-				...(jar.size ? { cookie: cookie(jar) } : {}),
-			},
+			method,
+			headers,
+			body:
+				body === undefined || body instanceof Uint8Array
+					? (body as BodyInit | undefined)
+					: JSON.stringify(body),
 		},
 		h.env,
 	);
+};
+
+export const answer = async (res: Response) => ({
+	status: res.status,
+	body: await res.json(),
+});
 
 export const INITIALIZE = {
 	jsonrpc: "2.0",
@@ -662,7 +677,7 @@ export async function aiSession(h: Harness) {
 }
 
 const accountId = async (h: Harness, jar: Jar) =>
-	((await (await send(h, jar, "/api/me")).json()) as { id: string }).id;
+	((await (await send(h, jar, "GET", "/api/me")).json()) as { id: string }).id;
 
 // Alice, through Google, with the test app connected and allowed: its pass in
 // bearer, her browser in jar.

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import { schema } from "./db";
 import {
 	type aiSession,
+	answer,
 	BOB,
 	type Harness,
 	withAiSession,
@@ -39,11 +40,6 @@ const addressOf = async (ai: Session) => {
 // An AI app sends the bytes as they are, with no sign-in.
 const postTo = (h: Harness, address: string, body: Uint8Array = JPEG) =>
 	h.app.request(address, { method: "POST", body }, h.env);
-
-const answer = async (response: Response) => ({
-	status: response.status,
-	body: await response.json(),
-});
 
 const uploadByAddress = async (h: Harness, address: string, body = JPEG) => {
 	const res = await postTo(h, address, body);

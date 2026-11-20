@@ -1,7 +1,14 @@
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import { picture, pictureUploadMonth } from "./db/picture-schema";
 import { addPicture } from "./picture-store";
-import { BOB, type Harness, makeHarness, withAccount } from "./test/harness";
+import {
+	answer,
+	BOB,
+	type Harness,
+	makeHarness,
+	send,
+	withAccount,
+} from "./test/harness";
 
 const bytes = (head: number[], length: number) => {
 	const body = new Uint8Array(length).fill(0x11);
@@ -19,27 +26,6 @@ const PDF = bytes([...new TextEncoder().encode("%PDF-1.7")], 100);
 
 const NO_SUCH_ID = "5b1f2c3d-0000-4000-8000-000000000000";
 
-// A body goes as it is: an upload is bytes, not JSON.
-const send = (
-	{ app, env }: Harness,
-	headers: Headers,
-	method: string,
-	path: string,
-	body?: Uint8Array,
-) =>
-	app.request(
-		path,
-		{
-			method,
-			headers: {
-				...Object.fromEntries(headers),
-				...(body === undefined ? {} : { "content-type": "image/jpeg" }),
-			},
-			body,
-		},
-		env,
-	);
-
 const upload = (h: Harness, headers: Headers, body: Uint8Array = JPEG) =>
 	send(h, headers, "POST", "/api/pictures", body);
 
@@ -49,11 +35,6 @@ const uploadedId = async (h: Harness, headers: Headers, body = JPEG) =>
 			picture: { id: string };
 		}
 	).picture.id;
-
-const answer = async (response: Response) => ({
-	status: response.status,
-	body: await response.json(),
-});
 
 describe("upload and load", () => {
 	test("uploads a JPEG and loads it back", async () => {
@@ -416,70 +397,49 @@ describe("limits and the storage stop", () => {
 // An owned item with these pictures: a Navy long button-up, no brand.
 async function addItem(h: Harness, headers: Headers, pictureIds: string[]) {
 	const { colours } = (await (
-		await h.app.request("/api/colours", { headers }, h.env)
+		await send(h, headers, "GET", "/api/colours")
 	).json()) as { colours: { id: string; name: string }[] };
 	const navy = colours.find((c) => c.name === "Navy")?.id;
 	const id = crypto.randomUUID();
-	await h.app.request(
-		"/api/owned-items",
-		{
-			method: "POST",
-			headers: {
-				...Object.fromEntries(headers),
-				"content-type": "application/json",
-			},
-			body: JSON.stringify({
-				id,
-				typeId: "shirt_l",
-				colourId: navy,
-				brandId: null,
-				quantity: 1,
-				pictureIds,
-			}),
-		},
-		h.env,
-	);
+	await send(h, headers, "POST", "/api/owned-items", {
+		id,
+		typeId: "shirt_l",
+		colourId: navy,
+		brandId: null,
+		quantity: 1,
+		pictureIds,
+	});
 	return id;
 }
 
 // A Navy wool jacket wish with one shop link for each list of pictures.
 async function addLinks(h: Harness, headers: Headers, lists: string[][]) {
 	const { colours } = (await (
-		await h.app.request("/api/colours", { headers }, h.env)
+		await send(h, headers, "GET", "/api/colours")
 	).json()) as { colours: { id: string; name: string }[] };
 	const navy = colours.find((c) => c.name === "Navy")?.id;
-	const json = {
-		...Object.fromEntries(headers),
-		"content-type": "application/json",
-	};
 	const wishId = crypto.randomUUID();
-	await h.app.request(
-		"/api/wishes",
-		{
-			method: "POST",
-			headers: json,
-			body: JSON.stringify({ id: wishId, typeId: "wool", colourId: navy }),
-		},
-		h.env,
-	);
+	await send(h, headers, "POST", "/api/wishes", {
+		id: wishId,
+		typeId: "wool",
+		colourId: navy,
+	});
 	const linkIds: string[] = [];
 	for (const pictureIds of lists) {
 		const id = crypto.randomUUID();
-		const res = await h.app.request(
+		const res = await send(
+			h,
+			headers,
+			"POST",
 			`/api/wishes/${wishId}/shop-links`,
 			{
-				method: "POST",
-				headers: json,
-				body: JSON.stringify({
-					id,
-					url: "https://cos.com/jacket",
-					brandId: null,
-					name: "Wool jacket",
-					price: null,
-					pictureIds,
-				}),
+				id,
+				url: "https://cos.com/jacket",
+				brandId: null,
+				name: "Wool jacket",
+				price: null,
+				pictureIds,
 			},
-			h.env,
 		);
 		expect(res.status).toBe(201);
 		linkIds.push(id);
@@ -583,18 +543,11 @@ describe("deletes and the stored bytes", () => {
 				rows: (await h.rows(picture)).reduce((sum, row) => sum + row.bytes, 0),
 			});
 		// When
-		await h.app.request(
-			`/api/owned-items/${item}`,
-			{
-				method: "PUT",
-				headers: {
-					...Object.fromEntries(headers),
-					"content-type": "application/json",
-				},
-				body: JSON.stringify({ brandId: null, quantity: 1, pictureIds: [a] }),
-			},
-			h.env,
-		);
+		await send(h, headers, "PUT", `/api/owned-items/${item}`, {
+			brandId: null,
+			quantity: 1,
+			pictureIds: [a],
+		});
 		await record();
 		await send(h, headers, "DELETE", `/api/pictures/${c}`);
 		await record();

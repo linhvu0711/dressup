@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
 	ALICE,
+	answer,
 	BOB,
 	type Harness,
 	makeHarness,
+	send,
 	withAccount,
 } from "./test/harness";
 import { addShopLink, addWish } from "./wish-store";
@@ -25,26 +27,6 @@ type Listed = {
 	colour: { id: string; name: string; hex: string };
 	shopLinks: Link[];
 };
-
-const send = (
-	{ app, env }: Harness,
-	headers: Headers,
-	method: string,
-	path: string,
-	body?: unknown,
-) =>
-	app.request(
-		path,
-		{
-			method,
-			headers: {
-				...Object.fromEntries(headers),
-				...(body === undefined ? {} : { "content-type": "application/json" }),
-			},
-			body: body === undefined ? undefined : JSON.stringify(body),
-		},
-		env,
-	);
 
 // The account's colour ids by name, from its first list.
 const colourIds = async (h: Harness, headers: Headers): Promise<Ids> => {
@@ -108,11 +90,6 @@ async function alice() {
 	const ids = await colourIds(h, headers);
 	return { h, headers, ids };
 }
-
-const answer = async (res: Response) => ({
-	status: res.status,
-	body: await res.json(),
-});
 
 // A small JPEG uploaded as a draft of the account, by id.
 async function uploaded(h: Harness, headers: Headers): Promise<string> {

@@ -1,27 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { BOB, type Harness, withAccount } from "./test/harness";
+import { BOB, type Harness, send, withAccount } from "./test/harness";
 
 type Tag = { id: string; name: string; combinations: number };
-
-const send = (
-	{ app, env }: Harness,
-	headers: Headers,
-	method: string,
-	path: string,
-	body?: unknown,
-) =>
-	app.request(
-		path,
-		{
-			method,
-			headers: {
-				...Object.fromEntries(headers),
-				...(body === undefined ? {} : { "content-type": "application/json" }),
-			},
-			body: body === undefined ? undefined : JSON.stringify(body),
-		},
-		env,
-	);
 
 const addTag = (h: Harness, headers: Headers, name: string) =>
 	send(h, headers, "POST", "/api/tags", { name });

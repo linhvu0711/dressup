@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { buyShopLink } from "./owned-item-store";
-import { ALICE, BOB, type Harness, makeHarness } from "./test/harness";
+import {
+	ALICE,
+	answer,
+	BOB,
+	type Harness,
+	makeHarness,
+	send,
+} from "./test/harness";
 
 type Ids = Record<string, string>;
 
@@ -17,31 +24,6 @@ type Wish = {
 	id: string;
 	shopLinks: { id: string; pictureIds: string[] }[];
 };
-
-const send = (
-	{ app, env }: Harness,
-	headers: Headers,
-	method: string,
-	path: string,
-	body?: unknown,
-) =>
-	app.request(
-		path,
-		{
-			method,
-			headers: {
-				...Object.fromEntries(headers),
-				...(body === undefined ? {} : { "content-type": "application/json" }),
-			},
-			body: body === undefined ? undefined : JSON.stringify(body),
-		},
-		env,
-	);
-
-const answer = async (res: Response) => ({
-	status: res.status,
-	body: await res.json(),
-});
 
 const colourIds = async (h: Harness, headers: Headers): Promise<Ids> => {
 	const { colours } = (await (

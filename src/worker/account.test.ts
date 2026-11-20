@@ -15,18 +15,11 @@ import {
 const googleSignIn = async (h: Harness): Promise<Jar> =>
 	(await finishGoogleSignIn(h, await startGoogleSignIn(h))).jar;
 
-const sendJson = (h: Harness, jar: Jar, path: string, body: unknown) =>
-	send(h, jar, path, {
-		method: "POST",
-		headers: { "content-type": "application/json" },
-		body: JSON.stringify(body),
-	});
-
 const deleteAccount = (h: Harness, jar: Jar) =>
-	send(h, jar, "/api/account", { method: "DELETE" });
+	send(h, jar, "DELETE", "/api/account");
 
 const me = async (h: Harness, jar: Jar) => {
-	const res = await send(h, jar, "/api/me");
+	const res = await send(h, jar, "GET", "/api/me");
 	return { status: res.status, body: await res.json() };
 };
 
@@ -35,13 +28,9 @@ JPEG.set([0xff, 0xd8, 0xff, 0xe0]);
 
 const uploadPicture = async (h: Harness, jar: Jar) =>
 	(
-		(await (
-			await send(h, jar, "/api/pictures", {
-				method: "POST",
-				headers: { "content-type": "image/jpeg" },
-				body: JPEG,
-			})
-		).json()) as { picture: { id: string } }
+		(await (await send(h, jar, "POST", "/api/pictures", JPEG)).json()) as {
+			picture: { id: string };
+		}
 	).picture.id;
 
 // The account's colours, brands, mannequin, one tag, one combination with
@@ -55,24 +44,22 @@ async function fillAccount(
 	wishId = "66666666-6666-4666-8666-666666666666",
 	shopLinkId = "77777777-7777-4777-8777-777777777777",
 ) {
-	const listed = await send(h, jar, "/api/colours");
+	const listed = await send(h, jar, "GET", "/api/colours");
 	expect(listed.status).toBe(200);
 	const { colours } = (await listed.json()) as {
 		colours: { id: string; name: string }[];
 	};
 	const idOf = (name: string) => colours.find((c) => c.name === name)?.id;
-	const skin = await send(h, jar, "/api/mannequin/skin", {
-		method: "PUT",
-		headers: { "content-type": "application/json" },
-		body: JSON.stringify({ hex: "#8D5524" }),
+	const skin = await send(h, jar, "PUT", "/api/mannequin/skin", {
+		hex: "#8D5524",
 	});
 	expect(skin.status).toBe(200);
 	const brand = { name: "Uniqlo" };
-	const brandAdded = await sendJson(h, jar, "/api/brands", brand);
+	const brandAdded = await send(h, jar, "POST", "/api/brands", brand);
 	expect(brandAdded.status).toBe(201);
 	const uniqlo = ((await brandAdded.json()) as { brand: { id: string } }).brand
 		.id;
-	const added = await sendJson(h, jar, "/api/tags", { name: "Work" });
+	const added = await send(h, jar, "POST", "/api/tags", { name: "Work" });
 	const { tag } = (await added.json()) as { tag: { id: string } };
 	const combination = {
 		id: combinationId,
@@ -83,7 +70,7 @@ async function fillAccount(
 		tags: [tag.id],
 	};
 	expect(
-		(await sendJson(h, jar, "/api/combinations", combination)).status,
+		(await send(h, jar, "POST", "/api/combinations", combination)).status,
 	).toBe(201);
 	const saved = await uploadPicture(h, jar);
 	await uploadPicture(h, jar);
@@ -95,11 +82,11 @@ async function fillAccount(
 		quantity: 1,
 		pictureIds: [saved],
 	};
-	expect((await sendJson(h, jar, "/api/owned-items", ownedItem)).status).toBe(
-		201,
-	);
+	expect(
+		(await send(h, jar, "POST", "/api/owned-items", ownedItem)).status,
+	).toBe(201);
 	const wish = { id: wishId, typeId: "casual_p", colourId: idOf("Navy") };
-	expect((await sendJson(h, jar, "/api/wishes", wish)).status).toBe(201);
+	expect((await send(h, jar, "POST", "/api/wishes", wish)).status).toBe(201);
 	const shopLink = {
 		id: shopLinkId,
 		url: "https://www.uniqlo.com/vn/en/casual-pants",
@@ -108,7 +95,7 @@ async function fillAccount(
 		price: 588000,
 	};
 	expect(
-		(await sendJson(h, jar, `/api/wishes/${wishId}/shop-links`, shopLink))
+		(await send(h, jar, "POST", `/api/wishes/${wishId}/shop-links`, shopLink))
 			.status,
 	).toBe(201);
 }
@@ -252,7 +239,7 @@ describe("DELETE /api/account", () => {
 		expect({
 			email: now.email,
 			newId: now.id !== firstId,
-			mannequin: await (await send(h, again, "/api/mannequin")).json(),
+			mannequin: await (await send(h, again, "GET", "/api/mannequin")).json(),
 		}).toEqual({
 			email: "alice@example.com",
 			newId: true,

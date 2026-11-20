@@ -2,29 +2,15 @@ import { describe, expect, test } from "bun:test";
 import { addColour, listColours } from "./colour-store";
 import { saveCombination } from "./combination-store";
 import { schema } from "./db";
-import { BOB, type Harness, makeHarness, withAccount } from "./test/harness";
+import {
+	BOB,
+	type Harness,
+	makeHarness,
+	send,
+	withAccount,
+} from "./test/harness";
 
 type Colour = { id: string; name: string; hex: string; inUse?: boolean };
-
-const send = (
-	{ app, env }: Harness,
-	headers: Headers,
-	method: string,
-	path: string,
-	body?: unknown,
-) =>
-	app.request(
-		path,
-		{
-			method,
-			headers: {
-				...Object.fromEntries(headers),
-				...(body === undefined ? {} : { "content-type": "application/json" }),
-			},
-			body: body === undefined ? undefined : JSON.stringify(body),
-		},
-		env,
-	);
 
 const coloursOf = async (h: Harness, headers: Headers) =>
 	(
