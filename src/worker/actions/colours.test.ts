@@ -400,6 +400,45 @@ describe("changing a name", () => {
 	});
 });
 
+describe("the same-name rule", () => {
+	test("refuses écru when the account has Écru", async () => {
+		// Given: alice with Écru
+		const { alice } = await withAlice();
+		const ecru = await colourActions.add.run(alice, {
+			name: "Écru",
+			hex: "#E8DCC4",
+		});
+		if (!ecru.ok) throw new Error("Écru was not added");
+		// When
+		const added = await colourActions.add.run(alice, {
+			name: "écru",
+			hex: "#2A7F7F",
+		});
+		// Then
+		expect(added).toEqual({ ok: false, error: DUPLICATE_ROW("écru") });
+	});
+
+	test("takes Do beside Đỏ", async () => {
+		// Given: alice with Đỏ
+		const { alice } = await withAlice();
+		const red = await colourActions.add.run(alice, {
+			name: "Đỏ",
+			hex: "#C8102E",
+		});
+		if (!red.ok) throw new Error("Đỏ was not added");
+		// When
+		const added = await colourActions.add.run(alice, {
+			name: "Do",
+			hex: "#2A7F7F",
+		});
+		// Then
+		expect(added).toMatchObject({
+			ok: true,
+			value: { name: "Do", hex: "#2A7F7F" },
+		});
+	});
+});
+
 describe("deleting a colour", () => {
 	test("refuses to delete a colour an owned item uses", async () => {
 		// Given: alice with a Navy long button-up, no brand, in her closet
