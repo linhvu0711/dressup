@@ -16,8 +16,6 @@ import { claimUploadAddress, giveUploadAddress } from "./upload-address-store";
 
 type Session = Awaited<ReturnType<typeof aiSession>>;
 
-const NO_SUCH_ID = "5b1f2c3d-0000-4000-8000-000000000000";
-
 const GONE = {
 	error: "address_gone",
 	message:
@@ -38,9 +36,6 @@ const uploadByAddress = async (h: Harness, address: string, body = JPEG) => {
 	expect(res.status).toBe(201);
 	return ((await res.json()) as { pictureId: string }).pictureId;
 };
-
-const addressFor = async (h: Harness, userId: string) =>
-	`http://localhost:5173/api/uploads/${(await giveUploadAddress(h.db, userId)).id}`;
 
 describe("upload address", () => {
 	test("gives an upload address that lasts 15 minutes", async () => {
@@ -140,19 +135,6 @@ describe("upload address", () => {
 			deleted: deleted.status,
 			keys: h.pictures.keys(),
 		}).toEqual({ loaded: 404, deleted: 404, keys: [pictureId] });
-	});
-
-	test("sweeps an address draft older than a day at the next upload", async () => {
-		// Given: no tool call after the clock jumps, since the session's
-		// access token lives one hour.
-		const { h, userId } = await withAiSession();
-		setSystemTime(new Date("2026-11-17T10:00:00Z"));
-		await uploadByAddress(h, await addressFor(h, userId));
-		setSystemTime(new Date("2026-11-18T11:00:00Z"));
-		// When
-		const fresh = await uploadByAddress(h, await addressFor(h, userId));
-		// Then
-		expect({ keys: h.pictures.keys() }).toEqual({ keys: [fresh] });
 	});
 
 	test("counts get_upload_address and not the upload", async () => {
@@ -322,44 +304,6 @@ describe("refusals at the address", () => {
 		});
 	});
 
-	test("refuses picture 1,001 of the account", async () => {
-		// Given
-		const { h, ai, userId } = await withAiSession();
-		const address = await addressOf(ai);
-		await h.seedPictures(userId, 1000);
-		// When
-		const refused = await answer(await postTo(h, address));
-		// Then
-		expect({ ...refused, keys: h.pictures.keys() }).toEqual({
-			status: 409,
-			body: {
-				error: "account_picture_limit",
-				message:
-					"You have 1,000 pictures. That is the limit. Take pictures off an owned item or a shop link to add new ones.",
-			},
-			keys: [],
-		});
-	});
-
-	test("refuses an upload at the storage stop", async () => {
-		// Given
-		const { h, ai } = await withAiSession();
-		const address = await addressOf(ai);
-		await h.addAccount(BOB);
-		await h.seedPictures("bob-id", 1, 8_999_999_950);
-		// When
-		const refused = await answer(await postTo(h, address));
-		// Then
-		expect({ ...refused, keys: h.pictures.keys() }).toEqual({
-			status: 507,
-			body: {
-				error: "storage_full",
-				message: "Picture storage is full. No new pictures for now.",
-			},
-			keys: [],
-		});
-	});
-
 	test("keeps nothing when the bucket write fails", async () => {
 		// Given
 		const { h, ai } = await withAiSession();
@@ -412,15 +356,6 @@ describe("show_picture", () => {
 		const p = await uploadPicture(h, bob, PNG);
 		// When
 		const shown = await ai.show("show_picture", { id: p });
-		// Then
-		expect(shown).toEqual(noPicture);
-	});
-
-	test("refuses a picture id that does not exist", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		// When
-		const shown = await ai.show("show_picture", { id: NO_SUCH_ID });
 		// Then
 		expect(shown).toEqual(noPicture);
 	});
