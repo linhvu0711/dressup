@@ -1,24 +1,8 @@
-import { OWNED_ITEM_LIMIT, QUANTITY_MAX } from "@/closet/owned-item";
 import { ACCOUNT_PICTURE_LIMIT } from "@/pictures/picture";
-import { serverError } from "./actions/action";
-import type { BoughtError } from "./owned-item-store";
 import { UPLOAD_ADDRESS_AGE_MS } from "./upload-address-store";
 
 // Every refusal an AI app gets names the value it sent and what is allowed,
 // so the AI app can fix its call and try again.
-
-export function boughtRefusalText(error: BoughtError): string {
-	switch (error.code) {
-		case "not_found":
-			return "No shop link with this id.";
-		case "owned_item_limit":
-			return `You have ${OWNED_ITEM_LIMIT} items. That is the limit. Delete one to add a new one.`;
-		case "quantity_limit":
-			return `You have ${QUANTITY_MAX} of this item. That is the limit.`;
-		case "conflict":
-			return serverError;
-	}
-}
 
 export const tooManyActions = "Too many actions. Wait a minute and try again.";
 

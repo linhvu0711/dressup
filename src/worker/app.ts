@@ -30,6 +30,7 @@ import { mannequinPartSchema } from "@/mannequin/mannequin";
 import { PICTURE_BYTES_MAX, pictureIdSchema } from "@/pictures/picture";
 import { tagIdSchema } from "@/tags/tag";
 import type { ActionScope } from "./actions/action";
+import { boughtActions } from "./actions/bought";
 import { brandActions } from "./actions/brands";
 import { colourActions } from "./actions/colours";
 import { combinationActions } from "./actions/combinations";
@@ -58,7 +59,6 @@ import type { Db } from "./db";
 import { user } from "./db/auth-schema";
 import { loadMannequin, setMannequinColour } from "./mannequin-store";
 import { mcpRoute } from "./mcp";
-import { type BoughtError, buyShopLink } from "./owned-item-store";
 import {
 	addPicture,
 	deleteDraft,
@@ -112,19 +112,6 @@ type Refusal = {
 	status: ContentfulStatusCode;
 	body: ErrorAnswer;
 };
-
-function boughtRefusal(error: BoughtError): Refusal {
-	switch (error.code) {
-		case "not_found":
-			return { status: 404, body: { error: "not_found" } };
-		case "owned_item_limit":
-			return { status: 409, body: { error: "owned_item_limit" } };
-		case "quantity_limit":
-			return { status: 409, body: { error: "quantity_limit" } };
-		case "conflict":
-			return { status: 409, body: { error: "conflict", field: "id" } };
-	}
-}
 
 // An AI app reads the code and the model reads the sentence; every refusal
 // spends the address, so each sentence says to use a new one.
@@ -358,16 +345,10 @@ export function createApp(getDb: (env: Env) => Db) {
 	});
 
 	app.post("/shop-links/:id/bought", withAuth, requireUser, async (c) => {
-		const bought = await buyShopLink(
-			getDb(c.env),
-			c.env.PICTURES,
-			c.var.user.id,
-			c.req.param("id"),
-		);
-		if (!bought.ok) {
-			const { status, body: refused } = boughtRefusal(bought.error);
-			return c.json(refused, status);
-		}
+		const bought = await boughtActions.buy.run(scope(c), {
+			id: c.req.param("id"),
+		});
+		if (!bought.ok) return c.json(bought.error.body, bought.error.status);
 		const { ownedItem, created } = bought.value;
 		return c.json({ ownedItem } satisfies OwnedItemAnswer, created ? 201 : 200);
 	});

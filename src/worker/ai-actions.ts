@@ -19,6 +19,7 @@ import { COLOUR_LIMIT, COLOUR_NAME_MAX } from "@/labels/colour";
 import { TAG_NAME_MAX, type Tag } from "@/tags/tag";
 import { SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";
 import { type ActionScope, serverError } from "./actions/action";
+import { boughtActions } from "./actions/bought";
 import { brandActions } from "./actions/brands";
 import { colourActions } from "./actions/colours";
 import { combinationActions } from "./actions/combinations";
@@ -27,7 +28,6 @@ import { tagActions } from "./actions/tags";
 import { shopLinkActions, wishActions } from "./actions/wishes";
 import { countAiAction } from "./ai-action-store";
 import {
-	boughtRefusalText,
 	noBrands,
 	noColours,
 	noCombinations,
@@ -44,7 +44,7 @@ import {
 import { listBrands } from "./brand-store";
 import { listColours } from "./colour-store";
 import type { Db } from "./db";
-import { buyShopLink, listOwnedPieces } from "./owned-item-store";
+import { listOwnedPieces } from "./owned-item-store";
 import { readPicture } from "./picture-store";
 import { listTags } from "./tag-store";
 import {
@@ -617,17 +617,13 @@ export function registerAiActions(server: McpServer, account: Account) {
 		{
 			title: "Mark a shop link as bought",
 			description:
-				"Moves a shop link to the closet as an owned item with its brand, quantity 1, and its pictures, and removes its wish with the other shop links and their pictures. When the closet holds this piece with this brand, adds 1 to that item. Answers the owned item.",
+				"Moves a shop link to the closet as an owned item with its brand, quantity 1, and its pictures, and removes its wish with the other shop links and their pictures. When the closet holds this piece with this brand, adds 1 to that item. Answers the owned item and created: true for a new item, false when it added 1.",
 			annotations: DELETE,
-			inputSchema: z.object({
-				id: z.string().describe("The shop link's id."),
-			}),
+			inputSchema: boughtActions.buy.input,
 		},
-		async ({ id }) => {
-			const bought = await buyShopLink(db, pictures, userId, id);
-			return bought.ok
-				? answer({ ownedItem: bought.value.ownedItem })
-				: refusal(boughtRefusalText(bought.error));
+		async (input) => {
+			const bought = await boughtActions.buy.run(scope, input);
+			return bought.ok ? answer(bought.value) : refusal(bought.error.text);
 		},
 	);
 

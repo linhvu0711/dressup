@@ -1327,6 +1327,28 @@ describe("wishes", () => {
 		});
 	});
 
+	test("answers created false when Bought adds 1 to an item", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		await ai.call("add_owned_item", {
+			typeId: "wool",
+			colourId: await colourId(ai, "Navy"),
+			quantity: 1,
+		});
+		const id = await addJacketLink(ai);
+		// When
+		const { data } = await ai.call("mark_shop_link_bought", { id });
+		// Then
+		const { created, ownedItem } = data as {
+			created: boolean;
+			ownedItem: { quantity: number };
+		};
+		expect({ created, quantity: ownedItem.quantity }).toEqual({
+			created: false,
+			quantity: 2,
+		});
+	});
+
 	test("refuses Bought at 500 owned items as a sentence", async () => {
 		// Given
 		const { h, ai, userId } = await withAiSession();
