@@ -29,11 +29,10 @@ import {
 import { TypeField, TypeOptions } from "./TypeOptions";
 
 // What the form says under its fields.
-type Problem = "full" | "duplicate" | "failed";
+type Problem = "full" | "failed";
 
 const PROBLEM_TEXT: Record<Problem, string> = {
 	full: limitText(OWNED_ITEM_LIMIT, "items"),
-	duplicate: "You have this item already. Change its number.",
 	failed: "Not saved. Try again.",
 };
 
@@ -80,11 +79,9 @@ export function OwnedItemSheet(
 		sent.error instanceof RequestError && sent.error.code === "picture_limit";
 	const problem: Problem | null = full
 		? "full"
-		: sent.error instanceof RequestError && sent.error.code === "duplicate"
-			? "duplicate"
-			: sent.isError && !limitHit
-				? "failed"
-				: null;
+		: sent.isError && !limitHit
+			? "failed"
+			: null;
 	const save = async () => {
 		if (!typeId || !colourId || full || sent.isPending || slots.saving) return;
 		const n = Math.max(1, count);
