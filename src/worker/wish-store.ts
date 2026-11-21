@@ -20,11 +20,7 @@ import { brand } from "./db/brand-schema";
 import { colour } from "./db/colour-schema";
 import { shopLink, wish } from "./db/wish-schema";
 import { guardedAdd } from "./guarded-add";
-import {
-	deleteWithPictures,
-	pictureIdsBy,
-	saveWithPictures,
-} from "./picture-store";
+import { deleteOwner, pictureIdsBy, saveWithPictures } from "./picture-store";
 import { pieceRefusal, samePiece } from "./piece-rows";
 import { invalidField, type Result } from "./result";
 
@@ -216,18 +212,8 @@ export async function deleteWish(
 	userId: string,
 	id: string,
 ): Promise<Result<WishId, WishError>> {
-	const [row] = await deleteWithPictures(
-		db,
-		bucket,
-		{ userId, owner: { kind: "wish", id } },
-		db
-			.delete(wish)
-			.where(and(eq(wish.id, id), eq(wish.userId, userId)))
-			.returning({ id: wish.id }),
-	);
-	return row
-		? { ok: true, value: row.id as WishId }
-		: { ok: false, error: { code: "not_found" } };
+	const deleted = await deleteOwner(db, bucket, userId, { kind: "wish", id });
+	return deleted.ok ? { ok: true, value: deleted.value as WishId } : deleted;
 }
 
 type AddedShopLink = AddedWish;
@@ -377,16 +363,11 @@ export async function deleteShopLink(
 	userId: string,
 	id: string,
 ): Promise<Result<ShopLinkId, WishError>> {
-	const [row] = await deleteWithPictures(
-		db,
-		bucket,
-		{ userId, owner: { kind: "shopLink", id } },
-		db
-			.delete(shopLink)
-			.where(and(eq(shopLink.id, id), eq(shopLink.userId, userId)))
-			.returning({ id: shopLink.id }),
-	);
-	return row
-		? { ok: true, value: row.id as ShopLinkId }
-		: { ok: false, error: { code: "not_found" } };
+	const deleted = await deleteOwner(db, bucket, userId, {
+		kind: "shopLink",
+		id,
+	});
+	return deleted.ok
+		? { ok: true, value: deleted.value as ShopLinkId }
+		: deleted;
 }

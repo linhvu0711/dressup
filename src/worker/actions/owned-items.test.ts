@@ -809,6 +809,28 @@ describe("deleting with pictures", () => {
 			rows: [d],
 		});
 	});
+
+	test("refuses to delete another account's item", async () => {
+		// Given: alice added the shirt with a picture; bob has an account
+		const { h, alice, ids } = await withAlice();
+		const [a] = await uploads(alice, 1);
+		held(
+			await ownedItemActions.add.run(alice, { ...shirt(ids), pictureIds: [a] }),
+		);
+		await h.addAccount(BOB);
+		// When
+		const deleted = await ownedItemActions.delete.run(scopeOf(h, BOB), {
+			id: FIRST_ID,
+		});
+		// Then
+		expect({
+			deleted,
+			pictures: (await listed(alice)).map((item) => item.pictureIds),
+		}).toEqual({
+			deleted: { ok: false, error: NOT_FOUND_ROW },
+			pictures: [[a]],
+		});
+	});
 });
 
 // A COS brand and, oldest first: a Navy sweater from COS, a Navy long tee

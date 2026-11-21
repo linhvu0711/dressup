@@ -32,7 +32,7 @@ import { shopLink, wish } from "./db/wish-schema";
 import { guardedAdd, insertUnder } from "./guarded-add";
 import {
 	buyWithPictures,
-	deleteWithPictures,
+	deleteOwner,
 	type PictureListSave,
 	pictureIdsBy,
 	saveWithPictures,
@@ -320,18 +320,13 @@ export async function deleteOwnedItem(
 	userId: string,
 	id: string,
 ): Promise<Result<OwnedItemId, OwnedItemError>> {
-	const [row] = await deleteWithPictures(
-		db,
-		bucket,
-		{ userId, owner: { kind: "ownedItem", id } },
-		db
-			.delete(ownedItem)
-			.where(and(eq(ownedItem.id, id), eq(ownedItem.userId, userId)))
-			.returning({ id: ownedItem.id }),
-	);
-	return row
-		? { ok: true, value: row.id as OwnedItemId }
-		: { ok: false, error: { code: "not_found" } };
+	const deleted = await deleteOwner(db, bucket, userId, {
+		kind: "ownedItem",
+		id,
+	});
+	return deleted.ok
+		? { ok: true, value: deleted.value as OwnedItemId }
+		: deleted;
 }
 
 export type BoughtError =

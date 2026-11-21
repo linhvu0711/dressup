@@ -510,6 +510,34 @@ export async function deleteWithPictures<T extends Statement>(
 	return deleted as Awaited<T>;
 }
 
+// Only the account's own owned item, shop link, or wish goes, with its
+// pictures; not found when the account has no such row.
+export async function deleteOwner(
+	db: Db,
+	bucket: R2Bucket,
+	userId: string,
+	owner: PictureOwner | { kind: "wish"; id: string },
+): Promise<Result<string, { code: "not_found" }>> {
+	const table =
+		owner.kind === "ownedItem"
+			? ownedItem
+			: owner.kind === "shopLink"
+				? shopLink
+				: wish;
+	const [row] = await deleteWithPictures(
+		db,
+		bucket,
+		{ userId, owner },
+		db
+			.delete(table)
+			.where(and(eq(table.id, owner.id), eq(table.userId, userId)))
+			.returning({ id: table.id }),
+	);
+	return row
+		? { ok: true, value: row.id }
+		: { ok: false, error: { code: "not_found" } };
+}
+
 // The Bought batch. The item write runs first, so the check sees it; then
 // the link's oldest pictures move to the item while it has room, before the
 // drop, so the kept ones stay; the wish goes last, with its other links,
