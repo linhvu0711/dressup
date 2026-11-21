@@ -177,6 +177,32 @@ const keyHolder = async (db: Db, userId: string, key: string) => {
 const isKeyTaken = (error: unknown) =>
 	hitsIndex(error, "combination.user_id, combination.key");
 
+// D1 takes at most 100 bound values in one statement, and the account id
+// takes one, so a filter's ids are read 99 at a time.
+const ID_CHUNK = 99;
+
+// The ids among these that are the account's colours or tags.
+async function ownIds(
+	db: Db,
+	table: typeof colour | typeof tag,
+	userId: string,
+	ids: readonly string[],
+): Promise<Set<string>> {
+	const named = [...new Set(ids)];
+	const chunks = [];
+	for (let i = 0; i < named.length; i += ID_CHUNK)
+		chunks.push(named.slice(i, i + ID_CHUNK));
+	const rows = await Promise.all(
+		chunks.map((chunk) =>
+			db
+				.select({ id: table.id })
+				.from(table)
+				.where(and(eq(table.userId, userId), inArray(table.id, chunk))),
+		),
+	);
+	return new Set(rows.flat().map((row) => row.id));
+}
+
 // The first piece whose colour is not one of the account's, as the problem.
 // A filter row may leave its colour out. Here and in notYourTag only the
 // named ids are read: the colour list read writes the starter colours, and
@@ -190,11 +216,7 @@ async function notYourColour(
 		p.colourId === undefined ? [] : [p.colourId],
 	);
 	if (named.length === 0) return null;
-	const rows = await db
-		.select({ id: colour.id })
-		.from(colour)
-		.where(and(eq(colour.userId, userId), inArray(colour.id, named)));
-	const colourIds = new Set(rows.map((row) => row.id));
+	const colourIds = await ownIds(db, colour, userId, named);
 	const i = pieces.findIndex(
 		(p) => p.colourId !== undefined && !colourIds.has(p.colourId),
 	);
@@ -234,11 +256,7 @@ async function notYourTag(
 	tags: readonly string[],
 ): Promise<CombinationProblem | null> {
 	if (tags.length === 0) return null;
-	const rows = await db
-		.select({ id: tag.id })
-		.from(tag)
-		.where(and(eq(tag.userId, userId), inArray(tag.id, [...tags])));
-	const tagIds = new Set(rows.map((row) => row.id));
+	const tagIds = await ownIds(db, tag, userId, tags);
 	const value = tags.find((id) => !tagIds.has(id));
 	return value === undefined
 		? null

@@ -1127,6 +1127,23 @@ describe("filtering the list", () => {
 		).toEqual([["chino_p", "tee_s"]]);
 	});
 
+	test("lists no combination for a filter of 100 of the account's tags", async () => {
+		// Given: alice with 100 tags; three(ids) with the first of them
+		const { alice, ids } = await withAlice();
+		const tags = await addTags(
+			alice,
+			Array.from({ length: 100 }, (_, i) => `t${i + 1}`),
+		);
+		await combinationActions.save.run(alice, {
+			...three(ids),
+			tags: [tags[0]],
+		});
+		// When
+		const found = await combinationActions.list.run(alice, { tags });
+		// Then
+		expect(found).toEqual({ ok: true, value: [] });
+	});
+
 	describe("with Pieces I own", () => {
 		// two(ids) and three(ids) saved; the closet has both pieces of two(ids)
 		async function withTwoPiecesOwned() {
