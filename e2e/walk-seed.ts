@@ -4,7 +4,9 @@ import { SESSION_FILE } from "./paths";
 
 // Seeds the walks of the Item page: run it after any Playwright run has
 // written the session file, which the global setup resets to a fresh account.
-const OXFORD = "00000000-0000-4000-8000-000000000142";
+// The test seeds take ids 00000000-0000-4000-8000-000000000001 and up, so
+// this one keeps out of their range.
+const OXFORD = "00000000-0000-4000-8142-000000000142";
 
 const api = await request.newContext({
 	baseURL: "http://localhost:5173",
