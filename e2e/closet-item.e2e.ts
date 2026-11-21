@@ -478,6 +478,38 @@ test("shows the price message for a pasted decimal price", async ({ page }) => {
 	});
 });
 
+test("moves dragged digits within the price to where they are dropped", async ({
+	page,
+}) => {
+	// Given: a fresh account, Add to closet open, "123.456" in Price paid,
+	// its "456" selected
+	await openAddSheet(page);
+	const price = addSheet(page).getByLabel("Price paid");
+	await price.pressSequentially("123456");
+	await price.evaluate((el: HTMLInputElement) => el.setSelectionRange(4, 7));
+	const at = await price.evaluate((el: HTMLInputElement) => {
+		const style = getComputedStyle(el);
+		const context = document.createElement("canvas").getContext("2d");
+		if (!context) throw new Error("no canvas");
+		context.font = style.font;
+		const box = el.getBoundingClientRect();
+		const left = box.left + Number.parseFloat(style.paddingLeft);
+		const x = (text: string) => left + context.measureText(text).width;
+		return {
+			from: (x("123.") + x("123.456")) / 2,
+			to: x("1") + 1,
+			y: box.top + box.height / 2,
+		};
+	});
+	// When: the selection is dragged to just after the first "1"
+	await page.mouse.move(at.from, at.y);
+	await page.mouse.down();
+	await page.mouse.move(at.to, at.y, { steps: 10 });
+	await page.mouse.up();
+	// Then
+	await expect(price).toHaveValue("145.623");
+});
+
 test("stops the price at 999.999.999 with its message", async ({ page }) => {
 	// Given: a fresh account, Add to closet open
 	await openAddSheet(page);
