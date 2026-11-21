@@ -36,6 +36,7 @@ import { SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";
 import type { ActionScope } from "./actions/action";
 import { brandActions } from "./actions/brands";
 import { colourActions } from "./actions/colours";
+import { tagActions } from "./actions/tags";
 import { countAiAction } from "./ai-action-store";
 import {
 	boughtRefusalText,
@@ -55,7 +56,6 @@ import {
 	noWishMatch,
 	ownedItemRefusalText,
 	serverError,
-	tagRefusalText,
 	tooManyActions,
 	uploadAddressText,
 	wishRefusalText,
@@ -78,7 +78,7 @@ import {
 	listOwnedPieces,
 } from "./owned-item-store";
 import { readPicture } from "./picture-store";
-import { addTag, deleteTag, listTags, renameTag } from "./tag-store";
+import { listTags } from "./tag-store";
 import {
 	giveUploadAddress,
 	UPLOAD_ADDRESS_AGE_MS,
@@ -269,13 +269,13 @@ export function registerAiActions(server: McpServer, account: Account) {
 			title: "Add a tag",
 			description: `Adds a tag. A name has 1 to ${TAG_NAME_MAX} characters, and each name is used once.`,
 			annotations: WRITE,
-			inputSchema: z.object({ name: z.string().describe("The tag's name.") }),
+			inputSchema: tagActions.add.input,
 		},
-		async ({ name }) => {
-			const added = await addTag(db, userId, name);
+		async (input) => {
+			const added = await tagActions.add.run(scope, input);
 			return added.ok
 				? answer({ tag: added.value })
-				: refusal(tagRefusalText(added.error));
+				: refusal(added.error.text);
 		},
 	);
 
@@ -285,16 +285,13 @@ export function registerAiActions(server: McpServer, account: Account) {
 			title: "Rename a tag",
 			description: "Renames a tag. Its combinations keep it.",
 			annotations: WRITE,
-			inputSchema: z.object({
-				id: z.string().describe("The tag's id."),
-				name: z.string().describe("The tag's new name."),
-			}),
+			inputSchema: tagActions.rename.input,
 		},
-		async ({ id, name }) => {
-			const renamed = await renameTag(db, userId, id, name);
+		async (input) => {
+			const renamed = await tagActions.rename.run(scope, input);
 			return renamed.ok
 				? answer({ tag: renamed.value })
-				: refusal(tagRefusalText(renamed.error));
+				: refusal(renamed.error.text);
 		},
 	);
 
@@ -305,13 +302,13 @@ export function registerAiActions(server: McpServer, account: Account) {
 			description:
 				"Deletes a tag and takes it off every combination. The combinations stay.",
 			annotations: DELETE,
-			inputSchema: z.object({ id: z.string().describe("The tag's id.") }),
+			inputSchema: tagActions.delete.input,
 		},
-		async ({ id }) => {
-			const deleted = await deleteTag(db, userId, id);
+		async (input) => {
+			const deleted = await tagActions.delete.run(scope, input);
 			return deleted.ok
 				? answer({ deleted: deleted.value.id })
-				: refusal(tagRefusalText(deleted.error));
+				: refusal(deleted.error.text);
 		},
 	);
 

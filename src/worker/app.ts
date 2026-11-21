@@ -32,6 +32,7 @@ import { tagIdSchema } from "@/tags/tag";
 import type { ActionScope } from "./actions/action";
 import { brandActions } from "./actions/brands";
 import { colourActions } from "./actions/colours";
+import { tagActions } from "./actions/tags";
 import { disconnectAiApp, listAiApps } from "./ai-app-store";
 import {
 	accountPictureLimit,
@@ -78,13 +79,7 @@ import {
 	readPicture,
 } from "./picture-store";
 import type { Result } from "./result";
-import {
-	addTag,
-	deleteTag,
-	listTags,
-	renameTag,
-	type TagError,
-} from "./tag-store";
+import { listTags } from "./tag-store";
 import { claimUploadAddress } from "./upload-address-store";
 import {
 	addShopLink,
@@ -286,14 +281,6 @@ function pictureRefusal(error: PictureError): Refusal {
 			return { status: 404, body: { error: "not_found" } };
 	}
 }
-
-// The website answers every bad field with "invalid"; the contract
-// (src/react-app/data/contract.ts) names every code it sends.
-const tagRefusals: Record<TagError["code"], Refusal> = {
-	name_length: { status: 400, body: { error: "invalid", field: "name" } },
-	duplicate: { status: 400, body: { error: "duplicate", field: "name" } },
-	not_found: { status: 404, body: { error: "not_found" } },
-};
 
 export function createApp(getDb: (env: Env) => Db) {
 	const scope = (c: Context<AppEnv>): ActionScope => ({
@@ -814,13 +801,10 @@ export function createApp(getDb: (env: Env) => Db) {
 	);
 
 	app.post("/tags", withAuth, requireUser, async (c) => {
-		const body = await readBody(c, z.object({ name: z.string() }));
+		const body = await readBody(c, tagActions.add.input);
 		if (!body.ok) return invalid(c, body.error.field);
-		const added = await addTag(getDb(c.env), c.var.user.id, body.value.name);
-		if (!added.ok) {
-			const { status, body } = tagRefusals[added.error.code];
-			return c.json(body, status);
-		}
+		const added = await tagActions.add.run(scope(c), body.value);
+		if (!added.ok) return c.json(added.error.body, added.error.status);
 		return c.json({ tag: added.value } satisfies TagAnswer, 201);
 	});
 
@@ -828,33 +812,20 @@ export function createApp(getDb: (env: Env) => Db) {
 	app.put("/tags/:id", withAuth, requireUser, async (c) => {
 		const body = await readBody(
 			c,
-			z.object({ id: tagIdSchema, name: z.string() }),
+			tagActions.rename.input.extend({ id: tagIdSchema }),
 		);
 		if (!body.ok) return invalid(c, body.error.field);
 		if (body.value.id !== c.req.param("id")) return invalid(c, "id");
-		const renamed = await renameTag(
-			getDb(c.env),
-			c.var.user.id,
-			body.value.id,
-			body.value.name,
-		);
-		if (!renamed.ok) {
-			const { status, body } = tagRefusals[renamed.error.code];
-			return c.json(body, status);
-		}
+		const renamed = await tagActions.rename.run(scope(c), body.value);
+		if (!renamed.ok) return c.json(renamed.error.body, renamed.error.status);
 		return c.json({ tag: renamed.value } satisfies TagAnswer, 200);
 	});
 
 	app.delete("/tags/:id", withAuth, requireUser, async (c) => {
-		const deleted = await deleteTag(
-			getDb(c.env),
-			c.var.user.id,
-			c.req.param("id"),
-		);
-		if (!deleted.ok) {
-			const { status, body } = tagRefusals[deleted.error.code];
-			return c.json(body, status);
-		}
+		const deleted = await tagActions.delete.run(scope(c), {
+			id: c.req.param("id"),
+		});
+		if (!deleted.ok) return c.json(deleted.error.body, deleted.error.status);
 		return c.body(null, 204);
 	});
 
