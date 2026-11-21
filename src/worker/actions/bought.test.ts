@@ -169,6 +169,25 @@ describe("marking a shop link bought", () => {
 		});
 	});
 
+	test("marks a link with no write id bought", async () => {
+		// Given: a link written before links had a write id
+		const { h, alice, ids } = await account();
+		await wishActions.add.run(alice, {
+			id: FIRST_ID,
+			typeId: "wool",
+			colourId: ids.Navy,
+		});
+		await h.seedShopLinks(ALICE.id, FIRST_ID, 1);
+		// When
+		const bought = await buy(alice, "00000000-0000-4000-b000-000000000001");
+		// Then
+		expect({
+			ok: bought.ok,
+			created: bought.ok && bought.value.created,
+			wishes: await wishlist(alice),
+		}).toEqual({ ok: true, created: true, wishes: [] });
+	});
+
 	test("adds 1 to the item of the same piece and brand", async () => {
 		// Given
 		const { h, alice, a, b, d, e } = await aliceWithItem();

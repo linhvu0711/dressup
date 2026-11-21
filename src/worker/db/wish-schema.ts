@@ -61,6 +61,9 @@ export const shopLink = sqliteTable(
 		}),
 		name: text("name").notNull(),
 		price: integer("price"),
+		// A fresh id each add sets with its own insert, so the rest of its batch
+		// can tell that insert from a send of the same add that landed first.
+		writeId: text("write_id"),
 		createdAt: integer("created_at", { mode: "timestamp_ms" })
 			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
 			.notNull(),

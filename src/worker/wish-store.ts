@@ -233,6 +233,7 @@ export async function addShopLink(
 	if (!parsed.success)
 		return invalidField(WISH_FIELDS, draft, parsed.error.issues[0]?.path ?? []);
 	const input = parsed.data;
+	const writeId = crypto.randomUUID();
 	const added = await guardedAdd(db, {
 		table: shopLink,
 		userId,
@@ -248,6 +249,7 @@ export async function addShopLink(
 			brandId: input.brandId,
 			name: input.name,
 			price: input.price,
+			writeId,
 		},
 		guards: [
 			input.brandId === null
@@ -259,15 +261,20 @@ export async function addShopLink(
 			code: "shop_link_limit",
 			of: eq(shopLink.wishId, wishId),
 		},
-		// Only this account's new link on this wish takes the pictures, so a
-		// conflict or a refused insert attaches none.
+		// Only this send's own insert takes the pictures, so a conflict, a
+		// refused insert, or a send of the same add that landed first attaches
+		// and drops none.
 		write: (insert) =>
 			saveWithPictures(
 				db,
 				bucket,
 				{
 					userId,
-					owner: { kind: "shopLink", id: input.id, holds: { wishId } },
+					owner: {
+						kind: "shopLink",
+						id: input.id,
+						holds: { wishId, writeId },
+					},
 					ids: input.pictureIds,
 				},
 				insert,
