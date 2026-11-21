@@ -16,6 +16,7 @@ import { type Holdings, holdingsOf, markOf } from "@/combinations/marks";
 import { LAYER_OF, TYPE_IDS, TYPE_NAMES } from "@/dress/clothing-types";
 import { BRAND_LIMIT, BRAND_NAME_MAX } from "@/labels/brand";
 import { COLOUR_LIMIT, COLOUR_NAME_MAX } from "@/labels/colour";
+import { ACCOUNT_PICTURE_LIMIT } from "@/pictures/picture";
 import { TAG_NAME_MAX, type Tag } from "@/tags/tag";
 import { SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";
 import { type ActionScope, serverError } from "./actions/action";
@@ -23,14 +24,17 @@ import { boughtActions } from "./actions/bought";
 import { brandActions } from "./actions/brands";
 import { colourActions } from "./actions/colours";
 import { combinationActions } from "./actions/combinations";
+import { mannequinActions } from "./actions/mannequin";
 import { ownedItemActions } from "./actions/owned-items";
 import { pictureActions } from "./actions/pictures";
 import { tagActions } from "./actions/tags";
 import { shopLinkActions, wishActions } from "./actions/wishes";
 import { countAiAction } from "./ai-action-store";
+import { listAiApps } from "./ai-app-store";
 import { listBrands } from "./brand-store";
 import { listColours } from "./colour-store";
 import type { Db } from "./db";
+import { loadMannequin } from "./mannequin-store";
 import { listOwnedPieces } from "./owned-item-store";
 import { listTags } from "./tag-store";
 import {
@@ -44,6 +48,7 @@ type Account = {
 	pictures: R2Bucket;
 	userId: string;
 	baseURL: string;
+	clientId: string;
 };
 
 const READ: ToolAnnotations = { readOnlyHint: true };
@@ -121,8 +126,10 @@ const noWishes = "Nothing on your wishlist yet.";
 
 const noWishMatch = "No wish matches the filter.";
 
+const noOtherAiApps = "No other AI app is connected.";
+
 export function registerAiActions(server: McpServer, account: Account) {
-	const { db, pictures, userId, baseURL } = account;
+	const { db, pictures, userId, baseURL, clientId } = account;
 	const scope: ActionScope = { db, userId, pictures };
 
 	async function combinationViews(list: Combination[]) {
@@ -683,6 +690,68 @@ export function registerAiActions(server: McpServer, account: Account) {
 					},
 				],
 			};
+		},
+	);
+
+	tool(
+		"delete_draft_picture",
+		{
+			title: "Remove a draft picture",
+			description: `Removes for good a draft picture: one that no owned item or shop link holds yet, such as one an upload address took. It stops counting toward the account's ${ACCOUNT_PICTURE_LIMIT.toLocaleString("en")} pictures. A picture on an owned item or a shop link goes with change_owned_item or change_shop_link.`,
+			annotations: DELETE,
+			inputSchema: pictureActions.deleteDraft.input,
+		},
+		async (input) => {
+			const deleted = await pictureActions.deleteDraft.run(scope, input);
+			return deleted.ok
+				? answer({ deleted: deleted.value })
+				: refusal(deleted.error.text);
+		},
+	);
+
+	tool(
+		"show_mannequin",
+		{
+			title: "Show the mannequin",
+			description:
+				"The skin and hair colours of the mannequin that wears the combinations. A new account has the starter colours.",
+			annotations: READ,
+			inputSchema: noArgs,
+		},
+		async () => answer({ mannequin: await loadMannequin(db, userId) }),
+	);
+
+	tool(
+		"set_mannequin_colour",
+		{
+			title: "Set a mannequin colour",
+			description:
+				"Sets the skin or hair colour of the mannequin that wears the combinations. A code is #RRGGBB in capital letters, such as #8D5524. Answers both colours.",
+			annotations: WRITE,
+			inputSchema: mannequinActions.set.input,
+		},
+		async (input) => {
+			const set = await mannequinActions.set.run(scope, input);
+			return set.ok
+				? answer({ mannequin: set.value })
+				: refusal(set.error.text);
+		},
+	);
+
+	tool(
+		"list_ai_apps",
+		{
+			title: "List the other AI apps",
+			description:
+				"The other AI apps connected to the account, oldest connect first, each with id, name, logo, and connectedAt. The app that asks is not on the list. Only the user can connect or disconnect an AI app, in Settings.",
+			annotations: READ,
+			inputSchema: noArgs,
+		},
+		async () => {
+			const apps = await listAiApps(db, userId, { except: clientId });
+			return apps.length === 0
+				? answer({ apps }, noOtherAiApps)
+				: answer({ apps });
 		},
 	);
 }

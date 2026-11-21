@@ -12,9 +12,10 @@ function dressupServer(
 	pictures: R2Bucket,
 	userId: string,
 	baseURL: string,
+	clientId: string,
 ) {
 	const server = new McpServer({ name: "dressup", version: "1.0.0" });
-	registerAiActions(server, { db, pictures, userId, baseURL });
+	registerAiActions(server, { db, pictures, userId, baseURL, clientId });
 	return server;
 }
 
@@ -67,7 +68,7 @@ export function mcpRoute(
 			const token =
 				req.headers.get("authorization")?.replace(/^\S+\s+/, "") ?? "";
 			return createMcpHandler(() =>
-				dressupServer(db, pictures, sub, baseURL),
+				dressupServer(db, pictures, sub, baseURL, azp),
 			).fetch(req, {
 				authInfo: {
 					token,

@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, ne } from "drizzle-orm";
 import type { AiApp } from "@/ai-apps/ai-app";
 import type { Db } from "./db";
 import { oauthClient, oauthConsent, oauthRefreshToken } from "./db/auth-schema";
@@ -7,8 +7,13 @@ import { oauthClient, oauthConsent, oauthRefreshToken } from "./db/auth-schema";
 // row better-auth writes on Allow.
 
 // The account's connected AI apps, oldest connect first. An app whose
-// document has no client_name is named by its client id.
-export async function listAiApps(db: Db, userId: string): Promise<AiApp[]> {
+// document has no client_name is named by its client id. An AI app asks with
+// except set to its own client id, since it is always connected itself.
+export async function listAiApps(
+	db: Db,
+	userId: string,
+	{ except }: { except?: string } = {},
+): Promise<AiApp[]> {
 	const rows = await db
 		.select({
 			id: oauthConsent.id,
@@ -19,7 +24,12 @@ export async function listAiApps(db: Db, userId: string): Promise<AiApp[]> {
 		})
 		.from(oauthConsent)
 		.innerJoin(oauthClient, eq(oauthConsent.clientId, oauthClient.clientId))
-		.where(eq(oauthConsent.userId, userId))
+		.where(
+			and(
+				eq(oauthConsent.userId, userId),
+				except === undefined ? undefined : ne(oauthConsent.clientId, except),
+			),
+		)
 		.orderBy(asc(oauthConsent.createdAt), asc(oauthConsent.id));
 	return rows.map((row) => ({
 		id: row.id,

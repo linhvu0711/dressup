@@ -74,6 +74,10 @@ describe("tags", () => {
 			["mark_shop_link_bought", D],
 			["get_upload_address", W],
 			["show_picture", R],
+			["delete_draft_picture", D],
+			["show_mannequin", R],
+			["set_mannequin_colour", W],
+			["list_ai_apps", R],
 		]);
 		expect(listed.every((t) => typeof t.title === "string")).toBe(true);
 	});
@@ -461,6 +465,137 @@ describe("brands", () => {
 	});
 });
 
+describe("mannequin", () => {
+	const shownMannequin = async (h: Harness, ai: Session) =>
+		(await send(h, ai.jar, "GET", "/api/mannequin")).json();
+
+	test("sets the hair colour and answers both colours", async () => {
+		// Given: a new account with the starter mannequin
+		const { ai } = await withAiSession();
+		// When
+		const { isError, data } = await ai.call("set_mannequin_colour", {
+			part: "hair",
+			hex: "#6B4A2F",
+		});
+		// Then
+		expect({ isError, data }).toEqual({
+			isError: false,
+			data: { mannequin: { skin: "#D6A27B", hair: "#6B4A2F" } },
+		});
+	});
+
+	test("Settings shows the colour an AI app set", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		await ai.call("set_mannequin_colour", { part: "skin", hex: "#8D5524" });
+		// When
+		const res = await send(h, ai.jar, "GET", "/api/mannequin");
+		// Then
+		expect({ status: res.status, body: await res.json() }).toEqual({
+			status: 200,
+			body: { mannequin: { skin: "#8D5524", hair: "#141418" } },
+		});
+	});
+
+	test("shows the colour an AI app set", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		await ai.call("set_mannequin_colour", { part: "skin", hex: "#8D5524" });
+		// When
+		const { isError, data } = await ai.call("show_mannequin");
+		// Then
+		expect({ isError, data }).toEqual({
+			isError: false,
+			data: { mannequin: { skin: "#8D5524", hair: "#141418" } },
+		});
+	});
+
+	test("refuses a mannequin colour that is not a colour code", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		// When
+		const { isError, text } = await ai.call("set_mannequin_colour", {
+			part: "hair",
+			hex: "brown",
+		});
+		// Then
+		expect({ isError, text, shown: await shownMannequin(h, ai) }).toEqual({
+			isError: true,
+			text: "That is not a colour written as #RRGGBB with capital letters, such as #1F3A5F.",
+			shown: { mannequin: { skin: "#D6A27B", hair: "#141418" } },
+		});
+	});
+
+	test("answers the could-not sentence when the mannequin write fails", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		h.addTrigger(
+			"CREATE TRIGGER fail_mannequin_write BEFORE INSERT ON mannequin BEGIN SELECT RAISE(ABORT, 'mannequin write failed'); END",
+		);
+		// When
+		const { isError, text } = await ai.call("set_mannequin_colour", {
+			part: "hair",
+			hex: "#6B4A2F",
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "dressup could not do this. Try again.",
+		});
+	});
+});
+
+describe("AI apps", () => {
+	test("answers an empty list when no other AI app is connected", async () => {
+		// Given: the test app is the only connected app
+		const { ai } = await withAiSession();
+		// When
+		const { isError, text, data } = await ai.call("list_ai_apps");
+		// Then
+		expect({ isError, text, data }).toEqual({
+			isError: false,
+			text: "No other AI app is connected.",
+			data: { apps: [] },
+		});
+	});
+
+	test("lists the other connected AI app with its name, logo, and connect date", async () => {
+		// Given: alice also allowed Other App on 2026-11-14 at 12:00 UTC
+		const { h, ai, userId } = await withAiSession();
+		await h.db.insert(schema.oauthClient).values({
+			id: "other",
+			clientId: "https://other.example/meta.json",
+			name: "Other App",
+			icon: "https://other.example/logo.png",
+			redirectUris: ["http://127.0.0.1/callback"],
+		});
+		await h.db.insert(schema.oauthConsent).values({
+			id: "allow-2",
+			clientId: "https://other.example/meta.json",
+			userId,
+			scopes: ["openid"],
+			createdAt: new Date(1794657600000),
+			updatedAt: new Date(1794657600000),
+		});
+		// When
+		const { isError, data } = await ai.call("list_ai_apps");
+		// Then
+		expect({ isError, data }).toEqual({
+			isError: false,
+			data: {
+				apps: [
+					{
+						id: "allow-2",
+						name: "Other App",
+						logo: "https://other.example/logo.png",
+						connectedAt: "2026-11-14T12:00:00.000Z",
+					},
+				],
+			},
+		});
+	});
+});
+
 describe("AI action limit", () => {
 	// Starts a clock minute so the 61 calls cannot cross into the next one.
 	async function sixtyActions() {
@@ -525,6 +660,62 @@ describe("AI action limit", () => {
 			isError: true,
 			text: "Too many actions. Wait a minute and try again.",
 			rows: [],
+		});
+	});
+
+	test("refuses set_mannequin_colour as the 61st AI action", async () => {
+		// Given
+		const { h, ai } = await sixtyActions();
+		// When
+		const { isError, text } = await ai.call("set_mannequin_colour", {
+			part: "hair",
+			hex: "#6B4A2F",
+		});
+		// Then
+		const shown = await (await send(h, ai.jar, "GET", "/api/mannequin")).json();
+		expect({ isError, text, shown }).toEqual({
+			isError: true,
+			text: "Too many actions. Wait a minute and try again.",
+			shown: { mannequin: { skin: "#D6A27B", hair: "#141418" } },
+		});
+	});
+
+	test("refuses show_mannequin as the 61st AI action", async () => {
+		// Given
+		const { ai } = await sixtyActions();
+		// When
+		const { isError, text } = await ai.call("show_mannequin");
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "Too many actions. Wait a minute and try again.",
+		});
+	});
+
+	test("refuses delete_draft_picture as the 61st AI action", async () => {
+		// Given: a web upload, so it spends no AI action
+		const { h, ai } = await sixtyActions();
+		const a = await uploadPicture(h, ai.jar);
+		// When
+		const { isError, text } = await ai.call("delete_draft_picture", { id: a });
+		// Then
+		const loaded = (await send(h, ai.jar, "GET", `/api/pictures/${a}`)).status;
+		expect({ isError, text, loaded }).toEqual({
+			isError: true,
+			text: "Too many actions. Wait a minute and try again.",
+			loaded: 200,
+		});
+	});
+
+	test("refuses list_ai_apps as the 61st AI action", async () => {
+		// Given
+		const { ai } = await sixtyActions();
+		// When
+		const { isError, text } = await ai.call("list_ai_apps");
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "Too many actions. Wait a minute and try again.",
 		});
 	});
 
