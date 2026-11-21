@@ -1257,6 +1257,90 @@ describe("owned items", () => {
 	});
 });
 
+describe("an owned item's name and price paid", () => {
+	type Named = { id: string; name: string | null; price: number | null };
+
+	// A Navy long button-up named AIRism tee, paid 249.000.
+	async function named(ai: Session) {
+		const { data } = await ai.call("list_colours");
+		const navy = (data as { colours: Colour[] }).colours.find(
+			(c) => c.name === "Navy",
+		)?.id;
+		return {
+			typeId: "shirt_l",
+			colourId: navy,
+			quantity: 1,
+			name: "AIRism tee",
+			price: 249000,
+		};
+	}
+
+	const count = async (ai: Session) =>
+		((await ai.call("list_owned_items")).data as { ownedItems: Named[] })
+			.ownedItems.length;
+
+	test("sets and reads the name and price paid", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		const args = await named(ai);
+		// When
+		await ai.call("add_owned_item", args);
+		const { data } = await ai.call("list_owned_items");
+		// Then
+		expect(
+			(data as { ownedItems: Named[] }).ownedItems.map((i) => [
+				i.name,
+				i.price,
+			]),
+		).toEqual([["AIRism tee", 249000]]);
+	});
+
+	test("changes the name and price paid", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		const added = await ai.call("add_owned_item", await named(ai));
+		const { id } = (added.data as { ownedItem: Named }).ownedItem;
+		// When
+		const { data } = await ai.call("change_owned_item", {
+			id,
+			quantity: 2,
+			name: "Supima tee",
+			price: 390000,
+		});
+		// Then
+		const { ownedItem } = data as { ownedItem: Named };
+		expect([ownedItem.name, ownedItem.price]).toEqual(["Supima tee", 390000]);
+	});
+
+	test("refuses a name of 81 characters as a sentence", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		const args = { ...(await named(ai)), name: "a".repeat(81) };
+		// When
+		const { isError, text } = await ai.call("add_owned_item", args);
+		// Then
+		expect({ isError, text, count: await count(ai) }).toEqual({
+			isError: true,
+			text: "Name is at most 80 characters.",
+			count: 0,
+		});
+	});
+
+	test("refuses a price over 999.999.999 as a sentence", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		const args = { ...(await named(ai)), price: 1000000000 };
+		// When
+		const { isError, text } = await ai.call("add_owned_item", args);
+		// Then
+		expect({ isError, text, count: await count(ai) }).toEqual({
+			isError: true,
+			text: "Price is a whole number of VND from 1 to 999.999.999.",
+			count: 0,
+		});
+	});
+});
+
 describe("wishes", () => {
 	type Link = {
 		id: string;

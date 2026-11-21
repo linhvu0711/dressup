@@ -1,6 +1,7 @@
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { z } from "zod";
 import type { ErrorAnswer } from "@/data/contract";
+import { PRICE_MAX } from "@/price";
 import type { Db } from "../db";
 import type { Result } from "../result";
 
@@ -64,3 +65,5 @@ export const notYourColour = (value: unknown) =>
 
 export const notYourBrand = (value: unknown) =>
 	`${value} is not one of your brands. list_brands names them.`;
+
+export const notAPrice = `Price is a whole number of VND from 1 to ${new Intl.NumberFormat("vi-VN").format(PRICE_MAX)}.`;

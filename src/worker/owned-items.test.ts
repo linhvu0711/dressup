@@ -302,3 +302,132 @@ describe("PUT and DELETE /api/owned-items/:id", () => {
 		]);
 	});
 });
+
+describe("an owned item's name and price paid", () => {
+	const named = (ids: Ids) => ({
+		...shirt(ids),
+		name: "AIRism tee",
+		price: 249000,
+	});
+
+	test("adds an item with a name and a price paid and lists them", async () => {
+		// Given: alice signed in; the shirt named AIRism tee, paid 249.000
+		const { h, headers, ids } = await alice();
+		// When
+		await post(h, headers, named(ids));
+		const [item] = await list(h, headers);
+		// Then
+		expect({ name: item?.name, price: item?.price }).toEqual({
+			name: "AIRism tee",
+			price: 249000,
+		});
+	});
+
+	test("changes an item's name and price paid", async () => {
+		// Given: alice added the named shirt
+		const { h, headers, ids } = await alice();
+		await post(h, headers, named(ids));
+		// When
+		const res = await put(h, headers, FIRST_ID, {
+			brandId: null,
+			quantity: 2,
+			name: "Supima tee",
+			price: 390000,
+		});
+		// Then
+		const { ownedItem } = (await res.json()) as { ownedItem: Listed };
+		expect({ name: ownedItem.name, price: ownedItem.price }).toEqual({
+			name: "Supima tee",
+			price: 390000,
+		});
+	});
+
+	test("keeps the name and price paid when a change leaves them out", async () => {
+		// Given: alice added the named shirt
+		const { h, headers, ids } = await alice();
+		await post(h, headers, named(ids));
+		// When
+		await put(h, headers, FIRST_ID, { brandId: null, quantity: 3 });
+		const [item] = await list(h, headers);
+		// Then
+		expect({
+			name: item?.name,
+			price: item?.price,
+			quantity: item?.quantity,
+		}).toEqual({ name: "AIRism tee", price: 249000, quantity: 3 });
+	});
+
+	test("ends with one change when a change is sent twice", async () => {
+		// Given: alice added the named shirt
+		const { h, headers, ids } = await alice();
+		await post(h, headers, named(ids));
+		const change = {
+			brandId: null,
+			quantity: 2,
+			name: "Supima tee",
+			price: 390000,
+		};
+		// When
+		await put(h, headers, FIRST_ID, change);
+		await put(h, headers, FIRST_ID, change);
+		// Then
+		expect(
+			(await list(h, headers)).map(({ name, price, quantity }) => ({
+				name,
+				price,
+				quantity,
+			})),
+		).toEqual([{ name: "Supima tee", price: 390000, quantity: 2 }]);
+	});
+
+	test("refuses a name of 81 characters", async () => {
+		// Given: the named shirt with a name of 81 characters
+		const { h, headers, ids } = await alice();
+		// When
+		const res = await post(h, headers, {
+			...named(ids),
+			name: "a".repeat(81),
+		});
+		// Then
+		expect({
+			...(await answer(res)),
+			count: (await list(h, headers)).length,
+		}).toEqual({
+			status: 400,
+			body: { error: "invalid", field: "name" },
+			count: 0,
+		});
+	});
+
+	test("refuses a price of 1.000.000.000", async () => {
+		// Given: the named shirt paid 1.000.000.000
+		const { h, headers, ids } = await alice();
+		// When
+		const res = await post(h, headers, { ...named(ids), price: 1000000000 });
+		// Then
+		expect({
+			...(await answer(res)),
+			count: (await list(h, headers)).length,
+		}).toEqual({
+			status: 400,
+			body: { error: "invalid", field: "price" },
+			count: 0,
+		});
+	});
+
+	test("refuses a price that is not digits", async () => {
+		// Given: the named shirt paid "249k"
+		const { h, headers, ids } = await alice();
+		// When
+		const res = await post(h, headers, { ...named(ids), price: "249k" });
+		// Then
+		expect({
+			...(await answer(res)),
+			count: (await list(h, headers)).length,
+		}).toEqual({
+			status: 400,
+			body: { error: "invalid", field: "price" },
+			count: 0,
+		});
+	});
+});

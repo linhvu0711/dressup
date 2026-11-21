@@ -46,6 +46,8 @@ type OwnedItemField =
 	| "colourId"
 	| "brandId"
 	| "quantity"
+	| "name"
+	| "price"
 	| "pictureIds"
 	| "body";
 
@@ -133,6 +135,8 @@ const OWNED_ITEM_FIELDS: readonly OwnedItemField[] = [
 	"colourId",
 	"brandId",
 	"quantity",
+	"name",
+	"price",
 	"pictureIds",
 ];
 
@@ -157,7 +161,8 @@ const itemGuards = (db: Db, userId: string, piece: Piece) => [
 
 // The page makes the id when the form opens, so an add sent again after a
 // lost answer gives back the same item rather than a second one, with the
-// quantity sent last, as the person may have changed it before the retry;
+// quantity, name, and price sent last, as the person may have changed them
+// before the retry;
 // the same id with another piece or brand, or another account's id, is
 // conflict. The colour, the brand, the limit, and the duplicate rule are the
 // shared add's guards, so two adds at once cannot both pass them.
@@ -200,8 +205,8 @@ export async function addOwnedItem(
 			colourId: input.colourId,
 			brandId: input.brandId,
 			quantity: input.quantity,
-			name: null,
-			price: null,
+			name: input.name ?? null,
+			price: input.price ?? null,
 			writeId: null,
 		},
 		guards: itemGuards(db, userId, input),
@@ -214,7 +219,11 @@ export async function addOwnedItem(
 				pictures,
 				db
 					.update(ownedItem)
-					.set({ quantity: input.quantity })
+					.set({
+						quantity: input.quantity,
+						name: input.name ?? null,
+						price: input.price ?? null,
+					})
 					.where(and(eq(ownedItem.id, input.id), eq(ownedItem.userId, userId))),
 			),
 		read: async () => (await readOwnedItems(db, userId, input.id))[0],
@@ -255,7 +264,7 @@ export async function changeOwnedItem(
 			draft,
 			parsed.error.issues[0]?.path ?? [],
 		);
-	const { brandId, quantity, pictureIds } = parsed.data;
+	const { brandId, quantity, name, price, pictureIds } = parsed.data;
 	const other = alias(ownedItem, "other");
 	const saved = await saveWithPictures(
 		db,
@@ -269,7 +278,7 @@ export async function changeOwnedItem(
 		},
 		db
 			.update(ownedItem)
-			.set({ brandId, quantity })
+			.set({ brandId, quantity, name, price })
 			.where(
 				and(
 					eq(ownedItem.id, id),

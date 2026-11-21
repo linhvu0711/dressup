@@ -202,6 +202,33 @@ describe("adding an owned item", () => {
 		}).toEqual({ ok: true, created: false, quantities: [3] });
 	});
 
+	test("writes the new name and price when the same item is sent again", async () => {
+		// Given: alice added the shirt named AIRism tee, paid 249.000
+		const { alice, ids } = await withAlice();
+		await ownedItemActions.add.run(alice, {
+			...shirt(ids),
+			name: "AIRism tee",
+			price: 249000,
+		});
+		// When
+		const again = await ownedItemActions.add.run(alice, {
+			...shirt(ids),
+			name: "Supima tee",
+			price: 390000,
+		});
+		// Then
+		expect({
+			created: again.ok && again.value.created,
+			listed: (await listed(alice)).map(({ name, price }) => ({
+				name,
+				price,
+			})),
+		}).toEqual({
+			created: false,
+			listed: [{ name: "Supima tee", price: 390000 }],
+		});
+	});
+
 	test("refuses the same piece with no brand a second time", async () => {
 		// Given: alice has a Navy long button-up with no brand
 		const { alice, ids } = await withAlice();

@@ -4,6 +4,7 @@ import { TYPE_IDS } from "@/dress/clothing-types";
 import { brandSchema } from "@/labels/brand";
 import { colourSchema } from "@/labels/colour";
 import { pictureIdSchema } from "@/pictures/picture";
+import { PRICE_MAX, priceSchema } from "@/price";
 
 export const WISH_LIMIT = 200;
 
@@ -12,8 +13,6 @@ export const SHOP_LINK_LIMIT = 10;
 export const ADDRESS_MAX = 2000;
 
 export const SHOP_LINK_NAME_MAX = 80;
-
-export const PRICE_MAX = 999_999_999;
 
 const wishIdSchema = z.uuid().brand<"WishId">();
 
@@ -45,9 +44,6 @@ const webAddressSchema = z
 			/^https?:$/.test(new URL(url).protocol) &&
 			new URL(url).hostname !== "",
 	);
-
-// A price in whole VND; null when the user leaves it empty.
-const priceSchema = z.number().int().min(1).max(PRICE_MAX).nullable();
 
 // The rules for a shop link as a website or an AI app sends it. The brand is
 // an id here; the store checks that it is the account's.

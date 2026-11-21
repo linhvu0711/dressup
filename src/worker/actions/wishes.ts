@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ITEM_PICTURE_LIMIT } from "@/pictures/picture";
 import { matchesPieceFilter, wishPiece } from "@/piece-filter/piece-filter";
-import { PRICE_MAX, SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";
+import { SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";
 import {
 	addShopLink,
 	addWish,
@@ -13,6 +13,7 @@ import {
 } from "../wish-store";
 import {
 	action,
+	notAPrice,
 	notAType,
 	notYourBrand,
 	notYourColour,
@@ -35,7 +36,7 @@ function fieldText(error: Extract<WishError, { code: "invalid" }>): string {
 		case "name":
 			return "Enter a name.";
 		case "price":
-			return `Price is a whole number of VND from 1 to ${new Intl.NumberFormat("vi-VN").format(PRICE_MAX)}.`;
+			return notAPrice;
 		case "typeId":
 			return notAType(error.value);
 		case "colourId":

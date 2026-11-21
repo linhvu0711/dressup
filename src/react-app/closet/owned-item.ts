@@ -4,16 +4,27 @@ import { TYPE_IDS } from "@/dress/clothing-types";
 import { brandSchema } from "@/labels/brand";
 import { colourSchema } from "@/labels/colour";
 import { pictureIdSchema } from "@/pictures/picture";
+import { priceSchema } from "@/price";
 
 export const OWNED_ITEM_LIMIT = 500;
 
 export const QUANTITY_MAX = 99;
+
+export const OWNED_ITEM_NAME_MAX = 80;
 
 const ownedItemIdSchema = z.uuid().brand<"OwnedItemId">();
 
 export type OwnedItemId = z.infer<typeof ownedItemIdSchema>;
 
 const quantitySchema = z.number().int().min(1).max(QUANTITY_MAX);
+
+// A blank name is no name: the item goes by its piece's name.
+const nameSchema = z
+	.string()
+	.trim()
+	.max(OWNED_ITEM_NAME_MAX)
+	.nullable()
+	.transform((name) => name || null);
 
 // The rules for an owned item as a website or an AI app sends it, so the
 // server's check and the page's form agree. The colour and the brand are
@@ -24,15 +35,20 @@ export const ownedItemInputSchema = z.object({
 	colourId: z.string(),
 	brandId: z.string().nullable(),
 	quantity: quantitySchema,
+	name: nameSchema.optional(),
+	price: priceSchema.optional(),
 	pictureIds: z.array(z.string()).optional(),
 });
 
-// The piece of an owned item never changes; only its brand, quantity, and
-// pictures do. pictureIds is the whole list; left out keeps the item's
-// pictures, so an AI app that sends none keeps them.
+// The piece of an owned item never changes; only its brand, quantity, name,
+// price, and pictures do. pictureIds is the whole list; left out keeps the
+// item's pictures, so an AI app that sends none keeps them. The name and the
+// price left out keep the item's too, and null clears them.
 export const ownedItemChangeSchema = z.object({
 	brandId: z.string().nullable(),
 	quantity: quantitySchema,
+	name: nameSchema.optional(),
+	price: priceSchema.optional(),
 	pictureIds: z.array(z.string()).optional(),
 });
 

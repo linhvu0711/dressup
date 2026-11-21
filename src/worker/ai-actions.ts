@@ -499,7 +499,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		{
 			title: "Change an owned item",
 			description:
-				"Changes the brand and the quantity of an owned item. Its piece stays. Leave brandId out for no brand.",
+				"Changes the brand, the quantity, the name, and the price paid of an owned item. Its piece stays. Leave brandId out for no brand. Leave name or price out to keep it; send null to clear it.",
 			annotations: WRITE,
 			inputSchema: ownedItemActions.change.input,
 		},
