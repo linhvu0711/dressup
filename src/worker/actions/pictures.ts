@@ -36,12 +36,6 @@ const pictureRefusals: Refusals<PictureActionError> = {
 		body: { error: "invalid", field: error.field },
 		text: "This file is not a JPEG, PNG, or WebP picture. Send one of these to a new upload address.",
 	}),
-	// No picture action returns it: the store's error holds the list error.
-	picture_limit: () => ({
-		status: 409,
-		body: { error: "picture_limit" },
-		text: notStored,
-	}),
 	account_picture_limit: () => ({
 		status: 409,
 		body: { error: "account_picture_limit" },

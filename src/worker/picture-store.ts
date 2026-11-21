@@ -40,7 +40,6 @@ export type PictureListError =
 
 export type PictureError =
 	| { code: "invalid"; field: "body" }
-	| PictureListError
 	| { code: "account_picture_limit" }
 	| { code: "storage_full" }
 	| { code: "not_found" };
