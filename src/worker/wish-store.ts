@@ -422,13 +422,15 @@ async function addWishWithLink(
 		link,
 		parentWrite: wishInsert,
 		refused: async () => {
-			const why = await pieceRefusal<WishId>(
-				db,
-				userId,
-				{ table: wish, where: samePiece(wish, userId, piece) },
-				{ colourId: piece.colourId, brandId: link.brandId },
-			);
-			if (why) return why;
+			const colourWhy = await notYourColour(db, userId, piece.colourId);
+			if (colourWhy) return colourWhy;
+			const brandWhy = await notYourBrand(db, userId, link.brandId);
+			if (brandWhy) return brandWhy;
+			const [held] = await db
+				.select({ id: wish.id })
+				.from(wish)
+				.where(samePiece(wish, userId, piece));
+			if (held) return { code: "duplicate", id: held.id as WishId };
 			// The id is another piece's or another account's wish, as addWish
 			// answers; else only the wish cap is left, since a new wish holds no
 			// link.
