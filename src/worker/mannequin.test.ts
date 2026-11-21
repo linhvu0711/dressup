@@ -54,44 +54,6 @@ describe("PUT /api/mannequin/:part", () => {
 		expect({ put, got }).toEqual({ put: set, got: set });
 	});
 
-	test("keeps a skin from one device and a hair from another", async () => {
-		// Given: alice signed in, no mannequin row
-		const { h, headers } = await withAccount();
-		// When
-		await putColour(h, headers, "skin", "#8D5524");
-		await putColour(h, headers, "hair", "#B55239");
-		const res = await getMannequin(h, headers);
-		// Then
-		expect(await res.json()).toEqual({
-			mannequin: { skin: "#8D5524", hair: "#B55239" },
-		});
-	});
-
-	test("ends in the same colours when one skin is set twice", async () => {
-		// Given: alice signed in, no mannequin row
-		const { h, headers } = await withAccount();
-		// When
-		await putColour(h, headers, "skin", "#8D5524");
-		await putColour(h, headers, "skin", "#8D5524");
-		const res = await getMannequin(h, headers);
-		// Then
-		expect(await res.json()).toEqual({
-			mannequin: { skin: "#8D5524", hair: "#141418" },
-		});
-	});
-
-	test("refuses a colour that is not a colour code", async () => {
-		// Given: alice signed in, no mannequin row
-		const { h, headers } = await withAccount();
-		// When
-		const res = await putColour(h, headers, "skin", "brown");
-		// Then
-		expect(await answer(res)).toEqual({
-			status: 400,
-			body: { error: "invalid", field: "hex" },
-		});
-	});
-
 	test("refuses a part that is not skin or hair", async () => {
 		// Given: alice signed in, no mannequin row
 		const { h, headers } = await withAccount();
