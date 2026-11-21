@@ -74,6 +74,7 @@ describe("tags", () => {
 			["mark_shop_link_bought", D],
 			["get_upload_address", W],
 			["show_picture", R],
+			["delete_draft_picture", D],
 			["show_mannequin", R],
 			["set_mannequin_colour", W],
 		]);
@@ -636,6 +637,21 @@ describe("AI action limit", () => {
 		expect({ isError, text }).toEqual({
 			isError: true,
 			text: "Too many actions. Wait a minute and try again.",
+		});
+	});
+
+	test("refuses delete_draft_picture as the 61st AI action", async () => {
+		// Given: a web upload, so it spends no AI action
+		const { h, ai } = await sixtyActions();
+		const a = await uploadPicture(h, ai.jar);
+		// When
+		const { isError, text } = await ai.call("delete_draft_picture", { id: a });
+		// Then
+		const loaded = (await send(h, ai.jar, "GET", `/api/pictures/${a}`)).status;
+		expect({ isError, text, loaded }).toEqual({
+			isError: true,
+			text: "Too many actions. Wait a minute and try again.",
+			loaded: 200,
 		});
 	});
 

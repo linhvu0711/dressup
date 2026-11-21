@@ -103,7 +103,13 @@ export const pictureActions = {
 		},
 	),
 	deleteDraft: action(
-		z.object({ id }),
+		z.object({
+			id: z
+				.string()
+				.describe(
+					"A picture id that an upload address answered and that no owned item or shop link holds yet.",
+				),
+		}),
 		pictureRefusals,
 		({ db, pictures, userId }, { id }) => deleteDraft(db, pictures, userId, id),
 	),

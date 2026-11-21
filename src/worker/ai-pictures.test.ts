@@ -9,6 +9,7 @@ import {
 	JPEG,
 	PDF,
 	PNG,
+	send,
 	uploadPicture,
 	withAiSession,
 } from "./test/harness";
@@ -358,5 +359,91 @@ describe("show_picture", () => {
 		const shown = await ai.show("show_picture", { id: p });
 		// Then
 		expect(shown).toEqual(noPicture);
+	});
+});
+
+describe("delete_draft_picture", () => {
+	const loaded = async (h: Harness, ai: Session, id: string) =>
+		(await send(h, ai.jar, "GET", `/api/pictures/${id}`)).status;
+
+	test("removes a draft picture and frees its place under the limit", async () => {
+		// Given: 999 pictures, and the draft is the account's picture 1,000
+		const { h, ai, userId } = await withAiSession();
+		await h.seedPictures(userId, 999);
+		const [a] = await uploads(h, ai, 1);
+		// When
+		const { isError, data } = await ai.call("delete_draft_picture", { id: a });
+		// Then
+		const next = (await postTo(h, await addressOf(ai))).status;
+		expect({ isError, data, loaded: await loaded(h, ai, a), next }).toEqual({
+			isError: false,
+			data: { deleted: a },
+			loaded: 404,
+			next: 201,
+		});
+	});
+
+	test("refuses an id that is no picture", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		const [a] = await uploads(h, ai, 1);
+		// When
+		const { isError, text } = await ai.call("delete_draft_picture", {
+			id: crypto.randomUUID(),
+		});
+		// Then
+		expect({ isError, text, loaded: await loaded(h, ai, a) }).toEqual({
+			isError: true,
+			text: "No picture with this id.",
+			loaded: 200,
+		});
+	});
+
+	test("refuses a picture on an owned item", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		const [a] = await uploads(h, ai, 1);
+		await ai.call("add_owned_item", { ...(await shirt(ai)), pictureIds: [a] });
+		// When
+		const { isError, text } = await ai.call("delete_draft_picture", { id: a });
+		// Then
+		expect({ isError, text, loaded: await loaded(h, ai, a) }).toEqual({
+			isError: true,
+			text: "No picture with this id.",
+			loaded: 200,
+		});
+	});
+
+	test("refuses a picture on a shop link", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		const [a] = await uploads(h, ai, 1);
+		const wishId = await addWish(ai);
+		await ai.call("add_shop_link", { wishId, ...coat, pictureIds: [a] });
+		// When
+		const { isError, text } = await ai.call("delete_draft_picture", { id: a });
+		// Then
+		expect({ isError, text, loaded: await loaded(h, ai, a) }).toEqual({
+			isError: true,
+			text: "No picture with this id.",
+			loaded: 200,
+		});
+	});
+
+	test("answers the could-not sentence when the picture delete fails", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		const [a] = await uploads(h, ai, 1);
+		h.addTrigger(
+			"CREATE TRIGGER fail_picture_delete BEFORE DELETE ON picture BEGIN SELECT RAISE(ABORT, 'picture delete failed'); END",
+		);
+		// When
+		const { isError, text } = await ai.call("delete_draft_picture", { id: a });
+		// Then
+		expect({ isError, text, loaded: await loaded(h, ai, a) }).toEqual({
+			isError: true,
+			text: "dressup could not do this. Try again.",
+			loaded: 200,
+		});
 	});
 });

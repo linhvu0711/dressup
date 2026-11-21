@@ -16,6 +16,7 @@ import { type Holdings, holdingsOf, markOf } from "@/combinations/marks";
 import { LAYER_OF, TYPE_IDS, TYPE_NAMES } from "@/dress/clothing-types";
 import { BRAND_LIMIT, BRAND_NAME_MAX } from "@/labels/brand";
 import { COLOUR_LIMIT, COLOUR_NAME_MAX } from "@/labels/colour";
+import { ACCOUNT_PICTURE_LIMIT } from "@/pictures/picture";
 import { TAG_NAME_MAX, type Tag } from "@/tags/tag";
 import { SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";
 import { type ActionScope, serverError } from "./actions/action";
@@ -685,6 +686,22 @@ export function registerAiActions(server: McpServer, account: Account) {
 					},
 				],
 			};
+		},
+	);
+
+	tool(
+		"delete_draft_picture",
+		{
+			title: "Remove a draft picture",
+			description: `Removes for good a picture that an upload address took and that no owned item or shop link holds, so it stops counting toward the account's ${ACCOUNT_PICTURE_LIMIT.toLocaleString("en")} pictures. A picture on an owned item or a shop link goes with change_owned_item or change_shop_link.`,
+			annotations: DELETE,
+			inputSchema: pictureActions.deleteDraft.input,
+		},
+		async (input) => {
+			const deleted = await pictureActions.deleteDraft.run(scope, input);
+			return deleted.ok
+				? answer({ deleted: deleted.value })
+				: refusal(deleted.error.text);
 		},
 	);
 
