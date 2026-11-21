@@ -27,6 +27,7 @@ export class MemoryBucket {
 		if (!object) return null;
 		return {
 			body: new Blob([object.bytes]).stream(),
+			arrayBuffer: async () => object.bytes.slice().buffer,
 			writeHttpMetadata(headers: Headers) {
 				headers.set("content-type", object.contentType);
 			},
