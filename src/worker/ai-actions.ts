@@ -14,7 +14,12 @@ import {
 } from "@/combinations/combination";
 import { OWN_CHOICES } from "@/combinations/filter";
 import { type Holdings, holdingsOf, markOf } from "@/combinations/marks";
-import { LAYER_OF, TYPE_IDS, TYPE_NAMES } from "@/dress/clothing-types";
+import {
+	isTypeId,
+	LAYER_OF,
+	TYPE_IDS,
+	TYPE_NAMES,
+} from "@/dress/clothing-types";
 import { BRAND_LIMIT, BRAND_NAME_MAX, type BrandId } from "@/labels/brand";
 import { COLOUR_LIMIT, COLOUR_NAME_MAX, type ColourId } from "@/labels/colour";
 import { ITEM_PICTURE_LIMIT } from "@/pictures/picture";
@@ -197,9 +202,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		args: z.output<typeof pieceFilterArgs>,
 	): Promise<{ ok: true; filter: PieceFilter } | { ok: false; text: string }> {
 		const { types = [], colourIds = [], brandIds = [] } = args;
-		const badType = types.find(
-			(t) => !(TYPE_IDS as readonly string[]).includes(t),
-		);
+		const badType = types.find((t) => !isTypeId(t));
 		if (badType !== undefined) return { ok: false, text: notAType(badType) };
 		if (colourIds.length > 0) {
 			const colours = await listColours(db, userId);

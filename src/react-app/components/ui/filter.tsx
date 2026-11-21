@@ -84,12 +84,15 @@ export function FilterSheet({
 	);
 }
 
-type ActiveFilter = {
+export type ActiveFilter = {
 	key: string;
 	label: string;
 	icon?: ReactNode;
 	onRemove: () => void;
 };
+
+export const shownText = (n: number, one: string) =>
+	n === 1 ? `1 ${one}` : `${n} ${one}s`;
 
 // The filters that are on, one chip each with a cross, and Clear all last;
 // under them, how many items show.

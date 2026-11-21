@@ -3,7 +3,7 @@ import { OWNED_ITEM_LIMIT, QUANTITY_MAX } from "@/closet/owned-item";
 import { Button } from "@/components/ui/button";
 import { SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
-import { after, cachedUserId, RequestError } from "@/data/client";
+import { after, cachedUserId, isGone, RequestError } from "@/data/client";
 import { useMarkBought } from "./api";
 import type { ShopLink, WishId } from "./wish";
 
@@ -60,10 +60,7 @@ export function BoughtDialog({
 										toast("Moved to your closet");
 									},
 									onError: (error) => {
-										if (
-											error instanceof RequestError &&
-											error.code === "not_found"
-										) {
+										if (isGone(error)) {
 											onClose();
 											void after.shopLinkGone(userId, link.id);
 										}

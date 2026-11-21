@@ -2,9 +2,9 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import {
 	after,
 	cachedUserId,
-	goneAsDone,
 	keys,
 	RequestError,
+	remove,
 	request,
 } from "../data/client";
 import { colourAnswer, coloursAnswer } from "../data/contract";
@@ -17,8 +17,6 @@ export function useColours() {
 		queryFn: async () =>
 			(await request("GET", "/api/colours", { answer: coloursAnswer })).colours,
 		enabled: userId !== null,
-		// "Retry" on the page is the person's way to try again.
-		retry: false,
 	});
 }
 
@@ -59,8 +57,7 @@ export function useChangeColour() {
 export function useDeleteColour() {
 	const userId = cachedUserId();
 	return useMutation({
-		mutationFn: (id: ColourId) =>
-			request("DELETE", `/api/colours/${id}`).catch(goneAsDone),
+		mutationFn: (id: ColourId) => remove(`/api/colours/${id}`),
 		onSuccess: (_, id) => after.colourDeleted(userId, id),
 		// The list did not know a combination uses it.
 		onError: (error) => {

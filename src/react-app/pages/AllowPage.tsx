@@ -34,9 +34,6 @@ function AllowScreen() {
 			if (error) throw new Error(`public-client answered ${error.status}`);
 			return data;
 		},
-		// "Try again" on the page is the person's way to try again; three silent
-		// retries would hold the placeholders for about 7 s first.
-		retry: false,
 	});
 	// The answer is { redirect: true, url }, and the auth client's redirect
 	// plugin sends the browser to the app itself; a second navigation here would

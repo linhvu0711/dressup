@@ -7,6 +7,7 @@ import {
 	type CombinationFilter,
 	filterChips,
 	filterCombinations,
+	matchingCombinations,
 	pruneCombinationFilter,
 	readCombinationFilter,
 	writeCombinationFilter,
@@ -264,6 +265,24 @@ describe("combination filter", () => {
 			written:
 				"piece=tee_s.00000000-0000-4000-8000-0000000000a1&tag=00000000-0000-4000-8000-000000000001&own=not_all",
 			read: filter,
+		});
+	});
+
+	test("matches nothing for Pieces I own until the closet is in", () => {
+		// Given: A, B, C; the closet not loaded yet
+		// When
+		const waits = matchingCombinations(
+			[A, B, C],
+			{ ...only([]), own: "all" },
+			undefined,
+		);
+		const any = matchingCombinations([A, B, C], only([]), undefined);
+		const noList = matchingCombinations(undefined, only([]), NONE);
+		// Then
+		expect({ waits, any: any && ids(any), noList }).toEqual({
+			waits: undefined,
+			any: ["A", "B", "C"],
+			noList: undefined,
 		});
 	});
 });

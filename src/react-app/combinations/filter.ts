@@ -1,8 +1,8 @@
-import { TYPE_IDS, TYPE_NAMES, type TypeId } from "@/dress/clothing-types";
+import { isTypeId, TYPE_NAMES, type TypeId } from "@/dress/clothing-types";
 import type { ColourId } from "@/labels/colour";
 import type { Tag, TagId } from "@/tags/tag";
 import { type CombinationProblem, pieceName } from "./combination";
-import { type PieceRef, pieceKey } from "./marks";
+import { NO_PIECES, type PieceRef, pieceKey } from "./marks";
 
 // A piece row: a type, a colour, or both. A row with neither filters nothing.
 export type PieceRow = { typeId: TypeId | null; colourId: ColourId | null };
@@ -28,9 +28,6 @@ export const BLANK_ROW: PieceRow = { typeId: null, colourId: null };
 
 export const isBlank = (row: PieceRow) =>
 	row.typeId === null && row.colourId === null;
-
-const isTypeId = (value: string): value is TypeId =>
-	(TYPE_IDS as readonly string[]).includes(value);
 
 type Filtered = {
 	pieces: readonly PieceRef[];
@@ -74,10 +71,17 @@ export const filterCombinations = <T extends Filtered>(
 	owned: ReadonlySet<string>,
 ): T[] => list.filter((c) => matchesFilter(c, f, owned));
 
-export const filterSize = (f: CombinationFilter) =>
-	f.pieces.filter((row) => !isBlank(row)).length +
-	f.tags.length +
-	(f.own === "any" ? 0 : 1);
+// With no closet every combination would look Not all, so Pieces I own
+// matches nothing until the closet is in: undefined, not an empty list. Any
+// never waits.
+export const matchingCombinations = <T extends Filtered>(
+	list: T[] | undefined,
+	f: CombinationFilter,
+	owned: ReadonlySet<string> | undefined,
+): T[] | undefined =>
+	list && (f.own === "any" || owned)
+		? filterCombinations(list, f, owned ?? NO_PIECES)
+		: undefined;
 
 // The rows an AI app sends, before the account's colours are checked.
 export function checkPieceRows(
@@ -232,6 +236,3 @@ export function filterChips(
 				];
 	return [...rows, ...ownChip, ...tagChips];
 }
-
-export const shownText = (n: number) =>
-	n === 1 ? "1 combination" : `${n} combinations`;

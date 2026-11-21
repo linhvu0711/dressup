@@ -5,14 +5,13 @@ import { Link, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
-import { keys, RequestError } from "@/data/client";
+import { isGone, keys, RequestError } from "@/data/client";
 import type { TypeId } from "@/dress/clothing-types";
 import type { Colour } from "@/labels/colour";
 import { useTags } from "@/tags/api";
 import { TagPicker } from "@/tags/TagPicker";
 import type { TagId } from "@/tags/tag";
 import {
-	CombinationGone,
 	useChangeCombination,
 	useCombinations,
 	useSaveCombination,
@@ -111,8 +110,7 @@ export function SaveCombinationDialog({
 												});
 											},
 											onError: (error) => {
-												if (error instanceof CombinationGone)
-													leaveGoneCombination();
+												if (isGone(error)) leaveGoneCombination();
 											},
 										}
 									: {
@@ -139,8 +137,8 @@ export function SaveCombinationDialog({
 							</div>
 						) : alert === "full" ? (
 							<p role="alert" className="text-[12.5px] text-destructive">
-								You have 300 combinations. That is the limit. Delete one to save
-								a new one.
+								You have {COMBINATION_LIMIT} combinations. That is the limit.
+								Delete one to save a new one.
 							</p>
 						) : alert === "failed" ? (
 							<p role="alert" className="text-[13px] text-destructive">

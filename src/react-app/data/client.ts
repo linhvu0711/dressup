@@ -16,9 +16,16 @@ import type { Wish } from "@/wishlist/wish";
 import { type ErrorCode, errorAnswer, meAnswer } from "./contract";
 
 // Every request the web app sends to the worker goes through request(), so
-// the 401 rule, the error codes, and the contract check live here once.
+// the 401 rule, the error codes, and the contract check live here once. Two
+// senders are left out: the session check, fetchMe, whose 401 means no
+// session, and the sign-in calls of authClient, which Better Auth sends
+// itself.
 
-export const queryClient = new QueryClient();
+// "Retry" or "Try again" on the page is the person's way to try again;
+// three silent retries would hold the placeholders for about 7 s first.
+export const queryClient = new QueryClient({
+	defaultOptions: { queries: { retry: false } },
+});
 
 export const keys = {
 	me: ["me"] as const,
@@ -34,14 +41,17 @@ export const keys = {
 	allowApp: (clientId: string) => ["allow-app", clientId] as const,
 };
 
-const refresh = (queryKey: readonly unknown[]) => {
-	// A list with no data yet keeps a load already under way, and that load
-	// may have read the server before this change: drop it, then load again.
-	// Not returned: a returned promise holds the caller's callbacks, such as
-	// the save form's close, until the list has loaded again.
-	void queryClient
+// A list with no data yet keeps a load already under way, and that load
+// may have read the server before this change: drop it, then load again.
+const reload = (queryKey: readonly unknown[]) =>
+	queryClient
 		.cancelQueries({ queryKey })
 		.then(() => queryClient.invalidateQueries({ queryKey }));
+
+const refresh = (queryKey: readonly unknown[]) => {
+	// Not returned: a returned promise holds the caller's callbacks, such as
+	// the save form's close, until the list has loaded again.
+	void reload(queryKey);
 };
 
 // The item in the closet list, in place or first.
@@ -274,7 +284,7 @@ export const after = {
 	// it. The closet loads first, so a piece bought there is in the closet
 	// before its wish leaves the wishlist, and the piece page stays.
 	async shopLinkGone(userId: string | null, id: string) {
-		await queryClient.invalidateQueries({ queryKey: keys.closet(userId) });
+		await reload(keys.closet(userId));
 		after.shopLinkDeleted(userId, id);
 	},
 	aiAppGone(userId: string | null, id: string) {
@@ -298,11 +308,8 @@ export class RequestError extends Error {
 	}
 }
 
-// Not found: deleted on another device already, which is what was asked.
-export const goneAsDone = (error: unknown) => {
-	if (!(error instanceof RequestError && error.code === "not_found"))
-		throw error;
-};
+export const isGone = (error: unknown) =>
+	error instanceof RequestError && error.code === "not_found";
 
 // The account has a label of this name already, in some letter case.
 export const isNameTaken = (error: unknown) =>
@@ -362,6 +369,18 @@ export async function request(
 	if (!answer.success)
 		throw new Error(`${what}: the answer does not match the contract`);
 	return answer.data;
+}
+
+// Not found: deleted on another device already, which is what was asked.
+// The answer says which, for a page that tells the person.
+export async function remove(path: string): Promise<"deleted" | "gone"> {
+	try {
+		await request("DELETE", path);
+		return "deleted";
+	} catch (error) {
+		if (isGone(error)) return "gone";
+		throw error;
+	}
 }
 
 type Me = z.output<typeof meAnswer>;

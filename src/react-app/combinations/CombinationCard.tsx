@@ -47,6 +47,10 @@ export function CombinationCard({
 						}))}
 						viewBox={VIEW_BOX}
 						lite
+						// The cards mount as they scroll near, and a load for each would
+						// ask the server again on every scroll; the wall loads the
+						// colours itself and keeps them fresh.
+						refetchOnMount={false}
 					/>
 				) : (
 					<MannequinPlaceholder viewBox={VIEW_BOX} loading={false} />

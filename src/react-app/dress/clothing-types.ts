@@ -25,6 +25,9 @@ export const TYPE_IDS = [
 
 export type TypeId = (typeof TYPE_IDS)[number];
 
+export const isTypeId = (value: string): value is TypeId =>
+	(TYPE_IDS as readonly string[]).includes(value);
+
 export const TYPE_NAMES: Record<TypeId, string> = {
 	tee_s: "Short tee",
 	tee_l: "Long tee",

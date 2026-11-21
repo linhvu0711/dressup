@@ -12,9 +12,6 @@ export function useMannequin({ refetchOnMount = true } = {}) {
 			(await request("GET", "/api/mannequin", { answer: mannequinAnswer }))
 				.mannequin,
 		enabled: userId !== null,
-		// "Try again" on the page is the person's way to try again, as for
-		// brands.
-		retry: false,
 		refetchOnMount,
 	});
 }
