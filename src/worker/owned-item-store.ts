@@ -36,6 +36,7 @@ import {
 	buyWithPictures,
 	deleteWithPictures,
 	type PictureListError,
+	type PictureListSave,
 	pictureIdsBy,
 	saveWithPictures,
 } from "./picture-store";
@@ -267,16 +268,18 @@ export async function addOwnedItem(
 	const conflict = { ok: false, error: { code: "conflict" } } as const;
 	// Only this account's item of this piece and brand takes the pictures, so
 	// a conflict or a refused insert attaches none.
-	const pictures = {
+	const pictures: PictureListSave = {
 		userId,
-		owner: { ownedItemId: input.id },
+		owner: {
+			kind: "ownedItem",
+			id: input.id,
+			holds: {
+				typeId: input.typeId,
+				colourId: input.colourId,
+				brandId: input.brandId,
+			},
+		},
 		ids: input.pictureIds,
-		itemHeld: exists(
-			db
-				.select({ one: sql`1` })
-				.from(ownedItem)
-				.where(and(eq(ownedItem.id, input.id), samePiece(userId, input))),
-		),
 	};
 	const [before] = await db
 		.select({
@@ -350,22 +353,10 @@ export async function changeOwnedItem(
 		bucket,
 		{
 			userId,
-			owner: { ownedItemId: id },
+			// The item holds the new brand only when the update wrote, since it
+			// runs first in the batch; a refused change attaches and drops nothing.
+			owner: { kind: "ownedItem", id, holds: { brandId } },
 			ids: pictureIds,
-			// The brand is the new one only when the update wrote, since it runs
-			// first in the batch; a refused change attaches and drops nothing.
-			itemHeld: exists(
-				db
-					.select({ one: sql`1` })
-					.from(ownedItem)
-					.where(
-						and(
-							eq(ownedItem.id, id),
-							eq(ownedItem.userId, userId),
-							sql`${ownedItem.brandId} is ${brandId}`,
-						),
-					),
-			),
 		},
 		db
 			.update(ownedItem)
@@ -427,7 +418,7 @@ export async function deleteOwnedItem(
 	const [row] = await deleteWithPictures(
 		db,
 		bucket,
-		{ userId, owner: { ownedItemId: id } },
+		{ userId, owner: { kind: "ownedItem", id } },
 		db
 			.delete(ownedItem)
 			.where(and(eq(ownedItem.id, id), eq(ownedItem.userId, userId)))

@@ -361,20 +361,8 @@ export async function addShopLink(
 		bucket,
 		{
 			userId,
-			owner: { shopLinkId: input.id },
+			owner: { kind: "shopLink", id: input.id, holds: { wishId } },
 			ids: input.pictureIds,
-			itemHeld: exists(
-				db
-					.select({ one: sql`1` })
-					.from(shopLink)
-					.where(
-						and(
-							eq(shopLink.id, input.id),
-							eq(shopLink.userId, userId),
-							eq(shopLink.wishId, wishId),
-						),
-					),
-			),
 		},
 		db
 			.insert(shopLink)
@@ -463,22 +451,10 @@ export async function changeShopLink(
 		bucket,
 		{
 			userId,
-			owner: { shopLinkId: id },
+			// The link holds the new brand only when the update wrote, since it
+			// runs first in the batch; a refused change attaches and drops nothing.
+			owner: { kind: "shopLink", id, holds: { brandId: input.brandId } },
 			ids: pictureIds,
-			// The brand is the new one only when the update wrote, since it runs
-			// first in the batch; a refused change attaches and drops nothing.
-			itemHeld: exists(
-				db
-					.select({ one: sql`1` })
-					.from(shopLink)
-					.where(
-						and(
-							eq(shopLink.id, id),
-							eq(shopLink.userId, userId),
-							sql`${shopLink.brandId} is ${input.brandId}`,
-						),
-					),
-			),
 		},
 		db
 			.update(shopLink)
@@ -527,7 +503,7 @@ export async function deleteShopLink(
 	const [row] = await deleteWithPictures(
 		db,
 		bucket,
-		{ userId, owner: { shopLinkId: id } },
+		{ userId, owner: { kind: "shopLink", id } },
 		db
 			.delete(shopLink)
 			.where(and(eq(shopLink.id, id), eq(shopLink.userId, userId)))

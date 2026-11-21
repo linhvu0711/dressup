@@ -1,8 +1,10 @@
 import {
 	and,
 	asc,
+	type Column,
 	count,
 	eq,
+	exists,
 	inArray,
 	isNotNull,
 	isNull,
@@ -25,6 +27,7 @@ import {
 } from "@/pictures/picture";
 import type { Db } from "./db";
 import { user } from "./db/auth-schema";
+import { ownedItem } from "./db/owned-item-schema";
 import {
 	picture,
 	pictureStorage,
@@ -45,19 +48,74 @@ export type AddPictureError =
 	| { code: "not_found" };
 
 // The one owner of a saved picture.
-type PictureOwner = { ownedItemId: string } | { shopLinkId: string };
+type PictureOwner = { kind: "ownedItem" | "shopLink"; id: string };
+
+// A save's owner, with the values its row holds once the owner's write ran,
+// so a refused, changed, or gone owner takes no picture.
+export type HeldOwner =
+	| {
+			kind: "ownedItem";
+			id: string;
+			holds: Partial<
+				Pick<
+					typeof ownedItem.$inferSelect,
+					"typeId" | "colourId" | "brandId" | "quantity"
+				>
+			>;
+	  }
+	| {
+			kind: "shopLink";
+			id: string;
+			holds: Partial<Pick<typeof shopLink.$inferSelect, "wishId" | "brandId">>;
+	  };
 
 const ownerIs = (owner: PictureOwner) =>
-	"ownedItemId" in owner
-		? eq(picture.ownedItemId, owner.ownedItemId)
-		: eq(picture.shopLinkId, owner.shopLinkId);
+	owner.kind === "ownedItem"
+		? eq(picture.ownedItemId, owner.id)
+		: eq(picture.shopLinkId, owner.id);
 
 // Both keys, so a picture never keeps a second owner.
 const ownedBy = (owner: PictureOwner) => ({
-	ownedItemId: null,
-	shopLinkId: null,
-	...owner,
+	ownedItemId: owner.kind === "ownedItem" ? owner.id : null,
+	shopLinkId: owner.kind === "shopLink" ? owner.id : null,
 });
+
+// `is`, so a null brand matches a null brand.
+const holding = <C extends string>(
+	columns: NoInfer<Record<C, Column>>,
+	holds: Partial<Record<C, unknown>>,
+) =>
+	Object.entries(holds).map(
+		([key, value]) => sql`${columns[key as C]} is ${value}`,
+	);
+
+function ownerHeld(db: Db, userId: string, owner: HeldOwner) {
+	if (owner.kind === "ownedItem")
+		return exists(
+			db
+				.select({ one: sql`1` })
+				.from(ownedItem)
+				.where(
+					and(
+						eq(ownedItem.id, owner.id),
+						eq(ownedItem.userId, userId),
+						...holding(ownedItem, owner.holds),
+					),
+				),
+		);
+	return exists(
+		db
+			.select({ one: sql`1` })
+			.from(shopLink)
+			.where(
+				and(
+					eq(shopLink.id, owner.id),
+					eq(shopLink.userId, userId),
+					...holding(shopLink, owner.holds),
+				),
+			),
+	);
+}
 
 const isDraft = and(isNull(picture.ownedItemId), isNull(picture.shopLinkId));
 
@@ -386,56 +444,56 @@ async function checkPictureList(
 	return held?.n === ids.length ? null : invalid;
 }
 
-type PictureListSave = {
+export type PictureListSave = {
 	userId: string;
-	owner: PictureOwner;
+	owner: HeldOwner;
 	// The whole list; undefined keeps the owner's pictures.
 	ids: string[] | undefined;
-	// The caller's exists on its own row as the owner write left it, so a
-	// refused or gone owner takes no picture.
-	itemHeld: SQL;
 };
 
 // The owner's write and its picture list in one batch: the owner first, so
-// itemHeld sees it, then the drafts in the list attach, then the owner's
-// pictures left out go, rows and objects; with itemHeld false, neither. It gives back the owner write's
-// result.
+// the owner check sees it, then the drafts in the list attach, then the
+// owner's pictures left out go, rows and objects; with the check false,
+// neither. It gives back the owner write's result.
 export async function saveWithPictures<T extends Statement>(
 	db: Db,
 	bucket: R2Bucket,
-	{ userId, owner, ids, itemHeld }: PictureListSave,
+	{ userId, owner, ids }: PictureListSave,
 	ownerWrite: T,
 ): Promise<Result<Awaited<T>, PictureListError>> {
 	if (ids === undefined)
 		return { ok: true, value: (await ownerWrite) as Awaited<T> };
 	const refused = await checkPictureList(db, userId, owner, ids);
 	if (refused) return { ok: false, error: refused };
-	const { before } = await runWithPictures(db, bucket, {
-		before: [
-			ownerWrite,
-			db
-				.update(picture)
-				.set(ownedBy(owner))
-				.where(
-					and(
-						eq(picture.userId, userId),
-						inArray(picture.id, ids),
-						or(isDraft, ownerIs(owner)),
-						itemHeld,
-					),
+	const held = ownerHeld(db, userId, owner);
+	const [written, , , dropped] = await db.batch([
+		ownerWrite,
+		db
+			.update(picture)
+			.set(ownedBy(owner))
+			.where(
+				and(
+					eq(picture.userId, userId),
+					inArray(picture.id, ids),
+					or(isDraft, ownerIs(owner)),
+					held,
 				),
-		],
-		drop: dropPictures(
+			),
+		...dropPictures(
 			db,
 			and(
 				eq(picture.userId, userId),
 				ownerIs(owner),
 				notInArray(picture.id, ids),
-				itemHeld,
+				held,
 			),
 		),
-	});
-	return { ok: true, value: before[0] as Awaited<T> };
+	]);
+	await removeObjects(
+		bucket,
+		dropped.map((row) => row.id),
+	);
+	return { ok: true, value: written as Awaited<T> };
 }
 
 // The owner's delete with its pictures in one batch: the pictures' rows go
@@ -494,7 +552,7 @@ export async function buyWithPictures<T extends Statement>(
 			ownerWrite,
 			db
 				.update(picture)
-				.set(ownedBy({ ownedItemId }))
+				.set(ownedBy({ kind: "ownedItem", id: ownedItemId }))
 				.where(
 					and(
 						eq(picture.userId, userId),
