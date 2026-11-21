@@ -27,8 +27,8 @@ export const ownedItem = sqliteTable(
 		quantity: integer("quantity").notNull(),
 		name: text("name"),
 		price: integer("price"),
-		// A fresh id each Bought sets with its own write, so the rest of its
-		// batch can tell that write from another one that set the same quantity.
+		// A fresh id each Bought sets with its insert, so the rest of its batch
+		// runs only once that insert wrote.
 		writeId: text("write_id"),
 		createdAt: integer("created_at", { mode: "timestamp_ms" })
 			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)

@@ -24,7 +24,7 @@
 - Wishlist: the pieces the account wants to buy, shown as one tile for each piece. The user filters it by type, colour, and brand.
 - Wish: one wanted piece, with its shop links. A piece has at most one wish. An account holds at most 200.
 - Shop link: one place to buy a wish: a web address with its own brand, name, and price in VND. A wish holds at most 10.
-- Bought: the action that turns one shop link into an owned item with the link's brand and pictures, and deletes the wish with its other shop links.
+- Bought: the action that turns one shop link into a new owned item with the link's brand, name, price, and pictures. It deletes the wish and the wish's other shop links.
 - AI app: an outside AI assistant, such as Claude, Claude Code, ChatGPT, or Codex, that acts in an account for its user.
 - Connected AI app: an AI app the user allowed on the Allow page. Settings lists each one. Disconnect stops it at once.
 - Allow page: the dressup page where the user lets one AI app see and change the data in their account.

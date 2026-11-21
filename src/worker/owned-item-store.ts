@@ -1,11 +1,10 @@
-import { and, asc, count, desc, eq, exists, sql } from "drizzle-orm";
+import { and, count, desc, eq, exists, sql } from "drizzle-orm";
 import {
 	OWNED_ITEM_LIMIT,
 	type OwnedItem,
 	type OwnedItemId,
 	ownedItemChangeSchema,
 	ownedItemInputSchema,
-	QUANTITY_MAX,
 } from "@/closet/owned-item";
 import type { Hex } from "@/colour/hex";
 import type { PieceRef } from "@/combinations/marks";
@@ -302,31 +301,32 @@ export async function deleteOwnedItem(
 export type BoughtError =
 	| { code: "not_found" }
 	| { code: "owned_item_limit" }
-	| { code: "quantity_limit" }
 	| { code: "conflict" };
 
-// Bought: the link becomes an owned item of its wish's piece with its brand
-// and pictures, or adds 1 to the item of that piece and brand, and the wish
-// goes with its other links. Every write is guarded by the link and the item
-// as they were read, so a link or an item changed since writes nothing.
+// Bought: the link becomes a new owned item of its wish's piece with the
+// link's brand, name, price, and pictures, and the wish goes with its other
+// links. Every write is guarded by the link as it was read, so a link changed
+// since writes nothing.
 export async function buyShopLink(
 	db: Db,
 	bucket: R2Bucket,
 	userId: string,
 	shopLinkId: string,
-): Promise<Result<AddedOwnedItem, BoughtError>> {
+): Promise<Result<OwnedItem, BoughtError>> {
 	const [link] = await db
 		.select({
 			wishId: wish.id,
 			typeId: wish.typeId,
 			colourId: wish.colourId,
 			brandId: shopLink.brandId,
+			name: shopLink.name,
+			price: shopLink.price,
 		})
 		.from(shopLink)
 		.innerJoin(wish, eq(wish.id, shopLink.wishId))
 		.where(and(eq(shopLink.id, shopLinkId), eq(shopLink.userId, userId)));
 	if (!link) return { ok: false, error: { code: "not_found" } };
-	const { wishId, ...piece } = link;
+	const { wishId, ...copied } = link;
 	const linkHeld = exists(
 		db
 			.select({ one: sql`1` })
@@ -336,63 +336,33 @@ export async function buyShopLink(
 					eq(shopLink.id, shopLinkId),
 					eq(shopLink.userId, userId),
 					eq(shopLink.wishId, wishId),
-					sql`${shopLink.brandId} is ${piece.brandId}`,
+					sql`${shopLink.brandId} is ${copied.brandId}`,
+					eq(shopLink.name, copied.name),
+					sql`${shopLink.price} is ${copied.price}`,
 				),
 			),
 	);
-	const [found] = await db
-		.select({ id: ownedItem.id, quantity: ownedItem.quantity })
-		.from(ownedItem)
-		.where(sameItem(userId, piece))
-		.orderBy(asc(ownedItem.createdAt), asc(sql`rowid`))
-		.limit(1);
-	if (found && found.quantity >= QUANTITY_MAX) {
-		return { ok: false, error: { code: "quantity_limit" } };
-	}
-	const id = found?.id ?? crypto.randomUUID();
+	const id = crypto.randomUUID();
 	const writeId = crypto.randomUUID();
-	const ownerWrite = found
-		? db
-				.update(ownedItem)
-				.set({ quantity: found.quantity + 1, writeId })
-				.where(
-					and(
-						eq(ownedItem.id, id),
-						eq(ownedItem.userId, userId),
-						eq(ownedItem.quantity, found.quantity),
-						linkHeld,
-					),
-				)
-				.returning({ id: ownedItem.id })
-		: insertUnder(db, ownedItem, {
-				userId,
-				id,
-				values: { ...piece, name: null, price: null, quantity: 1, writeId },
-				guards: [...itemGuards(db, userId, piece), linkHeld],
-				limit: { max: OWNED_ITEM_LIMIT },
-			})
-				.onConflictDoNothing()
-				.returning({ id: ownedItem.id });
 	const [row] = await buyWithPictures(
 		db,
 		bucket,
-		{
+		{ userId, link: { id: shopLinkId, wishId }, item: { id, writeId } },
+		insertUnder(db, ownedItem, {
 			userId,
-			link: { id: shopLinkId, wishId, brandId: piece.brandId },
-			item: { id, writeId },
-		},
-		ownerWrite,
+			id,
+			values: { ...copied, quantity: 1, writeId },
+			guards: [...itemGuards(db, userId, copied), linkHeld],
+			limit: { max: OWNED_ITEM_LIMIT },
+		})
+			.onConflictDoNothing()
+			.returning({ id: ownedItem.id }),
 	);
 	if (row) {
 		const [bought] = await readOwnedItems(db, userId, id);
-		if (bought) {
-			return { ok: true, value: { ownedItem: bought, created: !found } };
-		}
+		if (bought) return { ok: true, value: bought };
 	}
-	return {
-		ok: false,
-		error: await refusedBuy(db, userId, shopLinkId, !found),
-	};
+	return { ok: false, error: await refusedBuy(db, userId, shopLinkId) };
 }
 
 // Why a Bought that the guards stopped did not happen.
@@ -400,14 +370,12 @@ async function refusedBuy(
 	db: Db,
 	userId: string,
 	shopLinkId: string,
-	inserted: boolean,
 ): Promise<BoughtError> {
 	const [link] = await db
 		.select({ id: shopLink.id })
 		.from(shopLink)
 		.where(and(eq(shopLink.id, shopLinkId), eq(shopLink.userId, userId)));
 	if (!link) return { code: "not_found" };
-	if (!inserted) return { code: "conflict" };
 	const [held] = await db
 		.select({ n: count() })
 		.from(ownedItem)

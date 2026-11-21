@@ -289,8 +289,7 @@ export function createApp(getDb: (env: Env) => Db) {
 			id: c.req.param("id"),
 		});
 		if (!bought.ok) return c.json(bought.error.body, bought.error.status);
-		const { ownedItem, created } = bought.value;
-		return c.json({ ownedItem } satisfies OwnedItemAnswer, created ? 201 : 200);
+		return c.json({ ownedItem: bought.value } satisfies OwnedItemAnswer, 201);
 	});
 
 	app.get("/wishes", withAuth, requireUser, async (c) => {

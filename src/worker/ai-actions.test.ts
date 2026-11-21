@@ -1482,26 +1482,21 @@ describe("wishes", () => {
 		});
 	});
 
-	test("answers created false when Bought adds 1 to an item", async () => {
-		// Given
+	test("answers the bought item with the link's name and price paid", async () => {
+		// Given: the link "Wool jacket" at 4.290.000
 		const { ai } = await withAiSession();
-		await ai.call("add_owned_item", {
-			typeId: "wool",
-			colourId: await colourId(ai, "Navy"),
-			quantity: 1,
-		});
 		const id = await addJacketLink(ai);
 		// When
 		const { data } = await ai.call("mark_shop_link_bought", { id });
 		// Then
-		const { created, ownedItem } = data as {
-			created: boolean;
-			ownedItem: { quantity: number };
+		const { ownedItem } = data as {
+			ownedItem: { name: string | null; price: number | null };
 		};
-		expect({ created, quantity: ownedItem.quantity }).toEqual({
-			created: false,
-			quantity: 2,
-		});
+		expect({
+			keys: Object.keys(data as object),
+			name: ownedItem.name,
+			price: ownedItem.price,
+		}).toEqual({ keys: ["ownedItem"], name: "Wool jacket", price: 4290000 });
 	});
 
 	test("refuses Bought at 500 owned items as a sentence", async () => {

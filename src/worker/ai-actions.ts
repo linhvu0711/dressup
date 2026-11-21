@@ -636,13 +636,15 @@ export function registerAiActions(server: McpServer, account: Account) {
 		{
 			title: "Mark a shop link as bought",
 			description:
-				"Moves a shop link to the closet as an owned item with its brand, quantity 1, and its pictures, and removes its wish with the other shop links and their pictures. When the closet holds this piece with this brand, adds 1 to that item. Answers the owned item and created: true for a new item, false when it added 1.",
+				"Moves a shop link to the closet as a new owned item with the link's brand, name, price, quantity 1, and pictures, and removes its wish with the other shop links and their pictures. Answers the owned item.",
 			annotations: DELETE,
 			inputSchema: boughtActions.buy.input,
 		},
 		async (input) => {
 			const bought = await boughtActions.buy.run(scope, input);
-			return bought.ok ? answer(bought.value) : refusal(bought.error.text);
+			return bought.ok
+				? answer({ ownedItem: bought.value })
+				: refusal(bought.error.text);
 		},
 	);
 

@@ -545,13 +545,12 @@ export async function deleteOwner(
 }
 
 // The Bought batch. The item write runs first, so the check sees it; then
-// the link's oldest pictures move to the item while it has room, before the
-// drop, so the kept ones stay; the wish goes last, with its other links,
-// once no picture points at them. Each picture write and the wish delete
-// run only while the link is as it was read and the item holds the write id
-// the write set. The objects go only after the batch commits, so a failure
-// deletes no object, and no row is left with no object. It gives back the
-// item write's result.
+// the link's pictures move to the new item, before the drop, so they stay;
+// the wish goes last, with its other links, once no picture points at them.
+// Each picture write and the wish delete run only once the item write wrote
+// its write id; that write holds the link as it was read. The objects go only
+// after the batch commits, so a failure deletes no object, and no row is left
+// with no object. It gives back the item write's result.
 export async function buyWithPictures<T extends Statement>(
 	db: Db,
 	bucket: R2Bucket,
@@ -561,23 +560,16 @@ export async function buyWithPictures<T extends Statement>(
 		item,
 	}: {
 		userId: string;
-		link: { id: string; wishId: string; brandId: string | null };
+		link: { id: string; wishId: string };
 		item: { id: string; writeId: string };
 	},
 	itemWrite: T,
 ): Promise<Awaited<T>> {
-	const held = and(
-		ownerHeld(db, userId, {
-			kind: "shopLink",
-			id: link.id,
-			holds: { wishId: link.wishId, brandId: link.brandId },
-		}),
-		ownerHeld(db, userId, {
-			kind: "ownedItem",
-			id: item.id,
-			holds: { writeId: item.writeId },
-		}),
-	);
+	const held = ownerHeld(db, userId, {
+		kind: "ownedItem",
+		id: item.id,
+		holds: { writeId: item.writeId },
+	});
 	const removeWish = db
 		.delete(wish)
 		.where(and(eq(wish.id, link.wishId), eq(wish.userId, userId), held));
@@ -587,11 +579,7 @@ export async function buyWithPictures<T extends Statement>(
 			.update(picture)
 			.set(ownedBy({ kind: "ownedItem", id: item.id }))
 			.where(
-				and(
-					eq(picture.userId, userId),
-					sql`${picture.id} in (select ${picture.id} from ${picture} where ${picture.shopLinkId} = ${link.id} order by ${picture.createdAt}, rowid limit max(0, ${ITEM_PICTURE_LIMIT} - (select count(*) from ${picture} where ${picture.ownedItemId} = ${item.id})))`,
-					held,
-				),
+				and(eq(picture.userId, userId), eq(picture.shopLinkId, link.id), held),
 			),
 		...dropPictures(
 			db,
