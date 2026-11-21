@@ -18,10 +18,10 @@ import {
 import { brandOf } from "./brand-store";
 import { colourOf } from "./colour-store";
 import type { Db } from "./db";
-import { user } from "./db/auth-schema";
 import { brand } from "./db/brand-schema";
 import { colour } from "./db/colour-schema";
 import { shopLink, wish } from "./db/wish-schema";
+import { guardedAdd } from "./guarded-add";
 import {
 	deleteWithPictures,
 	type PictureListError,
@@ -209,7 +209,7 @@ async function refusedWrite(
 	db: Db,
 	userId: string,
 	piece: Piece,
-): Promise<WishError> {
+): Promise<WishError | null> {
 	const [ownColour] = await colourOf(db, userId, piece.colourId);
 	if (!ownColour)
 		return { code: "invalid", field: "colourId", value: piece.colourId };
@@ -217,17 +217,15 @@ async function refusedWrite(
 		.select({ id: wish.id })
 		.from(wish)
 		.where(samePiece(userId, piece));
-	return held
-		? { code: "duplicate", id: held.id as WishId }
-		: { code: "wish_limit" };
+	return held ? { code: "duplicate", id: held.id as WishId } : null;
 }
 
 // The page makes the id when the form opens, so an add sent again after a
 // lost answer gives back the same wish rather than a second one; the same id
 // with another piece, or another account's id, is conflict. The colour, the
-// limit, and the duplicate rule sit in the insert itself, so two adds at once
-// cannot both pass them; the unique index turns a lost race on one piece into
-// no row too.
+// limit, and the duplicate rule are the shared add's guards, so two adds at
+// once cannot both pass them; the unique index turns a lost race on one piece
+// into no row too.
 export async function addWish(
 	db: Db,
 	userId: string,
@@ -237,67 +235,28 @@ export async function addWish(
 	if (!parsed.success)
 		return invalid(draft, parsed.error.issues[0]?.path ?? []);
 	const input = parsed.data;
-	const conflict = { ok: false, error: { code: "conflict" } } as const;
-	const [before] = await db
-		.select({
-			userId: wish.userId,
-			typeId: wish.typeId,
-			colourId: wish.colourId,
-		})
-		.from(wish)
-		.where(eq(wish.id, input.id));
-	if (before) {
-		const same =
-			before.userId === userId &&
-			before.typeId === input.typeId &&
-			before.colourId === input.colourId;
-		if (!same) return conflict;
-		const [held] = await readWishes(db, userId, input.id);
-		return held
-			? { ok: true, value: { wish: held, created: false } }
-			: conflict;
-	}
-	await db
-		.insert(wish)
-		.select(
-			db
-				.select({
-					id: sql<string>`${input.id}`.as("id"),
-					userId: user.id,
-					typeId: sql<string>`${input.typeId}`.as("type_id"),
-					colourId: sql<string>`${input.colourId}`.as("colour_id"),
-					createdAt:
-						sql<number>`(cast(unixepoch('subsecond') * 1000 as integer))`.as(
-							"created_at",
-						),
-				})
-				.from(user)
-				.where(
-					and(
-						eq(user.id, userId),
-						exists(colourOf(db, userId, input.colourId)),
-						sql`(${db
-							.select({ n: count() })
-							.from(wish)
-							.where(eq(wish.userId, userId))}) < ${WISH_LIMIT}`,
-						notExists(
-							db
-								.select({ one: sql`1` })
-								.from(wish)
-								.where(samePiece(userId, input)),
-						),
-					),
-				),
-		)
-		.onConflictDoNothing();
-	const [added] = await readWishes(db, userId, input.id);
-	if (added) return { ok: true, value: { wish: added, created: true } };
-	const [taken] = await db
-		.select({ id: wish.id })
-		.from(wish)
-		.where(eq(wish.id, input.id));
-	if (taken) return conflict;
-	return { ok: false, error: await refusedWrite(db, userId, input) };
+	const added = await guardedAdd(db, {
+		table: wish,
+		userId,
+		id: input.id,
+		mine: samePiece(userId, input),
+		values: { typeId: input.typeId, colourId: input.colourId },
+		guards: [
+			exists(colourOf(db, userId, input.colourId)),
+			notExists(
+				db.select({ one: sql`1` }).from(wish).where(samePiece(userId, input)),
+			),
+		],
+		limit: { max: WISH_LIMIT, code: "wish_limit" },
+		read: async () => (await readWishes(db, userId, input.id))[0],
+		refused: () => refusedWrite(db, userId, input),
+	});
+	return added.ok
+		? {
+				ok: true,
+				value: { wish: added.value.value, created: added.value.created },
+			}
+		: added;
 }
 
 // Only the account's own wish goes; not found when the account has no wish
