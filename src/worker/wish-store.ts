@@ -22,12 +22,11 @@ import { shopLink, wish } from "./db/wish-schema";
 import { guardedAdd } from "./guarded-add";
 import {
 	deleteWithPictures,
-	type PictureListError,
 	pictureIdsBy,
 	saveWithPictures,
 } from "./picture-store";
 import { pieceRefusal, samePiece } from "./piece-rows";
-import type { Result } from "./result";
+import { invalidField, type Result } from "./result";
 
 type WishField =
 	| "id"
@@ -150,7 +149,7 @@ export async function listWishedPieces(
 	}));
 }
 
-const FIELDS: readonly WishField[] = [
+const WISH_FIELDS: readonly WishField[] = [
 	"id",
 	"typeId",
 	"colourId",
@@ -160,35 +159,6 @@ const FIELDS: readonly WishField[] = [
 	"price",
 	"pictureIds",
 ];
-
-const isField = (key: unknown): key is WishField =>
-	FIELDS.includes(key as WishField);
-
-// The first bad field, with the value that was sent for it.
-function invalid(
-	input: unknown,
-	path: readonly PropertyKey[],
-): { ok: false; error: WishError } {
-	const key = path[0];
-	if (!isField(key))
-		return { ok: false, error: { code: "invalid", field: "body" } };
-	const value =
-		typeof input === "object" && input !== null
-			? (input as Record<string, unknown>)[key]
-			: undefined;
-	return { ok: false, error: { code: "invalid", field: key, value } };
-}
-
-const listRefusal = (
-	error: PictureListError,
-	ids: string[] | undefined,
-): { ok: false; error: WishError } =>
-	error.code === "picture_limit"
-		? { ok: false, error: { code: "picture_limit" } }
-		: {
-				ok: false,
-				error: { code: "invalid", field: "pictureIds", value: ids },
-			};
 
 // The page makes the id when the form opens, so an add sent again after a
 // lost answer gives back the same wish rather than a second one; the same id
@@ -203,7 +173,7 @@ export async function addWish(
 ): Promise<Result<AddedWish, WishError>> {
 	const parsed = wishInputSchema.safeParse(draft);
 	if (!parsed.success)
-		return invalid(draft, parsed.error.issues[0]?.path ?? []);
+		return invalidField(WISH_FIELDS, draft, parsed.error.issues[0]?.path ?? []);
 	const input = parsed.data;
 	const added = await guardedAdd(db, {
 		table: wish,
@@ -275,7 +245,7 @@ export async function addShopLink(
 ): Promise<Result<AddedShopLink, WishError>> {
 	const parsed = shopLinkInputSchema.safeParse(draft);
 	if (!parsed.success)
-		return invalid(draft, parsed.error.issues[0]?.path ?? []);
+		return invalidField(WISH_FIELDS, draft, parsed.error.issues[0]?.path ?? []);
 	const input = parsed.data;
 	const added = await guardedAdd(db, {
 		table: shopLink,
@@ -354,7 +324,7 @@ export async function changeShopLink(
 ): Promise<Result<Wish, WishError>> {
 	const parsed = shopLinkChangeSchema.safeParse(draft);
 	if (!parsed.success)
-		return invalid(draft, parsed.error.issues[0]?.path ?? []);
+		return invalidField(WISH_FIELDS, draft, parsed.error.issues[0]?.path ?? []);
 	const { pictureIds, ...input } = parsed.data;
 	const saved = await saveWithPictures(
 		db,
@@ -380,7 +350,7 @@ export async function changeShopLink(
 			)
 			.returning({ wishId: shopLink.wishId }),
 	);
-	if (!saved.ok) return listRefusal(saved.error, pictureIds);
+	if (!saved.ok) return saved;
 	const [row] = saved.value;
 	if (row) {
 		const [held] = await readWishes(db, userId, row.wishId);

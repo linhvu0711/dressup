@@ -33,13 +33,12 @@ import { guardedAdd, insertUnder } from "./guarded-add";
 import {
 	buyWithPictures,
 	deleteWithPictures,
-	type PictureListError,
 	type PictureListSave,
 	pictureIdsBy,
 	saveWithPictures,
 } from "./picture-store";
 import { pieceRefusal, samePiece } from "./piece-rows";
-import type { Result } from "./result";
+import { invalidField, type Result } from "./result";
 
 type OwnedItemField =
 	| "id"
@@ -124,28 +123,14 @@ export async function listOwnedPieces(
 	}));
 }
 
-const isField = (key: unknown): key is OwnedItemField =>
-	key === "id" ||
-	key === "typeId" ||
-	key === "colourId" ||
-	key === "brandId" ||
-	key === "quantity" ||
-	key === "pictureIds";
-
-// The first bad field, with the value that was sent for it.
-function invalid(
-	input: unknown,
-	path: readonly PropertyKey[],
-): { ok: false; error: OwnedItemError } {
-	const key = path[0];
-	if (!isField(key))
-		return { ok: false, error: { code: "invalid", field: "body" } };
-	const value =
-		typeof input === "object" && input !== null
-			? (input as Record<string, unknown>)[key]
-			: undefined;
-	return { ok: false, error: { code: "invalid", field: key, value } };
-}
+const OWNED_ITEM_FIELDS: readonly OwnedItemField[] = [
+	"id",
+	"typeId",
+	"colourId",
+	"brandId",
+	"quantity",
+	"pictureIds",
+];
 
 // The account's items of one piece with one brand; `is` matches no brand
 // to no brand.
@@ -154,17 +139,6 @@ const sameItem = (userId: string, piece: Piece) =>
 		samePiece(ownedItem, userId, piece),
 		sql`${ownedItem.brandId} is ${piece.brandId}`,
 	);
-
-const listRefusal = (
-	error: PictureListError,
-	ids: string[] | undefined,
-): { ok: false; error: OwnedItemError } =>
-	error.code === "picture_limit"
-		? { ok: false, error: { code: "picture_limit" } }
-		: {
-				ok: false,
-				error: { code: "invalid", field: "pictureIds", value: ids },
-			};
 
 // The colour, the brand, and the duplicate rule of an owned item's insert.
 const itemGuards = (db: Db, userId: string, piece: Piece) => [
@@ -191,7 +165,11 @@ export async function addOwnedItem(
 ): Promise<Result<AddedOwnedItem, OwnedItemError>> {
 	const parsed = ownedItemInputSchema.safeParse(draft);
 	if (!parsed.success)
-		return invalid(draft, parsed.error.issues[0]?.path ?? []);
+		return invalidField(
+			OWNED_ITEM_FIELDS,
+			draft,
+			parsed.error.issues[0]?.path ?? [],
+		);
 	const input = parsed.data;
 	// Only this account's item of this piece and brand takes the pictures, so
 	// a conflict or a refused insert attaches none.
@@ -266,7 +244,11 @@ export async function changeOwnedItem(
 ): Promise<Result<OwnedItem, OwnedItemError>> {
 	const parsed = ownedItemChangeSchema.safeParse(draft);
 	if (!parsed.success)
-		return invalid(draft, parsed.error.issues[0]?.path ?? []);
+		return invalidField(
+			OWNED_ITEM_FIELDS,
+			draft,
+			parsed.error.issues[0]?.path ?? [],
+		);
 	const { brandId, quantity, pictureIds } = parsed.data;
 	const other = alias(ownedItem, "other");
 	const saved = await saveWithPictures(
@@ -305,7 +287,7 @@ export async function changeOwnedItem(
 			)
 			.returning({ id: ownedItem.id }),
 	);
-	if (!saved.ok) return listRefusal(saved.error, pictureIds);
+	if (!saved.ok) return saved;
 	const [row] = saved.value;
 	if (row) {
 		const [changed] = await readOwnedItems(db, userId, id);
