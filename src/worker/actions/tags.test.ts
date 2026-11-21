@@ -2,14 +2,20 @@ import { describe, expect, test } from "bun:test";
 import { listColours } from "../colour-store";
 import { listTags } from "../tag-store";
 import { three } from "../test/combination-pieces";
-import { ALICE, BOB, otherTabWrites, withAccount } from "../test/harness";
+import {
+	ALICE,
+	BOB,
+	otherTabWrites,
+	scopeOf,
+	withAccount,
+} from "../test/harness";
 import type { Refusal } from "./action";
 import { combinationActions } from "./combinations";
 import { tagActions } from "./tags";
 
 async function withAlice() {
 	const { h } = await withAccount();
-	return { h, alice: { db: h.db, userId: ALICE.id } };
+	return { h, alice: scopeOf(h) };
 }
 
 async function withWork() {
@@ -95,7 +101,7 @@ describe("renaming and deleting a tag", () => {
 		// Given: Work added by alice; bob has an account
 		const { h, work } = await withWork();
 		await h.addAccount(BOB);
-		const bob = { db: h.db, userId: BOB.id };
+		const bob = scopeOf(h, BOB);
 		// When
 		const renamed = await tagActions.rename.run(bob, {
 			id: work,
@@ -180,7 +186,7 @@ describe("adding a tag", () => {
 		// Given: alice with Work; bob has an account
 		const { h } = await withWork();
 		await h.addAccount(BOB);
-		const bob = { db: h.db, userId: BOB.id };
+		const bob = scopeOf(h, BOB);
 		// When
 		const added = await tagActions.add.run(bob, { name: "work" });
 		// Then

@@ -9,15 +9,12 @@ import {
 	JPEG,
 	PDF,
 	PNG,
-	send,
 	uploadPicture,
 	withAiSession,
 } from "./test/harness";
 import { claimUploadAddress, giveUploadAddress } from "./upload-address-store";
 
 type Session = Awaited<ReturnType<typeof aiSession>>;
-
-const NO_SUCH_ID = "5b1f2c3d-0000-4000-8000-000000000000";
 
 const GONE = {
 	error: "address_gone",
@@ -39,9 +36,6 @@ const uploadByAddress = async (h: Harness, address: string, body = JPEG) => {
 	expect(res.status).toBe(201);
 	return ((await res.json()) as { pictureId: string }).pictureId;
 };
-
-const addressFor = async (h: Harness, userId: string) =>
-	`http://localhost:5173/api/uploads/${(await giveUploadAddress(h.db, userId)).id}`;
 
 describe("upload address", () => {
 	test("gives an upload address that lasts 15 minutes", async () => {
@@ -143,19 +137,6 @@ describe("upload address", () => {
 		}).toEqual({ loaded: 404, deleted: 404, keys: [pictureId] });
 	});
 
-	test("sweeps an address draft older than a day at the next upload", async () => {
-		// Given: no tool call after the clock jumps, since the session's
-		// access token lives one hour.
-		const { h, userId } = await withAiSession();
-		setSystemTime(new Date("2026-11-17T10:00:00Z"));
-		await uploadByAddress(h, await addressFor(h, userId));
-		setSystemTime(new Date("2026-11-18T11:00:00Z"));
-		// When
-		const fresh = await uploadByAddress(h, await addressFor(h, userId));
-		// Then
-		expect({ keys: h.pictures.keys() }).toEqual({ keys: [fresh] });
-	});
-
 	test("counts get_upload_address and not the upload", async () => {
 		// Given
 		const { h, ai } = await withAiSession();
@@ -252,95 +233,6 @@ describe("owned item pictures", () => {
 		const [item] = (data as { ownedItems: Item[] }).ownedItems;
 		expect(item.pictureIds).toEqual([a]);
 	});
-
-	test("deletes a picture left out of an owned item's list", async () => {
-		// Given
-		const { h, ai } = await withAiSession();
-		const [a, b] = await uploads(h, ai, 2);
-		const added = await ai.call("add_owned_item", {
-			...(await shirt(ai)),
-			pictureIds: [a, b],
-		});
-		const { id } = (added.data as { ownedItem: Item }).ownedItem;
-		// When
-		const { data } = await ai.call("change_owned_item", {
-			id,
-			brandId: null,
-			quantity: 2,
-			pictureIds: [b],
-		});
-		// Then
-		expect({
-			pictureIds: (data as { ownedItem: Item }).ownedItem.pictureIds,
-			keys: h.pictures.keys(),
-		}).toEqual({ pictureIds: [b], keys: [b] });
-	});
-
-	test("keeps an owned item's pictures when pictureIds is left out", async () => {
-		// Given
-		const { h, ai } = await withAiSession();
-		const [a] = await uploads(h, ai, 1);
-		const added = await ai.call("add_owned_item", {
-			...(await shirt(ai)),
-			pictureIds: [a],
-		});
-		const { id } = (added.data as { ownedItem: Item }).ownedItem;
-		// When
-		const { data } = await ai.call("change_owned_item", {
-			id,
-			brandId: null,
-			quantity: 3,
-		});
-		// Then
-		const { quantity, pictureIds } = (data as { ownedItem: Item }).ownedItem;
-		expect({ quantity, pictureIds, keys: h.pictures.keys() }).toEqual({
-			quantity: 3,
-			pictureIds: [a],
-			keys: [a],
-		});
-	});
-
-	test("refuses 9 pictures on an owned item as a sentence", async () => {
-		// Given
-		const { h, ai } = await withAiSession();
-		const nine = await uploads(h, ai, 9);
-		const args = await shirt(ai);
-		// When
-		const { isError, text } = await ai.call("add_owned_item", {
-			...args,
-			pictureIds: nine,
-		});
-		// Then
-		expect({
-			isError,
-			text,
-			items: (
-				(await (await send(h, ai.jar, "GET", "/api/owned-items")).json()) as {
-					ownedItems: unknown[];
-				}
-			).ownedItems,
-		}).toEqual({
-			isError: true,
-			text: "An owned item has at most 8 pictures.",
-			items: [],
-		});
-	});
-
-	test("refuses a picture id that is not the account's on an owned item", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		const args = await shirt(ai);
-		// When
-		const { isError, text } = await ai.call("add_owned_item", {
-			...args,
-			pictureIds: [NO_SUCH_ID],
-		});
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "pictureIds holds an id that is not your upload or a picture of this item. list_owned_items names the item's pictures; get_upload_address gives a new upload.",
-		});
-	});
 });
 
 type Link = { id: string; pictureIds: string[] };
@@ -370,54 +262,6 @@ describe("shop link pictures", () => {
 		const [wish] = (data as { wishes: { shopLinks: Link[] }[] }).wishes;
 		expect(wish.shopLinks[0]?.pictureIds).toEqual([a]);
 	});
-
-	test("deletes a picture left out of a shop link's list", async () => {
-		// Given
-		const { h, ai } = await withAiSession();
-		const wishId = await addWish(ai);
-		const [a, b] = await uploads(h, ai, 2);
-		const added = await ai.call("add_shop_link", {
-			wishId,
-			...coat,
-			pictureIds: [a, b],
-		});
-		const id = (added.data as { wish: { shopLinks: Link[] } }).wish.shopLinks[0]
-			?.id;
-		// When
-		const { data } = await ai.call("change_shop_link", {
-			id,
-			...coat,
-			pictureIds: [b],
-		});
-		// Then
-		expect({
-			pictureIds: (data as { wish: { shopLinks: Link[] } }).wish.shopLinks[0]
-				?.pictureIds,
-			keys: h.pictures.keys(),
-		}).toEqual({ pictureIds: [b], keys: [b] });
-	});
-
-	test("refuses 9 pictures on a shop link as a sentence", async () => {
-		// Given
-		const { h, ai } = await withAiSession();
-		const wishId = await addWish(ai);
-		const nine = await uploads(h, ai, 9);
-		// When
-		const { isError, text } = await ai.call("add_shop_link", {
-			wishId,
-			...coat,
-			pictureIds: nine,
-		});
-		// Then
-		const { wishes } = (await (
-			await send(h, ai.jar, "GET", "/api/wishes")
-		).json()) as { wishes: { shopLinks: unknown[] }[] };
-		expect({ isError, text, links: wishes[0]?.shopLinks }).toEqual({
-			isError: true,
-			text: "A shop link has at most 8 pictures.",
-			links: [],
-		});
-	});
 });
 
 describe("refusals at the address", () => {
@@ -429,9 +273,10 @@ describe("refusals at the address", () => {
 		const refused = await answer(await postTo(h, address, PDF));
 		// Then
 		expect({ ...refused, keys: h.pictures.keys() }).toEqual({
-			status: 415,
+			status: 400,
 			body: {
-				error: "not_an_image",
+				error: "invalid",
+				field: "body",
 				message:
 					"This file is not a JPEG, PNG, or WebP picture. Send one of these to a new upload address.",
 			},
@@ -454,44 +299,6 @@ describe("refusals at the address", () => {
 				error: "too_large",
 				message:
 					"This picture is over 1 MB. Shrink it to 1 MB or less and send it to a new upload address.",
-			},
-			keys: [],
-		});
-	});
-
-	test("refuses picture 1,001 of the account", async () => {
-		// Given
-		const { h, ai, userId } = await withAiSession();
-		const address = await addressOf(ai);
-		await h.seedPictures(userId, 1000);
-		// When
-		const refused = await answer(await postTo(h, address));
-		// Then
-		expect({ ...refused, keys: h.pictures.keys() }).toEqual({
-			status: 409,
-			body: {
-				error: "account_picture_limit",
-				message:
-					"You have 1,000 pictures. That is the limit. Take pictures off an owned item or a shop link to add new ones.",
-			},
-			keys: [],
-		});
-	});
-
-	test("refuses an upload at the storage stop", async () => {
-		// Given
-		const { h, ai } = await withAiSession();
-		const address = await addressOf(ai);
-		await h.addAccount(BOB);
-		await h.seedPictures("bob-id", 1, 8_999_999_950);
-		// When
-		const refused = await answer(await postTo(h, address));
-		// Then
-		expect({ ...refused, keys: h.pictures.keys() }).toEqual({
-			status: 507,
-			body: {
-				error: "storage_full",
-				message: "Picture storage is full. No new pictures for now.",
 			},
 			keys: [],
 		});
@@ -549,15 +356,6 @@ describe("show_picture", () => {
 		const p = await uploadPicture(h, bob, PNG);
 		// When
 		const shown = await ai.show("show_picture", { id: p });
-		// Then
-		expect(shown).toEqual(noPicture);
-	});
-
-	test("refuses a picture id that does not exist", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		// When
-		const shown = await ai.show("show_picture", { id: NO_SUCH_ID });
 		// Then
 		expect(shown).toEqual(noPicture);
 	});

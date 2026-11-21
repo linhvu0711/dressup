@@ -8,10 +8,11 @@ import {
 	BOB,
 	count,
 	otherTabWrites,
+	scopeOf,
 	withAccount,
 } from "../test/harness";
 import { addWish } from "../wish-store";
-import type { Refusal } from "./action";
+import type { ActionScope, Refusal } from "./action";
 import { colourActions } from "./colours";
 
 const UUID =
@@ -19,7 +20,7 @@ const UUID =
 
 async function withAlice() {
 	const { h } = await withAccount();
-	return { h, alice: { db: h.db, userId: ALICE.id } };
+	return { h, alice: scopeOf(h) };
 }
 
 describe("adding a colour", () => {
@@ -156,7 +157,7 @@ describe("changing and deleting a colour", () => {
 		// Given: Teal added by alice; bob has an account
 		const { h, teal } = await withTeal();
 		await h.addAccount(BOB);
-		const bob = { db: h.db, userId: BOB.id };
+		const bob = scopeOf(h, BOB);
 		// When
 		const changed = await colourActions.change.run(bob, {
 			id: teal,
@@ -252,10 +253,7 @@ const NOT_FOUND_ROW = {
 } satisfies Refusal;
 
 // The starter set is 13, so n more makes 13 + n.
-async function addColours(
-	alice: { db: Parameters<typeof listColours>[0]; userId: string },
-	n: number,
-) {
+async function addColours(alice: ActionScope, n: number) {
 	await listColours(alice.db, alice.userId);
 	for (let i = 1; i <= n; i++)
 		await colourActions.add.run(alice, {
@@ -463,7 +461,7 @@ describe("deleting a colour", () => {
 		const added = await colourActions.add.run(alice, TEAL);
 		if (!added.ok) throw new Error("Teal was not added");
 		await h.addAccount(BOB);
-		const bob = { db: h.db, userId: BOB.id };
+		const bob = scopeOf(h, BOB);
 		// When
 		const deleted = await colourActions.delete.run(bob, {
 			id: added.value.id,

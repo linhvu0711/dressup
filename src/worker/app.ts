@@ -2,9 +2,7 @@ import { eq } from "drizzle-orm";
 import { type Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { createMiddleware } from "hono/factory";
-import type { ContentfulStatusCode } from "hono/utils/http-status";
-import { z } from "zod";
-import { hexSchema } from "@/colour/hex";
+import type { z } from "zod";
 import type {
 	AiAppsAnswer,
 	BrandAnswer,
@@ -26,23 +24,19 @@ import type {
 } from "@/data/contract";
 import { brandIdSchema } from "@/labels/brand";
 import { colourIdSchema } from "@/labels/colour";
-import { mannequinPartSchema } from "@/mannequin/mannequin";
-import { PICTURE_BYTES_MAX, pictureIdSchema } from "@/pictures/picture";
+import { PICTURE_BYTES_MAX } from "@/pictures/picture";
 import { tagIdSchema } from "@/tags/tag";
-import type { ActionScope } from "./actions/action";
+import type { ActionScope, Refusal } from "./actions/action";
+import { boughtActions } from "./actions/bought";
 import { brandActions } from "./actions/brands";
 import { colourActions } from "./actions/colours";
 import { combinationActions } from "./actions/combinations";
+import { mannequinActions } from "./actions/mannequin";
+import { ownedItemActions } from "./actions/owned-items";
+import { pictureActions, tooLarge } from "./actions/pictures";
 import { tagActions } from "./actions/tags";
+import { shopLinkActions, wishActions } from "./actions/wishes";
 import { disconnectAiApp, listAiApps } from "./ai-app-store";
-import {
-	accountPictureLimit,
-	addressGone,
-	notAPicture,
-	notStored,
-	storageFull,
-	tooLargeUpload,
-} from "./ai-messages";
 import {
 	type Auth,
 	type AuthEnvSettings,
@@ -54,36 +48,12 @@ import { listBrands } from "./brand-store";
 import { listColours } from "./colour-store";
 import type { Db } from "./db";
 import { user } from "./db/auth-schema";
-import { loadMannequin, setMannequinColour } from "./mannequin-store";
+import { loadMannequin } from "./mannequin-store";
 import { mcpRoute } from "./mcp";
-import {
-	addOwnedItem,
-	type BoughtError,
-	buyShopLink,
-	changeOwnedItem,
-	deleteOwnedItem,
-	listOwnedItems,
-	type OwnedItemError,
-} from "./owned-item-store";
-import {
-	addPicture,
-	deleteDraft,
-	deleteWithPictures,
-	type PictureError,
-	readPicture,
-} from "./picture-store";
+import { deleteWithPictures } from "./picture-store";
 import type { Result } from "./result";
 import { listTags } from "./tag-store";
 import { claimUploadAddress } from "./upload-address-store";
-import {
-	addShopLink,
-	addWish,
-	changeShopLink,
-	deleteShopLink,
-	deleteWish,
-	listWishes,
-	type WishError,
-} from "./wish-store";
 
 type User = Auth["$Infer"]["Session"]["user"];
 type AppEnv = {
@@ -123,132 +93,11 @@ const invalid = (c: Context<AppEnv>, field: string) =>
 const issueField = (path: readonly PropertyKey[]) =>
 	path.length === 0 ? "body" : path.map(String).join(".");
 
-type Refusal = {
-	status: ContentfulStatusCode;
-	body: ErrorAnswer;
-};
-
-// Only the JSON shape: the Closet module runs the owned item rules.
-const ownedItemBodySchema = z.object({
-	id: z.string(),
-	typeId: z.string(),
-	colourId: z.string(),
-	brandId: z.string().nullable(),
-	quantity: z.number(),
-	pictureIds: z.array(z.string()).optional(),
-});
-
-function ownedItemRefusal(error: OwnedItemError): Refusal {
-	switch (error.code) {
-		case "invalid":
-			return { status: 400, body: { error: "invalid", field: error.field } };
-		case "duplicate":
-			return { status: 409, body: { error: "duplicate", id: error.id } };
-		case "owned_item_limit":
-			return { status: 409, body: { error: "owned_item_limit" } };
-		case "picture_limit":
-			return { status: 409, body: { error: "picture_limit" } };
-		case "conflict":
-			return { status: 409, body: { error: "conflict", field: "id" } };
-		case "not_found":
-			return { status: 404, body: { error: "not_found" } };
-	}
-}
-
-function boughtRefusal(error: BoughtError): Refusal {
-	switch (error.code) {
-		case "not_found":
-			return { status: 404, body: { error: "not_found" } };
-		case "owned_item_limit":
-			return { status: 409, body: { error: "owned_item_limit" } };
-		case "quantity_limit":
-			return { status: 409, body: { error: "quantity_limit" } };
-		case "conflict":
-			return { status: 409, body: { error: "conflict", field: "id" } };
-	}
-}
-
-// Only the JSON shape: the Wishlist module runs the wish rules.
-const wishBodySchema = z.object({
-	id: z.string(),
-	typeId: z.string(),
-	colourId: z.string(),
-});
-
-const shopLinkBodySchema = z.object({
-	url: z.string(),
-	brandId: z.string().nullable(),
-	name: z.string(),
-	price: z.number().nullable(),
-	pictureIds: z.array(z.string()).optional(),
-});
-
-function wishRefusal(error: WishError): Refusal {
-	switch (error.code) {
-		case "invalid":
-			return { status: 400, body: { error: "invalid", field: error.field } };
-		case "duplicate":
-			return { status: 409, body: { error: "duplicate", id: error.id } };
-		case "wish_limit":
-			return { status: 409, body: { error: "wish_limit" } };
-		case "shop_link_limit":
-			return { status: 409, body: { error: "shop_link_limit" } };
-		case "picture_limit":
-			return { status: 409, body: { error: "picture_limit" } };
-		case "conflict":
-			return { status: 409, body: { error: "conflict", field: "id" } };
-		case "not_found":
-			return { status: 404, body: { error: "not_found" } };
-	}
-}
-
-// An AI app reads the code and the model reads the sentence; every refusal
-// spends the address, so each sentence says to use a new one.
-function uploadRefusal(error: PictureError): {
-	status: ContentfulStatusCode;
-	body: { error: string; message: string };
-} {
-	switch (error.code) {
-		case "invalid":
-			return {
-				status: 415,
-				body: { error: "not_an_image", message: notAPicture },
-			};
-		case "account_picture_limit":
-			return {
-				status: 409,
-				body: { error: "account_picture_limit", message: accountPictureLimit },
-			};
-		case "storage_full":
-			return {
-				status: 507,
-				body: { error: "storage_full", message: storageFull },
-			};
-		case "not_found":
-		case "picture_limit":
-			return { status: 500, body: { error: "not_stored", message: notStored } };
-	}
-}
-
-function pictureRefusal(error: PictureError): Refusal {
-	switch (error.code) {
-		case "invalid":
-			return { status: 400, body: { error: "invalid", field: error.field } };
-		case "picture_limit":
-			return { status: 409, body: { error: "picture_limit" } };
-		case "account_picture_limit":
-			return { status: 409, body: { error: "account_picture_limit" } };
-		case "storage_full":
-			return { status: 507, body: { error: "storage_full" } };
-		case "not_found":
-			return { status: 404, body: { error: "not_found" } };
-	}
-}
-
 export function createApp(getDb: (env: Env) => Db) {
 	const scope = (c: Context<AppEnv>): ActionScope => ({
 		db: getDb(c.env),
 		userId: c.var.user.id,
+		pictures: c.env.PICTURES,
 	});
 	const root = new Hono<AppEnv>();
 	const app = root.basePath("/api");
@@ -294,6 +143,9 @@ export function createApp(getDb: (env: Env) => Db) {
 		c.set("user", session.user);
 		await next();
 	});
+
+	const addressGone =
+		"This upload address was used or has expired. get_upload_address gives a new one.";
 
 	// The upload address is the pass: only the account's AI app was given it.
 	// The claim runs before the body is read, so any POST spends the address.
@@ -395,25 +247,17 @@ export function createApp(getDb: (env: Env) => Db) {
 		return c.body(null, 204);
 	});
 
-	app.get("/owned-items", withAuth, requireUser, async (c) =>
-		c.json({
-			ownedItems: await listOwnedItems(getDb(c.env), c.var.user.id),
-		} satisfies OwnedItemsAnswer),
-	);
+	app.get("/owned-items", withAuth, requireUser, async (c) => {
+		const listed = await ownedItemActions.list.run(scope(c), {});
+		if (!listed.ok) return c.json(listed.error.body, listed.error.status);
+		return c.json({ ownedItems: listed.value } satisfies OwnedItemsAnswer);
+	});
 
 	app.post("/owned-items", withAuth, requireUser, async (c) => {
-		const body = await readBody(c, ownedItemBodySchema);
+		const body = await readBody(c, ownedItemActions.add.input);
 		if (!body.ok) return invalid(c, body.error.field);
-		const added = await addOwnedItem(
-			getDb(c.env),
-			c.env.PICTURES,
-			c.var.user.id,
-			body.value,
-		);
-		if (!added.ok) {
-			const { status, body: refused } = ownedItemRefusal(added.error);
-			return c.json(refused, status);
-		}
+		const added = await ownedItemActions.add.run(scope(c), body.value);
+		if (!added.ok) return c.json(added.error.body, added.error.status);
 		const { ownedItem, created } = added.value;
 		return c.json({ ownedItem } satisfies OwnedItemAnswer, created ? 201 : 200);
 	});
@@ -421,70 +265,45 @@ export function createApp(getDb: (env: Env) => Db) {
 	app.put("/owned-items/:id", withAuth, requireUser, async (c) => {
 		const body = await readBody(
 			c,
-			z.object({
-				brandId: z.string().nullable(),
-				quantity: z.number(),
-				pictureIds: z.array(z.string()).optional(),
-			}),
+			ownedItemActions.change.input.omit({ id: true }),
 		);
 		if (!body.ok) return invalid(c, body.error.field);
-		const changed = await changeOwnedItem(
-			getDb(c.env),
-			c.env.PICTURES,
-			c.var.user.id,
-			c.req.param("id"),
-			body.value,
-		);
-		if (!changed.ok) {
-			const { status, body: refused } = ownedItemRefusal(changed.error);
-			return c.json(refused, status);
-		}
+		const changed = await ownedItemActions.change.run(scope(c), {
+			...body.value,
+			id: c.req.param("id"),
+		});
+		if (!changed.ok) return c.json(changed.error.body, changed.error.status);
 		return c.json({ ownedItem: changed.value } satisfies OwnedItemAnswer, 200);
 	});
 
 	app.delete("/owned-items/:id", withAuth, requireUser, async (c) => {
-		const deleted = await deleteOwnedItem(
-			getDb(c.env),
-			c.env.PICTURES,
-			c.var.user.id,
-			c.req.param("id"),
-		);
-		if (!deleted.ok) {
-			const { status, body: refused } = ownedItemRefusal(deleted.error);
-			return c.json(refused, status);
-		}
+		const deleted = await ownedItemActions.delete.run(scope(c), {
+			id: c.req.param("id"),
+		});
+		if (!deleted.ok) return c.json(deleted.error.body, deleted.error.status);
 		return c.body(null, 204);
 	});
 
 	app.post("/shop-links/:id/bought", withAuth, requireUser, async (c) => {
-		const bought = await buyShopLink(
-			getDb(c.env),
-			c.env.PICTURES,
-			c.var.user.id,
-			c.req.param("id"),
-		);
-		if (!bought.ok) {
-			const { status, body: refused } = boughtRefusal(bought.error);
-			return c.json(refused, status);
-		}
+		const bought = await boughtActions.buy.run(scope(c), {
+			id: c.req.param("id"),
+		});
+		if (!bought.ok) return c.json(bought.error.body, bought.error.status);
 		const { ownedItem, created } = bought.value;
 		return c.json({ ownedItem } satisfies OwnedItemAnswer, created ? 201 : 200);
 	});
 
-	app.get("/wishes", withAuth, requireUser, async (c) =>
-		c.json({
-			wishes: await listWishes(getDb(c.env), c.var.user.id),
-		} satisfies WishesAnswer),
-	);
+	app.get("/wishes", withAuth, requireUser, async (c) => {
+		const listed = await wishActions.list.run(scope(c), {});
+		if (!listed.ok) return c.json(listed.error.body, listed.error.status);
+		return c.json({ wishes: listed.value } satisfies WishesAnswer);
+	});
 
 	app.post("/wishes", withAuth, requireUser, async (c) => {
-		const body = await readBody(c, wishBodySchema);
+		const body = await readBody(c, wishActions.add.input);
 		if (!body.ok) return invalid(c, body.error.field);
-		const added = await addWish(getDb(c.env), c.var.user.id, body.value);
-		if (!added.ok) {
-			const { status, body: refused } = wishRefusal(added.error);
-			return c.json(refused, status);
-		}
+		const added = await wishActions.add.run(scope(c), body.value);
+		if (!added.ok) return c.json(added.error.body, added.error.status);
 		const { wish, created } = added.value;
 		return c.json({ wish } satisfies WishAnswer, created ? 201 : 200);
 	});
@@ -492,66 +311,45 @@ export function createApp(getDb: (env: Env) => Db) {
 	app.post("/wishes/:id/shop-links", withAuth, requireUser, async (c) => {
 		const body = await readBody(
 			c,
-			shopLinkBodySchema.extend({ id: z.string() }),
+			shopLinkActions.add.input.omit({ wishId: true }),
 		);
 		if (!body.ok) return invalid(c, body.error.field);
-		const added = await addShopLink(
-			getDb(c.env),
-			c.env.PICTURES,
-			c.var.user.id,
-			c.req.param("id"),
-			body.value,
-		);
-		if (!added.ok) {
-			const { status, body: refused } = wishRefusal(added.error);
-			return c.json(refused, status);
-		}
+		const added = await shopLinkActions.add.run(scope(c), {
+			...body.value,
+			wishId: c.req.param("id"),
+		});
+		if (!added.ok) return c.json(added.error.body, added.error.status);
 		const { wish, created } = added.value;
 		return c.json({ wish } satisfies WishAnswer, created ? 201 : 200);
 	});
 
 	app.put("/shop-links/:id", withAuth, requireUser, async (c) => {
-		const body = await readBody(c, shopLinkBodySchema);
-		if (!body.ok) return invalid(c, body.error.field);
-		const changed = await changeShopLink(
-			getDb(c.env),
-			c.env.PICTURES,
-			c.var.user.id,
-			c.req.param("id"),
-			body.value,
+		const body = await readBody(
+			c,
+			shopLinkActions.change.input.omit({ id: true }),
 		);
-		if (!changed.ok) {
-			const { status, body: refused } = wishRefusal(changed.error);
-			return c.json(refused, status);
-		}
+		if (!body.ok) return invalid(c, body.error.field);
+		const changed = await shopLinkActions.change.run(scope(c), {
+			...body.value,
+			id: c.req.param("id"),
+		});
+		if (!changed.ok) return c.json(changed.error.body, changed.error.status);
 		return c.json({ wish: changed.value } satisfies WishAnswer, 200);
 	});
 
 	app.delete("/shop-links/:id", withAuth, requireUser, async (c) => {
-		const deleted = await deleteShopLink(
-			getDb(c.env),
-			c.env.PICTURES,
-			c.var.user.id,
-			c.req.param("id"),
-		);
-		if (!deleted.ok) {
-			const { status, body: refused } = wishRefusal(deleted.error);
-			return c.json(refused, status);
-		}
+		const deleted = await shopLinkActions.delete.run(scope(c), {
+			id: c.req.param("id"),
+		});
+		if (!deleted.ok) return c.json(deleted.error.body, deleted.error.status);
 		return c.body(null, 204);
 	});
 
 	app.delete("/wishes/:id", withAuth, requireUser, async (c) => {
-		const deleted = await deleteWish(
-			getDb(c.env),
-			c.env.PICTURES,
-			c.var.user.id,
-			c.req.param("id"),
-		);
-		if (!deleted.ok) {
-			const { status, body: refused } = wishRefusal(deleted.error);
-			return c.json(refused, status);
-		}
+		const deleted = await wishActions.delete.run(scope(c), {
+			id: c.req.param("id"),
+		});
+		if (!deleted.ok) return c.json(deleted.error.body, deleted.error.status);
 		return c.body(null, 204);
 	});
 
@@ -561,32 +359,22 @@ export function createApp(getDb: (env: Env) => Db) {
 		requireUser,
 		bodyLimit({
 			maxSize: PICTURE_BYTES_MAX,
-			onError: (c) => c.json({ error: "too_large" } satisfies ErrorAnswer, 413),
+			onError: (c) => c.json(tooLarge.body, tooLarge.status),
 		}),
 		async (c) => {
-			const added = await addPicture(
-				getDb(c.env),
-				c.env.PICTURES,
-				c.var.user.id,
-				await c.req.arrayBuffer(),
-			);
-			if (!added.ok) {
-				const { status, body: refused } = pictureRefusal(added.error);
-				return c.json(refused, status);
-			}
+			const added = await pictureActions.add.run(scope(c), {
+				bytes: await c.req.arrayBuffer(),
+			});
+			if (!added.ok) return c.json(added.error.body, added.error.status);
 			return c.json({ picture: added.value } satisfies PictureAnswer, 201);
 		},
 	);
 
 	app.get("/pictures/:id", withAuth, requireUser, async (c) => {
-		const id = pictureIdSchema.safeParse(c.req.param("id"));
-		const read = id.success
-			? await readPicture(getDb(c.env), c.env.PICTURES, c.var.user.id, id.data)
-			: ({ ok: false, error: { code: "not_found" } } as const);
-		if (!read.ok) {
-			const { status, body: refused } = pictureRefusal(read.error);
-			return c.json(refused, status);
-		}
+		const read = await pictureActions.read.run(scope(c), {
+			id: c.req.param("id"),
+		});
+		if (!read.ok) return c.json(read.error.body, read.error.status);
 		const headers = new Headers();
 		read.value.writeHttpMetadata(headers);
 		// A picture never gets new bytes: a new upload is a new id.
@@ -595,46 +383,37 @@ export function createApp(getDb: (env: Env) => Db) {
 	});
 
 	app.delete("/pictures/:id", withAuth, requireUser, async (c) => {
-		const deleted = await deleteDraft(
-			getDb(c.env),
-			c.env.PICTURES,
-			c.var.user.id,
-			c.req.param("id"),
-		);
-		if (!deleted.ok) {
-			const { status, body: refused } = pictureRefusal(deleted.error);
-			return c.json(refused, status);
-		}
+		const deleted = await pictureActions.deleteDraft.run(scope(c), {
+			id: c.req.param("id"),
+		});
+		if (!deleted.ok) return c.json(deleted.error.body, deleted.error.status);
 		return c.body(null, 204);
 	});
+
+	// An AI app reads the code and the model reads the message.
+	const uploadRefusal = (
+		c: Context<AppEnv>,
+		{ status, body, text }: Omit<Refusal, "code">,
+	) => c.json({ ...body, message: text }, status);
 
 	app.post(
 		"/uploads/:id",
 		claimAddress,
 		bodyLimit({
 			maxSize: PICTURE_BYTES_MAX,
-			onError: (c) =>
-				c.json({ error: "too_large", message: tooLargeUpload }, 413),
+			onError: (c) => uploadRefusal(c, tooLarge),
 		}),
 		async (c) => {
-			// Read outside the try, so bodyLimit sees a body that runs over.
-			const bytes = await c.req.arrayBuffer();
-			try {
-				const added = await addPicture(
-					getDb(c.env),
-					c.env.PICTURES,
-					c.var.uploaderId,
-					bytes,
-				);
-				if (!added.ok) {
-					const { status, body } = uploadRefusal(added.error);
-					return c.json(body, status);
-				}
-				return c.json({ pictureId: added.value.id }, 201);
-			} catch {
-				// addPicture takes its row and count back before it throws.
-				return c.json({ error: "not_stored", message: notStored }, 500);
-			}
+			const added = await pictureActions.add.run(
+				{
+					db: getDb(c.env),
+					userId: c.var.uploaderId,
+					pictures: c.env.PICTURES,
+				},
+				{ bytes: await c.req.arrayBuffer() },
+			);
+			if (!added.ok) return uploadRefusal(c, added.error);
+			return c.json({ pictureId: added.value.id }, 201);
 		},
 	);
 
@@ -686,21 +465,17 @@ export function createApp(getDb: (env: Env) => Db) {
 	);
 
 	app.put("/mannequin/:part", withAuth, requireUser, async (c) => {
-		const part = mannequinPartSchema.safeParse(c.req.param("part"));
-		if (!part.success)
-			return c.json(
-				{ error: "invalid", field: "part" } satisfies ErrorAnswer,
-				400,
-			);
-		const body = await readBody(c, z.object({ hex: hexSchema }));
-		if (!body.ok) return invalid(c, body.error.field);
-		const mannequin = await setMannequinColour(
-			getDb(c.env),
-			c.var.user.id,
-			part.data,
-			body.value.hex,
+		const body = await readBody(
+			c,
+			mannequinActions.set.input.omit({ part: true }),
 		);
-		return c.json({ mannequin } satisfies MannequinAnswer, 200);
+		if (!body.ok) return invalid(c, body.error.field);
+		const set = await mannequinActions.set.run(scope(c), {
+			...body.value,
+			part: c.req.param("part"),
+		});
+		if (!set.ok) return c.json(set.error.body, set.error.status);
+		return c.json({ mannequin: set.value } satisfies MannequinAnswer, 200);
 	});
 
 	app.get("/brands", withAuth, requireUser, async (c) =>

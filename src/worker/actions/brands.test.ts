@@ -8,15 +8,16 @@ import {
 	BOB,
 	count,
 	otherTabWrites,
+	scopeOf,
 	withAccount,
 } from "../test/harness";
 import { addShopLink, addWish, listWishes } from "../wish-store";
-import type { Refusal } from "./action";
+import type { ActionScope, Refusal } from "./action";
 import { brandActions } from "./brands";
 
 async function withAlice() {
 	const { h } = await withAccount();
-	return { h, alice: { db: h.db, userId: ALICE.id } };
+	return { h, alice: scopeOf(h) };
 }
 
 async function withZara() {
@@ -110,7 +111,7 @@ describe("renaming and deleting a brand", () => {
 		// Given: Zara added by alice; bob has an account
 		const { h, zara } = await withZara();
 		await h.addAccount(BOB);
-		const bob = { db: h.db, userId: BOB.id };
+		const bob = scopeOf(h, BOB);
 		// When
 		const renamed = await brandActions.rename.run(bob, {
 			id: zara,
@@ -153,10 +154,7 @@ const BRAND_LIMIT_ROW = {
 	text: "You have 100 brands. That is the limit. Delete one to add a new one.",
 } satisfies Refusal;
 
-async function addBrands(
-	alice: { db: Parameters<typeof listColours>[0]; userId: string },
-	n: number,
-) {
+async function addBrands(alice: ActionScope, n: number) {
 	for (let i = 1; i <= n; i++)
 		await brandActions.add.run(alice, { name: `Brand ${i}` });
 }
@@ -278,7 +276,7 @@ describe("deleting a brand", () => {
 		// Given: bob with Zara; alice has an account
 		const { h, alice } = await withAlice();
 		await h.addAccount(BOB);
-		const bob = { db: h.db, userId: BOB.id };
+		const bob = scopeOf(h, BOB);
 		const zara = await brandActions.add.run(bob, { name: "Zara" });
 		if (!zara.ok) throw new Error("Zara was not added");
 		// When

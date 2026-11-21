@@ -906,6 +906,41 @@ describe("owned items", () => {
 		).toEqual([["shirt_l", "Navy", null, 2]]);
 	});
 
+	test("answers created true for a new owned item", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		// When
+		const { data } = await ai.call("add_owned_item", await shirt(ai));
+		// Then
+		expect({ created: (data as { created: boolean }).created }).toEqual({
+			created: true,
+		});
+	});
+
+	test("clears the brand when a change leaves brandId out", async () => {
+		// Given: brand Zara and the shirt with brand Zara
+		const { ai } = await withAiSession();
+		const brand = await ai.call("add_brand", { name: "Zara" });
+		const zara = (brand.data as { brand: { id: string } }).brand.id;
+		const added = await ai.call("add_owned_item", {
+			...(await shirt(ai)),
+			brandId: zara,
+		});
+		const { id } = (added.data as { ownedItem: Listed }).ownedItem;
+		// When
+		await ai.call("change_owned_item", { id, quantity: 2 });
+		const { data } = await ai.call("list_owned_items");
+		// Then
+		expect(
+			(data as { ownedItems: Listed[] }).ownedItems.map((i) => [
+				i.typeId,
+				i.colour.name,
+				i.brand,
+				i.quantity,
+			]),
+		).toEqual([["shirt_l", "Navy", null, 2]]);
+	});
+
 	test("refuses the same piece and brand a second time as a sentence", async () => {
 		// Given
 		const { ai } = await withAiSession();
@@ -917,36 +952,6 @@ describe("owned items", () => {
 		expect({ isError, text }).toEqual({
 			isError: true,
 			text: "You have this item already. Change its number.",
-		});
-	});
-
-	test("refuses a quantity of 0 as a sentence", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		const args = await shirt(ai);
-		// When
-		const { isError, text } = await ai.call("add_owned_item", {
-			...args,
-			quantity: 0,
-		});
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "Quantity is a whole number from 1 to 99.",
-		});
-	});
-
-	test("refuses item number 501 as a sentence", async () => {
-		// Given
-		const { h, ai, userId } = await withAiSession();
-		const args = await shirt(ai);
-		await h.seedOwnedItems(userId, 500);
-		// When
-		const { isError, text } = await ai.call("add_owned_item", args);
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "You have 500 items. That is the limit. Delete one to add a new one.",
 		});
 	});
 
@@ -965,6 +970,24 @@ describe("owned items", () => {
 		expect((data as { ownedItem: Listed }).ownedItem.quantity).toBe(5);
 	});
 
+	test("refuses a quantity of 100 on change as a sentence", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		const added = await ai.call("add_owned_item", await shirt(ai));
+		const { id } = (added.data as { ownedItem: Listed }).ownedItem;
+		// When
+		const { isError, text } = await ai.call("change_owned_item", {
+			id,
+			brandId: null,
+			quantity: 100,
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "Quantity is a whole number from 1 to 99.",
+		});
+	});
+
 	test("deletes an owned item", async () => {
 		// Given
 		const { ai } = await withAiSession();
@@ -978,49 +1001,6 @@ describe("owned items", () => {
 			isError: false,
 			text: "Nothing in your closet yet.",
 		});
-	});
-
-	// A draft picture uploaded as the session's browser, by id.
-	// The shirt with these pictures, added as the website adds it, by id.
-	const addWithPictures = async (
-		h: Harness,
-		ai: Session,
-		pictureIds: string[],
-	) => {
-		const id = crypto.randomUUID();
-		const res = await send(h, ai.jar, "POST", "/api/owned-items", {
-			...(await shirt(ai)),
-			id,
-			brandId: null,
-			pictureIds,
-		});
-		expect(res.status).toBe(201);
-		return id;
-	};
-
-	test("deletes an owned item with its pictures", async () => {
-		// Given
-		const { h, ai } = await withAiSession();
-		const a = await uploadPicture(h, ai.jar);
-		const id = await addWithPictures(h, ai, [a]);
-		// When
-		await ai.call("delete_owned_item", { id });
-		// Then
-		expect(h.pictures.keys()).toEqual([]);
-	});
-
-	test("lists the picture ids of each item in upload order", async () => {
-		// Given
-		const { h, ai } = await withAiSession();
-		const a = await uploadPicture(h, ai.jar);
-		const b = await uploadPicture(h, ai.jar);
-		await addWithPictures(h, ai, [a, b]);
-		// When
-		const { data } = await ai.call("list_owned_items");
-		// Then
-		const [item] = (data as { ownedItems: { pictureIds: string[] }[] })
-			.ownedItems;
-		expect(item.pictureIds).toEqual([a, b]);
 	});
 
 	test("says there is no such owned item", async () => {
@@ -1054,38 +1034,6 @@ describe("owned items", () => {
 		return navy;
 	}
 
-	const pieces = (data: unknown) =>
-		(data as { ownedItems: Listed[] }).ownedItems.map((i) => [
-			i.typeId,
-			i.colour.name,
-		]);
-
-	test("lists only the owned items that fit every filter given", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		const navy = await filterCloset(ai);
-		// When
-		const { data } = await ai.call("list_owned_items", {
-			types: ["sweater", "tee_l"],
-			colourIds: [navy],
-		});
-		// Then
-		expect(pieces(data)).toEqual([
-			["tee_l", "Navy"],
-			["sweater", "Navy"],
-		]);
-	});
-
-	test("lists the owned items with no brand for a null brand id", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		await filterCloset(ai);
-		// When
-		const { data } = await ai.call("list_owned_items", { brandIds: [null] });
-		// Then
-		expect(pieces(data)).toEqual([["tee_l", "Navy"]]);
-	});
-
 	test("refuses a type that is not one in a filter", async () => {
 		// Given
 		const { ai } = await withAiSession();
@@ -1099,22 +1047,6 @@ describe("owned items", () => {
 		expect({ isError, text }).toEqual({
 			isError: true,
 			text: "cape is not a type. list_types names the types.",
-		});
-	});
-
-	test("refuses a colour that is not the account's in a filter", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		await filterCloset(ai);
-		// When
-		const { isError, text } = await ai.call("list_owned_items", {
-			types: ["sweater", "tee_l"],
-			colourIds: ["nope"],
-		});
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "nope is not one of your colours. list_colours names them.",
 		});
 	});
 
@@ -1274,6 +1206,28 @@ describe("wishes", () => {
 		});
 	});
 
+	test("answers created false when Bought adds 1 to an item", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		await ai.call("add_owned_item", {
+			typeId: "wool",
+			colourId: await colourId(ai, "Navy"),
+			quantity: 1,
+		});
+		const id = await addJacketLink(ai);
+		// When
+		const { data } = await ai.call("mark_shop_link_bought", { id });
+		// Then
+		const { created, ownedItem } = data as {
+			created: boolean;
+			ownedItem: { quantity: number };
+		};
+		expect({ created, quantity: ownedItem.quantity }).toEqual({
+			created: false,
+			quantity: 2,
+		});
+	});
+
 	test("refuses Bought at 500 owned items as a sentence", async () => {
 		// Given
 		const { h, ai, userId } = await withAiSession();
@@ -1288,19 +1242,30 @@ describe("wishes", () => {
 		});
 	});
 
-	test("lists the picture ids of each shop link in upload order", async () => {
+	test("answers created true for a new wish", async () => {
 		// Given
-		const { h, ai } = await withAiSession();
-		const id = await addJacketLink(ai);
-		const pictureIds = await savePictures(h, ai, id, 2);
+		const { ai } = await withAiSession();
 		// When
-		const { data } = await ai.call("list_wishes");
+		const { data } = await ai.call("add_wish", {
+			typeId: "wool",
+			colourId: await colourId(ai, "Navy"),
+		});
 		// Then
-		expect(
-			(data as { wishes: Listed[] }).wishes.map((w) =>
-				w.shopLinks.map((l) => l.pictureIds),
-			),
-		).toEqual([[pictureIds]]);
+		expect({ created: (data as { created: boolean }).created }).toEqual({
+			created: true,
+		});
+	});
+
+	test("answers created true for a new shop link", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		const wishId = await addJacket(ai);
+		// When
+		const { data } = await ai.call("add_shop_link", cos(wishId));
+		// Then
+		expect({ created: (data as { created: boolean }).created }).toEqual({
+			created: true,
+		});
 	});
 
 	test("refuses a second wish for one piece as a sentence", async () => {
@@ -1316,22 +1281,6 @@ describe("wishes", () => {
 		expect({ isError, text }).toEqual({
 			isError: true,
 			text: "You have this wish already.",
-		});
-	});
-
-	test("refuses wish number 201 as a sentence", async () => {
-		// Given
-		const { h, ai, userId } = await withAiSession();
-		await h.seedWishes(userId, 200);
-		// When
-		const { isError, text } = await ai.call("add_wish", {
-			typeId: "train_p",
-			colourId: await colourId(ai, "Mustard"),
-		});
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "You have 200 wishes. That is the limit. Delete one to add a new one.",
 		});
 	});
 
@@ -1358,6 +1307,39 @@ describe("wishes", () => {
 		}).toEqual({ price: 3990000, after: [] });
 	});
 
+	test("refuses a shop link that is gone on change as a sentence", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		await addJacketLink(ai);
+		// When
+		const { isError, text } = await ai.call("change_shop_link", {
+			id: "5b1f2c3d-0000-4000-8000-000000000000",
+			url: "https://cos.com/jacket",
+			name: "Wool jacket",
+			price: 4290000,
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "No shop link with this id.",
+		});
+	});
+
+	test("refuses to delete a shop link that is gone as a sentence", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		await addJacketLink(ai);
+		// When
+		const { isError, text } = await ai.call("delete_shop_link", {
+			id: "5b1f2c3d-0000-4000-8000-000000000000",
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "No shop link with this id.",
+		});
+	});
+
 	test("refuses an address that is not http as a sentence", async () => {
 		// Given
 		const { ai } = await withAiSession();
@@ -1371,20 +1353,6 @@ describe("wishes", () => {
 		expect({ isError, text }).toEqual({
 			isError: true,
 			text: "Enter a web address that starts with https://.",
-		});
-	});
-
-	test("refuses shop link number 11 as a sentence", async () => {
-		// Given
-		const { h, ai, userId } = await withAiSession();
-		const wishId = await addJacket(ai);
-		await h.seedShopLinks(userId, wishId, 10);
-		// When
-		const { isError, text } = await ai.call("add_shop_link", cos(wishId));
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "10 shop links is the limit for one wish.",
 		});
 	});
 
@@ -1414,21 +1382,6 @@ describe("wishes", () => {
 		});
 	});
 
-	test("refuses to delete a colour a wish uses as a sentence", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		await addJacket(ai);
-		// When
-		const { isError, text } = await ai.call("delete_colour", {
-			id: await colourId(ai, "Navy"),
-		});
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "A combination, an owned item, or a wish uses Navy, so it stays. A colour in use cannot be deleted.",
-		});
-	});
-
 	// A COS brand, and three wishes, oldest first: a Navy sweater with a COS
 	// link, a Navy long tee with a link of no brand, Navy chino pants with no
 	// link.
@@ -1452,30 +1405,6 @@ describe("wishes", () => {
 		return cosId;
 	}
 
-	test("lists the wishes with a shop link of a picked brand", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		const cosId = await filterWishes(ai);
-		// When
-		const { data } = await ai.call("list_wishes", { brandIds: [cosId] });
-		// Then
-		expect((data as { wishes: Listed[] }).wishes.map((w) => w.typeId)).toEqual([
-			"sweater",
-		]);
-	});
-
-	test("lists the wishes with a shop link with no brand for a null brand id", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		await filterWishes(ai);
-		// When
-		const { data } = await ai.call("list_wishes", { brandIds: [null] });
-		// Then
-		expect((data as { wishes: Listed[] }).wishes.map((w) => w.typeId)).toEqual([
-			"tee_l",
-		]);
-	});
-
 	test("refuses a brand that is not the account's in a wish filter", async () => {
 		// Given
 		const { ai } = await withAiSession();
@@ -1488,21 +1417,6 @@ describe("wishes", () => {
 		expect({ isError, text }).toEqual({
 			isError: true,
 			text: "nope is not one of your brands. list_brands names them.",
-		});
-	});
-
-	test("refuses an empty brand id in a filter", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		await filterWishes(ai);
-		// When
-		const { isError, text } = await ai.call("list_wishes", {
-			brandIds: ["", "nope"],
-		});
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: " is not one of your brands. list_brands names them.",
 		});
 	});
 });

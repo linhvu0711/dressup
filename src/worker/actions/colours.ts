@@ -6,7 +6,7 @@ import {
 	changeColour,
 	deleteColour,
 } from "../colour-store";
-import { action, type Refusals } from "./action";
+import { action, notAColourCode, type Refusals } from "./action";
 
 // A taken name is 409 here, as the colour contract says; tags answer 400.
 const colourRefusals: Refusals<ColourError> = {
@@ -16,7 +16,7 @@ const colourRefusals: Refusals<ColourError> = {
 		text:
 			error.field === "name"
 				? `A colour name has 1 to ${COLOUR_NAME_MAX} characters.`
-				: "That is not a colour written as #RRGGBB with capital letters, such as #1F3A5F.",
+				: notAColourCode,
 	}),
 	duplicate: (error) => ({
 		status: 409,
