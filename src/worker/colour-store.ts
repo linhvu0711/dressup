@@ -1,4 +1,4 @@
-import { and, asc, count, eq, exists, not, sql } from "drizzle-orm";
+import { and, asc, eq, exists, not, sql } from "drizzle-orm";
 import type { Hex } from "@/colour/hex";
 import {
 	COLOUR_LIMIT,
@@ -7,13 +7,12 @@ import {
 	colourInputSchema,
 	type ListedColour,
 } from "@/labels/colour";
-import { sameLabelName } from "@/labels/name";
-import { type Db, hitsIndex } from "./db";
-import { user } from "./db/auth-schema";
+import type { Db } from "./db";
 import { colour, colourSeed } from "./db/colour-schema";
 import { combinationPiece } from "./db/combination-schema";
 import { ownedItem } from "./db/owned-item-schema";
 import { wish } from "./db/wish-schema";
+import { nameList } from "./name-list";
 import type { Result } from "./result";
 
 export type ColourError =
@@ -131,10 +130,12 @@ function check(input: ColourInput): Checked {
 	return { ok: false, error: { code: "invalid", field } };
 }
 
-// The server makes the id. The names are read through listColours, so an
-// account's first add, as from an AI app, gets the starter set before the
-// limit is counted. The count sits in the insert, so two adds at once cannot
-// both pass it.
+const colours = nameList({
+	table: colour,
+	index: "colour_userId_name_uq",
+	limit: { max: COLOUR_LIMIT, code: "colour_limit" },
+});
+
 export async function addColour(
 	db: Db,
 	userId: string,
@@ -143,47 +144,13 @@ export async function addColour(
 	const checked = check(input);
 	if (!checked.ok) return checked;
 	const { name, hex } = checked;
-	const duplicate = { ok: false, error: { code: "duplicate", name } } as const;
-	const colours = await listColours(db, userId);
-	if (colours.some((c) => sameLabelName(c.name, name))) return duplicate;
-	try {
-		const [row] = await db
-			.insert(colour)
-			.select(
-				db
-					.select({
-						id: sql<string>`${crypto.randomUUID()}`.as("id"),
-						userId: user.id,
-						name: sql<string>`${name}`.as("name"),
-						hex: sql<string>`${hex}`.as("hex"),
-						createdAt:
-							sql<number>`(cast(unixepoch('subsecond') * 1000 as integer))`.as(
-								"created_at",
-							),
-					})
-					.from(user)
-					.where(
-						and(
-							eq(user.id, userId),
-							sql`(${db
-								.select({ n: count() })
-								.from(colour)
-								.where(eq(colour.userId, userId))}) < ${COLOUR_LIMIT}`,
-						),
-					),
-			)
-			.returning({ id: colour.id, name: colour.name, hex: colour.hex });
-		return row
-			? { ok: true, value: toColour(row) }
-			: { ok: false, error: { code: "colour_limit" } };
-	} catch (error) {
-		if (hitsIndex(error, "colour_userId_name_uq")) return duplicate;
-		throw error;
-	}
+	// An account's first add, as from an AI app, gets the starter set before
+	// the limit is counted.
+	await seedOnce(db, userId);
+	const added = await colours.add(db, userId, { name, hex });
+	return added.ok ? { ok: true, value: toColour(added.value) } : added;
 }
 
-// Changes only a colour the account has. A name the account's other colours
-// hold is refused, so a change of letter case alone is taken.
 export async function changeColour(
 	db: Db,
 	userId: string,
@@ -193,23 +160,9 @@ export async function changeColour(
 	const checked = check(input);
 	if (!checked.ok) return checked;
 	const { name, hex } = checked;
-	const duplicate = { ok: false, error: { code: "duplicate", name } } as const;
-	const colours = await listColours(db, userId);
-	if (colours.some((c) => c.id !== id && sameLabelName(c.name, name)))
-		return duplicate;
-	try {
-		const [row] = await db
-			.update(colour)
-			.set({ name, hex })
-			.where(and(eq(colour.id, id), eq(colour.userId, userId)))
-			.returning({ id: colour.id, name: colour.name, hex: colour.hex });
-		return row
-			? { ok: true, value: toColour(row) }
-			: { ok: false, error: { code: "not_found" } };
-	} catch (error) {
-		if (hitsIndex(error, "colour_userId_name_uq")) return duplicate;
-		throw error;
-	}
+	await seedOnce(db, userId);
+	const changed = await colours.change(db, userId, id, { name, hex });
+	return changed.ok ? { ok: true, value: toColour(changed.value) } : changed;
 }
 
 // Only the account's own colour goes, and only while no combination wears it

@@ -62,6 +62,20 @@ describe("adding a tag", () => {
 			},
 		});
 	});
+
+	test("adds tag number 101", async () => {
+		// Given: alice with 100 tags
+		const { alice } = await withAlice();
+		for (let i = 1; i <= 100; i++)
+			await tagActions.add.run(alice, { name: `Tag ${i}` });
+		// When
+		const added = await tagActions.add.run(alice, { name: "Tag 101" });
+		// Then
+		expect({
+			ok: added.ok,
+			count: (await listTags(alice.db, ALICE.id)).length,
+		}).toEqual({ ok: true, count: 101 });
+	});
 });
 
 describe("renaming and deleting a tag", () => {
