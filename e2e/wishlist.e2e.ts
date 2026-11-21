@@ -290,6 +290,32 @@ test("asks for a web address under the Address field", async ({ page }) => {
 	);
 });
 
+test("asks for a web address when only a picture still shrinking is set", async ({
+	page,
+}) => {
+	// Given: the form with Short tee, White; the browser never finishes
+	// reading a picked picture, so it stays shrinking
+	await page.addInitScript(() => {
+		window.createImageBitmap = () => new Promise(() => {});
+	});
+	await page.goto("/wishlist");
+	await openAddSheet(page);
+	await pickPiece(page, "Short tee", "White");
+	// When
+	await addSheet(page)
+		.locator('input[type="file"]')
+		.setInputFiles({
+			name: "tee.jpg",
+			mimeType: "image/jpeg",
+			buffer: Buffer.from("tee"),
+		});
+	await saveForm(page);
+	// Then
+	await expect(fieldAlert(page, "Address")).toHaveText(
+		"Enter a web address that starts with https://.",
+	);
+});
+
 test("asks for a name under the Name field", async ({ page }) => {
 	// Given: the form with Short tee, White
 	await page.goto("/wishlist");

@@ -67,7 +67,7 @@ export function useShopLinkFields<Id extends string>(
 			name !== "" ||
 			price.value !== null ||
 			brand.brandId !== null ||
-			slots.list.length > 0,
+			slots.taken > 0,
 		// The link to send, or null when a check stopped it or a picture did
 		// not upload.
 		async read(): Promise<ShopLinkBody | null> {
