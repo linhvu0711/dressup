@@ -18,6 +18,8 @@ type Listed = {
 	colour: { id: string; name: string; hex: string };
 	brand: { id: string; name: string } | null;
 	quantity: number;
+	name: string | null;
+	price: number | null;
 	pictureIds: string[];
 };
 
@@ -64,6 +66,8 @@ describe("POST /api/owned-items", () => {
 						colour: { id: ids.Navy, name: "Navy", hex: "#1F3A5F" },
 						brand: null,
 						quantity: 2,
+						name: null,
+						price: null,
 						pictureIds: [],
 					},
 				],
@@ -154,6 +158,8 @@ describe("PUT and DELETE /api/owned-items/:id", () => {
 					colour: { id: ids.Navy, name: "Navy", hex: "#1F3A5F" },
 					brand: { id: zara, name: "Zara" },
 					quantity: 3,
+					name: null,
+					price: null,
 					pictureIds: [],
 				},
 			},

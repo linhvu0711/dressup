@@ -184,3 +184,27 @@ describe("migration 0018, drop the jacket state", () => {
 		});
 	});
 });
+
+const NAME_AND_PRICE = "20261121102228_ambiguous_santa_claus";
+
+describe("migration 20261121102228, the owned item name and price paid", () => {
+	test("reads an owned item saved before the name and price paid with neither", async () => {
+		// Given: alice at the migration before, with Navy and one Navy long
+		// button-up, no brand
+		const h = await makeHarness({ through: "20261121061206_nice_whistler" });
+		await h.addAccount(ALICE);
+		h.insertOld(
+			`INSERT INTO colour (id, user_id, name, hex) VALUES ('colour-navy', '${ALICE.id}', 'Navy', '#1F3A5F')`,
+		);
+		h.insertOld(
+			`INSERT INTO owned_item (id, user_id, type_id, colour_id, brand_id, quantity) VALUES ('item-old', '${ALICE.id}', 'shirt_l', 'colour-navy', NULL, 1)`,
+		);
+		// When
+		h.runMigration(NAME_AND_PRICE);
+		const items = await h.rows(schema.ownedItem, ALICE.id);
+		// Then
+		expect(items.map(({ id, name, price }) => ({ id, name, price }))).toEqual([
+			{ id: "item-old", name: null, price: null },
+		]);
+	});
+});

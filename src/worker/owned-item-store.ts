@@ -72,6 +72,8 @@ async function readOwnedItems(
 			id: ownedItem.id,
 			typeId: ownedItem.typeId,
 			quantity: ownedItem.quantity,
+			name: ownedItem.name,
+			price: ownedItem.price,
 			colourId: colour.id,
 			colourName: colour.name,
 			hex: colour.hex,
@@ -100,6 +102,8 @@ async function readOwnedItems(
 		},
 		brand: brandOrNone(row.brandId, row.brandName),
 		quantity: row.quantity,
+		name: row.name,
+		price: row.price,
 		pictureIds: pictures.get(row.id) ?? [],
 	}));
 }
@@ -196,6 +200,8 @@ export async function addOwnedItem(
 			colourId: input.colourId,
 			brandId: input.brandId,
 			quantity: input.quantity,
+			name: null,
+			price: null,
 			writeId: null,
 		},
 		guards: itemGuards(db, userId, input),
@@ -397,7 +403,7 @@ export async function buyShopLink(
 		: insertUnder(db, ownedItem, {
 				userId,
 				id,
-				values: { ...piece, quantity: 1, writeId },
+				values: { ...piece, name: null, price: null, quantity: 1, writeId },
 				guards: [...itemGuards(db, userId, piece), linkHeld],
 				limit: { max: OWNED_ITEM_LIMIT },
 			})

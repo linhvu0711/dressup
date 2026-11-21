@@ -126,6 +126,8 @@ describe("POST /api/shop-links/:id/bought", () => {
 						colour: { id: ids.Navy, name: "Navy", hex: "#1F3A5F" },
 						brand: { id: cos, name: "COS" },
 						quantity: 1,
+						name: null,
+						price: null,
 						pictureIds: [a, b],
 					},
 				},

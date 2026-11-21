@@ -42,6 +42,8 @@ export const ownedItemSchema = z.object({
 	colour: colourSchema,
 	brand: brandSchema.nullable(),
 	quantity: quantitySchema,
+	name: z.string().nullable(),
+	price: z.number().int().nullable(),
 	// In the order they were uploaded.
 	pictureIds: z.array(pictureIdSchema),
 });
