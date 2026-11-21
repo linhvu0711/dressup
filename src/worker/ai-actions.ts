@@ -34,11 +34,11 @@ import {
 import { TAG_NAME_MAX, type Tag } from "@/tags/tag";
 import { SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";
 import type { ActionScope } from "./actions/action";
+import { brandActions } from "./actions/brands";
 import { colourActions } from "./actions/colours";
 import { countAiAction } from "./ai-action-store";
 import {
 	boughtRefusalText,
-	brandRefusalText,
 	combinationRefusalText,
 	noBrands,
 	noColours,
@@ -60,7 +60,7 @@ import {
 	uploadAddressText,
 	wishRefusalText,
 } from "./ai-messages";
-import { addBrand, deleteBrand, listBrands, renameBrand } from "./brand-store";
+import { listBrands } from "./brand-store";
 import { listColours } from "./colour-store";
 import {
 	changeCombination,
@@ -406,15 +406,13 @@ export function registerAiActions(server: McpServer, account: Account) {
 			title: "Add a brand",
 			description: `Adds a brand. ${brandRules}`,
 			annotations: WRITE,
-			inputSchema: z.object({
-				name: z.string().describe("The brand's name."),
-			}),
+			inputSchema: brandActions.add.input,
 		},
-		async ({ name }) => {
-			const added = await addBrand(db, userId, name);
+		async (input) => {
+			const added = await brandActions.add.run(scope, input);
 			return added.ok
 				? answer({ brand: added.value })
-				: refusal(brandRefusalText(added.error));
+				: refusal(added.error.text);
 		},
 	);
 
@@ -424,16 +422,13 @@ export function registerAiActions(server: McpServer, account: Account) {
 			title: "Rename a brand",
 			description: `Renames a brand. ${brandRules}`,
 			annotations: WRITE,
-			inputSchema: z.object({
-				id: z.string().describe("The brand's id."),
-				name: z.string().describe("The brand's new name."),
-			}),
+			inputSchema: brandActions.rename.input,
 		},
-		async ({ id, name }) => {
-			const renamed = await renameBrand(db, userId, id, name);
+		async (input) => {
+			const renamed = await brandActions.rename.run(scope, input);
 			return renamed.ok
 				? answer({ brand: renamed.value })
-				: refusal(brandRefusalText(renamed.error));
+				: refusal(renamed.error.text);
 		},
 	);
 
@@ -443,13 +438,13 @@ export function registerAiActions(server: McpServer, account: Account) {
 			title: "Delete a brand",
 			description: "Deletes a brand for good.",
 			annotations: DELETE,
-			inputSchema: z.object({ id: z.string().describe("The brand's id.") }),
+			inputSchema: brandActions.delete.input,
 		},
-		async ({ id }) => {
-			const deleted = await deleteBrand(db, userId, id);
+		async (input) => {
+			const deleted = await brandActions.delete.run(scope, input);
 			return deleted.ok
 				? answer({ deleted: deleted.value.id })
-				: refusal(brandRefusalText(deleted.error));
+				: refusal(deleted.error.text);
 		},
 	);
 

@@ -5,11 +5,9 @@ import {
 	COMBINATION_TAGS_MAX,
 } from "@/combinations/combination";
 import { LAYER_NAMES, TYPE_NAMES } from "@/dress/clothing-types";
-import { BRAND_LIMIT, BRAND_NAME_MAX } from "@/labels/brand";
 import { ACCOUNT_PICTURE_LIMIT, ITEM_PICTURE_LIMIT } from "@/pictures/picture";
 import { TAG_NAME_MAX } from "@/tags/tag";
 import { PRICE_MAX, SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";
-import type { BrandError } from "./brand-store";
 import type { CombinationError } from "./combination-store";
 import type { BoughtError, OwnedItemError } from "./owned-item-store";
 import type { TagError } from "./tag-store";
@@ -30,19 +28,6 @@ export function tagRefusalText(error: TagError): string {
 			return `You already have a tag called ${error.name}.`;
 		case "not_found":
 			return noTag;
-	}
-}
-
-export function brandRefusalText(error: BrandError): string {
-	switch (error.code) {
-		case "invalid":
-			return `A brand name has 1 to ${BRAND_NAME_MAX} characters.`;
-		case "duplicate":
-			return `You already have a brand called ${error.name}.`;
-		case "brand_limit":
-			return `You have ${BRAND_LIMIT} brands. That is the limit. Delete one to add a new one.`;
-		case "not_found":
-			return noBrand;
 	}
 }
 
@@ -197,8 +182,6 @@ export const uploadAddressText = (address: string) =>
 	`Send the picture within ${UPLOAD_ADDRESS_AGE_MS / 60_000} minutes, once: curl -X POST --data-binary @photo.jpg ${address}. It answers with the picture's id.`;
 
 const noTag = "No tag with this id.";
-
-const noBrand = "No brand with this id.";
 
 const noCombination = "No combination with this id.";
 

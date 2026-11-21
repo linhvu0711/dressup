@@ -30,6 +30,7 @@ import { mannequinPartSchema } from "@/mannequin/mannequin";
 import { PICTURE_BYTES_MAX, pictureIdSchema } from "@/pictures/picture";
 import { tagIdSchema } from "@/tags/tag";
 import type { ActionScope } from "./actions/action";
+import { brandActions } from "./actions/brands";
 import { colourActions } from "./actions/colours";
 import { disconnectAiApp, listAiApps } from "./ai-app-store";
 import {
@@ -47,13 +48,7 @@ import {
 	createAuthCache,
 	createClientDiscovery,
 } from "./auth";
-import {
-	addBrand,
-	type BrandError,
-	deleteBrand,
-	listBrands,
-	renameBrand,
-} from "./brand-store";
+import { listBrands } from "./brand-store";
 import { listColours } from "./colour-store";
 import {
 	type CombinationError,
@@ -299,20 +294,6 @@ const tagRefusals: Record<TagError["code"], Refusal> = {
 	duplicate: { status: 400, body: { error: "duplicate", field: "name" } },
 	not_found: { status: 404, body: { error: "not_found" } },
 };
-
-// A taken name is 409, as for colours.
-function brandRefusal(error: BrandError): Refusal {
-	switch (error.code) {
-		case "invalid":
-			return { status: 400, body: { error: "invalid", field: "name" } };
-		case "duplicate":
-			return { status: 409, body: { error: "duplicate", field: "name" } };
-		case "brand_limit":
-			return { status: 409, body: { error: "brand_limit" } };
-		case "not_found":
-			return { status: 404, body: { error: "not_found" } };
-	}
-}
 
 export function createApp(getDb: (env: Env) => Db) {
 	const scope = (c: Context<AppEnv>): ActionScope => ({
@@ -798,13 +779,10 @@ export function createApp(getDb: (env: Env) => Db) {
 	);
 
 	app.post("/brands", withAuth, requireUser, async (c) => {
-		const body = await readBody(c, z.object({ name: z.string() }));
+		const body = await readBody(c, brandActions.add.input);
 		if (!body.ok) return invalid(c, body.error.field);
-		const added = await addBrand(getDb(c.env), c.var.user.id, body.value.name);
-		if (!added.ok) {
-			const { status, body } = brandRefusal(added.error);
-			return c.json(body, status);
-		}
+		const added = await brandActions.add.run(scope(c), body.value);
+		if (!added.ok) return c.json(added.error.body, added.error.status);
 		return c.json({ brand: added.value } satisfies BrandAnswer, 201);
 	});
 
@@ -812,29 +790,20 @@ export function createApp(getDb: (env: Env) => Db) {
 	app.put("/brands/:id", withAuth, requireUser, async (c) => {
 		const body = await readBody(
 			c,
-			z.object({ id: brandIdSchema, name: z.string() }),
+			brandActions.rename.input.extend({ id: brandIdSchema }),
 		);
 		if (!body.ok) return invalid(c, body.error.field);
 		if (body.value.id !== c.req.param("id")) return invalid(c, "id");
-		const { id, name } = body.value;
-		const renamed = await renameBrand(getDb(c.env), c.var.user.id, id, name);
-		if (!renamed.ok) {
-			const { status, body } = brandRefusal(renamed.error);
-			return c.json(body, status);
-		}
+		const renamed = await brandActions.rename.run(scope(c), body.value);
+		if (!renamed.ok) return c.json(renamed.error.body, renamed.error.status);
 		return c.json({ brand: renamed.value } satisfies BrandAnswer, 200);
 	});
 
 	app.delete("/brands/:id", withAuth, requireUser, async (c) => {
-		const deleted = await deleteBrand(
-			getDb(c.env),
-			c.var.user.id,
-			c.req.param("id"),
-		);
-		if (!deleted.ok) {
-			const { status, body } = brandRefusal(deleted.error);
-			return c.json(body, status);
-		}
+		const deleted = await brandActions.delete.run(scope(c), {
+			id: c.req.param("id"),
+		});
+		if (!deleted.ok) return c.json(deleted.error.body, deleted.error.status);
 		return c.body(null, 204);
 	});
 
