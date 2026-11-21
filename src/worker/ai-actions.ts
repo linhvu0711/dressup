@@ -12,7 +12,6 @@ import {
 	type Combination,
 	combinationTitle,
 } from "@/combinations/combination";
-import { OWN_CHOICES } from "@/combinations/filter";
 import { type Holdings, holdingsOf, markOf } from "@/combinations/marks";
 import {
 	isTypeId,
@@ -41,11 +40,7 @@ import {
 } from "./actions/action";
 import { brandActions } from "./actions/brands";
 import { colourActions } from "./actions/colours";
-import {
-	combinationActions,
-	combinationRefusalText,
-	tags,
-} from "./actions/combinations";
+import { combinationActions } from "./actions/combinations";
 import { tagActions } from "./actions/tags";
 import { countAiAction } from "./ai-action-store";
 import {
@@ -68,7 +63,6 @@ import {
 } from "./ai-messages";
 import { listBrands } from "./brand-store";
 import { listColours } from "./colour-store";
-import { findCombinations } from "./combination-store";
 import type { Db } from "./db";
 import {
 	addOwnedItem,
@@ -186,6 +180,14 @@ const filterRule =
 export function registerAiActions(server: McpServer, account: Account) {
 	const { db, pictures, userId, baseURL } = account;
 	const scope: ActionScope = { db, userId };
+
+	async function combinationViews(list: Combination[]) {
+		const [tags, holdings] = await Promise.all([
+			listTags(db, userId),
+			holdingsFor(db, userId),
+		]);
+		return list.map((c) => combinationView(c, tags, holdings));
+	}
 
 	// An unknown value is refused, not left out: a list from a wrong id would
 	// read as a true answer.
@@ -465,54 +467,15 @@ export function registerAiActions(server: McpServer, account: Account) {
 			description:
 				"The account's saved combinations, newest first, each with its title, its pieces, and its tags. Each piece has own, true when the closet has an owned item of that type and colour, and want, true when the wishlist has a wish for it. pieces, tags, and own narrow the list: a combination must match every piece row, carry every tag, and pass own.",
 			annotations: READ,
-			inputSchema: z.object({
-				pieces: z
-					.array(
-						z.object({
-							typeId: z
-								.string()
-								.optional()
-								.describe("A type id from list_types, such as tee_s."),
-							colourId: z
-								.string()
-								.optional()
-								.describe("A colour id from list_colours."),
-						}),
-					)
-					.optional()
-					.describe(
-						"Piece rows. A combination is listed when, for each row, one of its pieces has the row's type and colour; a row may give only one of the two.",
-					),
-				tags: tags
-					.optional()
-					.describe(
-						"Tag ids from list_tags. A combination is listed when it carries every one.",
-					),
-				own: z
-					.enum(OWN_CHOICES)
-					.optional()
-					.describe(
-						"Pieces I own. all lists the combinations whose every piece the closet has; not_all lists the ones with a piece it lacks; any, the default, lists them all.",
-					),
-			}),
+			inputSchema: combinationActions.list.input,
 		},
-		async ({ pieces = [], tags: tagIds = [], own = "any" }) => {
-			const [tags, holdings] = await Promise.all([
-				listTags(db, userId),
-				holdingsFor(db, userId),
-			]);
-			const found = await findCombinations(
-				db,
-				userId,
-				{ pieces, tags: tagIds, own },
-				holdings.owned,
-			);
-			if (!found.ok) return refusal(combinationRefusalText(found.error));
-			const combinations = found.value.map((c) =>
-				combinationView(c, tags, holdings),
-			);
+		async (input) => {
+			const listed = await combinationActions.list.run(scope, input);
+			if (!listed.ok) return refusal(listed.error.text);
+			const combinations = await combinationViews(listed.value);
 			if (combinations.length > 0) return answer({ combinations });
-			const filtered = pieces.length > 0 || tagIds.length > 0 || own !== "any";
+			const { pieces = [], tags = [], own = "any" } = input;
+			const filtered = pieces.length > 0 || tags.length > 0 || own !== "any";
 			return answer(
 				{ combinations },
 				filtered ? noCombinationsMatch : noCombinations,
@@ -536,17 +499,8 @@ export function registerAiActions(server: McpServer, account: Account) {
 				tags,
 			});
 			if (!saved.ok) return refusal(saved.error.text);
-			const [accountTags, holdings] = await Promise.all([
-				listTags(db, userId),
-				holdingsFor(db, userId),
-			]);
-			return answer({
-				combination: combinationView(
-					saved.value.combination,
-					accountTags,
-					holdings,
-				),
-			});
+			const [combination] = await combinationViews([saved.value.combination]);
+			return answer({ combination });
 		},
 	);
 
@@ -562,13 +516,8 @@ export function registerAiActions(server: McpServer, account: Account) {
 		async (input) => {
 			const changed = await combinationActions.change.run(scope, input);
 			if (!changed.ok) return refusal(changed.error.text);
-			const [accountTags, holdings] = await Promise.all([
-				listTags(db, userId),
-				holdingsFor(db, userId),
-			]);
-			return answer({
-				combination: combinationView(changed.value, accountTags, holdings),
-			});
+			const [combination] = await combinationViews([changed.value]);
+			return answer({ combination });
 		},
 	);
 

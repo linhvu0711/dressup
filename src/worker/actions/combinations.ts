@@ -3,19 +3,22 @@ import {
 	COMBINATION_LIMIT,
 	COMBINATION_TAGS_MAX,
 } from "@/combinations/combination";
+import { OWN_CHOICES } from "@/combinations/filter";
+import { NO_PIECES, pieceKeys } from "@/combinations/marks";
 import { LAYER_NAMES, TYPE_NAMES } from "@/dress/clothing-types";
 import {
 	type CombinationError,
 	changeCombination,
 	deleteCombination,
+	findCombinations,
 	saveCombination,
 } from "../combination-store";
+import { listOwnedPieces } from "../owned-item-store";
 import {
 	action,
 	issueField,
 	notAType,
 	notYourColour,
-	type Refusal,
 	type Refusals,
 	serverError,
 } from "./action";
@@ -79,14 +82,6 @@ const combinationRefusals: Refusals<CombinationError> = {
 	}),
 };
 
-// list_combinations reads this until the list moves into this module.
-export const combinationRefusalText = (error: CombinationError): string =>
-	(
-		combinationRefusals[error.code] as (
-			error: CombinationError,
-		) => Omit<Refusal, "code">
-	)(error).text;
-
 const pieces = z.array(
 	z.object({
 		typeId: z.string().describe("A type id from list_types, such as tee_l."),
@@ -94,7 +89,7 @@ const pieces = z.array(
 	}),
 );
 
-export const tags = z.array(z.string()).describe("Tag ids.");
+const tags = z.array(z.string()).describe("Tag ids.");
 
 const combinationInput = z.object({
 	id: z.string().describe("The combination's id."),
@@ -116,5 +111,47 @@ export const combinationActions = {
 		z.object({ id: z.string().describe("The combination's id.") }),
 		combinationRefusals,
 		({ db, userId }, { id }) => deleteCombination(db, userId, id),
+	),
+	list: action(
+		z.object({
+			pieces: z
+				.array(
+					z.object({
+						typeId: z
+							.string()
+							.optional()
+							.describe("A type id from list_types, such as tee_s."),
+						colourId: z
+							.string()
+							.optional()
+							.describe("A colour id from list_colours."),
+					}),
+				)
+				.optional()
+				.describe(
+					"Piece rows. A combination is listed when, for each row, one of its pieces has the row's type and colour; a row may give only one of the two.",
+				),
+			tags: tags
+				.optional()
+				.describe(
+					"Tag ids from list_tags. A combination is listed when it carries every one.",
+				),
+			own: z
+				.enum(OWN_CHOICES)
+				.optional()
+				.describe(
+					"Pieces I own. all lists the combinations whose every piece the closet has; not_all lists the ones with a piece it lacks; any, the default, lists them all.",
+				),
+		}),
+		combinationRefusals,
+		async ({ db, userId }, { pieces = [], tags = [], own = "any" }) =>
+			findCombinations(
+				db,
+				userId,
+				{ pieces, tags, own },
+				own === "any"
+					? NO_PIECES
+					: pieceKeys(await listOwnedPieces(db, userId)),
+			),
 	),
 };

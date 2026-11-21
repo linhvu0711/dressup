@@ -2,13 +2,15 @@ import { describe, expect, test } from "bun:test";
 import type { CombinationId } from "@/combinations/combination";
 import type { ColourId } from "@/labels/colour";
 import { listColours } from "../colour-store";
+import { schema } from "../db";
 import {
 	FIRST_ID,
 	greyPants,
 	SECOND_ID,
 	three,
+	two,
 } from "../test/combination-pieces";
-import { ALICE, BOB, withAccount } from "../test/harness";
+import { ALICE, BOB, count, withAccount } from "../test/harness";
 import { combinationActions } from "./combinations";
 import { tagActions } from "./tags";
 
@@ -331,5 +333,34 @@ describe("changing and deleting a combination", () => {
 		});
 		// Then
 		expect(deleted).toEqual({ ok: true, value: FIRST_ID as CombinationId });
+	});
+});
+
+describe("listing combinations", () => {
+	test("lists the newest first", async () => {
+		// Given: three(ids), then two(ids) saved
+		const { alice, ids } = await withAlice();
+		await combinationActions.save.run(alice, three(ids));
+		await combinationActions.save.run(alice, two(ids));
+		// When
+		const listed = await combinationActions.list.run(alice, {});
+		// Then
+		expect(listed.ok && listed.value.map((c) => c.id)).toEqual([
+			SECOND_ID as CombinationId,
+			FIRST_ID as CombinationId,
+		]);
+	});
+
+	test("lists with no filter and writes no starter colours", async () => {
+		// Given: alice's account, no colour list read yet
+		const { h } = await withAccount();
+		const alice = { db: h.db, userId: ALICE.id };
+		// When
+		const listed = await combinationActions.list.run(alice, {});
+		// Then
+		expect({
+			listed,
+			colours: await count(h, schema.colour),
+		}).toEqual({ listed: { ok: true, value: [] }, colours: 0 });
 	});
 });

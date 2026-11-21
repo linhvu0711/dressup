@@ -128,9 +128,6 @@ async function readCombinations(
 	}));
 }
 
-export const listCombinations = (db: Db, userId: string) =>
-	readCombinations(db, userId);
-
 // The combinations that match every piece row, carry every tag, and pass
 // Pieces I own, newest first. A type, colour, or tag the account does not
 // have is refused, as a save refuses it.
@@ -177,12 +174,15 @@ const isKeyTaken = (error: unknown): boolean =>
 		isKeyTaken(error.cause));
 
 // The first piece whose colour is not one of the account's, as the problem.
-// A filter row may leave its colour out.
+// A filter row may leave its colour out; with no colour named there is
+// nothing to check, and the colour list is not read, since a first read
+// writes the starter colours.
 async function notYourColour(
 	db: Db,
 	userId: string,
 	pieces: readonly { colourId?: string }[],
 ): Promise<CombinationProblem | null> {
+	if (pieces.every((p) => p.colourId === undefined)) return null;
 	const colourIds = new Set<string>(
 		(await listColours(db, userId)).map((c) => c.id),
 	);
@@ -224,6 +224,7 @@ async function notYourTag(
 	userId: string,
 	tags: readonly string[],
 ): Promise<CombinationProblem | null> {
+	if (tags.length === 0) return null;
 	const tagIds = new Set<string>((await listTags(db, userId)).map((t) => t.id));
 	const value = tags.find((id) => !tagIds.has(id));
 	return value === undefined

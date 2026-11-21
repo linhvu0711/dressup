@@ -52,7 +52,6 @@ import {
 } from "./auth";
 import { listBrands } from "./brand-store";
 import { listColours } from "./colour-store";
-import { listCombinations } from "./combination-store";
 import type { Db } from "./db";
 import { user } from "./db/auth-schema";
 import { loadMannequin, setMannequinColour } from "./mannequin-store";
@@ -359,11 +358,11 @@ export function createApp(getDb: (env: Env) => Db) {
 		return c.body(null, 204);
 	});
 
-	app.get("/combinations", withAuth, requireUser, async (c) =>
-		c.json({
-			combinations: await listCombinations(getDb(c.env), c.var.user.id),
-		} satisfies CombinationsAnswer),
-	);
+	app.get("/combinations", withAuth, requireUser, async (c) => {
+		const listed = await combinationActions.list.run(scope(c), {});
+		if (!listed.ok) return c.json(listed.error.body, listed.error.status);
+		return c.json({ combinations: listed.value } satisfies CombinationsAnswer);
+	});
 
 	app.post("/combinations", withAuth, requireUser, async (c) => {
 		const body = await readBody(c, combinationActions.save.input);
