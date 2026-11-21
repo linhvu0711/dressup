@@ -86,6 +86,7 @@ import {
 	type PictureError,
 	readPicture,
 } from "./picture-store";
+import type { Result } from "./result";
 import {
 	addTag,
 	deleteTag,
@@ -110,31 +111,34 @@ type AppEnv = {
 	Variables: { auth: Auth; user: User; uploaderId: string };
 };
 
+type BodyError = { code: "invalid"; field: string };
+
 // The parsed body, or the 400 that names the field: the whole zod path, as
 // `colours.sweater`. A body that is not JSON, or JSON but not an object
 // (an empty path), names "body".
 async function readBody<T extends z.ZodType>(
 	c: Context<AppEnv>,
 	schema: T,
-): Promise<{ data: z.output<T> } | { refused: Response }> {
+): Promise<Result<z.output<T>, BodyError>> {
 	let body: unknown;
 	try {
 		body = await c.req.json();
 	} catch {
-		return {
-			refused: c.json(
-				{ error: "invalid", field: "body" } satisfies ErrorAnswer,
-				400,
-			),
-		};
+		return { ok: false, error: { code: "invalid", field: "body" } };
 	}
 	const parsed = schema.safeParse(body);
-	if (parsed.success) return { data: parsed.data };
-	const field = issueField(parsed.error.issues[0]?.path ?? []);
+	if (parsed.success) return { ok: true, value: parsed.data };
 	return {
-		refused: c.json({ error: "invalid", field } satisfies ErrorAnswer, 400),
+		ok: false,
+		error: {
+			code: "invalid",
+			field: issueField(parsed.error.issues[0]?.path ?? []),
+		},
 	};
 }
+
+const invalid = (c: Context<AppEnv>, field: string) =>
+	c.json({ error: "invalid", field } satisfies ErrorAnswer, 400);
 
 const issueField = (path: readonly PropertyKey[]) =>
 	path.length === 0 ? "body" : path.map(String).join(".");
@@ -447,8 +451,12 @@ export function createApp(getDb: (env: Env) => Db) {
 
 	app.post("/combinations", withAuth, requireUser, async (c) => {
 		const body = await readBody(c, combinationBodySchema);
-		if ("refused" in body) return body.refused;
-		const saved = await saveCombination(getDb(c.env), c.var.user.id, body.data);
+		if (!body.ok) return invalid(c, body.error.field);
+		const saved = await saveCombination(
+			getDb(c.env),
+			c.var.user.id,
+			body.value,
+		);
 		if (!saved.ok) {
 			const { status, body: refused } = combinationRefusal(saved.error);
 			return c.json(refused, status);
@@ -464,16 +472,12 @@ export function createApp(getDb: (env: Env) => Db) {
 	// 404, so ids of other accounts cannot be told from missing ones.
 	app.put("/combinations/:id", withAuth, requireUser, async (c) => {
 		const body = await readBody(c, combinationBodySchema);
-		if ("refused" in body) return body.refused;
+		if (!body.ok) return invalid(c, body.error.field);
 		const id = c.req.param("id");
-		if (body.data.id !== id)
-			return c.json(
-				{ error: "invalid", field: "id" } satisfies ErrorAnswer,
-				400,
-			);
+		if (body.value.id !== id) return invalid(c, "id");
 		const changed = await changeCombination(getDb(c.env), c.var.user.id, id, {
-			pieces: body.data.pieces,
-			tags: body.data.tags,
+			pieces: body.value.pieces,
+			tags: body.value.tags,
 		});
 		if (!changed.ok) {
 			const { status, body: refused } = combinationRefusal(changed.error);
@@ -503,12 +507,12 @@ export function createApp(getDb: (env: Env) => Db) {
 
 	app.post("/owned-items", withAuth, requireUser, async (c) => {
 		const body = await readBody(c, ownedItemBodySchema);
-		if ("refused" in body) return body.refused;
+		if (!body.ok) return invalid(c, body.error.field);
 		const added = await addOwnedItem(
 			getDb(c.env),
 			c.env.PICTURES,
 			c.var.user.id,
-			body.data,
+			body.value,
 		);
 		if (!added.ok) {
 			const { status, body: refused } = ownedItemRefusal(added.error);
@@ -527,13 +531,13 @@ export function createApp(getDb: (env: Env) => Db) {
 				pictureIds: z.array(z.string()).optional(),
 			}),
 		);
-		if ("refused" in body) return body.refused;
+		if (!body.ok) return invalid(c, body.error.field);
 		const changed = await changeOwnedItem(
 			getDb(c.env),
 			c.env.PICTURES,
 			c.var.user.id,
 			c.req.param("id"),
-			body.data,
+			body.value,
 		);
 		if (!changed.ok) {
 			const { status, body: refused } = ownedItemRefusal(changed.error);
@@ -579,8 +583,8 @@ export function createApp(getDb: (env: Env) => Db) {
 
 	app.post("/wishes", withAuth, requireUser, async (c) => {
 		const body = await readBody(c, wishBodySchema);
-		if ("refused" in body) return body.refused;
-		const added = await addWish(getDb(c.env), c.var.user.id, body.data);
+		if (!body.ok) return invalid(c, body.error.field);
+		const added = await addWish(getDb(c.env), c.var.user.id, body.value);
 		if (!added.ok) {
 			const { status, body: refused } = wishRefusal(added.error);
 			return c.json(refused, status);
@@ -594,13 +598,13 @@ export function createApp(getDb: (env: Env) => Db) {
 			c,
 			shopLinkBodySchema.extend({ id: z.string() }),
 		);
-		if ("refused" in body) return body.refused;
+		if (!body.ok) return invalid(c, body.error.field);
 		const added = await addShopLink(
 			getDb(c.env),
 			c.env.PICTURES,
 			c.var.user.id,
 			c.req.param("id"),
-			body.data,
+			body.value,
 		);
 		if (!added.ok) {
 			const { status, body: refused } = wishRefusal(added.error);
@@ -612,13 +616,13 @@ export function createApp(getDb: (env: Env) => Db) {
 
 	app.put("/shop-links/:id", withAuth, requireUser, async (c) => {
 		const body = await readBody(c, shopLinkBodySchema);
-		if ("refused" in body) return body.refused;
+		if (!body.ok) return invalid(c, body.error.field);
 		const changed = await changeShopLink(
 			getDb(c.env),
 			c.env.PICTURES,
 			c.var.user.id,
 			c.req.param("id"),
-			body.data,
+			body.value,
 		);
 		if (!changed.ok) {
 			const { status, body: refused } = wishRefusal(changed.error);
@@ -755,8 +759,8 @@ export function createApp(getDb: (env: Env) => Db) {
 			c,
 			z.object({ name: z.string(), hex: z.string() }),
 		);
-		if ("refused" in body) return body.refused;
-		const added = await addColour(getDb(c.env), c.var.user.id, body.data);
+		if (!body.ok) return invalid(c, body.error.field);
+		const added = await addColour(getDb(c.env), c.var.user.id, body.value);
 		if (!added.ok) {
 			const { status, body } = colourRefusal(added.error);
 			return c.json(body, status);
@@ -770,13 +774,9 @@ export function createApp(getDb: (env: Env) => Db) {
 			c,
 			z.object({ id: colourIdSchema, name: z.string(), hex: z.string() }),
 		);
-		if ("refused" in body) return body.refused;
-		if (body.data.id !== c.req.param("id"))
-			return c.json(
-				{ error: "invalid", field: "id" } satisfies ErrorAnswer,
-				400,
-			);
-		const { id, ...input } = body.data;
+		if (!body.ok) return invalid(c, body.error.field);
+		if (body.value.id !== c.req.param("id")) return invalid(c, "id");
+		const { id, ...input } = body.value;
 		const changed = await changeColour(getDb(c.env), c.var.user.id, id, input);
 		if (!changed.ok) {
 			const { status, body } = colourRefusal(changed.error);
@@ -812,12 +812,12 @@ export function createApp(getDb: (env: Env) => Db) {
 				400,
 			);
 		const body = await readBody(c, z.object({ hex: hexSchema }));
-		if ("refused" in body) return body.refused;
+		if (!body.ok) return invalid(c, body.error.field);
 		const mannequin = await setMannequinColour(
 			getDb(c.env),
 			c.var.user.id,
 			part.data,
-			body.data.hex,
+			body.value.hex,
 		);
 		return c.json({ mannequin } satisfies MannequinAnswer, 200);
 	});
@@ -830,8 +830,8 @@ export function createApp(getDb: (env: Env) => Db) {
 
 	app.post("/brands", withAuth, requireUser, async (c) => {
 		const body = await readBody(c, z.object({ name: z.string() }));
-		if ("refused" in body) return body.refused;
-		const added = await addBrand(getDb(c.env), c.var.user.id, body.data.name);
+		if (!body.ok) return invalid(c, body.error.field);
+		const added = await addBrand(getDb(c.env), c.var.user.id, body.value.name);
 		if (!added.ok) {
 			const { status, body } = brandRefusal(added.error);
 			return c.json(body, status);
@@ -845,13 +845,9 @@ export function createApp(getDb: (env: Env) => Db) {
 			c,
 			z.object({ id: brandIdSchema, name: z.string() }),
 		);
-		if ("refused" in body) return body.refused;
-		if (body.data.id !== c.req.param("id"))
-			return c.json(
-				{ error: "invalid", field: "id" } satisfies ErrorAnswer,
-				400,
-			);
-		const { id, name } = body.data;
+		if (!body.ok) return invalid(c, body.error.field);
+		if (body.value.id !== c.req.param("id")) return invalid(c, "id");
+		const { id, name } = body.value;
 		const renamed = await renameBrand(getDb(c.env), c.var.user.id, id, name);
 		if (!renamed.ok) {
 			const { status, body } = brandRefusal(renamed.error);
@@ -881,8 +877,8 @@ export function createApp(getDb: (env: Env) => Db) {
 
 	app.post("/tags", withAuth, requireUser, async (c) => {
 		const body = await readBody(c, z.object({ name: z.string() }));
-		if ("refused" in body) return body.refused;
-		const added = await addTag(getDb(c.env), c.var.user.id, body.data.name);
+		if (!body.ok) return invalid(c, body.error.field);
+		const added = await addTag(getDb(c.env), c.var.user.id, body.value.name);
 		if (!added.ok) {
 			const { status, body } = tagRefusals[added.error.code];
 			return c.json(body, status);
@@ -896,17 +892,13 @@ export function createApp(getDb: (env: Env) => Db) {
 			c,
 			z.object({ id: tagIdSchema, name: z.string() }),
 		);
-		if ("refused" in body) return body.refused;
-		if (body.data.id !== c.req.param("id"))
-			return c.json(
-				{ error: "invalid", field: "id" } satisfies ErrorAnswer,
-				400,
-			);
+		if (!body.ok) return invalid(c, body.error.field);
+		if (body.value.id !== c.req.param("id")) return invalid(c, "id");
 		const renamed = await renameTag(
 			getDb(c.env),
 			c.var.user.id,
-			body.data.id,
-			body.data.name,
+			body.value.id,
+			body.value.name,
 		);
 		if (!renamed.ok) {
 			const { status, body } = tagRefusals[renamed.error.code];
