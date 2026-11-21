@@ -1,7 +1,6 @@
 import {
 	and,
 	asc,
-	count,
 	desc,
 	eq,
 	exists,
@@ -29,10 +28,10 @@ import type { ColourId } from "@/labels/colour";
 import type { TagId } from "@/tags/tag";
 import { listColours } from "./colour-store";
 import type { Db } from "./db";
-import { user } from "./db/auth-schema";
 import { colour } from "./db/colour-schema";
 import { combination, combinationPiece } from "./db/combination-schema";
 import { combinationTag, tag } from "./db/tag-schema";
+import { guardedAdd } from "./guarded-add";
 import type { Result } from "./result";
 import { listTags } from "./tag-store";
 
@@ -288,9 +287,10 @@ const replaceTags = (
 // a lost answer gives back the same combination rather than a second one. An
 // id another account holds, or one saved with other pieces, is conflict. A
 // save sent again writes its tags, since the form may have changed them. The
-// same pieces under another id is duplicate, with its id. A
-// new combination past the limit is not saved: combination_limit. The count
-// sits in the insert, so two saves at once cannot both pass it.
+// same pieces under another id is duplicate, with its id: the key index turns
+// it into no row, and the holder is read after the insert. A new combination
+// past the limit is not saved: combination_limit. The count sits in the
+// insert, so two saves at once cannot both pass it.
 export async function saveCombination(
 	db: Db,
 	userId: string,
@@ -304,68 +304,44 @@ export async function saveCombination(
 	const notTag = await notYourTag(db, userId, input.tags);
 	if (notTag) return { ok: false, error: notTag };
 	const key = combinationKey(input.pieces);
-	const conflict = { ok: false, error: { code: "conflict" } } as const;
-	const [before] = await db
-		.select({ userId: combination.userId, key: combination.key })
-		.from(combination)
-		.where(eq(combination.id, input.id));
 	const ours = sql`${eq(combination.id, input.id)} and ${eq(combination.userId, userId)}`;
-	if (before) {
-		if (before.userId !== userId || before.key !== key) return conflict;
-		await db.batch(replaceTags(db, userId, input.id, input.tags, ours));
-		const [same] = await readCombinations(db, userId, input.id);
-		return same
-			? { ok: true, value: { combination: same, created: false } }
-			: conflict;
-	}
-	const held = await keyHolder(db, userId, key);
-	if (held) return { ok: false, error: { code: "duplicate", id: held } };
-	try {
-		await db.batch([
-			db
-				.insert(combination)
-				.select(
-					db
-						.select({
-							id: sql<string>`${input.id}`.as("id"),
-							userId: user.id,
-							key: sql<string>`${key}`.as("key"),
-							createdAt:
-								sql<number>`(cast(unixepoch('subsecond') * 1000 as integer))`.as(
-									"created_at",
-								),
-						})
-						.from(user)
-						.where(
-							and(
-								eq(user.id, userId),
-								sql`(${db
-									.select({ n: count() })
-									.from(combination)
-									.where(
-										eq(combination.userId, userId),
-									)}) < ${COMBINATION_LIMIT}`,
-							),
-						),
-				)
-				.onConflictDoNothing({ target: combination.id }),
-			...pieceWrites(db, input.pieces, ours),
-			...(input.tags.length
-				? [tagLinks(db, userId, input.id, input.tags, ours)]
-				: []),
-		]);
-	} catch (error) {
-		const taken = isKeyTaken(error) && (await keyHolder(db, userId, key));
-		if (!taken) throw error;
-		return { ok: false, error: { code: "duplicate", id: taken } };
-	}
-	const [saved] = await readCombinations(db, userId, input.id);
-	if (saved) return { ok: true, value: { combination: saved, created: true } };
-	const [taken] = await db
-		.select({ id: combination.id })
-		.from(combination)
-		.where(eq(combination.id, input.id));
-	return taken ? conflict : { ok: false, error: { code: "combination_limit" } };
+	const saved = await guardedAdd(db, {
+		table: combination,
+		userId,
+		id: input.id,
+		mine: and(eq(combination.userId, userId), eq(combination.key, key)),
+		values: { key },
+		guards: [],
+		limit: { max: COMBINATION_LIMIT, code: "combination_limit" },
+		write: async (insert) => {
+			const [rows] = await db.batch([
+				insert,
+				...pieceWrites(db, input.pieces, ours),
+				...(input.tags.length
+					? [tagLinks(db, userId, input.id, input.tags, ours)]
+					: []),
+			]);
+			return { ok: true, value: rows };
+		},
+		resend: async () => {
+			await db.batch(replaceTags(db, userId, input.id, input.tags, ours));
+			return { ok: true, value: null };
+		},
+		read: async () => (await readCombinations(db, userId, input.id))[0],
+		refused: async (): Promise<CombinationError | null> => {
+			const held = await keyHolder(db, userId, key);
+			return held ? { code: "duplicate", id: held } : null;
+		},
+	});
+	return saved.ok
+		? {
+				ok: true,
+				value: {
+					combination: saved.value.value,
+					created: saved.value.created,
+				},
+			}
+		: saved;
 }
 
 // Finds the account's combination by id and swaps its pieces whole, in one
