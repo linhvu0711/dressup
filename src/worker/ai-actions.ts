@@ -23,6 +23,7 @@ import { boughtActions } from "./actions/bought";
 import { brandActions } from "./actions/brands";
 import { colourActions } from "./actions/colours";
 import { combinationActions } from "./actions/combinations";
+import { mannequinActions } from "./actions/mannequin";
 import { ownedItemActions } from "./actions/owned-items";
 import { pictureActions } from "./actions/pictures";
 import { tagActions } from "./actions/tags";
@@ -683,6 +684,23 @@ export function registerAiActions(server: McpServer, account: Account) {
 					},
 				],
 			};
+		},
+	);
+
+	tool(
+		"set_mannequin_colour",
+		{
+			title: "Set a mannequin colour",
+			description:
+				"Sets the skin or hair colour of the mannequin that wears the combinations. A code is #RRGGBB in capital letters, such as #8D5524. Answers both colours.",
+			annotations: WRITE,
+			inputSchema: mannequinActions.set.input,
+		},
+		async (input) => {
+			const set = await mannequinActions.set.run(scope, input);
+			return set.ok
+				? answer({ mannequin: set.value })
+				: refusal(set.error.text);
 		},
 	);
 }

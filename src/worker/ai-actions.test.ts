@@ -74,6 +74,7 @@ describe("tags", () => {
 			["mark_shop_link_bought", D],
 			["get_upload_address", W],
 			["show_picture", R],
+			["set_mannequin_colour", W],
 		]);
 		expect(listed.every((t) => typeof t.title === "string")).toBe(true);
 	});
@@ -461,6 +462,73 @@ describe("brands", () => {
 	});
 });
 
+describe("mannequin", () => {
+	const shownMannequin = async (h: Harness, ai: Session) =>
+		(await send(h, ai.jar, "GET", "/api/mannequin")).json();
+
+	test("sets the hair colour and answers both colours", async () => {
+		// Given: a new account with the starter mannequin
+		const { ai } = await withAiSession();
+		// When
+		const { isError, data } = await ai.call("set_mannequin_colour", {
+			part: "hair",
+			hex: "#6B4A2F",
+		});
+		// Then
+		expect({ isError, data }).toEqual({
+			isError: false,
+			data: { mannequin: { skin: "#D6A27B", hair: "#6B4A2F" } },
+		});
+	});
+
+	test("Settings shows the colour an AI app set", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		await ai.call("set_mannequin_colour", { part: "skin", hex: "#8D5524" });
+		// When
+		const res = await send(h, ai.jar, "GET", "/api/mannequin");
+		// Then
+		expect({ status: res.status, body: await res.json() }).toEqual({
+			status: 200,
+			body: { mannequin: { skin: "#8D5524", hair: "#141418" } },
+		});
+	});
+
+	test("refuses a mannequin colour that is not a colour code", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		// When
+		const { isError, text } = await ai.call("set_mannequin_colour", {
+			part: "hair",
+			hex: "brown",
+		});
+		// Then
+		expect({ isError, text, shown: await shownMannequin(h, ai) }).toEqual({
+			isError: true,
+			text: "That is not a colour written as #RRGGBB with capital letters, such as #1F3A5F.",
+			shown: { mannequin: { skin: "#D6A27B", hair: "#141418" } },
+		});
+	});
+
+	test("answers the could-not sentence when the mannequin write fails", async () => {
+		// Given
+		const { h, ai } = await withAiSession();
+		h.addTrigger(
+			"CREATE TRIGGER fail_mannequin_write BEFORE INSERT ON mannequin BEGIN SELECT RAISE(ABORT, 'mannequin write failed'); END",
+		);
+		// When
+		const { isError, text } = await ai.call("set_mannequin_colour", {
+			part: "hair",
+			hex: "#6B4A2F",
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "dressup could not do this. Try again.",
+		});
+	});
+});
+
 describe("AI action limit", () => {
 	// Starts a clock minute so the 61 calls cannot cross into the next one.
 	async function sixtyActions() {
@@ -525,6 +593,23 @@ describe("AI action limit", () => {
 			isError: true,
 			text: "Too many actions. Wait a minute and try again.",
 			rows: [],
+		});
+	});
+
+	test("refuses set_mannequin_colour as the 61st AI action", async () => {
+		// Given
+		const { h, ai } = await sixtyActions();
+		// When
+		const { isError, text } = await ai.call("set_mannequin_colour", {
+			part: "hair",
+			hex: "#6B4A2F",
+		});
+		// Then
+		const shown = await (await send(h, ai.jar, "GET", "/api/mannequin")).json();
+		expect({ isError, text, shown }).toEqual({
+			isError: true,
+			text: "Too many actions. Wait a minute and try again.",
+			shown: { mannequin: { skin: "#D6A27B", hair: "#141418" } },
 		});
 	});
 
