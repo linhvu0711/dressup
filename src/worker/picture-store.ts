@@ -367,10 +367,10 @@ export async function deleteDraft(
 export async function pictureIdsBy(
 	db: Db,
 	userId: string,
-	of: { ownedItemId: string | undefined } | { wishId: string | undefined },
+	of: { kind: "ownedItem" | "wish"; id: string | undefined },
 ): Promise<Map<string, PictureId[]>> {
-	const owner = "wishId" in of ? picture.shopLinkId : picture.ownedItemId;
-	const id = "wishId" in of ? of.wishId : of.ownedItemId;
+	const owner = of.kind === "wish" ? picture.shopLinkId : picture.ownedItemId;
+	const { id } = of;
 	const rows = await db
 		.select({ id: picture.id, owner })
 		.from(picture)
@@ -379,7 +379,7 @@ export async function pictureIdsBy(
 				eq(picture.userId, userId),
 				id === undefined
 					? isNotNull(owner)
-					: "wishId" in of
+					: of.kind === "wish"
 						? ofWish(db, id)
 						: eq(owner, id),
 			),

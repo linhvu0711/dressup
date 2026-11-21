@@ -89,7 +89,7 @@ async function readOwnedItems(
 		)
 		// Two adds in one millisecond share created_at; rowid keeps their order.
 		.orderBy(desc(ownedItem.createdAt), desc(sql`${ownedItem}.rowid`));
-	const pictures = await pictureIdsBy(db, userId, { ownedItemId: id });
+	const pictures = await pictureIdsBy(db, userId, { kind: "ownedItem", id });
 	return rows.map((row) => ({
 		id: row.id as OwnedItemId,
 		typeId: row.typeId,
