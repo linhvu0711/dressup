@@ -2,7 +2,6 @@ import { and, asc, desc, eq, exists, notExists, sql } from "drizzle-orm";
 import type { Hex } from "@/colour/hex";
 import type { PieceRef } from "@/combinations/marks";
 import type { TypeId } from "@/dress/clothing-types";
-import type { BrandId } from "@/labels/brand";
 import type { ColourId } from "@/labels/colour";
 import {
 	SHOP_LINK_LIMIT,
@@ -15,7 +14,7 @@ import {
 	type WishId,
 	wishInputSchema,
 } from "@/wishlist/wish";
-import { brandOf } from "./brand-store";
+import { brandOf, brandOrNone, notYourBrand } from "./brand-store";
 import { colourOf } from "./colour-store";
 import type { Db } from "./db";
 import { brand } from "./db/brand-schema";
@@ -123,10 +122,7 @@ async function readShopLinks(
 		const link: ShopLink = {
 			id: row.id as ShopLinkId,
 			url: row.url,
-			brand:
-				row.brandId === null || row.brandName === null
-					? null
-					: { id: row.brandId as BrandId, name: row.brandName },
+			brand: brandOrNone(row.brandId, row.brandName),
 			name: row.name,
 			price: row.price,
 			pictureIds: pictures.get(row.id) ?? [],
@@ -361,12 +357,7 @@ async function refusedLink(
 		.from(wish)
 		.where(and(eq(wish.id, wishId), eq(wish.userId, userId)));
 	if (!ownWish) return { code: "not_found" };
-	if (input.brandId !== null) {
-		const [ownBrand] = await brandOf(db, userId, input.brandId);
-		if (!ownBrand)
-			return { code: "invalid", field: "brandId", value: input.brandId };
-	}
-	return null;
+	return notYourBrand(db, userId, input.brandId);
 }
 
 // Every field of a link may change; the wish it belongs to stays. The brand
@@ -417,15 +408,12 @@ export async function changeShopLink(
 		.from(shopLink)
 		.where(and(eq(shopLink.id, id), eq(shopLink.userId, userId)));
 	if (!link) return { ok: false, error: { code: "not_found" } };
-	if (input.brandId !== null) {
-		const [ownBrand] = await brandOf(db, userId, input.brandId);
-		if (!ownBrand)
-			return {
-				ok: false,
-				error: { code: "invalid", field: "brandId", value: input.brandId },
-			};
-	}
-	return { ok: false, error: { code: "conflict" } };
+	return {
+		ok: false,
+		error: (await notYourBrand(db, userId, input.brandId)) ?? {
+			code: "conflict",
+		},
+	};
 }
 
 // Only the account's own link goes; not found when the account has no link

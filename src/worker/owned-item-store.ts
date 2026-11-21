@@ -21,9 +21,8 @@ import {
 import type { Hex } from "@/colour/hex";
 import type { PieceRef } from "@/combinations/marks";
 import type { TypeId } from "@/dress/clothing-types";
-import type { BrandId } from "@/labels/brand";
 import type { ColourId } from "@/labels/colour";
-import { brandOf } from "./brand-store";
+import { brandOf, brandOrNone, notYourBrand } from "./brand-store";
 import { colourOf } from "./colour-store";
 import type { Db } from "./db";
 import { brand } from "./db/brand-schema";
@@ -99,10 +98,7 @@ async function readOwnedItems(
 			name: row.colourName,
 			hex: row.hex as Hex,
 		},
-		brand:
-			row.brandId === null || row.brandName === null
-				? null
-				: { id: row.brandId as BrandId, name: row.brandName },
+		brand: brandOrNone(row.brandId, row.brandName),
 		quantity: row.quantity,
 		pictureIds: pictures.get(row.id) ?? [],
 	}));
@@ -194,11 +190,8 @@ async function refusedWrite(
 	const [ownColour] = await colourOf(db, userId, piece.colourId);
 	if (!ownColour)
 		return { code: "invalid", field: "colourId", value: piece.colourId };
-	if (piece.brandId !== null) {
-		const [ownBrand] = await brandOf(db, userId, piece.brandId);
-		if (!ownBrand)
-			return { code: "invalid", field: "brandId", value: piece.brandId };
-	}
+	const notYours = await notYourBrand(db, userId, piece.brandId);
+	if (notYours) return notYours;
 	const holders = await db
 		.select({ id: ownedItem.id })
 		.from(ownedItem)
