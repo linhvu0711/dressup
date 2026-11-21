@@ -1,0 +1,1 @@
+ALTER TABLE `shop_link` ADD `write_id` text;

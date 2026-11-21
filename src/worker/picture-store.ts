@@ -66,7 +66,9 @@ export type HeldOwner =
 	| {
 			kind: "shopLink";
 			id: string;
-			holds: Partial<Pick<typeof shopLink.$inferSelect, "wishId" | "brandId">>;
+			holds: Partial<
+				Pick<typeof shopLink.$inferSelect, "wishId" | "brandId" | "writeId">
+			>;
 	  };
 
 const ownerIs = (owner: PictureOwner) =>

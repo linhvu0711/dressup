@@ -836,6 +836,107 @@ describe("shop link pictures", () => {
 		});
 	});
 
+	test("keeps the first send's pictures when a resend with fewer lands second", async () => {
+		// Given: the add with a, its batch queued before the resend reads the id
+		const { h, alice } = await aliceWithWish();
+		const [a] = await uploads(alice, 1);
+		const hold = h.holdBatches();
+		const first = addLink(alice, FIRST_ID, {
+			...zaraLink(null),
+			pictureIds: [a],
+		});
+		await hold.queued(1);
+		// When: the same add sent again with no pictures
+		const resend = addLink(alice, FIRST_ID, {
+			...zaraLink(null),
+			pictureIds: [],
+		});
+		await hold.queued(2);
+		hold.release();
+		const [, again] = await Promise.all([first, resend]);
+		// Then
+		expect({
+			ok: again.ok,
+			created: again.ok && again.value.created,
+			pictureIds: (await linksOf(alice))?.[0]?.pictureIds,
+			keys: h.pictures.keys(),
+		}).toEqual({ ok: true, created: false, pictureIds: [a], keys: [a] });
+	});
+
+	test("attaches no picture from a resend that lands after a first send with none", async () => {
+		// Given: the add with no pictures, its batch queued before the resend
+		// reads the id
+		const { h, alice } = await aliceWithWish();
+		const [a] = await uploads(alice, 1);
+		const hold = h.holdBatches();
+		const first = addLink(alice, FIRST_ID, {
+			...zaraLink(null),
+			pictureIds: [],
+		});
+		await hold.queued(1);
+		// When: the same add sent again with a
+		const resend = addLink(alice, FIRST_ID, {
+			...zaraLink(null),
+			pictureIds: [a],
+		});
+		await hold.queued(2);
+		hold.release();
+		const [, again] = await Promise.all([first, resend]);
+		// Then: the link holds no picture and the bucket still holds a, so a
+		// stays a draft
+		expect({
+			ok: again.ok,
+			created: again.ok && again.value.created,
+			pictureIds: (await linksOf(alice))?.[0]?.pictureIds,
+			keys: h.pictures.keys(),
+		}).toEqual({ ok: true, created: false, pictureIds: [], keys: [a] });
+	});
+
+	test("keeps a shop link's pictures when its add is sent again with another list", async () => {
+		// Given: the Zara link added with a
+		const { h, alice } = await aliceWithWish();
+		const [a, b] = await uploads(alice, 2);
+		await addLink(alice, FIRST_ID, { ...zaraLink(null), pictureIds: [a] });
+		// When
+		const again = await addLink(alice, FIRST_ID, {
+			...zaraLink(null),
+			pictureIds: [b],
+		});
+		// Then
+		expect({
+			ok: again.ok,
+			created: again.ok && again.value.created,
+			pictureIds: (await linksOf(alice))?.[0]?.pictureIds,
+			keys: h.pictures.keys(),
+		}).toEqual({
+			ok: true,
+			created: false,
+			pictureIds: [a],
+			keys: [a, b].sort(),
+		});
+	});
+
+	test("takes a picture through a change on a link with no write id", async () => {
+		// Given: a link written before links had a write id
+		const { h, alice } = await aliceWithWish();
+		await h.seedShopLinks(ALICE.id, FIRST_ID, 1);
+		const [a] = await uploads(alice, 1);
+		// When
+		const changed = await shopLinkActions.change.run(alice, {
+			id: "00000000-0000-4000-b000-000000000001",
+			url: "https://shop.example/1",
+			brandId: null,
+			name: "Link 1",
+			price: 100000,
+			pictureIds: [a],
+		});
+		// Then
+		expect({
+			ok: changed.ok,
+			pictureIds: changed.ok && changed.value.shopLinks[0]?.pictureIds,
+		}).toEqual({ ok: true, pictureIds: [a] });
+	});
+
 	// LINK_ID holds a and b, OTHER_LINK_ID holds c.
 	async function twoLinksWithPictures() {
 		const { h, alice, ids } = await aliceWithWish();
