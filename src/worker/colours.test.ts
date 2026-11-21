@@ -109,6 +109,29 @@ describe("GET /api/colours", () => {
 });
 
 describe("POST /api/colours", () => {
+	test("refuses a body that is not JSON", async () => {
+		// Given: alice signed in
+		const { h, headers } = await withAccount();
+		// When: send always stringifies a body, so the raw text goes through the app
+		const res = await h.app.request(
+			"/api/colours",
+			{
+				method: "POST",
+				headers: new Headers({
+					...Object.fromEntries(headers),
+					"content-type": "application/json",
+				}),
+				body: "not json",
+			},
+			h.env,
+		);
+		// Then
+		expect({ status: res.status, body: await res.json() }).toEqual({
+			status: 400,
+			body: { error: "invalid", field: "body" },
+		});
+	});
+
 	test("lists an added colour after the starter set", async () => {
 		// Given: alice signed in, the list read once
 		const { h, headers } = await withAccount();
