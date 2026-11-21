@@ -856,10 +856,11 @@ describe("shop link pictures", () => {
 		const [, again] = await Promise.all([first, resend]);
 		// Then
 		expect({
+			ok: again.ok,
 			created: again.ok && again.value.created,
 			pictureIds: (await linksOf(alice))?.[0]?.pictureIds,
 			keys: h.pictures.keys(),
-		}).toEqual({ created: false, pictureIds: [a], keys: [a] });
+		}).toEqual({ ok: true, created: false, pictureIds: [a], keys: [a] });
 	});
 
 	test("attaches no picture from a resend that lands after a first send with none", async () => {
@@ -884,10 +885,11 @@ describe("shop link pictures", () => {
 		// Then: the link holds no picture and the bucket still holds a, so a
 		// stays a draft
 		expect({
+			ok: again.ok,
 			created: again.ok && again.value.created,
 			pictureIds: (await linksOf(alice))?.[0]?.pictureIds,
 			keys: h.pictures.keys(),
-		}).toEqual({ created: false, pictureIds: [], keys: [a] });
+		}).toEqual({ ok: true, created: false, pictureIds: [], keys: [a] });
 	});
 
 	test("keeps a shop link's pictures when its add is sent again with another list", async () => {
@@ -902,10 +904,16 @@ describe("shop link pictures", () => {
 		});
 		// Then
 		expect({
+			ok: again.ok,
 			created: again.ok && again.value.created,
 			pictureIds: (await linksOf(alice))?.[0]?.pictureIds,
 			keys: h.pictures.keys(),
-		}).toEqual({ created: false, pictureIds: [a], keys: [a, b].sort() });
+		}).toEqual({
+			ok: true,
+			created: false,
+			pictureIds: [a],
+			keys: [a, b].sort(),
+		});
 	});
 
 	test("takes a picture through a change on a link with no write id", async () => {
