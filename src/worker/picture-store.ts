@@ -33,7 +33,7 @@ import {
 	pictureStorage,
 	pictureUploadMonth,
 } from "./db/picture-schema";
-import { shopLink } from "./db/wish-schema";
+import { shopLink, wish } from "./db/wish-schema";
 import type { Result } from "./result";
 
 // Why the picture list of an owner cannot be saved.
@@ -179,48 +179,22 @@ async function removeObjects(bucket: R2Bucket, ids: string[]) {
 	}
 }
 
-// One batch, so the owner's write, the pictures' rows, and the stored bytes
-// change all or nothing; then the objects of the rows it deleted go.
-async function runWithPictures(
-	db: Db,
-	bucket: R2Bucket,
-	{
-		before = [],
-		drop,
-		after = [],
-	}: {
-		before?: Statement[];
-		drop: ReturnType<typeof dropPictures>;
-		after?: Statement[];
-	},
-) {
-	const results = (await db.batch([...before, ...drop, ...after] as [
-		Statement,
-		...Statement[],
-	])) as unknown[];
-	const dropped = (results[before.length + 1] as { id: string }[]).map(
-		(row) => row.id,
-	);
-	await removeObjects(bucket, dropped);
-	return {
-		before: results.slice(0, before.length),
-		dropped,
-		after: results.slice(before.length + 2),
-	};
-}
-
 const drafts = (userId: string) => and(eq(picture.userId, userId), isDraft);
 
 async function sweepDrafts(db: Db, bucket: R2Bucket, userId: string) {
-	await runWithPictures(db, bucket, {
-		drop: dropPictures(
+	const [, dropped] = await db.batch(
+		dropPictures(
 			db,
 			and(
 				drafts(userId),
 				lt(picture.createdAt, new Date(Date.now() - DRAFT_AGE_MS)),
 			),
 		),
-	});
+	);
+	await removeObjects(
+		bucket,
+		dropped.map((row) => row.id),
+	);
 }
 
 const pictureCount = (db: Db, userId: string) =>
@@ -376,9 +350,13 @@ export async function deleteDraft(
 	userId: string,
 	id: string,
 ): Promise<Result<PictureId, { code: "not_found" }>> {
-	const { dropped } = await runWithPictures(db, bucket, {
-		drop: dropPictures(db, and(drafts(userId), eq(picture.id, id))),
-	});
+	const [, dropped] = await db.batch(
+		dropPictures(db, and(drafts(userId), eq(picture.id, id))),
+	);
+	await removeObjects(
+		bucket,
+		dropped.map((row) => row.id),
+	);
 	return dropped.length > 0
 		? { ok: true, value: id as PictureId }
 		: { ok: false, error: { code: "not_found" } };
@@ -532,50 +510,64 @@ export async function deleteWithPictures<T extends Statement>(
 	return deleted as Awaited<T>;
 }
 
-// The Bought batch. The item write runs first, so held sees it; then the
-// link's oldest pictures move to the item while it has room, before the
-// drop, so the kept ones stay; the wish delete runs last, once no picture
-// points at its links. The objects go only after the batch commits, so a
-// failure deletes no object, and no row is left with no object. It gives
-// back the item write's result.
+// The Bought batch. The item write runs first, so the check sees it; then
+// the link's oldest pictures move to the item while it has room, before the
+// drop, so the kept ones stay; the wish goes last, with its other links,
+// once no picture points at them. Each picture write and the wish delete
+// run only while the link is as it was read and the item holds the quantity
+// the write set. The objects go only after the batch commits, so a failure
+// deletes no object, and no row is left with no object. It gives back the
+// item write's result.
 export async function buyWithPictures<T extends Statement>(
 	db: Db,
 	bucket: R2Bucket,
 	{
 		userId,
-		shopLinkId,
-		wishId,
-		ownedItemId,
-		held,
+		link,
+		item,
 	}: {
 		userId: string;
-		shopLinkId: string;
-		wishId: string;
-		ownedItemId: string;
-		held: SQL;
+		link: { id: string; wishId: string; brandId: string | null };
+		item: { id: string; quantity: number };
 	},
-	ownerWrite: T,
-	wishDelete: Statement,
+	itemWrite: T,
 ): Promise<Awaited<T>> {
-	const { before } = await runWithPictures(db, bucket, {
-		before: [
-			ownerWrite,
-			db
-				.update(picture)
-				.set(ownedBy({ kind: "ownedItem", id: ownedItemId }))
-				.where(
-					and(
-						eq(picture.userId, userId),
-						sql`${picture.id} in (select ${picture.id} from ${picture} where ${picture.shopLinkId} = ${shopLinkId} order by ${picture.createdAt}, rowid limit max(0, ${ITEM_PICTURE_LIMIT} - (select count(*) from ${picture} where ${picture.ownedItemId} = ${ownedItemId})))`,
-						held,
-					),
+	const held = and(
+		ownerHeld(db, userId, {
+			kind: "shopLink",
+			id: link.id,
+			holds: { wishId: link.wishId, brandId: link.brandId },
+		}),
+		ownerHeld(db, userId, {
+			kind: "ownedItem",
+			id: item.id,
+			holds: { quantity: item.quantity },
+		}),
+	);
+	const removeWish = db
+		.delete(wish)
+		.where(and(eq(wish.id, link.wishId), eq(wish.userId, userId), held));
+	const [written, , , dropped] = await db.batch([
+		itemWrite,
+		db
+			.update(picture)
+			.set(ownedBy({ kind: "ownedItem", id: item.id }))
+			.where(
+				and(
+					eq(picture.userId, userId),
+					sql`${picture.id} in (select ${picture.id} from ${picture} where ${picture.shopLinkId} = ${link.id} order by ${picture.createdAt}, rowid limit max(0, ${ITEM_PICTURE_LIMIT} - (select count(*) from ${picture} where ${picture.ownedItemId} = ${item.id})))`,
+					held,
 				),
-		],
-		drop: dropPictures(
+			),
+		...dropPictures(
 			db,
-			and(eq(picture.userId, userId), ofWish(db, wishId), held),
+			and(eq(picture.userId, userId), ofWish(db, link.wishId), held),
 		),
-		after: [wishDelete],
-	});
-	return before[0] as Awaited<T>;
+		removeWish,
+	]);
+	await removeObjects(
+		bucket,
+		dropped.map((row) => row.id),
+	);
+	return written as Awaited<T>;
 }

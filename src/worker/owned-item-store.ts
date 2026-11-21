@@ -470,10 +470,6 @@ export async function buyShopLink(
 				),
 			),
 	);
-	const wishDelete = (held: SQL) =>
-		db
-			.delete(wish)
-			.where(and(eq(wish.id, wishId), eq(wish.userId, userId), held));
 	const [found] = await db
 		.select({ id: ownedItem.id, quantity: ownedItem.quantity })
 		.from(ownedItem)
@@ -484,12 +480,6 @@ export async function buyShopLink(
 		return { ok: false, error: { code: "quantity_limit" } };
 	}
 	const id = found?.id ?? crypto.randomUUID();
-	const written = found
-		? and(eq(ownedItem.id, id), eq(ownedItem.quantity, found.quantity + 1))
-		: eq(ownedItem.id, id);
-	const held = sql`${linkHeld} and ${exists(
-		db.select({ one: sql`1` }).from(ownedItem).where(written),
-	)}`;
 	const ownerWrite = found
 		? db
 				.update(ownedItem)
@@ -509,9 +499,12 @@ export async function buyShopLink(
 	const [row] = await buyWithPictures(
 		db,
 		bucket,
-		{ userId, shopLinkId, wishId, ownedItemId: id, held },
+		{
+			userId,
+			link: { id: shopLinkId, wishId, brandId: piece.brandId },
+			item: { id, quantity: found ? found.quantity + 1 : 1 },
+		},
 		ownerWrite,
-		wishDelete(held),
 	);
 	if (row) {
 		const [bought] = await readOwnedItems(db, userId, id);
