@@ -202,10 +202,12 @@ test("adds the same piece and brand a second time", async ({ page }) => {
 	await openAddSheet(page);
 	await pickNavyShirt(page);
 	await addSheet(page).getByRole("button", { name: "Save" }).click();
-	// Then
 	await expect(toast(page)).toHaveText("Added to your closet");
-	await expect(tiles(page)).toHaveCount(1);
-	await expect(tiles(page)).toHaveAccessibleName("Navy long button-up, 2");
+	await tiles(page).click();
+	// Then
+	await expect(itemRows(page)).toHaveCount(2);
+	await expect(itemRows(page).nth(0)).toHaveAccessibleName("No brand × 1");
+	await expect(itemRows(page).nth(1)).toHaveAccessibleName("No brand × 1");
 });
 
 test("takes only whole numbers from 1 to 99 for the quantity", async ({
