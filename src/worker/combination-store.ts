@@ -109,19 +109,28 @@ async function readCombinations(
 			)
 			.orderBy(asc(tag.createdAt), asc(sql`${tag}.rowid`)),
 	]);
+	const piecesOf = new Map<string, typeof pieces>();
+	for (const piece of pieces) {
+		const held = piecesOf.get(piece.combinationId) ?? [];
+		held.push(piece);
+		piecesOf.set(piece.combinationId, held);
+	}
+	const tagsOf = new Map<string, TagId[]>();
+	for (const row of tags) {
+		const held = tagsOf.get(row.combinationId) ?? [];
+		held.push(row.tagId as TagId);
+		tagsOf.set(row.combinationId, held);
+	}
 	return rows.map((row) => ({
 		id: row.id as CombinationId,
-		pieces: pieces
-			.filter((p) => p.combinationId === row.id)
+		pieces: (piecesOf.get(row.id) ?? [])
 			.sort((a, b) => LAYERS.indexOf(a.layer) - LAYERS.indexOf(b.layer))
 			.map((p) => ({
 				layer: p.layer,
 				typeId: p.typeId,
 				colour: { id: p.colourId as ColourId, name: p.name, hex: p.hex as Hex },
 			})),
-		tags: tags
-			.filter((t) => t.combinationId === row.id)
-			.map((t) => t.tagId as TagId),
+		tags: tagsOf.get(row.id) ?? [],
 	}));
 }
 
