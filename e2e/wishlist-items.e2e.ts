@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
+import { sheet } from "./locators";
 import { jacketAndPolo, poloWithLink } from "./wishlist-helpers";
 
 const wishCards = (page: Page) => page.locator('[data-slot="wish-card"]');
@@ -155,4 +156,38 @@ test("shows Could not load your wishlist on a shop link page and loads on Retry"
 	await page.getByRole("button", { name: "Retry" }).click();
 	// Then
 	await expect(title(page)).toHaveText("Polo");
+});
+
+test("lists the other shops of the wish with an add card", async ({ page }) => {
+	// Given: the COS link's page open
+	const { cosLink } = await jacketAndPolo(page);
+	await page.goto(`/wishlist/link/${cosLink}`);
+	await expect(title(page)).toHaveText("Single-breasted wool jacket");
+	// When
+	const others = await page
+		.locator('[data-slot="other-shop"]')
+		.evaluateAll((links) => links.map((l) => l.getAttribute("aria-label")));
+	await page.getByRole("button", { name: "Add a shop link" }).click();
+	await expect(sheet(page)).toBeVisible();
+	// Then
+	expect({
+		others,
+		sheet: await sheet(page).getByRole("heading").first().textContent(),
+	}).toEqual({
+		others: ["Zara jacket, zara.com · Charcoal wool jacket"],
+		sheet: "Add a shop link",
+	});
+});
+
+test("hides Other shops for a wish with one link", async ({ page }) => {
+	// Given: a wish with one link "Polo"; its page open
+	const { link } = await poloWithLink(page);
+	await page.goto(`/wishlist/link/${link}`);
+	await expect(title(page)).toHaveText("Polo");
+	// When
+	const sections = await page
+		.getByRole("heading", { name: "Other shops for this wish" })
+		.count();
+	// Then
+	expect(sections).toBe(0);
 });

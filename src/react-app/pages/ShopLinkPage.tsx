@@ -9,6 +9,7 @@ import { ItemPictures } from "@/item/ItemPictures";
 import { tabSearch } from "@/shell/piece-link";
 import { useWishlist } from "@/wishlist/api";
 import { BoughtDialog } from "@/wishlist/BoughtDialog";
+import { OtherShops } from "@/wishlist/OtherShops";
 import { ShopLinkSheet } from "@/wishlist/ShopLinkSheet";
 import {
 	isWebAddress,
@@ -51,6 +52,13 @@ export function ShopLinkPage() {
 					/>
 				),
 				details: <LinkDetails wish={wish} link={link} />,
+				below: (
+					<OtherShops
+						wish={wish}
+						link={link}
+						state={{ search: tabSearch(location.state) }}
+					/>
+				),
 			})}
 		</ItemPage>
 	);
