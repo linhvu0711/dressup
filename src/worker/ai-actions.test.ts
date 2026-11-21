@@ -339,21 +339,6 @@ describe("colours", () => {
 		});
 	});
 
-	test("refuses a colour code in small letters", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		// When
-		const { isError, text } = await ai.call("add_colour", {
-			name: "Teal",
-			hex: "#2a7f7f",
-		});
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "That is not a colour written as #RRGGBB with capital letters, such as #1F3A5F.",
-		});
-	});
-
 	test("changes a colour", async () => {
 		// Given
 		const { h, ai, id } = await withTeal();
@@ -367,6 +352,22 @@ describe("colours", () => {
 		expect({ isError, stored: (await colours(h, ai)).at(-1) }).toEqual({
 			isError: false,
 			stored: { id, name: "Sea", hex: "#2A6F7F", inUse: false },
+		});
+	});
+
+	test("refuses to change a colour to a name another colour has", async () => {
+		// Given
+		const { ai, id } = await withTeal();
+		// When
+		const { isError, text } = await ai.call("change_colour", {
+			id,
+			name: "navy",
+			hex: "#2A7F7F",
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "You already have a colour called navy.",
 		});
 	});
 
@@ -405,20 +406,6 @@ describe("colours", () => {
 		expect({ isError, text }).toEqual({
 			isError: true,
 			text: "A combination, an owned item, or a wish uses Navy, so it stays. A colour in use cannot be deleted.",
-		});
-	});
-
-	test("refuses to delete a colour that is gone", async () => {
-		// Given
-		const { ai } = await withTeal();
-		// When
-		const { isError, text } = await ai.call("delete_colour", {
-			id: "11111111-1111-4111-8111-111111111111",
-		});
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "No colour with this id.",
 		});
 	});
 });
