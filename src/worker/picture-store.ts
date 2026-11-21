@@ -502,24 +502,34 @@ export async function saveWithPictures<T extends Statement>(
 export async function deleteWithPictures<T extends Statement>(
 	db: Db,
 	bucket: R2Bucket,
-	scope: { userId: string; owner?: PictureOwner | { wishId: string } },
+	{
+		userId,
+		owner,
+	}: {
+		userId: string;
+		owner: PictureOwner | { kind: "wish"; id: string } | { kind: "account" };
+	},
 	ownerDelete: T,
 ): Promise<Awaited<T>> {
-	const { after } = await runWithPictures(db, bucket, {
-		drop: dropPictures(
+	const [, dropped, deleted] = await db.batch([
+		...dropPictures(
 			db,
 			and(
-				eq(picture.userId, scope.userId),
-				scope.owner === undefined
+				eq(picture.userId, userId),
+				owner.kind === "account"
 					? undefined
-					: "wishId" in scope.owner
-						? ofWish(db, scope.owner.wishId)
-						: ownerIs(scope.owner),
+					: owner.kind === "wish"
+						? ofWish(db, owner.id)
+						: ownerIs(owner),
 			),
 		),
-		after: [ownerDelete],
-	});
-	return after[0] as Awaited<T>;
+		ownerDelete,
+	]);
+	await removeObjects(
+		bucket,
+		dropped.map((row) => row.id),
+	);
+	return deleted as Awaited<T>;
 }
 
 // The Bought batch. The item write runs first, so held sees it; then the

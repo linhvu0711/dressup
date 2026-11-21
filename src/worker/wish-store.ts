@@ -311,7 +311,7 @@ export async function deleteWish(
 	const [row] = await deleteWithPictures(
 		db,
 		bucket,
-		{ userId, owner: { wishId: id } },
+		{ userId, owner: { kind: "wish", id } },
 		db
 			.delete(wish)
 			.where(and(eq(wish.id, id), eq(wish.userId, userId)))

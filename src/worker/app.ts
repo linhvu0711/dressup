@@ -196,7 +196,7 @@ export function createApp(getDb: (env: Env) => Db) {
 		await deleteWithPictures(
 			db,
 			c.env.PICTURES,
-			{ userId: c.var.user.id },
+			{ userId: c.var.user.id, owner: { kind: "account" } },
 			db.delete(user).where(eq(user.id, c.var.user.id)),
 		);
 		// Sign-out also clears the 5-minute cookie cache, which would keep the
