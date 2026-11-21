@@ -528,6 +528,163 @@ describe("adding to the wishlist", () => {
 			refused: [WISH_LIMIT_ROW],
 		});
 	});
+
+	// The piece of each wish with the ids of its links, newest wish first.
+	const held = async (
+		alice: ActionScope,
+	): Promise<{ id: string; links: string[] }[]> =>
+		(await listed(alice)).map((wish) => ({
+			id: wish.id,
+			links: wish.shopLinks.map((link) => link.id),
+		}));
+
+	test("adds the shop link to the wish the piece has", async () => {
+		// Given: alice's wish FIRST_ID for the Navy wool jacket, no link
+		const { alice, ids } = await withAlice();
+		await wishActions.add.run(alice, jacket(ids));
+		// When: the one form's add of that piece with a new wish id
+		const added = await wishActions.addToWishlist.run(alice, {
+			...jacketWithLink(ids),
+			id: SECOND_ID,
+		});
+		// Then
+		expect({
+			ok: added.ok,
+			created: added.ok && added.value.created,
+			id: added.ok && (added.value.wish.id as string),
+			wishes: await held(alice),
+		}).toEqual({
+			ok: true,
+			created: true,
+			id: FIRST_ID,
+			wishes: [{ id: FIRST_ID, links: [LINK_ID] }],
+		});
+	});
+
+	test("adds a wish alone when no shop link comes", async () => {
+		// Given: alice
+		const { alice, ids } = await withAlice();
+		// When
+		const added = await wishActions.addToWishlist.run(alice, jacket(ids));
+		// Then
+		expect({
+			ok: added.ok,
+			created: added.ok && added.value.created,
+			id: added.ok && (added.value.wish.id as string),
+			shopLinks: added.ok && added.value.wish.shopLinks,
+		}).toEqual({ ok: true, created: true, id: FIRST_ID, shopLinks: [] });
+	});
+
+	test("gives back the piece's wish when no shop link comes", async () => {
+		// Given: alice's wish FIRST_ID with the Zara link
+		const { alice, ids } = await withAlice();
+		await wishActions.add.run(alice, jacket(ids));
+		await addLink(alice, FIRST_ID, zaraLink(null));
+		// When: the one form's add of that piece with no link, a new wish id
+		const added = await wishActions.addToWishlist.run(alice, {
+			...jacket(ids),
+			id: SECOND_ID,
+		});
+		// Then
+		expect({
+			ok: added.ok,
+			created: added.ok && added.value.created,
+			id: added.ok && (added.value.wish.id as string),
+			wishes: await held(alice),
+		}).toEqual({
+			ok: true,
+			created: false,
+			id: FIRST_ID,
+			wishes: [{ id: FIRST_ID, links: [LINK_ID] }],
+		});
+	});
+
+	test("refuses an 11th shop link through the wishlist add", async () => {
+		// Given: alice's wish FIRST_ID with 10 links
+		const { h, alice, ids } = await withAlice();
+		await wishActions.add.run(alice, jacket(ids));
+		await h.seedShopLinks(ALICE.id, FIRST_ID, 10);
+		// When
+		const added = await wishActions.addToWishlist.run(alice, {
+			...jacketWithLink(ids),
+			id: SECOND_ID,
+		});
+		// Then
+		expect({
+			added,
+			links: linkRows(h),
+			wishes: (await listed(alice)).length,
+		}).toEqual({
+			added: { ok: false, error: SHOP_LINK_LIMIT_ROW },
+			links: 10,
+			wishes: 1,
+		});
+	});
+
+	test("joins two overlapping adds of one new piece into one wish", async () => {
+		// Given: two adds of the Navy wool jacket with their own wish and link
+		// ids, both read no wish before either batch runs
+		const { h, alice, ids } = await withAlice();
+		const hold = h.holdBatches();
+		// When
+		const adds = [
+			wishActions.addToWishlist.run(alice, jacketWithLink(ids)),
+			wishActions.addToWishlist.run(alice, {
+				...jacket(ids),
+				id: SECOND_ID,
+				shopLink: { ...zaraLink(null), id: OTHER_LINK_ID },
+			}),
+		];
+		await hold.queued(2);
+		hold.release();
+		const results = await Promise.all(adds);
+		// Then
+		expect({
+			oks: results.map((r) => r.ok),
+			wishes: await held(alice),
+		}).toEqual({
+			oks: [true, true],
+			wishes: [{ id: FIRST_ID, links: [LINK_ID, OTHER_LINK_ID] }],
+		});
+	});
+
+	test("adds the wish again when it is removed during a wishlist add", async () => {
+		// Given: alice's wish FIRST_ID with no link; its delete waits in a
+		// batch, so the add below reads the wish before it goes
+		const { h, alice, ids } = await withAlice();
+		await wishActions.add.run(alice, jacket(ids));
+		const [a] = await uploads(alice, 1);
+		const hold = h.holdBatches();
+		const removing = wishActions.delete.run(alice, { id: FIRST_ID });
+		await hold.queued(1);
+		// When: the one form's add of that piece, with a picture, so its write
+		// waits behind the delete
+		const adding = wishActions.addToWishlist.run(alice, {
+			...jacket(ids),
+			id: SECOND_ID,
+			shopLink: { ...zaraLink(null), pictureIds: [a ?? ""] },
+		});
+		await hold.queued(2);
+		hold.release();
+		const [, added] = await Promise.all([removing, adding]);
+		// Then
+		const [wish] = await listed(alice);
+		expect({
+			ok: added.ok,
+			created: added.ok && added.value.created,
+			wishes: (await held(alice)).length,
+			id: wish?.id as string | undefined,
+			links: wish?.shopLinks.map((link) => link.id as string),
+			pictureIds: wish?.shopLinks[0]?.pictureIds as string[] | undefined,
+		}).toEqual({
+			ok: true,
+			created: true,
+			wishes: 1,
+			id: SECOND_ID,
+			links: [LINK_ID],
+			pictureIds: [a],
+		});
+	});
 });
 
 describe("adding a shop link", () => {

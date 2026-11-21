@@ -245,9 +245,33 @@ export async function addToWishlist(
 			: invalidField(WISH_FIELDS, draft, path);
 	}
 	const { shopLink: link, ...piece } = parsed.data;
-	return link
-		? addWishWithLink(db, bucket, userId, piece, link)
-		: addWish(db, userId, piece);
+	// The link joins the wish with this id; with no link, that wish comes back
+	// as it is.
+	const join = async (
+		wishId: string,
+	): Promise<Result<AddedWish, WishError>> => {
+		if (link) return addShopLink(db, bucket, userId, wishId, link);
+		const [held] = await readWishes(db, userId, wishId);
+		return held
+			? { ok: true, value: { wish: held, created: false } }
+			: { ok: false, error: { code: "not_found" } };
+	};
+	const [held] = await db
+		.select({ id: wish.id })
+		.from(wish)
+		.where(samePiece(wish, userId, piece));
+	if (held) {
+		const joined = await join(held.id);
+		// not_found: the wish went since the read, so the piece gets a new one.
+		if (joined.ok || joined.error.code !== "not_found") return joined;
+	}
+	const added = link
+		? await addWishWithLink(db, bucket, userId, piece, link)
+		: await addWish(db, userId, piece);
+	// Another add of this piece landed first: join its wish.
+	if (!added.ok && added.error.code === "duplicate")
+		return join(added.error.id);
+	return added;
 }
 
 // Only the account's own wish goes; not found when the account has no wish

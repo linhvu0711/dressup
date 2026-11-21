@@ -157,6 +157,21 @@ describe("POST /api/wishlist", () => {
 		expect(await answer(res)).toEqual({ status: 201, body: added(ids) });
 	});
 
+	test("answers 200 with the same wish to a wishlist add sent again", async () => {
+		// Given: alice; the Navy wool jacket with the Zara link, posted once
+		const { h, headers, ids } = await alice();
+		await postWishlist(h, headers, jacketWithLink(ids));
+		// When
+		const again = await postWishlist(h, headers, jacketWithLink(ids));
+		// Then
+		const wishes = await list(h, headers);
+		expect({
+			...(await answer(again)),
+			wishes: wishes.length,
+			links: wishes[0]?.shopLinks.length,
+		}).toEqual({ status: 200, body: added(ids), wishes: 1, links: 1 });
+	});
+
 	const refusals: [string, Record<string, unknown>, string][] = [
 		[
 			"an address that is not http or https",
