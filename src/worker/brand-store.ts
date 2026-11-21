@@ -7,12 +7,11 @@ import {
 	byBrandName,
 	type ListedBrand,
 } from "@/labels/brand";
-import { sameLabelName } from "@/labels/name";
-import { type Db, hitsIndex } from "./db";
-import { user } from "./db/auth-schema";
+import type { Db } from "./db";
 import { brand } from "./db/brand-schema";
 import { ownedItem } from "./db/owned-item-schema";
 import { shopLink } from "./db/wish-schema";
+import { nameList } from "./name-list";
 import type { Result } from "./result";
 
 export type BrandError =
@@ -21,7 +20,11 @@ export type BrandError =
 	| { code: "brand_limit" }
 	| { code: "not_found" };
 
-const NAME_INDEX = "brand_userId_name_uq";
+const brands = nameList({
+	table: brand,
+	index: "brand_userId_name_uq",
+	limit: { max: BRAND_LIMIT, code: "brand_limit" },
+});
 
 // The account's brand with this id, as a subquery: a write puts it in its
 // own WHERE, so a brand deleted at the same time stops the write.
@@ -75,8 +78,6 @@ function check(name: string): Checked {
 		: { ok: false, error: { code: "invalid", field: "name" } };
 }
 
-// The server makes the id. The count sits in the insert, so two adds at once
-// cannot both pass it.
 export async function addBrand(
 	db: Db,
 	userId: string,
@@ -84,47 +85,10 @@ export async function addBrand(
 ): Promise<Result<Brand, BrandError>> {
 	const checked = check(input);
 	if (!checked.ok) return checked;
-	const { name } = checked;
-	const duplicate = { ok: false, error: { code: "duplicate", name } } as const;
-	const brands = await listBrands(db, userId);
-	if (brands.some((b) => sameLabelName(b.name, name))) return duplicate;
-	try {
-		const [row] = await db
-			.insert(brand)
-			.select(
-				db
-					.select({
-						id: sql<string>`${crypto.randomUUID()}`.as("id"),
-						userId: user.id,
-						name: sql<string>`${name}`.as("name"),
-						createdAt:
-							sql<number>`(cast(unixepoch('subsecond') * 1000 as integer))`.as(
-								"created_at",
-							),
-					})
-					.from(user)
-					.where(
-						and(
-							eq(user.id, userId),
-							sql`(${db
-								.select({ n: count() })
-								.from(brand)
-								.where(eq(brand.userId, userId))}) < ${BRAND_LIMIT}`,
-						),
-					),
-			)
-			.returning({ id: brand.id, name: brand.name });
-		return row
-			? { ok: true, value: toBrand(row) }
-			: { ok: false, error: { code: "brand_limit" } };
-	} catch (error) {
-		if (hitsIndex(error, NAME_INDEX)) return duplicate;
-		throw error;
-	}
+	const added = await brands.add(db, userId, { name: checked.name });
+	return added.ok ? { ok: true, value: toBrand(added.value) } : added;
 }
 
-// Renames only a brand the account has. A name the account's other brands
-// hold is refused, so a change of letter case alone is taken.
 export async function renameBrand(
 	db: Db,
 	userId: string,
@@ -133,24 +97,8 @@ export async function renameBrand(
 ): Promise<Result<Brand, BrandError>> {
 	const checked = check(input);
 	if (!checked.ok) return checked;
-	const { name } = checked;
-	const duplicate = { ok: false, error: { code: "duplicate", name } } as const;
-	const brands = await listBrands(db, userId);
-	if (brands.some((b) => b.id !== id && sameLabelName(b.name, name)))
-		return duplicate;
-	try {
-		const [row] = await db
-			.update(brand)
-			.set({ name })
-			.where(and(eq(brand.id, id), eq(brand.userId, userId)))
-			.returning({ id: brand.id, name: brand.name });
-		return row
-			? { ok: true, value: toBrand(row) }
-			: { ok: false, error: { code: "not_found" } };
-	} catch (error) {
-		if (hitsIndex(error, NAME_INDEX)) return duplicate;
-		throw error;
-	}
+	const renamed = await brands.change(db, userId, id, { name: checked.name });
+	return renamed.ok ? { ok: true, value: toBrand(renamed.value) } : renamed;
 }
 
 // Only the account's own brand goes; not found when the account has no

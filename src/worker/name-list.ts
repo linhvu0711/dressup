@@ -1,6 +1,7 @@
-import { and, eq } from "drizzle-orm";
+import { and, count, eq, getTableColumns, sql } from "drizzle-orm";
 import { sameLabelName } from "@/labels/name";
 import { type Db, hitsIndex } from "./db";
+import { user } from "./db/auth-schema";
 import type { brand } from "./db/brand-schema";
 import type { colour } from "./db/colour-schema";
 import type { tag } from "./db/tag-schema";
@@ -25,6 +26,7 @@ type ChangeError = { code: "duplicate"; name: string } | { code: "not_found" };
 export function nameList<T extends LabelTable, L extends string = never>(list: {
 	table: T;
 	index: string;
+	limit?: { max: number; code: L };
 }) {
 	// Drizzle does not follow a generic table, so the calls below see one of
 	// the three, and each row is cast back to T's.
@@ -45,6 +47,49 @@ export function nameList<T extends LabelTable, L extends string = never>(list: {
 		);
 	};
 
+	// The count sits in the insert, so two adds at once cannot both pass it.
+	const guardedInsert = (
+		db: Db,
+		userId: string,
+		values: Values<T>,
+		max: number,
+	) => {
+		const columns = getTableColumns(table);
+		const { name, ...extra } = values;
+		const extras = Object.fromEntries(
+			Object.entries(extra).map(([key, value]) => [
+				key,
+				sql`${value}`.as(columns[key as keyof typeof columns].name),
+			]),
+		);
+		return db
+			.insert(table)
+			.select(
+				db
+					.select({
+						id: sql<string>`${crypto.randomUUID()}`.as("id"),
+						userId: user.id,
+						name: sql<string>`${name}`.as("name"),
+						...extras,
+						createdAt:
+							sql<number>`(cast(unixepoch('subsecond') * 1000 as integer))`.as(
+								"created_at",
+							),
+					})
+					.from(user)
+					.where(
+						and(
+							eq(user.id, userId),
+							sql`(${db
+								.select({ n: count() })
+								.from(table)
+								.where(eq(table.userId, userId))}) < ${max}`,
+						),
+					),
+			)
+			.returning();
+	};
+
 	return {
 		// The server makes the id: an add sent again after a lost answer finds
 		// its name taken, and the page reads the list again.
@@ -59,6 +104,13 @@ export function nameList<T extends LabelTable, L extends string = never>(list: {
 			} as const;
 			if (await taken(db, userId, values.name)) return duplicate;
 			try {
+				const { limit } = list;
+				if (limit) {
+					const [row] = await guardedInsert(db, userId, values, limit.max);
+					return row
+						? { ok: true, value: row as Row<T> }
+						: { ok: false, error: { code: limit.code } };
+				}
 				const [row] = await db
 					.insert(table)
 					.values({ id: crypto.randomUUID(), userId, ...values })
