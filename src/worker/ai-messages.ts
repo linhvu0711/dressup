@@ -6,12 +6,10 @@ import {
 } from "@/combinations/combination";
 import { LAYER_NAMES, TYPE_NAMES } from "@/dress/clothing-types";
 import { BRAND_LIMIT, BRAND_NAME_MAX } from "@/labels/brand";
-import { COLOUR_LIMIT, COLOUR_NAME_MAX } from "@/labels/colour";
 import { ACCOUNT_PICTURE_LIMIT, ITEM_PICTURE_LIMIT } from "@/pictures/picture";
 import { TAG_NAME_MAX } from "@/tags/tag";
 import { PRICE_MAX, SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";
 import type { BrandError } from "./brand-store";
-import type { ColourError } from "./colour-store";
 import type { CombinationError } from "./combination-store";
 import type { BoughtError, OwnedItemError } from "./owned-item-store";
 import type { TagError } from "./tag-store";
@@ -32,23 +30,6 @@ export function tagRefusalText(error: TagError): string {
 			return `You already have a tag called ${error.name}.`;
 		case "not_found":
 			return noTag;
-	}
-}
-
-export function colourRefusalText(error: ColourError): string {
-	switch (error.code) {
-		case "invalid":
-			return error.field === "name"
-				? `A colour name has 1 to ${COLOUR_NAME_MAX} characters.`
-				: "That is not a colour written as #RRGGBB with capital letters, such as #1F3A5F.";
-		case "duplicate":
-			return `You already have a colour called ${error.name}.`;
-		case "colour_limit":
-			return `You have ${COLOUR_LIMIT} colours. That is the limit. Delete one to add a new one.`;
-		case "not_found":
-			return noColour;
-		case "colour_in_use":
-			return `A combination, an owned item, or a wish uses ${error.name}, so it stays. A colour in use cannot be deleted.`;
 	}
 }
 
@@ -216,8 +197,6 @@ export const uploadAddressText = (address: string) =>
 	`Send the picture within ${UPLOAD_ADDRESS_AGE_MS / 60_000} minutes, once: curl -X POST --data-binary @photo.jpg ${address}. It answers with the picture's id.`;
 
 const noTag = "No tag with this id.";
-
-const noColour = "No colour with this id.";
 
 const noBrand = "No brand with this id.";
 

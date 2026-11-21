@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { COLOUR_LIMIT, COLOUR_NAME_MAX } from "@/labels/colour";
-import { addColour, type ColourError } from "../colour-store";
+import {
+	addColour,
+	type ColourError,
+	changeColour,
+	deleteColour,
+} from "../colour-store";
 import { action, type Refusals } from "./action";
 
 // A taken name is 409 here, as the colour contract says; tags answer 400.
@@ -43,5 +48,19 @@ export const colourActions = {
 		}),
 		colourRefusals,
 		({ db, userId }, input) => addColour(db, userId, input),
+	),
+	change: action(
+		z.object({
+			id: z.string().describe("The colour's id."),
+			name: z.string().describe("The colour's new name."),
+			hex: z.string().describe("The colour's new code, as #1F3A5F."),
+		}),
+		colourRefusals,
+		({ db, userId }, { id, ...input }) => changeColour(db, userId, id, input),
+	),
+	delete: action(
+		z.object({ id: z.string().describe("The colour's id.") }),
+		colourRefusals,
+		({ db, userId }, { id }) => deleteColour(db, userId, id),
 	),
 };

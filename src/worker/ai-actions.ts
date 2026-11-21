@@ -39,7 +39,6 @@ import { countAiAction } from "./ai-action-store";
 import {
 	boughtRefusalText,
 	brandRefusalText,
-	colourRefusalText,
 	combinationRefusalText,
 	noBrands,
 	noColours,
@@ -62,7 +61,7 @@ import {
 	wishRefusalText,
 } from "./ai-messages";
 import { addBrand, deleteBrand, listBrands, renameBrand } from "./brand-store";
-import { changeColour, deleteColour, listColours } from "./colour-store";
+import { listColours } from "./colour-store";
 import {
 	changeCombination,
 	deleteCombination,
@@ -357,17 +356,13 @@ export function registerAiActions(server: McpServer, account: Account) {
 			title: "Change a colour",
 			description: `Changes a colour's name, code, or both. ${colourRules}`,
 			annotations: WRITE,
-			inputSchema: z.object({
-				id: z.string().describe("The colour's id."),
-				name: z.string().describe("The colour's new name."),
-				hex: z.string().describe("The colour's new code, as #1F3A5F."),
-			}),
+			inputSchema: colourActions.change.input,
 		},
-		async ({ id, ...input }) => {
-			const changed = await changeColour(db, userId, id, input);
+		async (input) => {
+			const changed = await colourActions.change.run(scope, input);
 			return changed.ok
 				? answer({ colour: changed.value })
-				: refusal(colourRefusalText(changed.error));
+				: refusal(changed.error.text);
 		},
 	);
 
@@ -377,13 +372,13 @@ export function registerAiActions(server: McpServer, account: Account) {
 			title: "Delete a colour",
 			description: "Deletes a colour for good.",
 			annotations: DELETE,
-			inputSchema: z.object({ id: z.string().describe("The colour's id.") }),
+			inputSchema: colourActions.delete.input,
 		},
-		async ({ id }) => {
-			const deleted = await deleteColour(db, userId, id);
+		async (input) => {
+			const deleted = await colourActions.delete.run(scope, input);
 			return deleted.ok
 				? answer({ deleted: deleted.value.id })
-				: refusal(colourRefusalText(deleted.error));
+				: refusal(deleted.error.text);
 		},
 	);
 

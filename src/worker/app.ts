@@ -54,12 +54,7 @@ import {
 	listBrands,
 	renameBrand,
 } from "./brand-store";
-import {
-	type ColourError,
-	changeColour,
-	deleteColour,
-	listColours,
-} from "./colour-store";
+import { listColours } from "./colour-store";
 import {
 	type CombinationError,
 	changeCombination,
@@ -314,22 +309,6 @@ function brandRefusal(error: BrandError): Refusal {
 			return { status: 409, body: { error: "duplicate", field: "name" } };
 		case "brand_limit":
 			return { status: 409, body: { error: "brand_limit" } };
-		case "not_found":
-			return { status: 404, body: { error: "not_found" } };
-	}
-}
-
-// A taken name is 409 here, as the colour contract says; tags answer 400.
-function colourRefusal(error: ColourError): Refusal {
-	switch (error.code) {
-		case "invalid":
-			return { status: 400, body: { error: "invalid", field: error.field } };
-		case "duplicate":
-			return { status: 409, body: { error: "duplicate", field: "name" } };
-		case "colour_limit":
-			return { status: 409, body: { error: "colour_limit" } };
-		case "colour_in_use":
-			return { status: 409, body: { error: "colour_in_use" } };
 		case "not_found":
 			return { status: 404, body: { error: "not_found" } };
 	}
@@ -771,29 +750,20 @@ export function createApp(getDb: (env: Env) => Db) {
 	app.put("/colours/:id", withAuth, requireUser, async (c) => {
 		const body = await readBody(
 			c,
-			z.object({ id: colourIdSchema, name: z.string(), hex: z.string() }),
+			colourActions.change.input.extend({ id: colourIdSchema }),
 		);
 		if (!body.ok) return invalid(c, body.error.field);
 		if (body.value.id !== c.req.param("id")) return invalid(c, "id");
-		const { id, ...input } = body.value;
-		const changed = await changeColour(getDb(c.env), c.var.user.id, id, input);
-		if (!changed.ok) {
-			const { status, body } = colourRefusal(changed.error);
-			return c.json(body, status);
-		}
+		const changed = await colourActions.change.run(scope(c), body.value);
+		if (!changed.ok) return c.json(changed.error.body, changed.error.status);
 		return c.json({ colour: changed.value } satisfies ColourAnswer, 200);
 	});
 
 	app.delete("/colours/:id", withAuth, requireUser, async (c) => {
-		const deleted = await deleteColour(
-			getDb(c.env),
-			c.var.user.id,
-			c.req.param("id"),
-		);
-		if (!deleted.ok) {
-			const { status, body } = colourRefusal(deleted.error);
-			return c.json(body, status);
-		}
+		const deleted = await colourActions.delete.run(scope(c), {
+			id: c.req.param("id"),
+		});
+		if (!deleted.ok) return c.json(deleted.error.body, deleted.error.status);
 		return c.body(null, 204);
 	});
 

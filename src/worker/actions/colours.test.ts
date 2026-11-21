@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { ALICE, withAccount } from "../test/harness";
+import { listColours } from "../colour-store";
+import { saveCombination } from "../combination-store";
+import { ALICE, BOB, withAccount } from "../test/harness";
 import { colourActions } from "./colours";
 
 const UUID =
@@ -108,6 +110,101 @@ describe("adding a colour", () => {
 				status: 409,
 				body: { error: "colour_limit" },
 				text: "You have 100 colours. That is the limit. Delete one to add a new one.",
+			},
+		});
+	});
+});
+
+describe("changing and deleting a colour", () => {
+	async function withTeal() {
+		const { h, alice } = await withAlice();
+		const added = await colourActions.add.run(alice, {
+			name: "Teal",
+			hex: "#2A7F7F",
+		});
+		if (!added.ok) throw new Error("Teal was not added");
+		return { h, alice, teal: added.value.id };
+	}
+
+	test("changes a colour's name and code", async () => {
+		// Given: Teal added
+		const { alice, teal } = await withTeal();
+		// When
+		const changed = await colourActions.change.run(alice, {
+			id: teal,
+			name: "Sea",
+			hex: "#2A6F7F",
+		});
+		// Then
+		expect(changed).toEqual({
+			ok: true,
+			value: { id: teal, name: "Sea", hex: "#2A6F7F" },
+		});
+	});
+
+	test("refuses to change another account's colour", async () => {
+		// Given: Teal added by alice; bob has an account
+		const { h, teal } = await withTeal();
+		await h.addAccount(BOB);
+		const bob = { db: h.db, userId: BOB.id };
+		// When
+		const changed = await colourActions.change.run(bob, {
+			id: teal,
+			name: "Sea",
+			hex: "#2A6F7F",
+		});
+		// Then
+		expect(changed).toEqual({
+			ok: false,
+			error: {
+				code: "not_found",
+				status: 404,
+				body: { error: "not_found" },
+				text: "No colour with this id.",
+			},
+		});
+	});
+
+	test("deletes a colour", async () => {
+		// Given: Teal added
+		const { alice, teal } = await withTeal();
+		// When
+		const deleted = await colourActions.delete.run(alice, { id: teal });
+		// Then
+		expect(deleted).toEqual({
+			ok: true,
+			value: { id: teal, name: "Teal", hex: "#2A7F7F" },
+		});
+	});
+
+	test("refuses to delete a colour a combination uses", async () => {
+		// Given: a combination of Navy casual pants and a White long tee
+		const { h, alice } = await withAlice();
+		const colours = await listColours(h.db, ALICE.id);
+		const idOf = (name: string) => {
+			const found = colours.find((c) => c.name === name);
+			if (!found) throw new Error(`No colour ${name}`);
+			return found.id;
+		};
+		await saveCombination(h.db, ALICE.id, {
+			id: "11111111-1111-4111-8111-111111111111",
+			pieces: [
+				{ typeId: "casual_p", colourId: idOf("Navy") },
+				{ typeId: "tee_l", colourId: idOf("White") },
+			],
+		});
+		// When
+		const deleted = await colourActions.delete.run(alice, {
+			id: idOf("Navy"),
+		});
+		// Then
+		expect(deleted).toEqual({
+			ok: false,
+			error: {
+				code: "colour_in_use",
+				status: 409,
+				body: { error: "colour_in_use" },
+				text: "A combination, an owned item, or a wish uses Navy, so it stays. A colour in use cannot be deleted.",
 			},
 		});
 	});
