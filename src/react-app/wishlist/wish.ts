@@ -87,6 +87,21 @@ export const wishSchema = z.object({
 
 export type Wish = z.infer<typeof wishSchema>;
 
+export type WishlistCard = { wish: Wish; link: ShopLink | null };
+
+// The Wishlist's cards: each wish in list order, newest first, gives one card
+// for each shop link, oldest first, or one card when it has none.
+export const wishlistCards = (wishes: Wish[]): WishlistCard[] =>
+	wishes.flatMap((wish): WishlistCard[] =>
+		wish.shopLinks.length === 0
+			? [{ wish, link: null }]
+			: wish.shopLinks.map((link) => ({ wish, link })),
+	);
+
+export const linkPage = (id: ShopLinkId) => `/wishlist/link/${id}`;
+
+export const wishPage = (id: WishId) => `/wishlist/wish/${id}`;
+
 export const isWebAddress = (url: string): boolean =>
 	webAddressSchema.safeParse(url).success;
 

@@ -23,6 +23,11 @@ export function usePieceLink(from: PieceFrom) {
 	});
 }
 
+const searchRule = z
+	.string()
+	.regex(/^(\?.*)?$/)
+	.catch("");
+
 // Router state is whatever history holds, so it is parsed before use, and
 // only a tab or a combination's page gets through. A typed address has none
 // and goes back to the closet.
@@ -31,10 +36,7 @@ const pieceState = z.object({
 		z.enum(PIECE_TABS),
 		z.string().regex(/^\/combinations\/[^/?#]+$/),
 	]),
-	search: z
-		.string()
-		.regex(/^(\?.*)?$/)
-		.catch(""),
+	search: searchRule,
 });
 
 export function addressBeforePiece(state: unknown): string {
@@ -42,4 +44,10 @@ export function addressBeforePiece(state: unknown): string {
 	return parsed.success
 		? `${parsed.data.from}${parsed.data.search}`
 		: "/closet";
+}
+
+// An Item page's Back brings its tab back with the filter the person left.
+export function tabSearch(state: unknown): string {
+	const parsed = z.object({ search: searchRule }).safeParse(state);
+	return parsed.success ? parsed.data.search : "";
 }

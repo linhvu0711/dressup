@@ -13,6 +13,7 @@ import {
 	typedPrice,
 	type Wish,
 	type WishId,
+	wishlistCards,
 } from "./wish";
 
 const link = (
@@ -53,6 +54,27 @@ test("says the links and the lowest price of a wish", () => {
 		"2 links · from 2.990.000 ₫",
 		"2 links",
 	]);
+});
+
+test("makes one card for each shop link and one for each wish with no link", () => {
+	// Given
+	const withId = (l: ShopLink, id: string): ShopLink => ({
+		...l,
+		id: id as ShopLinkId,
+	});
+	const wishes = [
+		{ ...wishWith([]), id: "wish-a" as WishId },
+		{
+			...wishWith([withId(link(null), "link-1"), withId(link(null), "link-2")]),
+			id: "wish-b" as WishId,
+		},
+	];
+	// When
+	const cards = wishlistCards(wishes).map(
+		(card) => `${card.wish.id}:${card.link?.id ?? "none"}`,
+	);
+	// Then
+	expect(cards).toEqual(["wish-a:none", "wish-b:link-1", "wish-b:link-2"]);
 });
 
 test("writes a price in VND with dots", () => {

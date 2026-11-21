@@ -4,11 +4,16 @@ import { expect, test } from "./fixtures";
 import { colourIds, postBrand } from "./label-helpers";
 import { sheet, toast } from "./locators";
 import { WISHLIST_FULL_FILE } from "./paths";
-import { postShopLink, postWish } from "./wishlist-helpers";
+import { jacketAndPolo, postShopLink, postWish } from "./wishlist-helpers";
 
 const mainNav = (page: Page) => page.getByRole("navigation", { name: "Main" });
 
-const tiles = (page: Page) => page.locator('[data-slot="wish-tile"]');
+const wishCards = (page: Page) => page.locator('[data-slot="wish-card"]');
+
+const labelsOf = (cards: ReturnType<Page["locator"]>) =>
+	cards.evaluateAll((links) =>
+		links.map((link) => link.getAttribute("aria-label")),
+	);
 
 const addSheet = (page: Page) => sheet(page, "Add to wishlist");
 
@@ -49,37 +54,29 @@ test("opens the wishlist from the Wishlist tab", async ({ page }) => {
 	]);
 });
 
-test("shows one tile for each wish, newest first, with its links", async ({
+test("shows one card for each shop link and one for each wish with no link", async ({
 	page,
 }) => {
-	// Given: a fresh account with a Beige chino pants wish holding links at
-	// 588.000 and 790.000, then a Charcoal wool jacket wish with none
-	await page.goto("/");
-	const ids = await colourIds(page);
-	const chinos = await postWish(page, {
-		typeId: "chino_p",
-		colourId: ids.Beige,
-	});
-	for (const price of [588000, 790000])
-		await postShopLink(page, chinos, {
-			url: "https://www.uniqlo.com/vn/en/chino-pants",
-			brandId: null,
-			name: "Chino pants",
-			price,
-		});
-	await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
+	// Given: a fresh account; a Charcoal wool jacket wish with a COS link and
+	// a no-brand link; then an Olive long polo wish with no link
+	await jacketAndPolo(page);
 	// When
 	await page.goto("/wishlist");
 	// Then
-	await expect(tiles(page)).toHaveCount(2);
-	expect(
-		await tiles(page).evaluateAll((links) =>
-			links.map((link) => link.getAttribute("aria-label")),
-		),
-	).toEqual([
-		"Charcoal wool jacket, No link yet",
-		"Beige chino pants, 2 links · from 588.000 ₫",
-	]);
+	await expect(wishCards(page)).toHaveCount(3);
+	expect({
+		labels: await labelsOf(wishCards(page)),
+		prices: await wishCards(page)
+			.locator('[data-slot="item-price"]')
+			.allInnerTexts(),
+	}).toEqual({
+		labels: [
+			"Olive long polo, No shop link yet",
+			"Single-breasted wool jacket, COS · Charcoal wool jacket",
+			"Zara jacket, zara.com · Charcoal wool jacket",
+		],
+		prices: ["4.290.000 ₫", "588.000 ₫"],
+	});
 });
 
 test("shows skeleton tiles while the wishlist loads", async ({ page }) => {
@@ -201,45 +198,47 @@ test.describe("at the wishlist limit", () => {
 	});
 	const openWall = async (page: Page) => {
 		await page.goto("/wishlist");
-		await expect(tiles(page).first().locator("svg")).toHaveCount(1);
+		await expect(wishCards(page).first().locator("svg")).toHaveCount(1);
 	};
 
-	test("draws only the tiles near the screen", async ({ page }) => {
+	test("draws only the cards near the screen", async ({ page }) => {
 		// Given: both projects, the account with 200 wishes
 		// When
 		await openWall(page);
 		// Then
-		const count = await tiles(page)
-			.filter({ has: page.locator("svg") })
+		const count = await wishCards(page)
+			.filter({ has: page.locator("svg, img") })
 			.count();
 		expect(count).toBeGreaterThanOrEqual(1);
 		expect(count).toBeLessThanOrEqual(60);
 	});
 
-	test("draws a far tile when it scrolls near and drops the first one", async ({
+	test("draws a far card when it scrolls near and drops the first one", async ({
 		page,
 	}) => {
-		// Given: both projects, the account with 200 wishes, the wall open with the first tile
+		// Given: both projects, the account with 200 wishes, the wall open with the first card
 		// drawn
 		await openWall(page);
 		const last = page.getByRole("link", {
-			name: "Burgundy chino pants, No link yet",
+			name: "Burgundy chino pants, No shop link yet",
 		});
 		// When
 		await last.scrollIntoViewIfNeeded();
 		// Then
 		await expect(last.locator("svg")).toHaveCount(1);
-		await expect(tiles(page).first().locator("svg")).toHaveCount(0);
+		await expect(wishCards(page).first().locator("svg")).toHaveCount(0);
 	});
 
-	test("keeps every tile on the page", async ({ page }) => {
+	test("keeps every card on the page", async ({ page }) => {
 		// Given: both projects, the account with 200 wishes
 		// When
 		await openWall(page);
 		// Then
-		await expect(tiles(page)).toHaveCount(200);
+		await expect(wishCards(page)).toHaveCount(209);
 		await expect(
-			page.getByRole("link", { name: "Burgundy chino pants, No link yet" }),
+			page.getByRole("link", {
+				name: "Burgundy chino pants, No shop link yet",
+			}),
 		).toBeAttached();
 	});
 });
@@ -307,19 +306,16 @@ async function jacketWithLinks(page: Page) {
 	return { ids, wish };
 }
 
-const openJacket = async (page: Page) => {
-	await page.goto("/wishlist");
-	await page
-		.getByRole("link", { name: /^Charcoal wool jacket,/ })
-		.first()
-		.click();
-};
+// A Wishlist card opens its own Item page, so the piece page opens by its
+// address.
+const openJacket = (page: Page, ids: Record<string, string>) =>
+	page.goto(`/piece/wool/${ids.Charcoal}`);
 
 test("lists the shop links of a wish on its piece page", async ({ page }) => {
 	// Given
-	await jacketWithLinks(page);
+	const { ids } = await jacketWithLinks(page);
 	// When
-	await openJacket(page);
+	await openJacket(page, ids);
 	// Then
 	await expect(
 		page.getByRole("heading", { name: "On your wishlist" }),
@@ -338,8 +334,8 @@ test("opens the shop in a new tab with noopener noreferrer", async ({
 	page,
 }) => {
 	// Given: the account of the case above, on the piece page
-	await jacketWithLinks(page);
-	await openJacket(page);
+	const { ids } = await jacketWithLinks(page);
+	await openJacket(page, ids);
 	// When
 	const address = page.locator('[data-slot="shop-address"]').first();
 	// Then
@@ -468,29 +464,6 @@ test("shows Could not load your closet and wishlist when both fail on the piece 
 		"In your closet",
 		"On your wishlist",
 	]);
-});
-
-test("sends a piece page with no item and no wish back to the wishlist", async ({
-	page,
-}) => {
-	// Given: a fresh account with an Olive long polo wish, on /wishlist
-	await page.goto("/");
-	const ids = await colourIds(page);
-	const wish = await postWish(page, { typeId: "polo_l", colourId: ids.Olive });
-	await page.goto("/wishlist");
-	// When: the tile; the wish deleted elsewhere
-	await page.getByRole("link", { name: /^Olive long polo,/ }).click();
-	await expect(page).toHaveURL(`/piece/polo_l/${ids.Olive}`);
-	await page.request.delete(`/api/wishes/${wish}`);
-	// Then: once the tab comes back into view, the page loads its lists again
-	// and goes back. A load still running when the tab comes back is joined,
-	// not sent again, so the tab comes back until a load sees the delete.
-	await expect(async () => {
-		await page.evaluate(() =>
-			document.dispatchEvent(new Event("visibilitychange", { bubbles: true })),
-		);
-		await expect(page).toHaveURL("/wishlist", { timeout: 1000 });
-	}).toPass();
 });
 
 const linkSheet = (page: Page, name = "Add a shop link") => sheet(page, name);
