@@ -697,7 +697,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		"delete_draft_picture",
 		{
 			title: "Remove a draft picture",
-			description: `Removes for good a picture that an upload address took and that no owned item or shop link holds, so it stops counting toward the account's ${ACCOUNT_PICTURE_LIMIT.toLocaleString("en")} pictures. A picture on an owned item or a shop link goes with change_owned_item or change_shop_link.`,
+			description: `Removes for good a draft picture: one that no owned item or shop link holds yet, such as one an upload address took. It stops counting toward the account's ${ACCOUNT_PICTURE_LIMIT.toLocaleString("en")} pictures. A picture on an owned item or a shop link goes with change_owned_item or change_shop_link.`,
 			annotations: DELETE,
 			inputSchema: pictureActions.deleteDraft.input,
 		},
