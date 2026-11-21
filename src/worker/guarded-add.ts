@@ -144,11 +144,12 @@ type Add<
 	write?: (
 		insert: InsertIds,
 		held: SQL,
-	) => Promise<Result<{ id: string }[], E>>;
+	) => Promise<Result<{ id: string }[], NoInfer<E>>>;
 	// Runs when the same add comes again, after a lost answer.
-	resend?: (held: SQL) => Promise<Result<unknown, E>>;
+	resend?: (held: SQL) => Promise<Result<unknown, NoInfer<E>>>;
 	read: () => Promise<V | undefined>;
-	// Why the guards stopped the insert; null leaves the cap.
+	// Why the guards stopped the insert; null leaves the cap. The add's error
+	// type comes from here, so a write's narrower error does not set it.
 	refused: () => Promise<E | null>;
 };
 

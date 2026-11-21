@@ -7,7 +7,6 @@ import {
 	exists,
 	ne,
 	notExists,
-	type SQL,
 	sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
@@ -27,11 +26,11 @@ import type { ColourId } from "@/labels/colour";
 import { brandOf } from "./brand-store";
 import { colourOf } from "./colour-store";
 import type { Db } from "./db";
-import { user } from "./db/auth-schema";
 import { brand } from "./db/brand-schema";
 import { colour } from "./db/colour-schema";
 import { ownedItem } from "./db/owned-item-schema";
 import { shopLink, wish } from "./db/wish-schema";
+import { guardedAdd, insertUnder } from "./guarded-add";
 import {
 	buyWithPictures,
 	deleteWithPictures,
@@ -172,56 +171,16 @@ const listRefusal = (
 				error: { code: "invalid", field: "pictureIds", value: ids },
 			};
 
-// The one insert of an owned item. The colour, the brand, the limit, and
-// the duplicate rule sit in the insert itself, so two writes at once cannot
-// both pass them; `also` adds the caller's own guard.
-function insertItem(
-	db: Db,
-	userId: string,
-	item: Piece & { id: string; quantity: number; writeId?: string },
-	also?: SQL,
-) {
-	return db
-		.insert(ownedItem)
-		.select(
-			db
-				.select({
-					id: sql<string>`${item.id}`.as("id"),
-					userId: user.id,
-					typeId: sql<string>`${item.typeId}`.as("type_id"),
-					colourId: sql<string>`${item.colourId}`.as("colour_id"),
-					brandId: sql<string | null>`${item.brandId}`.as("brand_id"),
-					quantity: sql<number>`${item.quantity}`.as("quantity"),
-					writeId: sql<string | null>`${item.writeId ?? null}`.as("write_id"),
-					createdAt:
-						sql<number>`(cast(unixepoch('subsecond') * 1000 as integer))`.as(
-							"created_at",
-						),
-				})
-				.from(user)
-				.where(
-					and(
-						eq(user.id, userId),
-						exists(colourOf(db, userId, item.colourId)),
-						item.brandId === null
-							? undefined
-							: exists(brandOf(db, userId, item.brandId)),
-						sql`(${db
-							.select({ n: count() })
-							.from(ownedItem)
-							.where(eq(ownedItem.userId, userId))}) < ${OWNED_ITEM_LIMIT}`,
-						notExists(
-							db
-								.select({ one: sql`1` })
-								.from(ownedItem)
-								.where(samePiece(userId, item)),
-						),
-						also,
-					),
-				),
-		)
-		.onConflictDoNothing({ target: ownedItem.id });
-}
+// The colour, the brand, and the duplicate rule of an owned item's insert.
+const itemGuards = (db: Db, userId: string, piece: Piece) => [
+	exists(colourOf(db, userId, piece.colourId)),
+	piece.brandId === null
+		? undefined
+		: exists(brandOf(db, userId, piece.brandId)),
+	notExists(
+		db.select({ one: sql`1` }).from(ownedItem).where(samePiece(userId, piece)),
+	),
+];
 
 // Why a write that the guards stopped did not happen, in the order a person
 // would fix it. `otherThan` is the item a change writes, which holds its own
@@ -230,9 +189,8 @@ async function refusedWrite(
 	db: Db,
 	userId: string,
 	piece: Piece,
-	fallback: OwnedItemError,
 	otherThan?: string,
-): Promise<OwnedItemError> {
+): Promise<OwnedItemError | null> {
 	const [ownColour] = await colourOf(db, userId, piece.colourId);
 	if (!ownColour)
 		return { code: "invalid", field: "colourId", value: piece.colourId };
@@ -246,16 +204,15 @@ async function refusedWrite(
 		.from(ownedItem)
 		.where(samePiece(userId, piece));
 	const held = holders.find((row) => row.id !== otherThan);
-	return held ? { code: "duplicate", id: held.id as OwnedItemId } : fallback;
+	return held ? { code: "duplicate", id: held.id as OwnedItemId } : null;
 }
 
 // The page makes the id when the form opens, so an add sent again after a
 // lost answer gives back the same item rather than a second one, with the
 // quantity sent last, as the person may have changed it before the retry;
 // the same id with another piece or brand, or another account's id, is
-// conflict. The
-// colour, the brand, the limit, and the duplicate rule sit in the insert
-// itself, so two adds at once cannot both pass them.
+// conflict. The colour, the brand, the limit, and the duplicate rule are the
+// shared add's guards, so two adds at once cannot both pass them.
 export async function addOwnedItem(
 	db: Db,
 	bucket: R2Bucket,
@@ -266,7 +223,6 @@ export async function addOwnedItem(
 	if (!parsed.success)
 		return invalid(draft, parsed.error.issues[0]?.path ?? []);
 	const input = parsed.data;
-	const conflict = { ok: false, error: { code: "conflict" } } as const;
 	// Only this account's item of this piece and brand takes the pictures, so
 	// a conflict or a refused insert attaches none.
 	const pictures: PictureListSave = {
@@ -282,55 +238,43 @@ export async function addOwnedItem(
 		},
 		ids: input.pictureIds,
 	};
-	const [before] = await db
-		.select({
-			userId: ownedItem.userId,
-			typeId: ownedItem.typeId,
-			colourId: ownedItem.colourId,
-			brandId: ownedItem.brandId,
-		})
-		.from(ownedItem)
-		.where(eq(ownedItem.id, input.id));
-	if (before) {
-		const same =
-			before.userId === userId &&
-			before.typeId === input.typeId &&
-			before.colourId === input.colourId &&
-			before.brandId === input.brandId;
-		if (!same) return conflict;
-		const saved = await saveWithPictures(
-			db,
-			bucket,
-			pictures,
-			db
-				.update(ownedItem)
-				.set({ quantity: input.quantity })
-				.where(and(eq(ownedItem.id, input.id), eq(ownedItem.userId, userId))),
-		);
-		if (!saved.ok) return listRefusal(saved.error, input.pictureIds);
-		const [held] = await readOwnedItems(db, userId, input.id);
-		return held
-			? { ok: true, value: { ownedItem: held, created: false } }
-			: conflict;
-	}
-	const saved = await saveWithPictures(
-		db,
-		bucket,
-		pictures,
-		insertItem(db, userId, input),
-	);
-	if (!saved.ok) return listRefusal(saved.error, input.pictureIds);
-	const [added] = await readOwnedItems(db, userId, input.id);
-	if (added) return { ok: true, value: { ownedItem: added, created: true } };
-	const [taken] = await db
-		.select({ id: ownedItem.id })
-		.from(ownedItem)
-		.where(eq(ownedItem.id, input.id));
-	if (taken) return conflict;
-	return {
-		ok: false,
-		error: await refusedWrite(db, userId, input, { code: "owned_item_limit" }),
-	};
+	const added = await guardedAdd(db, {
+		table: ownedItem,
+		userId,
+		id: input.id,
+		mine: samePiece(userId, input),
+		values: {
+			typeId: input.typeId,
+			colourId: input.colourId,
+			brandId: input.brandId,
+			quantity: input.quantity,
+			writeId: null,
+		},
+		guards: itemGuards(db, userId, input),
+		limit: { max: OWNED_ITEM_LIMIT, code: "owned_item_limit" },
+		write: (insert) => saveWithPictures(db, bucket, pictures, insert),
+		resend: () =>
+			saveWithPictures(
+				db,
+				bucket,
+				pictures,
+				db
+					.update(ownedItem)
+					.set({ quantity: input.quantity })
+					.where(and(eq(ownedItem.id, input.id), eq(ownedItem.userId, userId))),
+			),
+		read: async () => (await readOwnedItems(db, userId, input.id))[0],
+		refused: () => refusedWrite(db, userId, input),
+	});
+	return added.ok
+		? {
+				ok: true,
+				value: {
+					ownedItem: added.value.value,
+					created: added.value.created,
+				},
+			}
+		: added;
 }
 
 // Only the brand and the quantity change; the piece stays. The brand and the
@@ -398,13 +342,9 @@ export async function changeOwnedItem(
 	if (!held) return { ok: false, error: { code: "not_found" } };
 	return {
 		ok: false,
-		error: await refusedWrite(
-			db,
-			userId,
-			{ ...held, brandId },
-			{ code: "conflict" },
-			id,
-		),
+		error: (await refusedWrite(db, userId, { ...held, brandId }, id)) ?? {
+			code: "conflict",
+		},
 	};
 }
 
@@ -495,12 +435,15 @@ export async function buyShopLink(
 					),
 				)
 				.returning({ id: ownedItem.id })
-		: insertItem(
-				db,
+		: insertUnder(db, ownedItem, {
 				userId,
-				{ id, ...piece, quantity: 1, writeId },
-				linkHeld,
-			).returning({ id: ownedItem.id });
+				id,
+				values: { ...piece, quantity: 1, writeId },
+				guards: [...itemGuards(db, userId, piece), linkHeld],
+				limit: { max: OWNED_ITEM_LIMIT },
+			})
+				.onConflictDoNothing()
+				.returning({ id: ownedItem.id });
 	const [row] = await buyWithPictures(
 		db,
 		bucket,
