@@ -33,6 +33,8 @@ import {
 } from "@/piece-filter/piece-filter";
 import { TAG_NAME_MAX, type Tag } from "@/tags/tag";
 import { SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";
+import type { ActionScope } from "./actions/action";
+import { colourActions } from "./actions/colours";
 import { countAiAction } from "./ai-action-store";
 import {
 	boughtRefusalText,
@@ -60,12 +62,7 @@ import {
 	wishRefusalText,
 } from "./ai-messages";
 import { addBrand, deleteBrand, listBrands, renameBrand } from "./brand-store";
-import {
-	addColour,
-	changeColour,
-	deleteColour,
-	listColours,
-} from "./colour-store";
+import { changeColour, deleteColour, listColours } from "./colour-store";
 import {
 	changeCombination,
 	deleteCombination,
@@ -195,6 +192,7 @@ const filterRule =
 
 export function registerAiActions(server: McpServer, account: Account) {
 	const { db, pictures, userId, baseURL } = account;
+	const scope: ActionScope = { db, userId };
 
 	// An unknown value is refused, not left out: a list from a wrong id would
 	// read as a true answer.
@@ -343,16 +341,13 @@ export function registerAiActions(server: McpServer, account: Account) {
 			title: "Add a colour",
 			description: `Adds a colour. ${colourRules}`,
 			annotations: WRITE,
-			inputSchema: z.object({
-				name: z.string().describe("The colour's name."),
-				hex: z.string().describe("The colour code, as #1F3A5F."),
-			}),
+			inputSchema: colourActions.add.input,
 		},
 		async (input) => {
-			const added = await addColour(db, userId, input);
+			const added = await colourActions.add.run(scope, input);
 			return added.ok
 				? answer({ colour: added.value })
-				: refusal(colourRefusalText(added.error));
+				: refusal(added.error.text);
 		},
 	);
 

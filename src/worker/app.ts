@@ -29,6 +29,8 @@ import { colourIdSchema } from "@/labels/colour";
 import { mannequinPartSchema } from "@/mannequin/mannequin";
 import { PICTURE_BYTES_MAX, pictureIdSchema } from "@/pictures/picture";
 import { tagIdSchema } from "@/tags/tag";
+import type { ActionScope } from "./actions/action";
+import { colourActions } from "./actions/colours";
 import { disconnectAiApp, listAiApps } from "./ai-app-store";
 import {
 	accountPictureLimit,
@@ -53,7 +55,6 @@ import {
 	renameBrand,
 } from "./brand-store";
 import {
-	addColour,
 	type ColourError,
 	changeColour,
 	deleteColour,
@@ -335,6 +336,10 @@ function colourRefusal(error: ColourError): Refusal {
 }
 
 export function createApp(getDb: (env: Env) => Db) {
+	const scope = (c: Context<AppEnv>): ActionScope => ({
+		db: getDb(c.env),
+		userId: c.var.user.id,
+	});
 	const root = new Hono<AppEnv>();
 	const app = root.basePath("/api");
 	// One per isolate: the plugin keeps its document cache and fetch limits in
@@ -755,16 +760,10 @@ export function createApp(getDb: (env: Env) => Db) {
 	);
 
 	app.post("/colours", withAuth, requireUser, async (c) => {
-		const body = await readBody(
-			c,
-			z.object({ name: z.string(), hex: z.string() }),
-		);
+		const body = await readBody(c, colourActions.add.input);
 		if (!body.ok) return invalid(c, body.error.field);
-		const added = await addColour(getDb(c.env), c.var.user.id, body.value);
-		if (!added.ok) {
-			const { status, body } = colourRefusal(added.error);
-			return c.json(body, status);
-		}
+		const added = await colourActions.add.run(scope(c), body.value);
+		if (!added.ok) return c.json(added.error.body, added.error.status);
 		return c.json({ colour: added.value } satisfies ColourAnswer, 201);
 	});
 
