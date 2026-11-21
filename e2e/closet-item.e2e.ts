@@ -1,0 +1,237 @@
+import type { Page } from "@playwright/test";
+import { postOwnedItems } from "./closet-helpers";
+import { expect, test } from "./fixtures";
+import { colourIds, postBrand } from "./label-helpers";
+import { sheet, toast } from "./locators";
+import { uploadPng } from "./picture-helpers";
+
+const facts = (page: Page) => page.locator('[data-slot="item-facts"]');
+
+const fact = (page: Page, term: string) =>
+	facts(page)
+		.locator("div")
+		.filter({ has: page.getByText(term, { exact: true }) })
+		.locator("dd");
+
+const bigPicture = (page: Page) =>
+	page.locator('[data-slot="item-picture"] img');
+
+// One plain item, a White short tee with no brand, on a fresh account.
+async function postPlainTee(page: Page, quantity = 1) {
+	await page.goto("/");
+	const ids = await colourIds(page);
+	const [id] = await postOwnedItems(page, {
+		typeId: "tee_s",
+		colourId: ids.White,
+		brandId: null,
+		quantity,
+	});
+	return id;
+}
+
+// The Uniqlo Oxford shirt with three pictures.
+async function postOxfordShirt(page: Page) {
+	await page.goto("/");
+	const ids = await colourIds(page);
+	const uniqlo = await postBrand(page, "Uniqlo");
+	const pictures = [
+		await uploadPng(page),
+		await uploadPng(page),
+		await uploadPng(page),
+	];
+	const [id] = await postOwnedItems(page, {
+		typeId: "shirt_l",
+		colourId: ids.Navy,
+		brandId: uniqlo,
+		quantity: 2,
+		name: "Oxford shirt",
+		price: 784000,
+		pictureIds: pictures,
+	});
+	return { id, pictures };
+}
+
+test("shows an item's pictures, name, brand, price, facts, and actions", async ({
+	page,
+}) => {
+	// Given: Navy long button-up, Uniqlo, 2, "Oxford shirt", 784000, three
+	// pictures
+	const { id, pictures } = await postOxfordShirt(page);
+	// When
+	await page.goto(`/closet/${id}`);
+	// Then
+	await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+	const header = page.getByRole("link", { name: "Back" }).locator("..");
+	expect({
+		heading: await page.getByRole("heading", { level: 1 }).textContent(),
+		brand: await page.locator('[data-slot="item-brand"]').textContent(),
+		price: await page.locator('[data-slot="item-price"]').textContent(),
+		terms: await facts(page).locator("dt").allTextContents(),
+		values: await facts(page).locator("dd").allTextContents(),
+		thumbs: await page.locator('[data-slot="picture-thumbs"] button').count(),
+		big: await bigPicture(page).getAttribute("src"),
+		actions: await page
+			.locator('[data-slot="item-actions"] button')
+			.evaluateAll((buttons) =>
+				buttons.map((b) => b.getAttribute("aria-label")),
+			),
+		header: await header
+			.locator("a, button")
+			.evaluateAll((parts) => parts.map((p) => p.getAttribute("aria-label"))),
+	}).toEqual({
+		heading: "Oxford shirt",
+		brand: "Uniqlo",
+		price: "784.000 ₫",
+		terms: ["Type", "Colour", "Brand", "Quantity", "Price paid"],
+		values: ["Long button-up", "Navy", "Uniqlo", "2", "784.000 ₫"],
+		thumbs: 3,
+		big: `/api/pictures/${pictures[0]}`,
+		actions: ["Edit item", "Delete item"],
+		header: ["Back"],
+	});
+});
+
+test("shows the tapped thumbnail large", async ({ page }) => {
+	// Given: the Oxford shirt's page open
+	const { id, pictures } = await postOxfordShirt(page);
+	await page.goto(`/closet/${id}`);
+	// When
+	await page.getByRole("button", { name: "Show picture 3 of 3" }).click();
+	// Then
+	await expect(bigPicture(page)).toHaveAttribute(
+		"src",
+		`/api/pictures/${pictures[2]}`,
+	);
+});
+
+test("edits the item from Edit item", async ({ page }) => {
+	// Given: White short tee, no brand, 2, its page open
+	const id = await postPlainTee(page, 2);
+	await page.goto(`/closet/${id}`);
+	// When
+	await page.getByRole("button", { name: "Edit item" }).click();
+	const edit = sheet(page, "Edit item");
+	await edit.getByRole("button", { name: "More" }).click();
+	await edit.getByRole("button", { name: "Save" }).click();
+	// Then
+	await expect(toast(page)).toHaveText("Changes saved");
+	await expect(fact(page, "Quantity")).toHaveText("3");
+});
+
+test("deletes the item from Delete item and goes back to the Closet", async ({
+	page,
+}) => {
+	// Given: White short tee, no brand, 2, its page open
+	const id = await postPlainTee(page, 2);
+	await page.goto(`/closet/${id}`);
+	// When
+	await page.getByRole("button", { name: "Delete item" }).click();
+	await page
+		.getByRole("alertdialog", { name: "Remove this item?" })
+		.getByRole("button", { name: "Delete" })
+		.click();
+	// Then
+	await expect(toast(page)).toHaveText("Removed from your closet");
+	await expect(page).toHaveURL("/closet");
+});
+
+test("shows Could not load your closet on the item page and loads on Retry", async ({
+	page,
+}) => {
+	// Given: White short tee; the first GET /api/owned-items answered 500,
+	// the next passed on
+	const id = await postPlainTee(page);
+	let failed = false;
+	await page.route("**/api/owned-items", (route) => {
+		if (failed) return route.continue();
+		failed = true;
+		return route.fulfill({ status: 500 });
+	});
+	// When
+	await page.goto(`/closet/${id}`);
+	await page
+		.getByRole("heading", { name: "Could not load your closet" })
+		.waitFor();
+	await page.getByRole("button", { name: "Retry" }).click();
+	// Then
+	await expect(
+		page.getByRole("heading", { name: "White short tee" }),
+	).toBeVisible();
+});
+
+test("shows the placeholder while the closet loads, then the item", async ({
+	page,
+}) => {
+	// Given: White short tee; GET /api/owned-items held until the test lets
+	// it go
+	const id = await postPlainTee(page);
+	let release = () => {};
+	const held = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	await page.route("**/api/owned-items", async (route) => {
+		await held;
+		await route.continue();
+	});
+	// When
+	await page.goto(`/closet/${id}`);
+	await page.locator('[data-slot="item-loading"]').waitFor();
+	const placeholder = await page.locator('[data-slot="item-loading"]').count();
+	release();
+	const heading = page.getByRole("heading", { level: 1 });
+	await heading.waitFor();
+	// Then
+	expect({
+		placeholder,
+		url: new URL(page.url()).pathname,
+		heading: await heading.textContent(),
+	}).toEqual({
+		placeholder: 1,
+		url: `/closet/${id}`,
+		heading: "White short tee",
+	});
+});
+
+test("goes back to the Closet when another tab deleted the item first", async ({
+	page,
+}) => {
+	// Given: White short tee, its page open; a second tab deleted it, so
+	// this tab's DELETE answers 404
+	const id = await postPlainTee(page);
+	await page.goto(`/closet/${id}`);
+	await page.getByRole("heading", { name: "White short tee" }).waitFor();
+	const gone = await page.request.delete(`/api/owned-items/${id}`);
+	expect(gone.status()).toBe(204);
+	// When
+	await page.getByRole("button", { name: "Delete item" }).click();
+	await page
+		.getByRole("alertdialog", { name: "Remove this item?" })
+		.getByRole("button", { name: "Delete" })
+		.click();
+	// Then
+	await expect(toast(page)).toHaveText("Removed from your closet");
+	await expect(page).toHaveURL("/closet");
+});
+
+test("sends the page of a deleted item back to the closet", async ({
+	page,
+}) => {
+	// Given: White short tee, then deleted
+	const id = await postPlainTee(page);
+	const gone = await page.request.delete(`/api/owned-items/${id}`);
+	expect(gone.status()).toBe(204);
+	// When
+	await page.goto(`/closet/${id}`);
+	// Then
+	await expect(page).toHaveURL("/closet");
+});
+
+test("sends the page of another account's item back to the closet", async ({
+	page,
+}) => {
+	// Given: a fresh account; the 500-item account's first item
+	// When
+	await page.goto("/closet/00000000-0000-4000-8000-000000000001");
+	// Then
+	await expect(page).toHaveURL("/closet");
+});
