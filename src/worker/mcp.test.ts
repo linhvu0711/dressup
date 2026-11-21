@@ -131,6 +131,49 @@ describe("/api/mcp", () => {
 		});
 	});
 
+	test("gives the combination tools the module's field descriptions", async () => {
+		// Given: initialize and notifications/initialized sent
+		const { h, bearer } = await withAiApp();
+		await post(h, INITIALIZE, bearer);
+		const session = { ...bearer, "mcp-protocol-version": "2025-11-25" };
+		await post(
+			h,
+			{ jsonrpc: "2.0", method: "notifications/initialized" },
+			session,
+		);
+		// When
+		const listed = await message<{
+			result: {
+				tools: {
+					name: string;
+					inputSchema: {
+						properties: Record<
+							string,
+							{
+								description?: string;
+								items?: {
+									properties: Record<string, { description?: string }>;
+								};
+							}
+						>;
+					};
+				}[];
+			};
+		}>(await post(h, { jsonrpc: "2.0", id: 2, method: "tools/list" }, session));
+		// Then
+		const properties = (name: string) =>
+			listed.result.tools.find((t) => t.name === name)?.inputSchema.properties;
+		expect({
+			typeId:
+				properties("save_combination")?.pieces?.items?.properties.typeId
+					?.description,
+			id: properties("change_combination")?.id?.description,
+		}).toEqual({
+			typeId: "A type id from list_types, such as tee_l.",
+			id: "The combination's id.",
+		});
+	});
+
 	test("refuses a pass whose allow was removed", async () => {
 		// Given: a connected app whose allow row is gone; its token has 3600 s
 		// left

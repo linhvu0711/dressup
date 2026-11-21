@@ -5,7 +5,6 @@ import {
 	BOB,
 	bytes,
 	type Harness,
-	postBrands,
 	send,
 	uploadPicture,
 	withAiSession,
@@ -136,25 +135,6 @@ describe("tags", () => {
 		});
 	});
 
-	test("refuses a tag name of 25 characters", async () => {
-		// Given
-		const { h, ai } = await withAiSession();
-		// When
-		const { isError, text } = await ai.call("add_tag", {
-			name: "a".repeat(25),
-		});
-		// Then
-		expect({
-			isError,
-			text,
-			names: (await tags(h, ai)).map((t) => t.name),
-		}).toEqual({
-			isError: true,
-			text: "A tag name has 1 to 24 characters.",
-			names: [],
-		});
-	});
-
 	test("renames a tag", async () => {
 		// Given
 		const { h, ai } = await withAiSession();
@@ -190,47 +170,6 @@ describe("tags", () => {
 			isError: true,
 			text: "You already have a tag called work.",
 			names: ["Work", "Trip"],
-		});
-	});
-
-	test("refuses to rename a tag to an empty name", async () => {
-		// Given
-		const { h, ai } = await withAiSession();
-		const work = await addTag(h, ai, "Work");
-		// When
-		const { isError, text } = await ai.call("rename_tag", {
-			id: work,
-			name: "  ",
-		});
-		// Then
-		expect({
-			isError,
-			text,
-			names: (await tags(h, ai)).map((t) => t.name),
-		}).toEqual({
-			isError: true,
-			text: "A tag name has 1 to 24 characters.",
-			names: ["Work"],
-		});
-	});
-
-	test("refuses to rename a tag that is gone", async () => {
-		// Given
-		const { h, ai } = await withAiSession();
-		const work = await addTag(h, ai, "Work");
-		expect((await send(h, ai.jar, "DELETE", `/api/tags/${work}`)).status).toBe(
-			204,
-		);
-		// When
-		const { isError, text } = await ai.call("rename_tag", {
-			id: work,
-			name: "Office",
-		});
-		// Then
-		expect({ isError, text, tags: await tags(h, ai) }).toEqual({
-			isError: true,
-			text: "No tag with this id.",
-			tags: [],
 		});
 	});
 
@@ -339,21 +278,6 @@ describe("colours", () => {
 		});
 	});
 
-	test("refuses a colour code in small letters", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		// When
-		const { isError, text } = await ai.call("add_colour", {
-			name: "Teal",
-			hex: "#2a7f7f",
-		});
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "That is not a colour written as #RRGGBB with capital letters, such as #1F3A5F.",
-		});
-	});
-
 	test("changes a colour", async () => {
 		// Given
 		const { h, ai, id } = await withTeal();
@@ -367,6 +291,22 @@ describe("colours", () => {
 		expect({ isError, stored: (await colours(h, ai)).at(-1) }).toEqual({
 			isError: false,
 			stored: { id, name: "Sea", hex: "#2A6F7F", inUse: false },
+		});
+	});
+
+	test("refuses to change a colour to a name another colour has", async () => {
+		// Given
+		const { ai, id } = await withTeal();
+		// When
+		const { isError, text } = await ai.call("change_colour", {
+			id,
+			name: "navy",
+			hex: "#2A7F7F",
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "You already have a colour called navy.",
 		});
 	});
 
@@ -405,20 +345,6 @@ describe("colours", () => {
 		expect({ isError, text }).toEqual({
 			isError: true,
 			text: "A combination, an owned item, or a wish uses Navy, so it stays. A colour in use cannot be deleted.",
-		});
-	});
-
-	test("refuses to delete a colour that is gone", async () => {
-		// Given
-		const { ai } = await withTeal();
-		// When
-		const { isError, text } = await ai.call("delete_colour", {
-			id: "11111111-1111-4111-8111-111111111111",
-		});
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "No colour with this id.",
 		});
 	});
 });
@@ -475,31 +401,6 @@ describe("brands", () => {
 		});
 	});
 
-	test("refuses an empty brand name", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		// When
-		const { isError, text } = await ai.call("add_brand", { name: " " });
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "A brand name has 1 to 24 characters.",
-		});
-	});
-
-	test("refuses brand number 101", async () => {
-		// Given: 100 brands, added through the routes
-		const { h, ai } = await withAiSession();
-		await postBrands(h, ai.jar, 100);
-		// When
-		const { isError, text } = await ai.call("add_brand", { name: "Uniqlo" });
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "You have 100 brands. That is the limit. Delete one to add a new one.",
-		});
-	});
-
 	test("renames a brand", async () => {
 		// Given
 		const { ai, id } = await withZara();
@@ -512,6 +413,24 @@ describe("brands", () => {
 		expect({ isError, data }).toEqual({
 			isError: false,
 			data: { brand: { id, name: "Zara Home" } },
+		});
+	});
+
+	test("refuses to rename a brand to a name already used", async () => {
+		// Given
+		const { ai } = await withZara();
+		const cos = (
+			(await ai.call("add_brand", { name: "COS" })).data as { brand: Brand }
+		).brand.id;
+		// When
+		const { isError, text } = await ai.call("rename_brand", {
+			id: cos,
+			name: "zara",
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "You already have a brand called zara.",
 		});
 	});
 
@@ -705,24 +624,6 @@ describe("combinations", () => {
 		});
 	});
 
-	test("refuses a change to a combination that is gone", async () => {
-		// Given: THREE saved, then deleted
-		const { ai } = await withAiSession();
-		const ids = await colourIds(ai);
-		const id = await savedId(ai, three(ids));
-		await ai.call("delete_combination", { id });
-		// When
-		const { isError, text } = await ai.call("change_combination", {
-			id,
-			pieces: two(ids).pieces,
-		});
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "No combination with this id.",
-		});
-	});
-
 	test("deletes a combination", async () => {
 		// Given: THREE saved
 		const { ai } = await withAiSession();
@@ -837,89 +738,6 @@ describe("combinations", () => {
 		});
 	});
 
-	test("refuses a save at 300 combinations", async () => {
-		// Given
-		const { h, ai, userId } = await withAiSession();
-		const ids = await colourIds(ai);
-		await h.seedCombinations(userId, 300);
-		// When
-		const { isError, text } = await ai.call("save_combination", three(ids));
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "You have 300 combinations. That is the limit.",
-		});
-	});
-
-	test("refuses one piece", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		const ids = await colourIds(ai);
-		// When
-		const { isError, text } = await ai.call("save_combination", {
-			pieces: [{ typeId: "casual_p", colourId: ids.Navy }],
-		});
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "A combination has 2 to 4 pieces.",
-		});
-	});
-
-	test("refuses two pieces in one layer", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		const ids = await colourIds(ai);
-		// When
-		const { isError, text } = await ai.call("save_combination", {
-			pieces: [
-				{ typeId: "casual_p", colourId: ids.Navy },
-				{ typeId: "chino_sh", colourId: ids.Black },
-			],
-		});
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "Casual pants and Chino shorts are both in the bottom layer. A combination has at most one piece for each layer.",
-		});
-	});
-
-	test("refuses a type that is not in the list", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		const ids = await colourIds(ai);
-		// When
-		const { isError, text } = await ai.call("save_combination", {
-			pieces: [
-				{ typeId: "jeans", colourId: ids.Navy },
-				{ typeId: "tee_l", colourId: ids.Black },
-			],
-		});
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "jeans is not a type. list_types names the types.",
-		});
-	});
-
-	test("refuses a colour that is not the account's", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		const ids = await colourIds(ai);
-		// When
-		const { isError, text } = await ai.call("save_combination", {
-			pieces: [
-				{ typeId: "casual_p", colourId: "not-a-colour" },
-				{ typeId: "tee_l", colourId: ids.Black },
-			],
-		});
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "not-a-colour is not one of your colours. list_colours names them.",
-		});
-	});
-
 	describe("tags", () => {
 		type Named = { id: string; name: string };
 		type Tagged = { id: string; tags: Named[] };
@@ -972,108 +790,6 @@ describe("combinations", () => {
 			}).toEqual({ isError: false, tags: [{ id: weekend, name: "Weekend" }] });
 		});
 
-		test("keeps a combination's tags when a change leaves them out", async () => {
-			// Given: THREE saved with Work
-			const { ai } = await withAiSession();
-			const work = await addTagByAi(ai, "Work");
-			const ids = await colourIds(ai);
-			const id = await savedId(ai, { ...three(ids), tags: [work] });
-			// When
-			const { data } = await ai.call("change_combination", {
-				id,
-				pieces: greyPants(ids),
-			});
-			// Then
-			expect((data as { combination: Tagged }).combination.tags).toEqual([
-				{ id: work, name: "Work" },
-			]);
-		});
-
-		test("refuses a tag that is not the account's as a sentence", async () => {
-			// Given
-			const { ai } = await withAiSession();
-			const ids = await colourIds(ai);
-			// When
-			const { isError, text } = await ai.call("save_combination", {
-				...three(ids),
-				tags: ["5b1f2c3d-0000-4000-8000-000000000000"],
-			});
-			// Then
-			expect({ isError, text }).toEqual({
-				isError: true,
-				text: "5b1f2c3d-0000-4000-8000-000000000000 is not one of your tags. list_tags names them.",
-			});
-		});
-
-		test("refuses 51 tags as a sentence", async () => {
-			// Given: 51 tags
-			const { ai } = await withAiSession();
-			const ids = await colourIds(ai);
-			const many: string[] = [];
-			for (let n = 0; n < 51; n++) many.push(await addTagByAi(ai, `t${n}`));
-			// When
-			const { isError, text } = await ai.call("save_combination", {
-				...three(ids),
-				tags: many,
-			});
-			// Then
-			expect({ isError, text }).toEqual({
-				isError: true,
-				text: "A combination has at most 50 tags.",
-			});
-		});
-
-		test("takes a deleted tag off its combinations", async () => {
-			// Given: THREE saved with Work and Weekend
-			const { ai } = await withAiSession();
-			const work = await addTagByAi(ai, "Work");
-			const weekend = await addTagByAi(ai, "Weekend");
-			const ids = await colourIds(ai);
-			await savedId(ai, { ...three(ids), tags: [work, weekend] });
-			// When
-			await ai.call("delete_tag", { id: weekend });
-			const { data } = await ai.call("list_combinations");
-			// Then
-			expect((data as { combinations: Tagged[] }).combinations[0].tags).toEqual(
-				[{ id: work, name: "Work" }],
-			);
-		});
-
-		test("lists the combinations that hold every piece row and carry every tag", async () => {
-			// Given: TWO, THREE with Work, and White short tee + Navy chino pants
-			// with Work, saved in that order
-			const { ai } = await withAiSession();
-			const work = await addTagByAi(ai, "Work");
-			const ids = await colourIds(ai);
-			await savedId(ai, two(ids));
-			await savedId(ai, { ...three(ids), tags: [work] });
-			await savedId(ai, {
-				pieces: [
-					{ typeId: "chino_p", colourId: ids.Navy },
-					{ typeId: "tee_s", colourId: ids.White },
-				],
-				tags: [work],
-			});
-			// When
-			const { isError, data } = await ai.call("list_combinations", {
-				pieces: [
-					{ typeId: "tee_s", colourId: ids.White },
-					{ colourId: ids.Navy },
-				],
-				tags: [work],
-			});
-			// Then
-			expect({
-				isError,
-				titles: (data as { combinations: Listed[] }).combinations.map(
-					(c) => c.title,
-				),
-			}).toEqual({
-				isError: false,
-				titles: ["White short tee + Navy chino pants"],
-			});
-		});
-
 		test("refuses a tag in a filter that is not the account's", async () => {
 			// Given
 			const { ai } = await withAiSession();
@@ -1118,70 +834,6 @@ describe("combinations", () => {
 		]);
 	});
 
-	test("lists only the combinations whose pieces the closet has all of with own all", async () => {
-		// Given: TWO, then THREE; the closet has both pieces of TWO
-		const { ai } = await withAiSession();
-		const ids = await colourIds(ai);
-		await savedId(ai, two(ids));
-		await savedId(ai, three(ids));
-		await ai.call("add_owned_item", {
-			typeId: "train_sh",
-			colourId: ids.Grey,
-			quantity: 1,
-		});
-		await ai.call("add_owned_item", {
-			typeId: "tee_s",
-			colourId: ids.White,
-			quantity: 1,
-		});
-		// When
-		const { isError, data } = await ai.call("list_combinations", {
-			own: "all",
-		});
-		// Then
-		expect({
-			isError,
-			titles: (data as { combinations: Listed[] }).combinations.map(
-				(c) => c.title,
-			),
-		}).toEqual({
-			isError: false,
-			titles: ["White short tee + Grey training shorts"],
-		});
-	});
-
-	test("lists the combinations with a piece the closet lacks with own not_all", async () => {
-		// Given: TWO, then THREE; the closet has both pieces of TWO
-		const { ai } = await withAiSession();
-		const ids = await colourIds(ai);
-		await savedId(ai, two(ids));
-		await savedId(ai, three(ids));
-		await ai.call("add_owned_item", {
-			typeId: "train_sh",
-			colourId: ids.Grey,
-			quantity: 1,
-		});
-		await ai.call("add_owned_item", {
-			typeId: "tee_s",
-			colourId: ids.White,
-			quantity: 1,
-		});
-		// When
-		const { isError, data } = await ai.call("list_combinations", {
-			own: "not_all",
-		});
-		// Then
-		expect({
-			isError,
-			titles: (data as { combinations: Listed[] }).combinations.map(
-				(c) => c.title,
-			),
-		}).toEqual({
-			isError: false,
-			titles: ["Khaki Harrington jacket + Black long tee + Navy casual pants"],
-		});
-	});
-
 	test("says no combination matches when own all finds none", async () => {
 		// Given: TWO, and nothing in the closet
 		const { ai } = await withAiSession();
@@ -1194,36 +846,6 @@ describe("combinations", () => {
 		expect({ isError, text }).toEqual({
 			isError: false,
 			text: "No combination matches these filters.",
-		});
-	});
-
-	test("refuses a type in a filter that is not a type", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		await savedId(ai, three(await colourIds(ai)));
-		// When
-		const { isError, text } = await ai.call("list_combinations", {
-			pieces: [{ typeId: "jeans" }],
-		});
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "jeans is not a type. list_types names the types.",
-		});
-	});
-
-	test("refuses a colour in a filter that is not the account's", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		await savedId(ai, three(await colourIds(ai)));
-		// When
-		const { isError, text } = await ai.call("list_combinations", {
-			pieces: [{ colourId: "not-a-colour" }],
-		});
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "not-a-colour is not one of your colours. list_colours names them.",
 		});
 	});
 

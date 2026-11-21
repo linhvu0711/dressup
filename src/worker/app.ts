@@ -29,6 +29,11 @@ import { colourIdSchema } from "@/labels/colour";
 import { mannequinPartSchema } from "@/mannequin/mannequin";
 import { PICTURE_BYTES_MAX, pictureIdSchema } from "@/pictures/picture";
 import { tagIdSchema } from "@/tags/tag";
+import type { ActionScope } from "./actions/action";
+import { brandActions } from "./actions/brands";
+import { colourActions } from "./actions/colours";
+import { combinationActions } from "./actions/combinations";
+import { tagActions } from "./actions/tags";
 import { disconnectAiApp, listAiApps } from "./ai-app-store";
 import {
 	accountPictureLimit,
@@ -45,27 +50,8 @@ import {
 	createAuthCache,
 	createClientDiscovery,
 } from "./auth";
-import {
-	addBrand,
-	type BrandError,
-	deleteBrand,
-	listBrands,
-	renameBrand,
-} from "./brand-store";
-import {
-	addColour,
-	type ColourError,
-	changeColour,
-	deleteColour,
-	listColours,
-} from "./colour-store";
-import {
-	type CombinationError,
-	changeCombination,
-	deleteCombination,
-	listCombinations,
-	saveCombination,
-} from "./combination-store";
+import { listBrands } from "./brand-store";
+import { listColours } from "./colour-store";
 import type { Db } from "./db";
 import { user } from "./db/auth-schema";
 import { loadMannequin, setMannequinColour } from "./mannequin-store";
@@ -86,13 +72,8 @@ import {
 	type PictureError,
 	readPicture,
 } from "./picture-store";
-import {
-	addTag,
-	deleteTag,
-	listTags,
-	renameTag,
-	type TagError,
-} from "./tag-store";
+import type { Result } from "./result";
+import { listTags } from "./tag-store";
 import { claimUploadAddress } from "./upload-address-store";
 import {
 	addShopLink,
@@ -110,31 +91,34 @@ type AppEnv = {
 	Variables: { auth: Auth; user: User; uploaderId: string };
 };
 
+type BodyError = { code: "invalid"; field: string };
+
 // The parsed body, or the 400 that names the field: the whole zod path, as
 // `colours.sweater`. A body that is not JSON, or JSON but not an object
 // (an empty path), names "body".
 async function readBody<T extends z.ZodType>(
 	c: Context<AppEnv>,
 	schema: T,
-): Promise<{ data: z.output<T> } | { refused: Response }> {
+): Promise<Result<z.output<T>, BodyError>> {
 	let body: unknown;
 	try {
 		body = await c.req.json();
 	} catch {
-		return {
-			refused: c.json(
-				{ error: "invalid", field: "body" } satisfies ErrorAnswer,
-				400,
-			),
-		};
+		return { ok: false, error: { code: "invalid", field: "body" } };
 	}
 	const parsed = schema.safeParse(body);
-	if (parsed.success) return { data: parsed.data };
-	const field = issueField(parsed.error.issues[0]?.path ?? []);
+	if (parsed.success) return { ok: true, value: parsed.data };
 	return {
-		refused: c.json({ error: "invalid", field } satisfies ErrorAnswer, 400),
+		ok: false,
+		error: {
+			code: "invalid",
+			field: issueField(parsed.error.issues[0]?.path ?? []),
+		},
 	};
 }
+
+const invalid = (c: Context<AppEnv>, field: string) =>
+	c.json({ error: "invalid", field } satisfies ErrorAnswer, 400);
 
 const issueField = (path: readonly PropertyKey[]) =>
 	path.length === 0 ? "body" : path.map(String).join(".");
@@ -143,37 +127,6 @@ type Refusal = {
 	status: ContentfulStatusCode;
 	body: ErrorAnswer;
 };
-
-// Only the JSON shape: the Combinations module runs the combination rules.
-const combinationBodySchema = z.object({
-	id: z.string(),
-	pieces: z.array(z.object({ typeId: z.string(), colourId: z.string() })),
-	tags: z.array(z.string()).optional(),
-});
-
-function combinationRefusal(error: CombinationError): Refusal {
-	switch (error.code) {
-		case "not_type":
-		case "not_colour":
-		case "not_tag":
-		case "too_many_tags":
-		case "pieces_count":
-		case "same_layer":
-		case "invalid":
-			return {
-				status: 400,
-				body: { error: "invalid", field: issueField(error.path) },
-			};
-		case "conflict":
-			return { status: 409, body: { error: "conflict", field: "id" } };
-		case "duplicate":
-			return { status: 409, body: { error: "duplicate", id: error.id } };
-		case "combination_limit":
-			return { status: 409, body: { error: "combination_limit" } };
-		case "not_found":
-			return { status: 404, body: { error: "not_found" } };
-	}
-}
 
 // Only the JSON shape: the Closet module runs the owned item rules.
 const ownedItemBodySchema = z.object({
@@ -292,45 +245,11 @@ function pictureRefusal(error: PictureError): Refusal {
 	}
 }
 
-// The website answers every bad field with "invalid"; the contract
-// (src/react-app/data/contract.ts) names every code it sends.
-const tagRefusals: Record<TagError["code"], Refusal> = {
-	name_length: { status: 400, body: { error: "invalid", field: "name" } },
-	duplicate: { status: 400, body: { error: "duplicate", field: "name" } },
-	not_found: { status: 404, body: { error: "not_found" } },
-};
-
-// A taken name is 409, as for colours.
-function brandRefusal(error: BrandError): Refusal {
-	switch (error.code) {
-		case "invalid":
-			return { status: 400, body: { error: "invalid", field: "name" } };
-		case "duplicate":
-			return { status: 409, body: { error: "duplicate", field: "name" } };
-		case "brand_limit":
-			return { status: 409, body: { error: "brand_limit" } };
-		case "not_found":
-			return { status: 404, body: { error: "not_found" } };
-	}
-}
-
-// A taken name is 409 here, as the colour contract says; tags answer 400.
-function colourRefusal(error: ColourError): Refusal {
-	switch (error.code) {
-		case "invalid":
-			return { status: 400, body: { error: "invalid", field: error.field } };
-		case "duplicate":
-			return { status: 409, body: { error: "duplicate", field: "name" } };
-		case "colour_limit":
-			return { status: 409, body: { error: "colour_limit" } };
-		case "colour_in_use":
-			return { status: 409, body: { error: "colour_in_use" } };
-		case "not_found":
-			return { status: 404, body: { error: "not_found" } };
-	}
-}
-
 export function createApp(getDb: (env: Env) => Db) {
+	const scope = (c: Context<AppEnv>): ActionScope => ({
+		db: getDb(c.env),
+		userId: c.var.user.id,
+	});
 	const root = new Hono<AppEnv>();
 	const app = root.basePath("/api");
 	// One per isolate: the plugin keeps its document cache and fetch limits in
@@ -439,20 +358,17 @@ export function createApp(getDb: (env: Env) => Db) {
 		return c.body(null, 204);
 	});
 
-	app.get("/combinations", withAuth, requireUser, async (c) =>
-		c.json({
-			combinations: await listCombinations(getDb(c.env), c.var.user.id),
-		} satisfies CombinationsAnswer),
-	);
+	app.get("/combinations", withAuth, requireUser, async (c) => {
+		const listed = await combinationActions.list.run(scope(c), {});
+		if (!listed.ok) return c.json(listed.error.body, listed.error.status);
+		return c.json({ combinations: listed.value } satisfies CombinationsAnswer);
+	});
 
 	app.post("/combinations", withAuth, requireUser, async (c) => {
-		const body = await readBody(c, combinationBodySchema);
-		if ("refused" in body) return body.refused;
-		const saved = await saveCombination(getDb(c.env), c.var.user.id, body.data);
-		if (!saved.ok) {
-			const { status, body: refused } = combinationRefusal(saved.error);
-			return c.json(refused, status);
-		}
+		const body = await readBody(c, combinationActions.save.input);
+		if (!body.ok) return invalid(c, body.error.field);
+		const saved = await combinationActions.save.run(scope(c), body.value);
+		if (!saved.ok) return c.json(saved.error.body, saved.error.status);
 		const { combination, created } = saved.value;
 		return c.json(
 			{ combination } satisfies CombinationAnswer,
@@ -463,35 +379,19 @@ export function createApp(getDb: (env: Env) => Db) {
 	// A gone combination and another account's combination answer the same
 	// 404, so ids of other accounts cannot be told from missing ones.
 	app.put("/combinations/:id", withAuth, requireUser, async (c) => {
-		const body = await readBody(c, combinationBodySchema);
-		if ("refused" in body) return body.refused;
-		const id = c.req.param("id");
-		if (body.data.id !== id)
-			return c.json(
-				{ error: "invalid", field: "id" } satisfies ErrorAnswer,
-				400,
-			);
-		const changed = await changeCombination(getDb(c.env), c.var.user.id, id, {
-			pieces: body.data.pieces,
-			tags: body.data.tags,
-		});
-		if (!changed.ok) {
-			const { status, body: refused } = combinationRefusal(changed.error);
-			return c.json(refused, status);
-		}
+		const body = await readBody(c, combinationActions.change.input);
+		if (!body.ok) return invalid(c, body.error.field);
+		if (body.value.id !== c.req.param("id")) return invalid(c, "id");
+		const changed = await combinationActions.change.run(scope(c), body.value);
+		if (!changed.ok) return c.json(changed.error.body, changed.error.status);
 		return c.json({ combination: changed.value } satisfies CombinationAnswer);
 	});
 
 	app.delete("/combinations/:id", withAuth, requireUser, async (c) => {
-		const deleted = await deleteCombination(
-			getDb(c.env),
-			c.var.user.id,
-			c.req.param("id"),
-		);
-		if (!deleted.ok) {
-			const { status, body: refused } = combinationRefusal(deleted.error);
-			return c.json(refused, status);
-		}
+		const deleted = await combinationActions.delete.run(scope(c), {
+			id: c.req.param("id"),
+		});
+		if (!deleted.ok) return c.json(deleted.error.body, deleted.error.status);
 		return c.body(null, 204);
 	});
 
@@ -503,12 +403,12 @@ export function createApp(getDb: (env: Env) => Db) {
 
 	app.post("/owned-items", withAuth, requireUser, async (c) => {
 		const body = await readBody(c, ownedItemBodySchema);
-		if ("refused" in body) return body.refused;
+		if (!body.ok) return invalid(c, body.error.field);
 		const added = await addOwnedItem(
 			getDb(c.env),
 			c.env.PICTURES,
 			c.var.user.id,
-			body.data,
+			body.value,
 		);
 		if (!added.ok) {
 			const { status, body: refused } = ownedItemRefusal(added.error);
@@ -527,13 +427,13 @@ export function createApp(getDb: (env: Env) => Db) {
 				pictureIds: z.array(z.string()).optional(),
 			}),
 		);
-		if ("refused" in body) return body.refused;
+		if (!body.ok) return invalid(c, body.error.field);
 		const changed = await changeOwnedItem(
 			getDb(c.env),
 			c.env.PICTURES,
 			c.var.user.id,
 			c.req.param("id"),
-			body.data,
+			body.value,
 		);
 		if (!changed.ok) {
 			const { status, body: refused } = ownedItemRefusal(changed.error);
@@ -579,8 +479,8 @@ export function createApp(getDb: (env: Env) => Db) {
 
 	app.post("/wishes", withAuth, requireUser, async (c) => {
 		const body = await readBody(c, wishBodySchema);
-		if ("refused" in body) return body.refused;
-		const added = await addWish(getDb(c.env), c.var.user.id, body.data);
+		if (!body.ok) return invalid(c, body.error.field);
+		const added = await addWish(getDb(c.env), c.var.user.id, body.value);
 		if (!added.ok) {
 			const { status, body: refused } = wishRefusal(added.error);
 			return c.json(refused, status);
@@ -594,13 +494,13 @@ export function createApp(getDb: (env: Env) => Db) {
 			c,
 			shopLinkBodySchema.extend({ id: z.string() }),
 		);
-		if ("refused" in body) return body.refused;
+		if (!body.ok) return invalid(c, body.error.field);
 		const added = await addShopLink(
 			getDb(c.env),
 			c.env.PICTURES,
 			c.var.user.id,
 			c.req.param("id"),
-			body.data,
+			body.value,
 		);
 		if (!added.ok) {
 			const { status, body: refused } = wishRefusal(added.error);
@@ -612,13 +512,13 @@ export function createApp(getDb: (env: Env) => Db) {
 
 	app.put("/shop-links/:id", withAuth, requireUser, async (c) => {
 		const body = await readBody(c, shopLinkBodySchema);
-		if ("refused" in body) return body.refused;
+		if (!body.ok) return invalid(c, body.error.field);
 		const changed = await changeShopLink(
 			getDb(c.env),
 			c.env.PICTURES,
 			c.var.user.id,
 			c.req.param("id"),
-			body.data,
+			body.value,
 		);
 		if (!changed.ok) {
 			const { status, body: refused } = wishRefusal(changed.error);
@@ -751,16 +651,10 @@ export function createApp(getDb: (env: Env) => Db) {
 	);
 
 	app.post("/colours", withAuth, requireUser, async (c) => {
-		const body = await readBody(
-			c,
-			z.object({ name: z.string(), hex: z.string() }),
-		);
-		if ("refused" in body) return body.refused;
-		const added = await addColour(getDb(c.env), c.var.user.id, body.data);
-		if (!added.ok) {
-			const { status, body } = colourRefusal(added.error);
-			return c.json(body, status);
-		}
+		const body = await readBody(c, colourActions.add.input);
+		if (!body.ok) return invalid(c, body.error.field);
+		const added = await colourActions.add.run(scope(c), body.value);
+		if (!added.ok) return c.json(added.error.body, added.error.status);
 		return c.json({ colour: added.value } satisfies ColourAnswer, 201);
 	});
 
@@ -768,33 +662,20 @@ export function createApp(getDb: (env: Env) => Db) {
 	app.put("/colours/:id", withAuth, requireUser, async (c) => {
 		const body = await readBody(
 			c,
-			z.object({ id: colourIdSchema, name: z.string(), hex: z.string() }),
+			colourActions.change.input.extend({ id: colourIdSchema }),
 		);
-		if ("refused" in body) return body.refused;
-		if (body.data.id !== c.req.param("id"))
-			return c.json(
-				{ error: "invalid", field: "id" } satisfies ErrorAnswer,
-				400,
-			);
-		const { id, ...input } = body.data;
-		const changed = await changeColour(getDb(c.env), c.var.user.id, id, input);
-		if (!changed.ok) {
-			const { status, body } = colourRefusal(changed.error);
-			return c.json(body, status);
-		}
+		if (!body.ok) return invalid(c, body.error.field);
+		if (body.value.id !== c.req.param("id")) return invalid(c, "id");
+		const changed = await colourActions.change.run(scope(c), body.value);
+		if (!changed.ok) return c.json(changed.error.body, changed.error.status);
 		return c.json({ colour: changed.value } satisfies ColourAnswer, 200);
 	});
 
 	app.delete("/colours/:id", withAuth, requireUser, async (c) => {
-		const deleted = await deleteColour(
-			getDb(c.env),
-			c.var.user.id,
-			c.req.param("id"),
-		);
-		if (!deleted.ok) {
-			const { status, body } = colourRefusal(deleted.error);
-			return c.json(body, status);
-		}
+		const deleted = await colourActions.delete.run(scope(c), {
+			id: c.req.param("id"),
+		});
+		if (!deleted.ok) return c.json(deleted.error.body, deleted.error.status);
 		return c.body(null, 204);
 	});
 
@@ -812,12 +693,12 @@ export function createApp(getDb: (env: Env) => Db) {
 				400,
 			);
 		const body = await readBody(c, z.object({ hex: hexSchema }));
-		if ("refused" in body) return body.refused;
+		if (!body.ok) return invalid(c, body.error.field);
 		const mannequin = await setMannequinColour(
 			getDb(c.env),
 			c.var.user.id,
 			part.data,
-			body.data.hex,
+			body.value.hex,
 		);
 		return c.json({ mannequin } satisfies MannequinAnswer, 200);
 	});
@@ -829,13 +710,10 @@ export function createApp(getDb: (env: Env) => Db) {
 	);
 
 	app.post("/brands", withAuth, requireUser, async (c) => {
-		const body = await readBody(c, z.object({ name: z.string() }));
-		if ("refused" in body) return body.refused;
-		const added = await addBrand(getDb(c.env), c.var.user.id, body.data.name);
-		if (!added.ok) {
-			const { status, body } = brandRefusal(added.error);
-			return c.json(body, status);
-		}
+		const body = await readBody(c, brandActions.add.input);
+		if (!body.ok) return invalid(c, body.error.field);
+		const added = await brandActions.add.run(scope(c), body.value);
+		if (!added.ok) return c.json(added.error.body, added.error.status);
 		return c.json({ brand: added.value } satisfies BrandAnswer, 201);
 	});
 
@@ -843,33 +721,20 @@ export function createApp(getDb: (env: Env) => Db) {
 	app.put("/brands/:id", withAuth, requireUser, async (c) => {
 		const body = await readBody(
 			c,
-			z.object({ id: brandIdSchema, name: z.string() }),
+			brandActions.rename.input.extend({ id: brandIdSchema }),
 		);
-		if ("refused" in body) return body.refused;
-		if (body.data.id !== c.req.param("id"))
-			return c.json(
-				{ error: "invalid", field: "id" } satisfies ErrorAnswer,
-				400,
-			);
-		const { id, name } = body.data;
-		const renamed = await renameBrand(getDb(c.env), c.var.user.id, id, name);
-		if (!renamed.ok) {
-			const { status, body } = brandRefusal(renamed.error);
-			return c.json(body, status);
-		}
+		if (!body.ok) return invalid(c, body.error.field);
+		if (body.value.id !== c.req.param("id")) return invalid(c, "id");
+		const renamed = await brandActions.rename.run(scope(c), body.value);
+		if (!renamed.ok) return c.json(renamed.error.body, renamed.error.status);
 		return c.json({ brand: renamed.value } satisfies BrandAnswer, 200);
 	});
 
 	app.delete("/brands/:id", withAuth, requireUser, async (c) => {
-		const deleted = await deleteBrand(
-			getDb(c.env),
-			c.var.user.id,
-			c.req.param("id"),
-		);
-		if (!deleted.ok) {
-			const { status, body } = brandRefusal(deleted.error);
-			return c.json(body, status);
-		}
+		const deleted = await brandActions.delete.run(scope(c), {
+			id: c.req.param("id"),
+		});
+		if (!deleted.ok) return c.json(deleted.error.body, deleted.error.status);
 		return c.body(null, 204);
 	});
 
@@ -880,13 +745,10 @@ export function createApp(getDb: (env: Env) => Db) {
 	);
 
 	app.post("/tags", withAuth, requireUser, async (c) => {
-		const body = await readBody(c, z.object({ name: z.string() }));
-		if ("refused" in body) return body.refused;
-		const added = await addTag(getDb(c.env), c.var.user.id, body.data.name);
-		if (!added.ok) {
-			const { status, body } = tagRefusals[added.error.code];
-			return c.json(body, status);
-		}
+		const body = await readBody(c, tagActions.add.input);
+		if (!body.ok) return invalid(c, body.error.field);
+		const added = await tagActions.add.run(scope(c), body.value);
+		if (!added.ok) return c.json(added.error.body, added.error.status);
 		return c.json({ tag: added.value } satisfies TagAnswer, 201);
 	});
 
@@ -894,37 +756,20 @@ export function createApp(getDb: (env: Env) => Db) {
 	app.put("/tags/:id", withAuth, requireUser, async (c) => {
 		const body = await readBody(
 			c,
-			z.object({ id: tagIdSchema, name: z.string() }),
+			tagActions.rename.input.extend({ id: tagIdSchema }),
 		);
-		if ("refused" in body) return body.refused;
-		if (body.data.id !== c.req.param("id"))
-			return c.json(
-				{ error: "invalid", field: "id" } satisfies ErrorAnswer,
-				400,
-			);
-		const renamed = await renameTag(
-			getDb(c.env),
-			c.var.user.id,
-			body.data.id,
-			body.data.name,
-		);
-		if (!renamed.ok) {
-			const { status, body } = tagRefusals[renamed.error.code];
-			return c.json(body, status);
-		}
+		if (!body.ok) return invalid(c, body.error.field);
+		if (body.value.id !== c.req.param("id")) return invalid(c, "id");
+		const renamed = await tagActions.rename.run(scope(c), body.value);
+		if (!renamed.ok) return c.json(renamed.error.body, renamed.error.status);
 		return c.json({ tag: renamed.value } satisfies TagAnswer, 200);
 	});
 
 	app.delete("/tags/:id", withAuth, requireUser, async (c) => {
-		const deleted = await deleteTag(
-			getDb(c.env),
-			c.var.user.id,
-			c.req.param("id"),
-		);
-		if (!deleted.ok) {
-			const { status, body } = tagRefusals[deleted.error.code];
-			return c.json(body, status);
-		}
+		const deleted = await tagActions.delete.run(scope(c), {
+			id: c.req.param("id"),
+		});
+		if (!deleted.ok) return c.json(deleted.error.body, deleted.error.status);
 		return c.body(null, 204);
 	});
 
