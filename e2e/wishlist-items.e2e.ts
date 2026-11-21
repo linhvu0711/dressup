@@ -412,3 +412,90 @@ test("keeps the dialog open with Not saved when Bought fails", async ({
 		"Not saved. Try again.",
 	);
 });
+
+// A fresh account with an Olive long polo wish and no link, on its page.
+async function onPoloWishPage(page: Page) {
+	await page.goto("/");
+	const ids = await colourIds(page);
+	await postWish(page, { typeId: "polo_l", colourId: ids.Olive });
+	await page.goto("/wishlist");
+	await page
+		.getByRole("link", { name: "Olive long polo, No shop link yet" })
+		.click();
+	await expect(title(page)).toHaveText("Olive long polo");
+}
+
+test("shows a wish with no shop link on its own page", async ({ page }) => {
+	// Given: an Olive long polo wish and no link; /wishlist open
+	// When
+	await onPoloWishPage(page);
+	// Then
+	expect({
+		title: await title(page).textContent(),
+		note: await page.getByText("No shop link yet.").textContent(),
+		facts: await page
+			.locator('[data-slot="facts"] > div')
+			.evaluateAll((rows) =>
+				rows.map((row) => [
+					row.querySelector("dt")?.textContent,
+					row.querySelector("dd")?.textContent,
+				]),
+			),
+		buttons: await page
+			.getByRole("main")
+			.getByRole("button")
+			.filter({ hasText: /^(Add a shop link|Remove from wishlist)$/ })
+			.allTextContents(),
+		drawing: await page.locator("main svg:not(.lucide)").count(),
+	}).toEqual({
+		title: "Olive long polo",
+		note: "No shop link yet.",
+		facts: [
+			["Type", "Long polo"],
+			["Colour", "Olive"],
+		],
+		buttons: ["Add a shop link", "Remove from wishlist"],
+		drawing: 1,
+	});
+});
+
+test("removes a wish with no shop link after its confirm", async ({ page }) => {
+	// Given: that wish's page open
+	await onPoloWishPage(page);
+	// When
+	await page.getByRole("button", { name: "Remove from wishlist" }).click();
+	const text = await confirm(page).locator("p").textContent();
+	await confirm(page).getByRole("button", { name: "Remove" }).click();
+	const empty = page.getByRole("heading", {
+		name: "Nothing on your wishlist yet",
+	});
+	await expect(empty).toBeVisible();
+	// Then
+	expect({
+		confirm: text,
+		url: new URL(page.url()).pathname,
+		empty: await empty.textContent(),
+	}).toEqual({
+		confirm: "It has no shop link.",
+		url: "/wishlist",
+		empty: "Nothing on your wishlist yet",
+	});
+});
+
+test("opens the new link's page after a link is added to a wish with none", async ({
+	page,
+}) => {
+	// Given: that wish's page open
+	await onPoloWishPage(page);
+	// When
+	await page.getByRole("button", { name: "Add a shop link" }).click();
+	const add = sheet(page, "Add a shop link");
+	await add
+		.getByRole("textbox", { name: "Address" })
+		.fill("https://shop.example/polo");
+	await add.getByRole("textbox", { name: "Name" }).fill("Olive polo");
+	await add.getByRole("button", { name: "Save" }).click();
+	// Then
+	await expect(title(page)).toHaveText("Olive polo");
+	await expect(page).toHaveURL(/\/wishlist\/link\//);
+});
