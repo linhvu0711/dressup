@@ -253,12 +253,20 @@ export function OwnedItemSheet(
 							// A drag deletes, then drops; a reformat between the two loses
 							// where a drop back into the field goes. The price follows the
 							// text, for a drag out of the field.
-							if ((e.nativeEvent as InputEvent).inputType === "deleteByDrag")
+							if ((e.nativeEvent as InputEvent).inputType === "deleteByDrag") {
 								setPrice({
 									...typedPrice(e.target.value),
 									shown: e.target.value,
 								});
-							else setPrice(typedPrice(e.target.value, put.current));
+								// A drop back into the field comes before the next task; after
+								// a drag out, the text left gets its dots then.
+								setTimeout(() =>
+									setPrice((now) => ({
+										...now,
+										shown: typedPrice(now.shown).shown,
+									})),
+								);
+							} else setPrice(typedPrice(e.target.value, put.current));
 						}}
 						className={cn(INPUT, "min-w-0 flex-1")}
 					/>

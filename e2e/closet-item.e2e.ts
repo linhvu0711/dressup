@@ -547,6 +547,7 @@ test("saves the price left after its digits are dragged out", async ({
 		{ x: at.selected, y: at.y },
 		{ x: name.x + name.width / 2, y: name.y + name.height / 2 },
 	);
+	await expect(addSheet(page).getByLabel("Price paid")).toHaveValue("123");
 	await addSheet(page).getByRole("button", { name: "Save" }).click();
 	// Then
 	await expect(
