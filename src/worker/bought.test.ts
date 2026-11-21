@@ -137,6 +137,28 @@ describe("POST /api/shop-links/:id/bought", () => {
 		});
 	});
 
+	test("answers 200 when Bought adds 1 to an item", async () => {
+		// Given: alice owns the Navy wool COS jacket once, and wishes for it
+		const owner = await account();
+		const { h, headers, ids, cos } = owner;
+		await send(h, headers, "POST", "/api/owned-items", {
+			id: FIRST_ID,
+			typeId: "wool",
+			colourId: ids.Navy,
+			brandId: cos,
+			quantity: 1,
+		});
+		await withLinks(owner);
+		// When
+		const res = await buy(h, headers, LINK_ID);
+		// Then
+		const { ownedItem } = (await res.json()) as { ownedItem: Item };
+		expect({ status: res.status, quantity: ownedItem.quantity }).toEqual({
+			status: 200,
+			quantity: 2,
+		});
+	});
+
 	test("answers 401 to a signed-out Bought", async () => {
 		// Given: alice has an account; no session headers
 		const h = await makeHarness();

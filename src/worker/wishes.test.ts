@@ -89,6 +89,19 @@ describe("POST /api/wishes", () => {
 		});
 	});
 
+	test("answers 200 to a wish add sent again", async () => {
+		// Given: alice; the add of the Navy wool jacket sent once
+		const { h, headers, ids } = await alice();
+		await post(h, headers, jacket(ids));
+		// When
+		const again = await post(h, headers, jacket(ids));
+		// Then
+		expect({
+			status: again.status,
+			count: (await list(h, headers)).length,
+		}).toEqual({ status: 200, count: 1 });
+	});
+
 	test("refuses a second wish for one piece", async () => {
 		// Given: alice with the wish FIRST_ID for a Navy wool jacket
 		const { h, headers, ids } = await alice();
@@ -156,6 +169,19 @@ describe("POST /api/wishes/:id/shop-links", () => {
 				},
 			],
 		});
+	});
+
+	test("answers 200 to a shop link add sent again", async () => {
+		// Given: the Zara link added once
+		const { h, headers, zara } = await aliceWithWish();
+		await postLink(h, headers, FIRST_ID, zaraLink(zara));
+		// When
+		const again = await postLink(h, headers, FIRST_ID, zaraLink(zara));
+		// Then
+		expect({
+			status: again.status,
+			count: (await linksOf(h, headers))?.length,
+		}).toEqual({ status: 200, count: 1 });
 	});
 
 	test("adds a shop link with no brand when brandId is left out", async () => {

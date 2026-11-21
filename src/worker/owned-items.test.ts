@@ -71,6 +71,19 @@ describe("POST /api/owned-items", () => {
 		});
 	});
 
+	test("answers 200 to an add sent again with the same id", async () => {
+		// Given: alice added the shirt once
+		const { h, headers, ids } = await alice();
+		await post(h, headers, shirt(ids));
+		// When
+		const again = await post(h, headers, shirt(ids));
+		// Then
+		expect({
+			status: again.status,
+			count: (await list(h, headers)).length,
+		}).toEqual({ status: 200, count: 1 });
+	});
+
 	test("adds an item with no brand when brandId is left out", async () => {
 		// Given: alice signed in; the shirt with no brandId key
 		const { h, headers, ids } = await alice();
