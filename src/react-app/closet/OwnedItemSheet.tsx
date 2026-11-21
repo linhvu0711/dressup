@@ -66,8 +66,6 @@ export function OwnedItemSheet(
 	const [price, setPrice] = useState(() =>
 		typedPrice(String(editing?.price ?? "")),
 	);
-	// The text of a paste, for the change that follows it.
-	const pasted = useRef<string | undefined>(undefined);
 	const colours = useColours();
 	const colour = colours.data?.find((c) => c.id === colourId);
 	const slots = usePictureSlots(editing?.pictureIds ?? []);
@@ -240,12 +238,21 @@ export function OwnedItemSheet(
 						autoComplete="off"
 						value={price.shown}
 						onPaste={(e) => {
-							pasted.current = e.clipboardData.getData("text");
+							// The field puts the text in itself, so the price is judged on
+							// what was pasted: its own dots move as it reformats.
+							const text = e.clipboardData.getData("text");
+							// A paste with no text, as of an image, puts nothing in.
+							if (text === "") return;
+							e.preventDefault();
+							const { value, selectionStart, selectionEnd } = e.currentTarget;
+							const at = selectionStart ?? value.length;
+							const next =
+								value.slice(0, at) + text + value.slice(selectionEnd ?? at);
+							setPrice(typedPrice(next, text));
 						}}
-						onChange={(e) => {
-							setPrice(typedPrice(e.target.value, pasted.current));
-							pasted.current = undefined;
-						}}
+						// A drop lands where the pointer is, which the field cannot read.
+						onDrop={(e) => e.preventDefault()}
+						onChange={(e) => setPrice(typedPrice(e.target.value))}
 						className={cn(INPUT, "min-w-0 flex-1")}
 					/>
 					<span aria-hidden>₫</span>
