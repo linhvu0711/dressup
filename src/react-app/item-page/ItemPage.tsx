@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { Hex } from "@/colour/hex";
 import type { PieceRef } from "@/combinations/marks";
+import { PieceCombinations } from "@/combinations/PieceCombinations";
 import { PictureGallery } from "@/pictures/PictureGallery";
 import type { PictureId } from "@/pictures/picture";
 import { priceText } from "@/price";
@@ -45,40 +46,45 @@ export function ItemDetails({
 	facts: readonly ItemFact[];
 }) {
 	return (
-		<div className="flex flex-col gap-6 wide:grid wide:grid-cols-[440px_minmax(0,1fr)] wide:gap-12">
-			<PictureGallery ids={pictureIds} piece={piece} />
-			<div className="flex min-w-0 flex-col gap-4">
-				<div className="flex flex-col gap-1">
-					<h1 className="break-words text-[32px] leading-[1.1]">{title}</h1>
-					{brand === null ? null : (
-						<p
-							data-slot="item-brand"
-							className="text-[13px] text-muted-foreground"
-						>
-							{brand}
-						</p>
-					)}
-					{price === null ? null : (
-						<p data-slot="item-price" className="font-medium text-[18px]">
-							{priceText(price)}
-						</p>
-					)}
+		<>
+			<div className="flex flex-col gap-6 wide:grid wide:grid-cols-[440px_minmax(0,1fr)] wide:gap-12">
+				<PictureGallery ids={pictureIds} piece={piece} />
+				<div className="flex min-w-0 flex-col gap-4">
+					<div className="flex flex-col gap-1">
+						<h1 className="break-words text-[32px] leading-[1.1]">{title}</h1>
+						{brand === null ? null : (
+							<p
+								data-slot="item-brand"
+								className="text-[13px] text-muted-foreground"
+							>
+								{brand}
+							</p>
+						)}
+						{price === null ? null : (
+							<p data-slot="item-price" className="font-medium text-[18px]">
+								{priceText(price)}
+							</p>
+						)}
+					</div>
+					<div data-slot="item-actions" className="flex gap-2">
+						{actions}
+					</div>
+					<dl data-slot="item-facts" className="flex flex-col">
+						{facts.map((fact) => (
+							<div
+								key={fact.term}
+								className="flex min-h-[46px] items-center justify-between gap-4 border-border border-b"
+							>
+								<dt className="text-[13px] text-muted-foreground">
+									{fact.term}
+								</dt>
+								<dd className="text-right text-[14px]">{fact.value}</dd>
+							</div>
+						))}
+					</dl>
 				</div>
-				<div data-slot="item-actions" className="flex gap-2">
-					{actions}
-				</div>
-				<dl data-slot="item-facts" className="flex flex-col">
-					{facts.map((fact) => (
-						<div
-							key={fact.term}
-							className="flex min-h-[46px] items-center justify-between gap-4 border-border border-b"
-						>
-							<dt className="text-[13px] text-muted-foreground">{fact.term}</dt>
-							<dd className="text-right text-[14px]">{fact.value}</dd>
-						</div>
-					))}
-				</dl>
 			</div>
-		</div>
+			<PieceCombinations piece={piece} wideColumns={5} />
+		</>
 	);
 }

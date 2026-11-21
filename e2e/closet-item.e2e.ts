@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import { postOwnedItems } from "./closet-helpers";
+import { isPhone, postCombinations } from "./combination-helpers";
 import { expect, test } from "./fixtures";
 import { colourIds, postBrand } from "./label-helpers";
 import { sheet, toast } from "./locators";
@@ -234,4 +235,77 @@ test("sends the page of another account's item back to the closet", async ({
 	await page.goto("/closet/00000000-0000-4000-8000-000000000001");
 	// Then
 	await expect(page).toHaveURL("/closet");
+});
+
+const combinationsPart = (page: Page) =>
+	page.getByRole("region", { name: "Combinations with this piece" });
+
+// A Navy long button-up and six combinations of it with chino pants.
+async function postShirtWithCombinations(page: Page) {
+	await page.goto("/");
+	const ids = await colourIds(page);
+	const [id] = await postOwnedItems(page, {
+		typeId: "shirt_l",
+		colourId: ids.Navy,
+		brandId: null,
+		quantity: 1,
+	});
+	await postCombinations(
+		page,
+		...["Khaki", "Beige", "Black", "Grey", "Olive", "Brown"].map((chinos) => ({
+			id: crypto.randomUUID(),
+			pieces: [
+				{ typeId: "chino_p", colourId: ids[chinos] },
+				{ typeId: "shirt_l", colourId: ids.Navy },
+			],
+		})),
+	);
+	return { id, navy: ids.Navy };
+}
+
+const shownCombinations = async (page: Page) => {
+	const seeAll = combinationsPart(page).getByRole("link", { name: /^See all/ });
+	await seeAll.waitFor();
+	return {
+		visible: await combinationsPart(page)
+			.locator('[data-slot="combination-card"]:visible')
+			.count(),
+		seeAll: await seeAll.textContent(),
+	};
+};
+
+test("shows five combinations with the piece on a laptop", async ({ page }) => {
+	test.skip(isPhone(page), "a laptop shows five");
+	// Given: a Navy long button-up and six combinations with it
+	const { id } = await postShirtWithCombinations(page);
+	// When
+	await page.goto(`/closet/${id}`);
+	// Then
+	expect(await shownCombinations(page)).toEqual({
+		visible: 5,
+		seeAll: "See all 6",
+	});
+});
+
+test("shows four combinations with the piece on a phone", async ({ page }) => {
+	test.skip(!isPhone(page), "a phone shows four");
+	// Given: a Navy long button-up and six combinations with it
+	const { id } = await postShirtWithCombinations(page);
+	// When
+	await page.goto(`/closet/${id}`);
+	// Then
+	expect(await shownCombinations(page)).toEqual({
+		visible: 4,
+		seeAll: "See all 6",
+	});
+});
+
+test("opens the wall filtered to the piece from See all", async ({ page }) => {
+	// Given: a Navy long button-up and six combinations with it, its page open
+	const { id, navy } = await postShirtWithCombinations(page);
+	await page.goto(`/closet/${id}`);
+	// When
+	await combinationsPart(page).getByRole("link", { name: "See all 6" }).click();
+	// Then
+	await expect(page).toHaveURL(`/combinations?piece=shirt_l.${navy}`);
 });
