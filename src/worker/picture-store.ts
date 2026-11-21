@@ -59,7 +59,7 @@ export type HeldOwner =
 			holds: Partial<
 				Pick<
 					typeof ownedItem.$inferSelect,
-					"typeId" | "colourId" | "brandId" | "quantity"
+					"typeId" | "colourId" | "brandId" | "writeId"
 				>
 			>;
 	  }
@@ -514,7 +514,7 @@ export async function deleteWithPictures<T extends Statement>(
 // the link's oldest pictures move to the item while it has room, before the
 // drop, so the kept ones stay; the wish goes last, with its other links,
 // once no picture points at them. Each picture write and the wish delete
-// run only while the link is as it was read and the item holds the quantity
+// run only while the link is as it was read and the item holds the write id
 // the write set. The objects go only after the batch commits, so a failure
 // deletes no object, and no row is left with no object. It gives back the
 // item write's result.
@@ -528,7 +528,7 @@ export async function buyWithPictures<T extends Statement>(
 	}: {
 		userId: string;
 		link: { id: string; wishId: string; brandId: string | null };
-		item: { id: string; quantity: number };
+		item: { id: string; writeId: string };
 	},
 	itemWrite: T,
 ): Promise<Awaited<T>> {
@@ -541,7 +541,7 @@ export async function buyWithPictures<T extends Statement>(
 		ownerHeld(db, userId, {
 			kind: "ownedItem",
 			id: item.id,
-			holds: { quantity: item.quantity },
+			holds: { writeId: item.writeId },
 		}),
 	);
 	const removeWish = db

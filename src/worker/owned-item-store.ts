@@ -178,7 +178,7 @@ const listRefusal = (
 function insertItem(
 	db: Db,
 	userId: string,
-	item: Piece & { id: string; quantity: number },
+	item: Piece & { id: string; quantity: number; writeId?: string },
 	also?: SQL,
 ) {
 	return db
@@ -192,6 +192,7 @@ function insertItem(
 					colourId: sql<string>`${item.colourId}`.as("colour_id"),
 					brandId: sql<string | null>`${item.brandId}`.as("brand_id"),
 					quantity: sql<number>`${item.quantity}`.as("quantity"),
+					writeId: sql<string | null>`${item.writeId ?? null}`.as("write_id"),
 					createdAt:
 						sql<number>`(cast(unixepoch('subsecond') * 1000 as integer))`.as(
 							"created_at",
@@ -480,10 +481,11 @@ export async function buyShopLink(
 		return { ok: false, error: { code: "quantity_limit" } };
 	}
 	const id = found?.id ?? crypto.randomUUID();
+	const writeId = crypto.randomUUID();
 	const ownerWrite = found
 		? db
 				.update(ownedItem)
-				.set({ quantity: found.quantity + 1 })
+				.set({ quantity: found.quantity + 1, writeId })
 				.where(
 					and(
 						eq(ownedItem.id, id),
@@ -493,16 +495,19 @@ export async function buyShopLink(
 					),
 				)
 				.returning({ id: ownedItem.id })
-		: insertItem(db, userId, { id, ...piece, quantity: 1 }, linkHeld).returning(
-				{ id: ownedItem.id },
-			);
+		: insertItem(
+				db,
+				userId,
+				{ id, ...piece, quantity: 1, writeId },
+				linkHeld,
+			).returning({ id: ownedItem.id });
 	const [row] = await buyWithPictures(
 		db,
 		bucket,
 		{
 			userId,
 			link: { id: shopLinkId, wishId, brandId: piece.brandId },
-			item: { id, quantity: found ? found.quantity + 1 : 1 },
+			item: { id, writeId },
 		},
 		ownerWrite,
 	);

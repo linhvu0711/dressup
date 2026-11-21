@@ -355,6 +355,37 @@ describe("Bought while another write runs", () => {
 		});
 	});
 
+	test("refuses Bought when the quantity changes during it to the one Bought sets", async () => {
+		// Given
+		const { h, alice, cos, a, b, c, d, e } = await aliceWithItem();
+		const hold = h.holdBatches();
+		// When
+		const bought = buy(alice, LINK_ID);
+		await hold.queued(1);
+		await ownedItemActions.change.run(alice, {
+			id: ITEM_ID,
+			brandId: cos,
+			quantity: 2,
+		});
+		hold.release();
+		const result = await bought;
+		// Then
+		expect({
+			result,
+			items: (await closet(alice)).map((i) => ({
+				quantity: i.quantity,
+				pictureIds: i.pictureIds,
+			})),
+			links: await linkPictures(alice),
+			keys: h.pictures.keys(),
+		}).toEqual({
+			result: { ok: false, error: CONFLICT_ROW },
+			items: [{ quantity: 2, pictureIds: [d, e] }],
+			links: [[a, b], [c]],
+			keys: [a, b, c, d, e].sort(),
+		});
+	});
+
 	test("refuses Bought when the same item is added during it", async () => {
 		// Given
 		const { h, alice, ids, cos, a, b, c } = await aliceWithLinks();
