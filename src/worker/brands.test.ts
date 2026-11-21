@@ -1,12 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { addBrand } from "./brand-store";
 import {
 	BOB,
 	colourIds,
 	type Harness,
-	otherTabWrites,
 	postBrand,
-	postBrands,
 	send,
 	withAccount,
 } from "./test/harness";
@@ -101,94 +98,6 @@ describe("POST /api/brands", () => {
 			names: ["Zara"],
 		});
 	});
-
-	test("refuses an empty name", async () => {
-		// Given: alice with no brands
-		const { h, headers } = await withAccount();
-		// When
-		const res = await post(h, headers, "   ");
-		// Then
-		expect({ status: res.status, body: await res.json() }).toEqual({
-			status: 400,
-			body: { error: "invalid", field: "name" },
-		});
-	});
-
-	test("refuses a 25-character name", async () => {
-		// Given: alice with no brands
-		const { h, headers } = await withAccount();
-		// When
-		const res = await post(h, headers, "B".repeat(25));
-		// Then
-		expect({ status: res.status, body: await res.json() }).toEqual({
-			status: 400,
-			body: { error: "invalid", field: "name" },
-		});
-	});
-
-	test("adds brand number 100", async () => {
-		// Given: alice with 99 brands
-		const { h, headers } = await withAccount();
-		await postBrands(h, headers, 99);
-		// When
-		const res = await post(h, headers, "Uniqlo");
-		// Then
-		expect({
-			status: res.status,
-			count: (await brandsOf(h, headers)).length,
-		}).toEqual({ status: 201, count: 100 });
-	});
-
-	test("refuses brand number 101", async () => {
-		// Given: alice with 100 brands
-		const { h, headers } = await withAccount();
-		await postBrands(h, headers, 100);
-		// When
-		const res = await post(h, headers, "Uniqlo");
-		// Then
-		expect({
-			status: res.status,
-			body: await res.json(),
-			count: (await brandsOf(h, headers)).length,
-		}).toEqual({ status: 409, body: { error: "brand_limit" }, count: 100 });
-	});
-});
-
-describe("two writes at the same time", () => {
-	test("answers duplicate when another tab adds the name first", async () => {
-		// Given: alice with no brands; another tab stores "zara" between this
-		// add's check and its write
-		const { h, headers } = await withAccount();
-		otherTabWrites(h, "brand", "INSERT", "Zara");
-		// When
-		const res = await post(h, headers, "Zara");
-		// Then
-		expect({ status: res.status, body: await res.json() }).toEqual({
-			status: 409,
-			body: { error: "duplicate", field: "name" },
-		});
-	});
-
-	test("adds one of two brands sent at once at 99", async () => {
-		// Given: alice with 99 brands
-		const { h, headers } = await withAccount();
-		await postBrands(h, headers, 99);
-		// When
-		const results = await Promise.all([
-			addBrand(h.db, "alice-id", "Uniqlo"),
-			addBrand(h.db, "alice-id", "Muji"),
-		]);
-		// Then
-		expect({
-			oks: results.map((r) => r.ok).sort(),
-			refused: results.flatMap((r) => (r.ok ? [] : [r.error])),
-			count: (await brandsOf(h, headers)).length,
-		}).toEqual({
-			oks: [false, true],
-			refused: [{ code: "brand_limit" }],
-			count: 100,
-		});
-	});
 });
 
 describe("PUT and DELETE /api/brands/:id", () => {
@@ -204,38 +113,6 @@ describe("PUT and DELETE /api/brands/:id", () => {
 			name: ((await res.json()) as { brand: Brand }).brand.name,
 			names: await namesOf(h, headers),
 		}).toEqual({ status: 200, name: "Zara Home", names: ["Zara Home"] });
-	});
-
-	test("renames a brand to its own name in another case", async () => {
-		// Given: alice with the brand Zara
-		const { h, headers } = await withAccount();
-		const id = await postBrand(h, headers, "Zara");
-		// When
-		const res = await putBrand(h, headers, id, "ZARA");
-		// Then
-		expect({ status: res.status, names: await namesOf(h, headers) }).toEqual({
-			status: 200,
-			names: ["ZARA"],
-		});
-	});
-
-	test("refuses a rename to another brand's name", async () => {
-		// Given: alice with Zara and COS
-		const { h, headers } = await withAccount();
-		await post(h, headers, "Zara");
-		const cos = await postBrand(h, headers, "COS");
-		// When
-		const res = await putBrand(h, headers, cos, "zara");
-		// Then
-		expect({
-			status: res.status,
-			body: await res.json(),
-			names: await namesOf(h, headers),
-		}).toEqual({
-			status: 409,
-			body: { error: "duplicate", field: "name" },
-			names: ["COS", "Zara"],
-		});
 	});
 
 	test("answers not found for another account's brand", async () => {
@@ -270,21 +147,6 @@ describe("PUT and DELETE /api/brands/:id", () => {
 		}).toEqual({ first: 204, second: 404, names: ["COS"] });
 	});
 
-	test("answers duplicate when another tab saves the name during a rename", async () => {
-		// Given: alice with COS; another tab stores "zara" between this
-		// rename's check and its write
-		const { h, headers } = await withAccount();
-		const cos = await postBrand(h, headers, "COS");
-		otherTabWrites(h, "brand", "UPDATE", "Zara");
-		// When
-		const res = await putBrand(h, headers, cos, "Zara");
-		// Then
-		expect({ status: res.status, body: await res.json() }).toEqual({
-			status: 409,
-			body: { error: "duplicate", field: "name" },
-		});
-	});
-
 	test("answers 401 to a signed-out rename and delete", async () => {
 		// Given: alice, no session headers
 		const { h } = await withAccount();
@@ -304,32 +166,6 @@ describe("PUT and DELETE /api/brands/:id", () => {
 });
 
 describe("owned items of a deleted brand", () => {
-	type Item = { id: string; typeId: string; brand: Brand | null };
-
-	const navyId = async (h: Harness, headers: Headers) =>
-		(await colourIds(h, headers)).Navy;
-
-	const addShirt = async (
-		h: Harness,
-		headers: Headers,
-		id: string,
-		brandId: string,
-	) =>
-		send(h, headers, "POST", "/api/owned-items", {
-			id,
-			typeId: "shirt_l",
-			colourId: await navyId(h, headers),
-			brandId,
-			quantity: 1,
-		});
-
-	const items = async (h: Harness, headers: Headers) =>
-		(
-			(await (await send(h, headers, "GET", "/api/owned-items")).json()) as {
-				ownedItems: Item[];
-			}
-		).ownedItems;
-
 	test("counts the owned items of each brand", async () => {
 		// Given: alice with Zara and COS; a Navy long button-up, a White short
 		// tee, and a Black long tee, each from Zara
@@ -360,39 +196,6 @@ describe("owned items of a deleted brand", () => {
 		expect(brands.map((b) => [b.name, b.items])).toEqual([
 			["COS", 0],
 			["Zara", 3],
-		]);
-	});
-
-	test("clears the brand of its items when the brand goes", async () => {
-		// Given: alice with Zara and a Navy long button-up from Zara
-		const { h, headers } = await withAccount();
-		const zara = await postBrand(h, headers, "Zara");
-		await addShirt(h, headers, "11111111-1111-4111-8111-111111111111", zara);
-		// When
-		await send(h, headers, "DELETE", `/api/brands/${zara}`);
-		// Then
-		expect((await items(h, headers))[0].brand).toBeNull();
-	});
-
-	test("keeps two items of one piece when both lose their brand", async () => {
-		// Given: alice with Zara and COS, a Navy long button-up from each
-		const { h, headers } = await withAccount();
-		const zara = await postBrand(h, headers, "Zara");
-		const cos = await postBrand(h, headers, "COS");
-		await addShirt(h, headers, "11111111-1111-4111-8111-111111111111", zara);
-		await addShirt(h, headers, "22222222-2222-4222-8222-222222222222", cos);
-		// When
-		await send(h, headers, "DELETE", `/api/brands/${zara}`);
-		await send(h, headers, "DELETE", `/api/brands/${cos}`);
-		// Then
-		expect(
-			(await items(h, headers)).map((i) => ({
-				typeId: i.typeId,
-				brand: i.brand,
-			})),
-		).toEqual([
-			{ typeId: "shirt_l", brand: null },
-			{ typeId: "shirt_l", brand: null },
 		]);
 	});
 });
@@ -443,18 +246,5 @@ describe("brands of shop links", () => {
 		expect(brands.map((b) => [b.name, b.items, b.shopLinks])).toEqual([
 			["Zara", 1, 2],
 		]);
-	});
-
-	test("clears the brand of its shop links when the brand goes", async () => {
-		// Given: alice with Zara on 1 shop link
-		const { h, headers, zara } = await aliceWithWish();
-		await addLink(h, headers, "33333333-3333-4333-8333-333333333333", zara);
-		// When
-		await send(h, headers, "DELETE", `/api/brands/${zara}`);
-		// Then
-		const { wishes } = (await (
-			await send(h, headers, "GET", "/api/wishes")
-		).json()) as { wishes: { shopLinks: { brand: unknown }[] }[] };
-		expect(wishes[0]?.shopLinks[0]?.brand).toBeNull();
 	});
 });

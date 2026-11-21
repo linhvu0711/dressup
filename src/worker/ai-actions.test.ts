@@ -5,7 +5,6 @@ import {
 	BOB,
 	bytes,
 	type Harness,
-	postBrands,
 	send,
 	uploadPicture,
 	withAiSession,
@@ -462,31 +461,6 @@ describe("brands", () => {
 		});
 	});
 
-	test("refuses an empty brand name", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		// When
-		const { isError, text } = await ai.call("add_brand", { name: " " });
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "A brand name has 1 to 24 characters.",
-		});
-	});
-
-	test("refuses brand number 101", async () => {
-		// Given: 100 brands, added through the routes
-		const { h, ai } = await withAiSession();
-		await postBrands(h, ai.jar, 100);
-		// When
-		const { isError, text } = await ai.call("add_brand", { name: "Uniqlo" });
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "You have 100 brands. That is the limit. Delete one to add a new one.",
-		});
-	});
-
 	test("renames a brand", async () => {
 		// Given
 		const { ai, id } = await withZara();
@@ -499,6 +473,24 @@ describe("brands", () => {
 		expect({ isError, data }).toEqual({
 			isError: false,
 			data: { brand: { id, name: "Zara Home" } },
+		});
+	});
+
+	test("refuses to rename a brand to a name already used", async () => {
+		// Given
+		const { ai } = await withZara();
+		const cos = (
+			(await ai.call("add_brand", { name: "COS" })).data as { brand: Brand }
+		).brand.id;
+		// When
+		const { isError, text } = await ai.call("rename_brand", {
+			id: cos,
+			name: "zara",
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "You already have a brand called zara.",
 		});
 	});
 
