@@ -5,6 +5,7 @@ import { RequestError } from "@/data/client";
 import { BrandField, useBrandPick } from "@/labels/BrandField";
 import { PICTURES_LABEL, PictureSlots } from "@/pictures/PictureSlots";
 import { usePictureSlots } from "@/pictures/usePictureSlots";
+import { typedPrice } from "@/price";
 import { useAddShopLink, useChangeShopLink, useDeleteShopLink } from "./api";
 import {
 	ADDRESS_MAX,
@@ -13,7 +14,6 @@ import {
 	type ShopLink,
 	type ShopLinkId,
 	shopName,
-	typedPrice,
 	type WishId,
 } from "./wish";
 

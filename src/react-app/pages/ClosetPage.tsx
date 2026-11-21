@@ -1,28 +1,25 @@
 import { useCloset } from "@/closet/api";
+import { ItemCard, ItemCardSkeleton } from "@/closet/ItemCard";
 import { OwnedItemSheet } from "@/closet/OwnedItemSheet";
-import { closetPieces } from "@/closet/owned-item";
 import { PieceTabPage } from "@/closet/PieceTabPage";
-import { pieceName } from "@/combinations/combination";
-import { pieceKey } from "@/combinations/marks";
-import { closetPiece } from "@/piece-filter/piece-filter";
+import { PartError } from "@/components/ui/part-error";
+import { ownedItemPiece } from "@/piece-filter/piece-filter";
 
-// The pieces the account owns, one tile for each, the piece of the newest
-// item first.
+// The items the account owns, one card for each, newest first.
 export function ClosetPage() {
 	return (
 		<PieceTabPage
 			title="Closet"
-			tab="/closet"
 			slot="closet"
 			query={useCloset()}
-			entries={closetPieces}
-			toPiece={closetPiece}
-			tile={(piece) => ({
-				key: pieceKey(piece),
-				label: `${pieceName(piece)}, ${piece.quantity}`,
-				badge: piece.quantity,
-			})}
-			failedTitle="Could not load your closet"
+			entries={(items) => items}
+			toPiece={ownedItemPiece}
+			card={(item) => <ItemCard key={item.id} item={item} />}
+			skeleton={<ItemCardSkeleton />}
+			failed={(retry) => (
+				<PartError onRetry={retry}>Could not load your closet.</PartError>
+			)}
+			unit="item"
 			empty={{ title: "Nothing in your closet yet" }}
 			addLabel="Add to closet"
 			addSheet={(close) => <OwnedItemSheet mode="add" onClose={close} />}

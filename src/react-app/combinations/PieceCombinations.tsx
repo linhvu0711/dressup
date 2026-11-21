@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import { useId } from "react";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
@@ -8,13 +9,17 @@ import { type CombinationFilter, filterCombinations } from "./filter";
 import { NO_PIECES, type PieceRef } from "./marks";
 import { wallAddress } from "./wall-address";
 
-// The part shows one row of cards, as the piece page's picture does.
-const SHOWN = 4;
-
-// The piece page's part for the combinations that hold the piece, newest
-// first, with See all to the wall filtered by the piece. A piece in no
-// combination has no part.
-export function PieceCombinations({ piece }: { piece: PieceRef }) {
+// The part for the combinations that hold the piece, newest first, in one
+// row, with See all to the wall filtered by the piece. A piece in no
+// combination has no part. A phone always shows four; wideColumns is for a
+// wide page with room for a fifth.
+export function PieceCombinations({
+	piece,
+	wideColumns = 4,
+}: {
+	piece: PieceRef;
+	wideColumns?: 4 | 5;
+}) {
 	const title = useId();
 	const combinations = useCombinations();
 	// A failed first load has no data: retry is off for every list.
@@ -46,10 +51,23 @@ export function PieceCombinations({ piece }: { piece: PieceRef }) {
 					<Link to={wallAddress(filter)}>See all {held.length}</Link>
 				</Button>
 			</div>
-			<div className="grid grid-cols-4 gap-2.5">
-				{held.slice(0, SHOWN).map((c) => (
-					<CombinationCard key={c.id} combination={c} />
-				))}
+			<div
+				className={cn(
+					"grid grid-cols-4 gap-2.5",
+					wideColumns === 5 && "wide:grid-cols-5",
+				)}
+			>
+				{held.slice(0, wideColumns).map((c, i) =>
+					// CombinationCard takes no className, so a wrapper hides the
+					// fifth on a phone.
+					i < 4 ? (
+						<CombinationCard key={c.id} combination={c} />
+					) : (
+						<div key={c.id} className="hidden wide:block">
+							<CombinationCard combination={c} />
+						</div>
+					),
+				)}
 			</div>
 		</section>
 	);

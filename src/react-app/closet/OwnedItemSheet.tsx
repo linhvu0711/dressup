@@ -9,11 +9,13 @@ import { limitText } from "@/count-text";
 import { RequestError } from "@/data/client";
 import type { TypeId } from "@/dress/clothing-types";
 import { TypeFigure } from "@/dress/figure/TypeFigure";
+import { useColours } from "@/labels/api";
 import { BrandField, useBrandPick } from "@/labels/BrandField";
 import { ColourSwatches } from "@/labels/ColourSwatches";
 import type { ColourId } from "@/labels/colour";
 import { PICTURES_LABEL, PictureSlots } from "@/pictures/PictureSlots";
 import { usePictureSlots } from "@/pictures/usePictureSlots";
+import { typedPrice } from "@/price";
 import {
 	useAddOwnedItem,
 	useChangeOwnedItem,
@@ -22,6 +24,7 @@ import {
 } from "./api";
 import {
 	OWNED_ITEM_LIMIT,
+	OWNED_ITEM_NAME_MAX,
 	type OwnedItem,
 	type OwnedItemId,
 	QUANTITY_MAX,
@@ -29,13 +32,16 @@ import {
 import { TypeField, TypeOptions } from "./TypeOptions";
 
 // What the form says under its fields.
-type Problem = "full" | "duplicate" | "failed";
+type Problem = "full" | "failed";
 
 const PROBLEM_TEXT: Record<Problem, string> = {
 	full: limitText(OWNED_ITEM_LIMIT, "items"),
-	duplicate: "You have this item already. Change its number.",
 	failed: "Not saved. Try again.",
 };
+
+// The server's own texts for a name or a price it refuses.
+const NAME_CUT = `Name is at most ${OWNED_ITEM_NAME_MAX} characters.`;
+const PRICE_CUT = "Price is a whole number of VND from 1 to 999.999.999.";
 
 // The form to add an owned item, a type, a colour, a brand, and a quantity,
 // or to change the brand and quantity of the one it is given.
@@ -52,6 +58,26 @@ export function OwnedItemSheet(
 		editing?.colour.id,
 	);
 	const [quantity, setQuantity] = useState(String(editing?.quantity ?? 1));
+	// Set straight, not through panel.change: a change there takes a new id in
+	// the add form, and a Save again after a lost answer must keep the id, so
+	// the server saves the name and price sent last.
+	const [name, setName] = useState(editing?.name ?? "");
+	const [nameCut, setNameCut] = useState(false);
+	const [price, setPrice] = useState(() =>
+		typedPrice(String(editing?.price ?? "")),
+	);
+	// The text a paste or a drop puts in, for the change it makes. The browser
+	// makes that change before the next task, so the text is dropped then: a
+	// paste that changes nothing, as of an image, leaves none behind.
+	const put = useRef<string | undefined>(undefined);
+	const inserted = (text: string) => {
+		put.current = text;
+		setTimeout(() => {
+			put.current = undefined;
+		});
+	};
+	const colours = useColours();
+	const colour = colours.data?.find((c) => c.id === colourId);
 	const slots = usePictureSlots(editing?.pictureIds ?? []);
 	const first = useRef<HTMLButtonElement>(null);
 	const closet = useCloset();
@@ -80,25 +106,32 @@ export function OwnedItemSheet(
 		sent.error instanceof RequestError && sent.error.code === "picture_limit";
 	const problem: Problem | null = full
 		? "full"
-		: sent.error instanceof RequestError && sent.error.code === "duplicate"
-			? "duplicate"
-			: sent.isError && !limitHit
-				? "failed"
-				: null;
+		: sent.isError && !limitHit
+			? "failed"
+			: null;
 	const save = async () => {
 		if (!typeId || !colourId || full || sent.isPending || slots.saving) return;
 		const n = Math.max(1, count);
 		const pictureIds = await slots.settle();
 		if (pictureIds === null) return;
 		const { brandId } = brand;
+		const named = { name: name.trim() || null, price: price.value };
 		if (editing)
 			update.mutate(
-				{ id: panel.id, brandId, quantity: n, pictureIds },
+				{ id: panel.id, brandId, quantity: n, ...named, pictureIds },
 				{ onSuccess: () => panel.done("Changes saved") },
 			);
 		else
 			add.mutate(
-				{ id: panel.id, typeId, colourId, brandId, quantity: n, pictureIds },
+				{
+					id: panel.id,
+					typeId,
+					colourId,
+					brandId,
+					quantity: n,
+					...named,
+					pictureIds,
+				},
 				{ onSuccess: () => panel.done("Added to your closet") },
 			);
 	};
@@ -152,6 +185,22 @@ export function OwnedItemSheet(
 					</Field>
 				</>
 			)}
+			<Field label="Name" problem={nameCut ? NAME_CUT : undefined}>
+				<input
+					aria-label="Name"
+					autoComplete="off"
+					placeholder={
+						typeId && colour ? pieceName({ typeId, colour }) : undefined
+					}
+					value={name}
+					onChange={(e) => {
+						const typed = e.target.value;
+						setName(typed.slice(0, OWNED_ITEM_NAME_MAX));
+						setNameCut(typed.length > OWNED_ITEM_NAME_MAX);
+					}}
+					className={INPUT}
+				/>
+			</Field>
 			<BrandField pick={brand} ref={editing ? first : undefined} />
 			<Field label="Quantity">
 				<div className="flex items-center gap-2">
@@ -189,6 +238,39 @@ export function OwnedItemSheet(
 					>
 						<Plus size={16} strokeWidth={1.9} aria-hidden />
 					</Button>
+				</div>
+			</Field>
+			<Field label="Price paid" problem={price.cut ? PRICE_CUT : undefined}>
+				<div className="flex items-center gap-2">
+					<input
+						aria-label="Price paid"
+						inputMode="numeric"
+						autoComplete="off"
+						value={price.shown}
+						onPaste={(e) => inserted(e.clipboardData.getData("text"))}
+						onDrop={(e) => inserted(e.dataTransfer.getData("text"))}
+						onChange={(e) => {
+							// A drag deletes, then drops; a reformat between the two loses
+							// where a drop back into the field goes. The price follows the
+							// text, for a drag out of the field.
+							if ((e.nativeEvent as InputEvent).inputType === "deleteByDrag") {
+								setPrice({
+									...typedPrice(e.target.value),
+									shown: e.target.value,
+								});
+								// A drop back into the field comes before the next task; after
+								// a drag out, the text left gets its dots then.
+								setTimeout(() =>
+									setPrice((now) => ({
+										...now,
+										shown: typedPrice(now.shown).shown,
+									})),
+								);
+							} else setPrice(typedPrice(e.target.value, put.current));
+						}}
+						className={cn(INPUT, "min-w-0 flex-1")}
+					/>
+					<span aria-hidden>₫</span>
 				</div>
 			</Field>
 			<Field label={PICTURES_LABEL}>
