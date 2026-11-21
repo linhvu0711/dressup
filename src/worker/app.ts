@@ -32,6 +32,7 @@ import { tagIdSchema } from "@/tags/tag";
 import type { ActionScope } from "./actions/action";
 import { brandActions } from "./actions/brands";
 import { colourActions } from "./actions/colours";
+import { combinationActions } from "./actions/combinations";
 import { tagActions } from "./actions/tags";
 import { disconnectAiApp, listAiApps } from "./ai-app-store";
 import {
@@ -51,13 +52,7 @@ import {
 } from "./auth";
 import { listBrands } from "./brand-store";
 import { listColours } from "./colour-store";
-import {
-	type CombinationError,
-	changeCombination,
-	deleteCombination,
-	listCombinations,
-	saveCombination,
-} from "./combination-store";
+import { listCombinations } from "./combination-store";
 import type { Db } from "./db";
 import { user } from "./db/auth-schema";
 import { loadMannequin, setMannequinColour } from "./mannequin-store";
@@ -133,37 +128,6 @@ type Refusal = {
 	status: ContentfulStatusCode;
 	body: ErrorAnswer;
 };
-
-// Only the JSON shape: the Combinations module runs the combination rules.
-const combinationBodySchema = z.object({
-	id: z.string(),
-	pieces: z.array(z.object({ typeId: z.string(), colourId: z.string() })),
-	tags: z.array(z.string()).optional(),
-});
-
-function combinationRefusal(error: CombinationError): Refusal {
-	switch (error.code) {
-		case "not_type":
-		case "not_colour":
-		case "not_tag":
-		case "too_many_tags":
-		case "pieces_count":
-		case "same_layer":
-		case "invalid":
-			return {
-				status: 400,
-				body: { error: "invalid", field: issueField(error.path) },
-			};
-		case "conflict":
-			return { status: 409, body: { error: "conflict", field: "id" } };
-		case "duplicate":
-			return { status: 409, body: { error: "duplicate", id: error.id } };
-		case "combination_limit":
-			return { status: 409, body: { error: "combination_limit" } };
-		case "not_found":
-			return { status: 404, body: { error: "not_found" } };
-	}
-}
 
 // Only the JSON shape: the Closet module runs the owned item rules.
 const ownedItemBodySchema = z.object({
@@ -402,17 +366,10 @@ export function createApp(getDb: (env: Env) => Db) {
 	);
 
 	app.post("/combinations", withAuth, requireUser, async (c) => {
-		const body = await readBody(c, combinationBodySchema);
+		const body = await readBody(c, combinationActions.save.input);
 		if (!body.ok) return invalid(c, body.error.field);
-		const saved = await saveCombination(
-			getDb(c.env),
-			c.var.user.id,
-			body.value,
-		);
-		if (!saved.ok) {
-			const { status, body: refused } = combinationRefusal(saved.error);
-			return c.json(refused, status);
-		}
+		const saved = await combinationActions.save.run(scope(c), body.value);
+		if (!saved.ok) return c.json(saved.error.body, saved.error.status);
 		const { combination, created } = saved.value;
 		return c.json(
 			{ combination } satisfies CombinationAnswer,
@@ -423,31 +380,19 @@ export function createApp(getDb: (env: Env) => Db) {
 	// A gone combination and another account's combination answer the same
 	// 404, so ids of other accounts cannot be told from missing ones.
 	app.put("/combinations/:id", withAuth, requireUser, async (c) => {
-		const body = await readBody(c, combinationBodySchema);
+		const body = await readBody(c, combinationActions.change.input);
 		if (!body.ok) return invalid(c, body.error.field);
-		const id = c.req.param("id");
-		if (body.value.id !== id) return invalid(c, "id");
-		const changed = await changeCombination(getDb(c.env), c.var.user.id, id, {
-			pieces: body.value.pieces,
-			tags: body.value.tags,
-		});
-		if (!changed.ok) {
-			const { status, body: refused } = combinationRefusal(changed.error);
-			return c.json(refused, status);
-		}
+		if (body.value.id !== c.req.param("id")) return invalid(c, "id");
+		const changed = await combinationActions.change.run(scope(c), body.value);
+		if (!changed.ok) return c.json(changed.error.body, changed.error.status);
 		return c.json({ combination: changed.value } satisfies CombinationAnswer);
 	});
 
 	app.delete("/combinations/:id", withAuth, requireUser, async (c) => {
-		const deleted = await deleteCombination(
-			getDb(c.env),
-			c.var.user.id,
-			c.req.param("id"),
-		);
-		if (!deleted.ok) {
-			const { status, body: refused } = combinationRefusal(deleted.error);
-			return c.json(refused, status);
-		}
+		const deleted = await combinationActions.delete.run(scope(c), {
+			id: c.req.param("id"),
+		});
+		if (!deleted.ok) return c.json(deleted.error.body, deleted.error.status);
 		return c.body(null, 204);
 	});
 

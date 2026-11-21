@@ -2,13 +2,21 @@ import { describe, expect, test } from "bun:test";
 import { saveCombination } from "./combination-store";
 import { combinationPiece } from "./db/combination-schema";
 import {
+	beigeChinos,
+	FIRST_ID,
+	greyPants,
+	SECOND_ID,
+	THIRD_ID,
+	three,
+	two,
+} from "./test/combination-pieces";
+import {
 	ALICE,
 	alice,
 	answer,
 	BOB,
 	colourIds,
 	type Harness,
-	type Ids,
 	makeHarness,
 	send,
 } from "./test/harness";
@@ -33,30 +41,6 @@ const list = async (h: Harness, headers: Headers) =>
 		}
 	).combinations;
 
-const FIRST_ID = "11111111-1111-4111-8111-111111111111";
-const SECOND_ID = "22222222-2222-4222-8222-222222222222";
-
-// Khaki Harrington jacket + Black long tee + Navy casual pants.
-const three = (ids: Ids) => ({
-	id: FIRST_ID,
-	pieces: [
-		{ typeId: "harrington", colourId: ids.Khaki },
-		{ typeId: "tee_l", colourId: ids.Black },
-		{ typeId: "casual_p", colourId: ids.Navy },
-	],
-});
-
-// White short tee + Grey training shorts.
-const two = (ids: Ids) => ({
-	id: SECOND_ID,
-	pieces: [
-		{ typeId: "train_sh", colourId: ids.Grey },
-		{ typeId: "tee_s", colourId: ids.White },
-	],
-});
-
-const THIRD_ID = "33333333-3333-4333-8333-333333333333";
-
 // Each piece of a listed combination as its type and colour name, bottom
 // layer first.
 const piecesOf = (listed: Listed | undefined) =>
@@ -64,22 +48,6 @@ const piecesOf = (listed: Listed | undefined) =>
 
 const put = (h: Harness, headers: Headers, id: string, body: unknown) =>
 	send(h, headers, "PUT", `/api/combinations/${id}`, body);
-
-// THREE with Grey casual pants in place of Navy.
-const greyPants = (ids: Ids) => ({
-	...three(ids),
-	pieces: [
-		{ typeId: "harrington", colourId: ids.Khaki },
-		{ typeId: "tee_l", colourId: ids.Black },
-		{ typeId: "casual_p", colourId: ids.Grey },
-	],
-});
-
-// Beige chino pants and a White long tee: the pieces the races change into.
-const beigeChinos = (ids: Ids) => [
-	{ typeId: "chino_p", colourId: ids.Beige },
-	{ typeId: "tee_l", colourId: ids.White },
-];
 
 describe("POST /api/combinations", () => {
 	test("saves a combination and lists it", async () => {

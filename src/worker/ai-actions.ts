@@ -33,14 +33,23 @@ import {
 } from "@/piece-filter/piece-filter";
 import { TAG_NAME_MAX, type Tag } from "@/tags/tag";
 import { SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";
-import type { ActionScope } from "./actions/action";
+import {
+	type ActionScope,
+	notAType,
+	notYourColour,
+	serverError,
+} from "./actions/action";
 import { brandActions } from "./actions/brands";
 import { colourActions } from "./actions/colours";
+import {
+	combinationActions,
+	combinationRefusalText,
+	tags,
+} from "./actions/combinations";
 import { tagActions } from "./actions/tags";
 import { countAiAction } from "./ai-action-store";
 import {
 	boughtRefusalText,
-	combinationRefusalText,
 	noBrands,
 	noColours,
 	noCombinations,
@@ -49,25 +58,17 @@ import {
 	noOwnedItems,
 	noPicture,
 	noTags,
-	notAType,
 	notYourBrand,
-	notYourColour,
 	noWishes,
 	noWishMatch,
 	ownedItemRefusalText,
-	serverError,
 	tooManyActions,
 	uploadAddressText,
 	wishRefusalText,
 } from "./ai-messages";
 import { listBrands } from "./brand-store";
 import { listColours } from "./colour-store";
-import {
-	changeCombination,
-	deleteCombination,
-	findCombinations,
-	saveCombination,
-} from "./combination-store";
+import { findCombinations } from "./combination-store";
 import type { Db } from "./db";
 import {
 	addOwnedItem,
@@ -147,7 +148,6 @@ const holdingsFor = async (db: Db, userId: string) => {
 const noArgs = z.object({});
 
 const field = {
-	tags: z.array(z.string()).describe("Tag ids."),
 	types: z
 		.array(z.string())
 		.optional()
@@ -162,12 +162,6 @@ const field = {
 		.describe(
 			"Brand ids from list_brands, and null for no brand. Any of them matches.",
 		),
-	pieces: z.array(
-		z.object({
-			typeId: z.string().describe("A type id from list_types, such as tee_l."),
-			colourId: z.string().describe("A colour id from list_colours."),
-		}),
-	),
 	// Loose strings on purpose, as add_owned_item: a list of 9 must reach the
 	// store to get a sentence.
 	pictureIds: z
@@ -489,7 +483,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 					.describe(
 						"Piece rows. A combination is listed when, for each row, one of its pieces has the row's type and colour; a row may give only one of the two.",
 					),
-				tags: field.tags
+				tags: tags
 					.optional()
 					.describe(
 						"Tag ids from list_tags. A combination is listed when it carries every one.",
@@ -532,19 +526,16 @@ export function registerAiActions(server: McpServer, account: Account) {
 			title: "Save a combination",
 			description: `Saves a combination of 2 to 4 pieces, at most one for each layer. A piece is a type id from list_types and a colour id from list_colours. An account keeps each combination once and at most ${COMBINATION_LIMIT} combinations. tags is a list of tag ids from list_tags; each must be one of your tags, at most ${COMBINATION_TAGS_MAX}.`,
 			annotations: WRITE,
-			inputSchema: z.object({
-				pieces: field.pieces,
-				tags: field.tags.optional(),
-			}),
+			inputSchema: combinationActions.save.input.omit({ id: true }),
 		},
 		async ({ pieces, tags = [] }) => {
 			// The server makes the id, so a save sent twice makes two combinations.
-			const saved = await saveCombination(db, userId, {
+			const saved = await combinationActions.save.run(scope, {
 				id: crypto.randomUUID(),
 				pieces,
 				tags,
 			});
-			if (!saved.ok) return refusal(combinationRefusalText(saved.error));
+			if (!saved.ok) return refusal(saved.error.text);
 			const [accountTags, holdings] = await Promise.all([
 				listTags(db, userId),
 				holdingsFor(db, userId),
@@ -566,18 +557,11 @@ export function registerAiActions(server: McpServer, account: Account) {
 			description:
 				"Changes a saved combination's pieces. The pieces given replace all of its pieces: 2 to 4, at most one for each layer. It keeps its id and its place in the list. tags given replace its tags; left out, they stay.",
 			annotations: WRITE,
-			inputSchema: z.object({
-				id: z.string().describe("The combination's id."),
-				pieces: field.pieces,
-				tags: field.tags.optional(),
-			}),
+			inputSchema: combinationActions.change.input,
 		},
-		async ({ id, pieces, tags }) => {
-			const changed = await changeCombination(db, userId, id, {
-				pieces,
-				tags,
-			});
-			if (!changed.ok) return refusal(combinationRefusalText(changed.error));
+		async (input) => {
+			const changed = await combinationActions.change.run(scope, input);
+			if (!changed.ok) return refusal(changed.error.text);
 			const [accountTags, holdings] = await Promise.all([
 				listTags(db, userId),
 				holdingsFor(db, userId),
@@ -594,15 +578,13 @@ export function registerAiActions(server: McpServer, account: Account) {
 			title: "Delete a combination",
 			description: "Deletes a saved combination for good.",
 			annotations: DELETE,
-			inputSchema: z.object({
-				id: z.string().describe("The combination's id."),
-			}),
+			inputSchema: combinationActions.delete.input,
 		},
-		async ({ id }) => {
-			const deleted = await deleteCombination(db, userId, id);
+		async (input) => {
+			const deleted = await combinationActions.delete.run(scope, input);
 			return deleted.ok
-				? answer({ deleted: id })
-				: refusal(combinationRefusalText(deleted.error));
+				? answer({ deleted: input.id })
+				: refusal(deleted.error.text);
 		},
 	);
 

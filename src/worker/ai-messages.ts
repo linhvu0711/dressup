@@ -1,49 +1,13 @@
-import type { z } from "zod";
 import { OWNED_ITEM_LIMIT, QUANTITY_MAX } from "@/closet/owned-item";
-import {
-	COMBINATION_LIMIT,
-	COMBINATION_TAGS_MAX,
-} from "@/combinations/combination";
-import { LAYER_NAMES, TYPE_NAMES } from "@/dress/clothing-types";
 import { ACCOUNT_PICTURE_LIMIT, ITEM_PICTURE_LIMIT } from "@/pictures/picture";
 import { PRICE_MAX, SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";
-import type { CombinationError } from "./combination-store";
+import { notAType, notYourColour, serverError } from "./actions/action";
 import type { BoughtError, OwnedItemError } from "./owned-item-store";
 import { UPLOAD_ADDRESS_AGE_MS } from "./upload-address-store";
 import type { WishError } from "./wish-store";
 
 // Every refusal an AI app gets names the value it sent and what is allowed,
 // so the AI app can fix its call and try again.
-
-const issueText = (issue: z.core.$ZodIssue): string =>
-	`${issue.path.map(String).join(".")} is not valid.`;
-
-export function combinationRefusalText(error: CombinationError): string {
-	switch (error.code) {
-		case "pieces_count":
-			return "A combination has 2 to 4 pieces.";
-		case "same_layer":
-			return `${TYPE_NAMES[error.other]} and ${TYPE_NAMES[error.typeId]} are both in the ${LAYER_NAMES[error.layer].toLowerCase()} layer. A combination has at most one piece for each layer.`;
-		case "not_type":
-			return notAType(error.value);
-		case "not_colour":
-			return notYourColour(error.value);
-		case "not_tag":
-			return `${error.value} is not one of your tags. list_tags names them.`;
-		case "too_many_tags":
-			return `A combination has at most ${COMBINATION_TAGS_MAX} tags.`;
-		case "duplicate":
-			return `You have this combination already, with id ${error.id}.`;
-		case "combination_limit":
-			return `You have ${COMBINATION_LIMIT} combinations. That is the limit.`;
-		case "invalid":
-			return issueText(error.issue);
-		case "not_found":
-			return noCombination;
-		case "conflict":
-			return serverError;
-	}
-}
 
 // The sentence for one bad field of an owned item, with the value sent.
 function ownedItemFieldText(
@@ -144,8 +108,6 @@ export function wishRefusalText(
 	}
 }
 
-export const serverError = "dressup could not do this. Try again.";
-
 export const tooManyActions = "Too many actions. Wait a minute and try again.";
 
 export const addressGone =
@@ -168,8 +130,6 @@ export const notStored =
 export const uploadAddressText = (address: string) =>
 	`Send the picture within ${UPLOAD_ADDRESS_AGE_MS / 60_000} minutes, once: curl -X POST --data-binary @photo.jpg ${address}. It answers with the picture's id.`;
 
-const noCombination = "No combination with this id.";
-
 export const noPicture = "No picture with this id.";
 
 export const noTags = "You have no tags yet.";
@@ -181,12 +141,6 @@ export const noCombinations = "You have no combinations yet.";
 export const noCombinationsMatch = "No combination matches these filters.";
 
 export const noBrands = "You have no brands yet.";
-
-export const notAType = (value: unknown) =>
-	`${value} is not a type. list_types names the types.`;
-
-export const notYourColour = (value: unknown) =>
-	`${value} is not one of your colours. list_colours names them.`;
 
 export const notYourBrand = (value: unknown) =>
 	`${value} is not one of your brands. list_brands names them.`;

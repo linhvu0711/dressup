@@ -50,3 +50,11 @@ export function action<S extends z.ZodObject, T, E extends { code: string }>(
 
 export const issueField = (path: readonly PropertyKey[]) =>
 	path.length === 0 ? "body" : path.map(String).join(".");
+
+export const serverError = "dressup could not do this. Try again.";
+
+export const notAType = (value: unknown) =>
+	`${value} is not a type. list_types names the types.`;
+
+export const notYourColour = (value: unknown) =>
+	`${value} is not one of your colours. list_colours names them.`;
