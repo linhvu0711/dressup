@@ -72,9 +72,11 @@ export async function pieceFilterOf(
 			return { ok: false, error: { code: "not_colour", value: bad } };
 	}
 	if (brandIds.some((id) => id !== null)) {
-		const brands = await listBrands(db, userId);
+		const brands = new Set<string>(
+			(await listBrands(db, userId)).map((b) => b.id),
+		);
 		const bad = brandIds.find(
-			(id): id is string => id !== null && !brands.some((b) => b.id === id),
+			(id): id is string => id !== null && !brands.has(id),
 		);
 		if (bad !== undefined)
 			return { ok: false, error: { code: "not_brand", value: bad } };
