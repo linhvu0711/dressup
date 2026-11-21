@@ -250,10 +250,14 @@ export function OwnedItemSheet(
 						onPaste={(e) => inserted(e.clipboardData.getData("text"))}
 						onDrop={(e) => inserted(e.dataTransfer.getData("text"))}
 						onChange={(e) => {
-							// A drag within the field deletes, then drops; a reformat
-							// between the two loses where the drop goes.
+							// A drag deletes, then drops; a reformat between the two loses
+							// where a drop back into the field goes. The price follows the
+							// text, for a drag out of the field.
 							if ((e.nativeEvent as InputEvent).inputType === "deleteByDrag")
-								setPrice({ ...price, shown: e.target.value });
+								setPrice({
+									...typedPrice(e.target.value),
+									shown: e.target.value,
+								});
 							else setPrice(typedPrice(e.target.value, put.current));
 						}}
 						className={cn(INPUT, "min-w-0 flex-1")}

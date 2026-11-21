@@ -478,16 +478,13 @@ test("shows the price message for a pasted decimal price", async ({ page }) => {
 	});
 });
 
-test("moves dragged digits within the price to where they are dropped", async ({
-	page,
-}) => {
-	// Given: a fresh account, Add to closet open, "123.456" in Price paid,
-	// its "456" selected
-	await openAddSheet(page);
+// Where the price's "123." ends and its "456" sits, with "123.456" typed and
+// "456" selected, so the mouse can drag the selection.
+async function selectedPriceDigits(page: Page) {
 	const price = addSheet(page).getByLabel("Price paid");
 	await price.pressSequentially("123456");
 	await price.evaluate((el: HTMLInputElement) => el.setSelectionRange(4, 7));
-	const at = await price.evaluate((el: HTMLInputElement) => {
+	return price.evaluate((el: HTMLInputElement) => {
 		const style = getComputedStyle(el);
 		const context = document.createElement("canvas").getContext("2d");
 		if (!context) throw new Error("no canvas");
@@ -496,18 +493,68 @@ test("moves dragged digits within the price to where they are dropped", async ({
 		const left = box.left + Number.parseFloat(style.paddingLeft);
 		const x = (text: string) => left + context.measureText(text).width;
 		return {
-			from: (x("123.") + x("123.456")) / 2,
-			to: x("1") + 1,
+			selected: (x("123.") + x("123.456")) / 2,
+			afterOne: x("1") + 1,
 			y: box.top + box.height / 2,
 		};
 	});
-	// When: the selection is dragged to just after the first "1"
-	await page.mouse.move(at.from, at.y);
+}
+
+async function drag(
+	page: Page,
+	from: { x: number; y: number },
+	to: { x: number; y: number },
+) {
+	await page.mouse.move(from.x, from.y);
 	await page.mouse.down();
-	await page.mouse.move(at.to, at.y, { steps: 10 });
+	await page.mouse.move(to.x, to.y, { steps: 10 });
 	await page.mouse.up();
+}
+
+test("moves dragged digits within the price to where they are dropped", async ({
+	page,
+}) => {
+	// Given: a fresh account, Add to closet open, "123.456" in Price paid,
+	// its "456" selected
+	await openAddSheet(page);
+	const at = await selectedPriceDigits(page);
+	// When: the selection is dragged to just after the first "1"
+	await drag(page, { x: at.selected, y: at.y }, { x: at.afterOne, y: at.y });
 	// Then
-	await expect(price).toHaveValue("145.623");
+	await expect(addSheet(page).getByLabel("Price paid")).toHaveValue("145.623");
+});
+
+test("saves the price left after its digits are dragged out", async ({
+	page,
+}) => {
+	// Given: a fresh account, Add to closet open on a Navy long button-up,
+	// "123.456" in Price paid, its "456" selected
+	await openAddSheet(page);
+	await addSheet(page).getByRole("button", { name: "Pick a type" }).click();
+	await sheet(page, "Pick a type")
+		.getByRole("button", { name: "Long button-up", exact: true })
+		.click();
+	await addSheet(page)
+		.getByRole("radiogroup", { name: "Colour" })
+		.getByRole("radio", { name: "Navy", exact: true })
+		.click();
+	const at = await selectedPriceDigits(page);
+	const name = await addSheet(page).getByLabel("Name").boundingBox();
+	if (!name) throw new Error("no Name field");
+	// When: the selection is dragged into Name, then Save
+	await drag(
+		page,
+		{ x: at.selected, y: at.y },
+		{ x: name.x + name.width / 2, y: name.y + name.height / 2 },
+	);
+	await addSheet(page).getByRole("button", { name: "Save" }).click();
+	// Then
+	await expect(
+		page.getByRole("link", {
+			name: "456, Navy long button-up, 123 ₫",
+			exact: true,
+		}),
+	).toBeVisible();
 });
 
 test("stops the price at 999.999.999 with its message", async ({ page }) => {
