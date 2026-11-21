@@ -32,6 +32,7 @@ import { countAiAction } from "./ai-action-store";
 import { listBrands } from "./brand-store";
 import { listColours } from "./colour-store";
 import type { Db } from "./db";
+import { loadMannequin } from "./mannequin-store";
 import { listOwnedPieces } from "./owned-item-store";
 import { listTags } from "./tag-store";
 import {
@@ -685,6 +686,18 @@ export function registerAiActions(server: McpServer, account: Account) {
 				],
 			};
 		},
+	);
+
+	tool(
+		"show_mannequin",
+		{
+			title: "Show the mannequin",
+			description:
+				"The skin and hair colours of the mannequin that wears the combinations. A new account has the starter colours.",
+			annotations: READ,
+			inputSchema: noArgs,
+		},
+		async () => answer({ mannequin: await loadMannequin(db, userId) }),
 	);
 
 	tool(

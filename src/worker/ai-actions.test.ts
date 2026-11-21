@@ -74,6 +74,7 @@ describe("tags", () => {
 			["mark_shop_link_bought", D],
 			["get_upload_address", W],
 			["show_picture", R],
+			["show_mannequin", R],
 			["set_mannequin_colour", W],
 		]);
 		expect(listed.every((t) => typeof t.title === "string")).toBe(true);
@@ -494,6 +495,19 @@ describe("mannequin", () => {
 		});
 	});
 
+	test("shows the colour an AI app set", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		await ai.call("set_mannequin_colour", { part: "skin", hex: "#8D5524" });
+		// When
+		const { isError, data } = await ai.call("show_mannequin");
+		// Then
+		expect({ isError, data }).toEqual({
+			isError: false,
+			data: { mannequin: { skin: "#8D5524", hair: "#141418" } },
+		});
+	});
+
 	test("refuses a mannequin colour that is not a colour code", async () => {
 		// Given
 		const { h, ai } = await withAiSession();
@@ -610,6 +624,18 @@ describe("AI action limit", () => {
 			isError: true,
 			text: "Too many actions. Wait a minute and try again.",
 			shown: { mannequin: { skin: "#D6A27B", hair: "#141418" } },
+		});
+	});
+
+	test("refuses show_mannequin as the 61st AI action", async () => {
+		// Given
+		const { ai } = await sixtyActions();
+		// When
+		const { isError, text } = await ai.call("show_mannequin");
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "Too many actions. Wait a minute and try again.",
 		});
 	});
 
