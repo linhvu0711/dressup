@@ -92,6 +92,27 @@ test("shows an item's pictures, name, brand, price, facts, and actions", async (
 	});
 });
 
+test("opens the item page from its card", async ({ page }) => {
+	// Given: White short tee, no brand, 1, named "Plain tee"
+	await page.goto("/");
+	const ids = await colourIds(page);
+	const [id] = await postOwnedItems(page, {
+		typeId: "tee_s",
+		colourId: ids.White,
+		brandId: null,
+		quantity: 1,
+		name: "Plain tee",
+	});
+	await page.goto("/closet");
+	// When
+	await page
+		.getByRole("link", { name: "Plain tee, White short tee", exact: true })
+		.click();
+	// Then
+	await expect(page).toHaveURL(`/closet/${id}`);
+	await expect(page.getByRole("heading", { name: "Plain tee" })).toBeVisible();
+});
+
 test("shows the tapped thumbnail large", async ({ page }) => {
 	// Given: the Oxford shirt's page open
 	const { id, pictures } = await postOxfordShirt(page);
