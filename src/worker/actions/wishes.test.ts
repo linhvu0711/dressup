@@ -534,6 +534,26 @@ describe("adding a shop link", () => {
 			count: 10,
 		});
 	});
+
+	test("adds a link to a wish while another wish holds 10 links", async () => {
+		// Given: alice's Black wool jacket wish holds 10 links
+		const { h, alice, ids } = await aliceWithWish();
+		held(
+			await wishActions.add.run(alice, {
+				id: SECOND_ID,
+				typeId: "wool",
+				colourId: ids.Black,
+			}),
+		);
+		await h.seedShopLinks(ALICE.id, SECOND_ID, 10);
+		// When
+		const added = await addLink(alice, FIRST_ID, zaraLink(null));
+		// Then: the Black wish is newest, so first
+		expect({
+			ok: added.ok,
+			counts: (await listed(alice)).map((w) => w.shopLinks.length),
+		}).toEqual({ ok: true, counts: [10, 1] });
+	});
 });
 
 describe("changing and deleting a shop link that is gone", () => {

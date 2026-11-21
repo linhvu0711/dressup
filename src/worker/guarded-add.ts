@@ -140,13 +140,10 @@ type Add<
 	values: Values<T>;
 	guards: (SQL | undefined)[];
 	limit: { max: number; code: L; of?: SQL };
-	// Runs the insert; held is true once the row is this add's.
-	write?: (
-		insert: InsertIds,
-		held: SQL,
-	) => Promise<Result<{ id: string }[], NoInfer<E>>>;
+	// Runs the insert, with the writes that go with it.
+	write?: (insert: InsertIds) => Promise<Result<{ id: string }[], NoInfer<E>>>;
 	// Runs when the same add comes again, after a lost answer.
-	resend?: (held: SQL) => Promise<Result<unknown, NoInfer<E>>>;
+	resend?: () => Promise<Result<unknown, NoInfer<E>>>;
 	read: () => Promise<V | undefined>;
 	// Why the guards stopped the insert; null leaves the cap. The add's error
 	// type comes from here, so a write's narrower error does not set it.
@@ -182,7 +179,7 @@ export async function guardedAdd<
 	if (stored) {
 		if (!stored.mine) return conflict;
 		if (add.resend) {
-			const resent = await add.resend(held);
+			const resent = await add.resend();
 			if (!resent.ok) return resent;
 		}
 		const value = await add.read();
@@ -192,7 +189,7 @@ export async function guardedAdd<
 	}
 	const insert = insertIds(db, add.table, add);
 	const written = add.write
-		? await add.write(insert, held)
+		? await add.write(insert)
 		: { ok: true as const, value: await insert };
 	if (!written.ok) return written;
 	if (written.value.length > 0) {
