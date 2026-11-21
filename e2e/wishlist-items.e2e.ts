@@ -499,3 +499,25 @@ test("opens the new link's page after a link is added to a wish with none", asyn
 	await expect(title(page)).toHaveText("Olive polo");
 	await expect(page).toHaveURL(/\/wishlist\/link\//);
 });
+
+test("shows the address message under the Address field in the edit sheet", async ({
+	page,
+}) => {
+	// Given: the one-link account; its page open; Edit clicked
+	const { link } = await poloWithLink(page);
+	await page.goto(`/wishlist/link/${link}`);
+	await expect(title(page)).toHaveText("Polo");
+	await actions(page).getByRole("button", { name: "Edit" }).click();
+	const edit = sheet(page, "Edit shop link");
+	// When
+	await edit.getByRole("textbox", { name: "Address" }).fill("www.cos.com/polo");
+	await edit.getByRole("button", { name: "Save" }).click();
+	// Then
+	const field = edit
+		.locator('[data-slot="field"]')
+		.filter({ has: page.getByRole("textbox", { name: "Address" }) });
+	await expect(field.getByRole("alert")).toHaveText(
+		"Enter a web address that starts with https://.",
+	);
+	await expect(edit.getByRole("alert")).toHaveCount(1);
+});
