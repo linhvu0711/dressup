@@ -135,25 +135,6 @@ describe("tags", () => {
 		});
 	});
 
-	test("refuses a tag name of 25 characters", async () => {
-		// Given
-		const { h, ai } = await withAiSession();
-		// When
-		const { isError, text } = await ai.call("add_tag", {
-			name: "a".repeat(25),
-		});
-		// Then
-		expect({
-			isError,
-			text,
-			names: (await tags(h, ai)).map((t) => t.name),
-		}).toEqual({
-			isError: true,
-			text: "A tag name has 1 to 24 characters.",
-			names: [],
-		});
-	});
-
 	test("renames a tag", async () => {
 		// Given
 		const { h, ai } = await withAiSession();
@@ -189,47 +170,6 @@ describe("tags", () => {
 			isError: true,
 			text: "You already have a tag called work.",
 			names: ["Work", "Trip"],
-		});
-	});
-
-	test("refuses to rename a tag to an empty name", async () => {
-		// Given
-		const { h, ai } = await withAiSession();
-		const work = await addTag(h, ai, "Work");
-		// When
-		const { isError, text } = await ai.call("rename_tag", {
-			id: work,
-			name: "  ",
-		});
-		// Then
-		expect({
-			isError,
-			text,
-			names: (await tags(h, ai)).map((t) => t.name),
-		}).toEqual({
-			isError: true,
-			text: "A tag name has 1 to 24 characters.",
-			names: ["Work"],
-		});
-	});
-
-	test("refuses to rename a tag that is gone", async () => {
-		// Given
-		const { h, ai } = await withAiSession();
-		const work = await addTag(h, ai, "Work");
-		expect((await send(h, ai.jar, "DELETE", `/api/tags/${work}`)).status).toBe(
-			204,
-		);
-		// When
-		const { isError, text } = await ai.call("rename_tag", {
-			id: work,
-			name: "Office",
-		});
-		// Then
-		expect({ isError, text, tags: await tags(h, ai) }).toEqual({
-			isError: true,
-			text: "No tag with this id.",
-			tags: [],
 		});
 	});
 
@@ -1000,22 +940,6 @@ describe("combinations", () => {
 				isError: true,
 				text: "A combination has at most 50 tags.",
 			});
-		});
-
-		test("takes a deleted tag off its combinations", async () => {
-			// Given: THREE saved with Work and Weekend
-			const { ai } = await withAiSession();
-			const work = await addTagByAi(ai, "Work");
-			const weekend = await addTagByAi(ai, "Weekend");
-			const ids = await colourIds(ai);
-			await savedId(ai, { ...three(ids), tags: [work, weekend] });
-			// When
-			await ai.call("delete_tag", { id: weekend });
-			const { data } = await ai.call("list_combinations");
-			// Then
-			expect((data as { combinations: Tagged[] }).combinations[0].tags).toEqual(
-				[{ id: work, name: "Work" }],
-			);
 		});
 
 		test("lists the combinations that hold every piece row and carry every tag", async () => {

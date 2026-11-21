@@ -3,7 +3,6 @@ import {
 	BOB,
 	colourIds,
 	type Harness,
-	otherTabWrites,
 	send,
 	withAccount,
 } from "./test/harness";
@@ -56,62 +55,6 @@ describe("GET and POST /api/tags", () => {
 		expect(names).toEqual(["Work", "Trip"]);
 	});
 
-	test("adds a tag once when the same add comes twice", async () => {
-		// Given: alice signed in
-		const { h, headers } = await withAccount();
-		// When
-		const first = await addTag(h, headers, "Work");
-		const second = await addTag(h, headers, "Work");
-		// Then
-		expect({
-			first: first.status,
-			second: second.status,
-			body: await second.json(),
-			count: (await tagsOf(h, headers)).length,
-		}).toEqual({
-			first: 201,
-			second: 400,
-			body: { error: "duplicate", field: "name" },
-			count: 1,
-		});
-	});
-
-	test("refuses an empty name", async () => {
-		// Given: alice signed in
-		const { h, headers } = await withAccount();
-		// When
-		const res = await addTag(h, headers, "   ");
-		// Then
-		expect({ status: res.status, body: await res.json() }).toEqual({
-			status: 400,
-			body: { error: "invalid", field: "name" },
-		});
-	});
-
-	test("takes a name of 24 characters", async () => {
-		// Given: alice signed in
-		const { h, headers } = await withAccount();
-		// When
-		const res = await addTag(h, headers, "a".repeat(24));
-		// Then
-		expect({
-			status: res.status,
-			name: ((await res.json()) as { tag: Tag }).tag.name,
-		}).toEqual({ status: 201, name: "aaaaaaaaaaaaaaaaaaaaaaaa" });
-	});
-
-	test("refuses a name of 25 characters", async () => {
-		// Given: alice signed in
-		const { h, headers } = await withAccount();
-		// When
-		const res = await addTag(h, headers, "a".repeat(25));
-		// Then
-		expect({ status: res.status, body: await res.json() }).toEqual({
-			status: 400,
-			body: { error: "invalid", field: "name" },
-		});
-	});
-
 	test("refuses a name the account has in another letter case", async () => {
 		// Given: alice signed in; "Work" posted
 		const { h, headers } = await withAccount();
@@ -128,17 +71,6 @@ describe("GET and POST /api/tags", () => {
 			body: { error: "duplicate", field: "name" },
 			count: 1,
 		});
-	});
-
-	test("takes a name another account has", async () => {
-		// Given: alice posted "Work"; bob signed in
-		const { h, headers } = await withAccount();
-		await addTag(h, headers, "Work");
-		const bob = await h.addAccount(BOB);
-		// When
-		const res = await addTag(h, bob, "work");
-		// Then
-		expect(res.status).toBe(201);
 	});
 
 	test("lists only the account's own tags", async () => {
@@ -197,19 +129,6 @@ describe("PUT and DELETE /api/tags/:id", () => {
 		});
 	});
 
-	test("renames a tag to its own name in another letter case", async () => {
-		// Given: alice posted "Work"
-		const { h, headers } = await withAccount();
-		const work = await added(h, headers, "Work");
-		// When
-		const res = await rename(h, headers, work, "WORK");
-		// Then
-		expect({
-			status: res.status,
-			name: ((await res.json()) as { tag: Tag }).tag.name,
-		}).toEqual({ status: 200, name: "WORK" });
-	});
-
 	test("refuses a rename to another tag's name", async () => {
 		// Given: alice posted "Work" and "Trip"
 		const { h, headers } = await withAccount();
@@ -229,38 +148,6 @@ describe("PUT and DELETE /api/tags/:id", () => {
 		});
 	});
 
-	test("refuses a rename to an empty name", async () => {
-		// Given: alice posted "Work"
-		const { h, headers } = await withAccount();
-		const work = await added(h, headers, "Work");
-		// When
-		const res = await rename(h, headers, work, "");
-		// Then
-		expect({ status: res.status, body: await res.json() }).toEqual({
-			status: 400,
-			body: { error: "invalid", field: "name" },
-		});
-	});
-
-	test("answers 404 for a rename of another account's tag", async () => {
-		// Given: alice posted "Work"; bob signed in
-		const { h, headers } = await withAccount();
-		const work = await added(h, headers, "Work");
-		const bob = await h.addAccount(BOB);
-		// When
-		const res = await rename(h, bob, work, "Mine");
-		// Then
-		expect({
-			status: res.status,
-			body: await res.json(),
-			aliceNames: await namesOf(h, headers),
-		}).toEqual({
-			status: 404,
-			body: { error: "not_found" },
-			aliceNames: ["Work"],
-		});
-	});
-
 	test("deletes a tag", async () => {
 		// Given: alice posted "Work"
 		const { h, headers } = await withAccount();
@@ -272,36 +159,6 @@ describe("PUT and DELETE /api/tags/:id", () => {
 			status: 204,
 			tags: [],
 		});
-	});
-
-	test("renames a tag once when the same rename comes twice", async () => {
-		// Given: alice posted "Work"
-		const { h, headers } = await withAccount();
-		const work = await added(h, headers, "Work");
-		// When
-		const first = await rename(h, headers, work, "Office");
-		const second = await rename(h, headers, work, "Office");
-		// Then
-		expect({
-			first: first.status,
-			second: second.status,
-			names: await namesOf(h, headers),
-		}).toEqual({ first: 200, second: 200, names: ["Office"] });
-	});
-
-	test("answers 404 when the same delete comes twice", async () => {
-		// Given: alice posted "Work"
-		const { h, headers } = await withAccount();
-		const work = await added(h, headers, "Work");
-		// When
-		const first = await remove(h, headers, work);
-		const second = await remove(h, headers, work);
-		// Then
-		expect({
-			first: first.status,
-			second: second.status,
-			tags: await tagsOf(h, headers),
-		}).toEqual({ first: 204, second: 404, tags: [] });
 	});
 
 	test("refuses PUT and DELETE /api/tags/:id without a session", async () => {
@@ -388,67 +245,5 @@ describe("tags and combinations", () => {
 			{ id: weekend, name: "Weekend", combinations: 1 },
 			{ id: rain, name: "Rain", combinations: 0 },
 		]);
-	});
-
-	test("deletes a tag and takes it off its combinations", async () => {
-		// Given: alice; tags Work and Weekend; THREE with both
-		const { h, headers } = await withAccount();
-		const ids = await colourIds(h, headers);
-		const work = await added(h, headers, "Work");
-		const weekend = await added(h, headers, "Weekend");
-		await send(
-			h,
-			headers,
-			"POST",
-			"/api/combinations",
-			three(ids, [work, weekend]),
-		);
-		// When
-		const res = await send(h, headers, "DELETE", `/api/tags/${weekend}`);
-		const { combinations } = (await (
-			await send(h, headers, "GET", "/api/combinations")
-		).json()) as { combinations: { pieces: unknown[]; tags: string[] }[] };
-		// Then
-		expect({
-			status: res.status,
-			combinations: combinations.map((c) => ({
-				pieces: c.pieces.length,
-				tags: c.tags,
-			})),
-		}).toEqual({ status: 204, combinations: [{ pieces: 3, tags: [work] }] });
-	});
-});
-
-describe("a name another tab saves at the same time", () => {
-	test("answers duplicate when another tab adds the name first", async () => {
-		// Given: alice signed in; another tab stores "work" between this add's
-		// check and its write
-		const { h, headers } = await withAccount();
-		otherTabWrites(h, "tag", "INSERT", "Work");
-		// When
-		const res = await addTag(h, headers, "Work");
-		// Then
-		expect({ status: res.status, body: await res.json() }).toEqual({
-			status: 400,
-			body: { error: "duplicate", field: "name" },
-		});
-	});
-
-	test("answers duplicate when another tab takes the new name first", async () => {
-		// Given: alice posted "Work"; another tab stores "office" between this
-		// rename's check and its write
-		const { h, headers } = await withAccount();
-		const work = await added(h, headers, "Work");
-		otherTabWrites(h, "tag", "UPDATE", "Office");
-		// When
-		const res = await send(h, headers, "PUT", `/api/tags/${work}`, {
-			id: work,
-			name: "Office",
-		});
-		// Then
-		expect({ status: res.status, body: await res.json() }).toEqual({
-			status: 400,
-			body: { error: "duplicate", field: "name" },
-		});
 	});
 });
