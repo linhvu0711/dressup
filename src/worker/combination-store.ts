@@ -26,7 +26,7 @@ import {
 import { LAYER_OF, LAYERS } from "@/dress/clothing-types";
 import type { ColourId } from "@/labels/colour";
 import type { TagId } from "@/tags/tag";
-import type { Db } from "./db";
+import { type Db, hitsIndex } from "./db";
 import { colour } from "./db/colour-schema";
 import { combination, combinationPiece } from "./db/combination-schema";
 import { combinationTag, tag } from "./db/tag-schema";
@@ -172,12 +172,10 @@ const keyHolder = async (db: Db, userId: string, key: string) => {
 };
 
 // Two tabs can both pass the duplicate check; the index on (user_id, key)
-// then refuses the second write, with an error that names it. D1 and drizzle
-// may wrap it, so the causes are read too.
-const isKeyTaken = (error: unknown): boolean =>
-	error instanceof Error &&
-	(error.message.includes("combination.user_id, combination.key") ||
-		isKeyTaken(error.cause));
+// then refuses the second write. Both D1 and bun:sqlite name its columns,
+// not the index, so the text is that column list.
+const isKeyTaken = (error: unknown) =>
+	hitsIndex(error, "combination.user_id, combination.key");
 
 // The first piece whose colour is not one of the account's, as the problem.
 // A filter row may leave its colour out. Here and in notYourTag only the
