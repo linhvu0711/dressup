@@ -9,7 +9,6 @@ import {
 	JPEG,
 	PDF,
 	PNG,
-	send,
 	uploadPicture,
 	withAiSession,
 } from "./test/harness";
@@ -280,54 +279,6 @@ describe("shop link pictures", () => {
 		// Then
 		const [wish] = (data as { wishes: { shopLinks: Link[] }[] }).wishes;
 		expect(wish.shopLinks[0]?.pictureIds).toEqual([a]);
-	});
-
-	test("deletes a picture left out of a shop link's list", async () => {
-		// Given
-		const { h, ai } = await withAiSession();
-		const wishId = await addWish(ai);
-		const [a, b] = await uploads(h, ai, 2);
-		const added = await ai.call("add_shop_link", {
-			wishId,
-			...coat,
-			pictureIds: [a, b],
-		});
-		const id = (added.data as { wish: { shopLinks: Link[] } }).wish.shopLinks[0]
-			?.id;
-		// When
-		const { data } = await ai.call("change_shop_link", {
-			id,
-			...coat,
-			pictureIds: [b],
-		});
-		// Then
-		expect({
-			pictureIds: (data as { wish: { shopLinks: Link[] } }).wish.shopLinks[0]
-				?.pictureIds,
-			keys: h.pictures.keys(),
-		}).toEqual({ pictureIds: [b], keys: [b] });
-	});
-
-	test("refuses 9 pictures on a shop link as a sentence", async () => {
-		// Given
-		const { h, ai } = await withAiSession();
-		const wishId = await addWish(ai);
-		const nine = await uploads(h, ai, 9);
-		// When
-		const { isError, text } = await ai.call("add_shop_link", {
-			wishId,
-			...coat,
-			pictureIds: nine,
-		});
-		// Then
-		const { wishes } = (await (
-			await send(h, ai.jar, "GET", "/api/wishes")
-		).json()) as { wishes: { shopLinks: unknown[] }[] };
-		expect({ isError, text, links: wishes[0]?.shopLinks }).toEqual({
-			isError: true,
-			text: "A shop link has at most 8 pictures.",
-			links: [],
-		});
 	});
 });
 

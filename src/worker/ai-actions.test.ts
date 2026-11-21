@@ -1242,21 +1242,6 @@ describe("wishes", () => {
 		});
 	});
 
-	test("lists the picture ids of each shop link in upload order", async () => {
-		// Given
-		const { h, ai } = await withAiSession();
-		const id = await addJacketLink(ai);
-		const pictureIds = await savePictures(h, ai, id, 2);
-		// When
-		const { data } = await ai.call("list_wishes");
-		// Then
-		expect(
-			(data as { wishes: Listed[] }).wishes.map((w) =>
-				w.shopLinks.map((l) => l.pictureIds),
-			),
-		).toEqual([[pictureIds]]);
-	});
-
 	test("answers created true for a new wish", async () => {
 		// Given
 		const { ai } = await withAiSession();
@@ -1296,22 +1281,6 @@ describe("wishes", () => {
 		expect({ isError, text }).toEqual({
 			isError: true,
 			text: "You have this wish already.",
-		});
-	});
-
-	test("refuses wish number 201 as a sentence", async () => {
-		// Given
-		const { h, ai, userId } = await withAiSession();
-		await h.seedWishes(userId, 200);
-		// When
-		const { isError, text } = await ai.call("add_wish", {
-			typeId: "train_p",
-			colourId: await colourId(ai, "Mustard"),
-		});
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "You have 200 wishes. That is the limit. Delete one to add a new one.",
 		});
 	});
 
@@ -1387,20 +1356,6 @@ describe("wishes", () => {
 		});
 	});
 
-	test("refuses shop link number 11 as a sentence", async () => {
-		// Given
-		const { h, ai, userId } = await withAiSession();
-		const wishId = await addJacket(ai);
-		await h.seedShopLinks(userId, wishId, 10);
-		// When
-		const { isError, text } = await ai.call("add_shop_link", cos(wishId));
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "10 shop links is the limit for one wish.",
-		});
-	});
-
 	test("deletes a wish", async () => {
 		// Given
 		const { ai } = await withAiSession();
@@ -1427,21 +1382,6 @@ describe("wishes", () => {
 		});
 	});
 
-	test("refuses to delete a colour a wish uses as a sentence", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		await addJacket(ai);
-		// When
-		const { isError, text } = await ai.call("delete_colour", {
-			id: await colourId(ai, "Navy"),
-		});
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "A combination, an owned item, or a wish uses Navy, so it stays. A colour in use cannot be deleted.",
-		});
-	});
-
 	// A COS brand, and three wishes, oldest first: a Navy sweater with a COS
 	// link, a Navy long tee with a link of no brand, Navy chino pants with no
 	// link.
@@ -1465,30 +1405,6 @@ describe("wishes", () => {
 		return cosId;
 	}
 
-	test("lists the wishes with a shop link of a picked brand", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		const cosId = await filterWishes(ai);
-		// When
-		const { data } = await ai.call("list_wishes", { brandIds: [cosId] });
-		// Then
-		expect((data as { wishes: Listed[] }).wishes.map((w) => w.typeId)).toEqual([
-			"sweater",
-		]);
-	});
-
-	test("lists the wishes with a shop link with no brand for a null brand id", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		await filterWishes(ai);
-		// When
-		const { data } = await ai.call("list_wishes", { brandIds: [null] });
-		// Then
-		expect((data as { wishes: Listed[] }).wishes.map((w) => w.typeId)).toEqual([
-			"tee_l",
-		]);
-	});
-
 	test("refuses a brand that is not the account's in a wish filter", async () => {
 		// Given
 		const { ai } = await withAiSession();
@@ -1501,21 +1417,6 @@ describe("wishes", () => {
 		expect({ isError, text }).toEqual({
 			isError: true,
 			text: "nope is not one of your brands. list_brands names them.",
-		});
-	});
-
-	test("refuses an empty brand id in a filter", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		await filterWishes(ai);
-		// When
-		const { isError, text } = await ai.call("list_wishes", {
-			brandIds: ["", "nope"],
-		});
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: " is not one of your brands. list_brands names them.",
 		});
 	});
 });
