@@ -23,6 +23,16 @@ export function usePieceLink(from: PieceFrom) {
 	});
 }
 
+// The one way in to an owned item's page. Its Back goes to the Closet with
+// the Closet's filter, as a piece page's does.
+export function useItemLink() {
+	const { search } = useLocation();
+	return (item: { id: string }) => ({
+		to: `/closet/${item.id}`,
+		state: { from: "/closet", search },
+	});
+}
+
 // Router state is whatever history holds, so it is parsed before use, and
 // only a tab or a combination's page gets through. A typed address has none
 // and goes back to the closet.

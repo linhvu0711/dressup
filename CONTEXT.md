@@ -20,7 +20,7 @@
 - Sign-up switch: one on/off environment variable that stops new sign-ups. People with an account can still sign in.
 - Label: a colour, a brand, or a tag. The account makes it once on the Labels page and uses it everywhere.
 - Labels page: the page with the lists that the account makes once and uses everywhere.
-- Closet: the pieces the account owns, shown as one tile for each piece. The user filters it by type, colour, and brand.
+- Closet: the account's owned items, one card each, newest first. A card opens the item's Item page. The user filters the Closet by type, colour, and brand.
 - Wishlist: the pieces the account wants to buy, shown as one tile for each piece. The user filters it by type, colour, and brand.
 - Wish: one wanted piece, with its shop links. A piece has at most one wish. When the user removes the last shop link of a wish, the wish goes too. An account holds at most 200.
 - Shop link: one place to buy a wish: a web address with its own brand, name, and price in VND. A wish holds at most 10.

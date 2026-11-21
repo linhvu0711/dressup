@@ -2,27 +2,26 @@ import { useRef } from "react";
 import { Link } from "react-router";
 import type { Hex } from "@/colour/hex";
 import { pieceName } from "@/combinations/combination";
+import { PLACEHOLDER, PULSE } from "@/components/ui/placeholder";
 import type { TypeId } from "@/dress/clothing-types";
 import { TypeFigure } from "@/dress/figure/TypeFigure";
 import { type PieceTab, usePieceLink } from "@/shell/piece-link";
 import { useNearScreen } from "@/shell/Wall";
 
-// One tile of a wall of pieces: the piece drawn in its colour, an optional
-// badge on the picture, its name, and an optional second line. Each text
+// One tile of a wall of pieces: the piece drawn in its colour, its name, and
+// an optional second line. Each text
 // stays on one line, so every tile of a wall has one height.
 export function PieceTile({
 	piece,
 	from,
 	label,
 	slot,
-	badge,
 	line,
 }: {
 	piece: { typeId: TypeId; colour: { id: string; name: string; hex: Hex } };
 	from: PieceTab;
 	label: string;
 	slot: string;
-	badge?: number;
 	line?: string;
 }) {
 	const linkTo = usePieceLink(from);
@@ -44,11 +43,6 @@ export function PieceTile({
 						className="absolute inset-[10%] size-[80%]"
 					/>
 				) : null}
-				{badge === undefined ? null : (
-					<span className="absolute top-2 right-2 grid h-6 min-w-6 place-items-center rounded-full bg-foreground px-1.5 font-semibold text-[12px] text-background">
-						{badge}
-					</span>
-				)}
 			</span>
 			<span className="flex min-w-0 flex-col">
 				<span className="truncate font-medium text-[13.5px]">
@@ -61,5 +55,16 @@ export function PieceTile({
 				)}
 			</span>
 		</Link>
+	);
+}
+
+export function PieceTileSkeleton() {
+	return (
+		<div className="flex flex-col gap-[7px]">
+			<span
+				className={`block aspect-square w-full rounded-[14px] bg-[#D3CFC9] ${PULSE}`}
+			/>
+			<span className={`block h-3.5 w-[70%] rounded-[12px] ${PLACEHOLDER}`} />
+		</div>
 	);
 }
