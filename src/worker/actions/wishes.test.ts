@@ -123,6 +123,13 @@ const NOT_YOUR_PICTURE_ROW = {
 	text: "pictureIds holds an id that is not your upload or a picture of this shop link. list_wishes names the link's pictures; get_upload_address gives a new upload.",
 } satisfies Refusal;
 
+const CONFLICT_ROW = {
+	code: "conflict",
+	status: 409,
+	body: { error: "conflict", field: "id" },
+	text: "dressup could not do this. Try again.",
+} satisfies Refusal;
+
 describe("adding a wish", () => {
 	test("lists wishes newest first", async () => {
 		// Given: alice with a wish for a White short tee, then a Navy wool jacket
@@ -151,6 +158,41 @@ describe("adding a wish", () => {
 			created: again.ok && again.value.created,
 			count: (await listed(alice)).length,
 		}).toEqual({ ok: true, created: false, count: 1 });
+	});
+
+	test("refuses a wish id another account added", async () => {
+		// Given: bob added his Navy wool jacket under FIRST_ID
+		const { h, alice, ids } = await withAlice();
+		await h.addAccount(BOB);
+		held(
+			await wishActions.add.run(
+				scopeOf(h, BOB),
+				jacket(await colourIdsOf(h, BOB)),
+			),
+		);
+		// When
+		const added = await wishActions.add.run(alice, jacket(ids));
+		// Then
+		expect({ added, count: (await listed(alice)).length }).toEqual({
+			added: { ok: false, error: CONFLICT_ROW },
+			count: 0,
+		});
+	});
+
+	test("refuses a wish id held by a wish for another piece", async () => {
+		// Given: alice wished the Navy wool jacket under FIRST_ID
+		const { alice, ids } = await withAlice();
+		held(await wishActions.add.run(alice, jacket(ids)));
+		// When
+		const added = await wishActions.add.run(alice, {
+			...jacket(ids),
+			colourId: ids.Black,
+		});
+		// Then
+		expect({ added, count: (await listed(alice)).length }).toEqual({
+			added: { ok: false, error: CONFLICT_ROW },
+			count: 1,
+		});
 	});
 
 	test("adds a wish for a piece the closet holds", async () => {
@@ -297,6 +339,22 @@ describe("wish adds at once", () => {
 		});
 	});
 
+	test("gives back the same wish to two adds of one id that overlap", async () => {
+		// Given: alice; the add of a Navy wool jacket sent twice at once
+		const { alice, ids } = await withAlice();
+		// When
+		const results = await Promise.all([
+			wishActions.add.run(alice, jacket(ids)),
+			wishActions.add.run(alice, jacket(ids)),
+		]);
+		// Then
+		expect({
+			created: results.map((r) => r.ok && r.value.created).sort(),
+			oks: results.map((r) => r.ok),
+			count: (await listed(alice)).length,
+		}).toEqual({ created: [false, true], oks: [true, true], count: 1 });
+	});
+
 	test("refuses the second of two adds of one piece that overlap", async () => {
 		// Given: alice; two adds of a Navy wool jacket
 		const { alice, ids } = await withAlice();
@@ -363,6 +421,47 @@ describe("adding a shop link", () => {
 			created: again.ok && again.value.created,
 			count: (await linksOf(alice))?.length,
 		}).toEqual({ ok: true, created: false, count: 1 });
+	});
+
+	test("refuses a shop link id another account added", async () => {
+		// Given: bob's own wish holds a link under LINK_ID
+		const { h, alice } = await aliceWithWish();
+		await h.addAccount(BOB);
+		const bob = scopeOf(h, BOB);
+		held(
+			await wishActions.add.run(bob, {
+				...jacket(await colourIdsOf(h, BOB)),
+				id: SECOND_ID,
+			}),
+		);
+		held(await addLink(bob, SECOND_ID, zaraLink(null)));
+		// When
+		const added = await addLink(alice, FIRST_ID, zaraLink(null));
+		// Then
+		expect({ added, links: (await linksOf(alice))?.length }).toEqual({
+			added: { ok: false, error: CONFLICT_ROW },
+			links: 0,
+		});
+	});
+
+	test("refuses a shop link id held on another wish", async () => {
+		// Given: alice's Black wool jacket wish holds a link under LINK_ID
+		const { alice, ids } = await aliceWithWish();
+		held(
+			await wishActions.add.run(alice, {
+				id: SECOND_ID,
+				typeId: "wool",
+				colourId: ids.Black,
+			}),
+		);
+		held(await addLink(alice, SECOND_ID, zaraLink(null)));
+		// When
+		const added = await addLink(alice, FIRST_ID, zaraLink(null));
+		// Then: the Black wish is newest, so first
+		expect({
+			added,
+			counts: (await listed(alice)).map((w) => w.shopLinks.length),
+		}).toEqual({ added: { ok: false, error: CONFLICT_ROW }, counts: [1, 0] });
 	});
 
 	const refusals: [string, Record<string, unknown>, string, string][] = [
@@ -450,6 +549,26 @@ describe("adding a shop link", () => {
 			added: { ok: false, error: SHOP_LINK_LIMIT_ROW },
 			count: 10,
 		});
+	});
+
+	test("adds a link to a wish while another wish holds 10 links", async () => {
+		// Given: alice's Black wool jacket wish holds 10 links
+		const { h, alice, ids } = await aliceWithWish();
+		held(
+			await wishActions.add.run(alice, {
+				id: SECOND_ID,
+				typeId: "wool",
+				colourId: ids.Black,
+			}),
+		);
+		await h.seedShopLinks(ALICE.id, SECOND_ID, 10);
+		// When
+		const added = await addLink(alice, FIRST_ID, zaraLink(null));
+		// Then: the Black wish is newest, so first
+		expect({
+			ok: added.ok,
+			counts: (await listed(alice)).map((w) => w.shopLinks.length),
+		}).toEqual({ ok: true, counts: [10, 1] });
 	});
 });
 

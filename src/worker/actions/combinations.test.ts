@@ -124,6 +124,28 @@ describe("saving a combination", () => {
 		});
 	});
 
+	test("refuses a colour of another account and writes no starter colours", async () => {
+		// Given: alice, who has not read her colour list yet; bob's 13 starter colours
+		const { h } = await withAccount();
+		await h.addAccount(BOB);
+		const bobIds = await idsOf(h, BOB.id);
+		// When
+		const saved = await combinationActions.save.run(scopeOf(h), three(bobIds));
+		// Then
+		expect({ saved, colours: await count(h, schema.colour) }).toEqual({
+			saved: {
+				ok: false,
+				error: {
+					code: "not_colour",
+					status: 400,
+					body: { error: "invalid", field: "pieces.0.colourId" },
+					text: `${bobIds.Khaki} is not one of your colours. list_colours names them.`,
+				},
+			},
+			colours: 13,
+		});
+	});
+
 	test("refuses a tag that is not the account's", async () => {
 		// Given: alice's account
 		const { alice, ids } = await withAlice();
@@ -489,6 +511,27 @@ describe("two saves at the same time", () => {
 			saved: { ok: false, error: DUPLICATE_ROW(THIRD_ID) },
 			ids: [THIRD_ID as CombinationId],
 		});
+	});
+
+	test("gives back the combination when its first save lands during a resend", async () => {
+		// Given: alice with Work and Weekend; her resend's write waits until
+		// the first save of the same id, with Work, landed
+		const { h, alice, ids } = await withAlice();
+		const [work, weekend] = await addTags(alice, ["Work", "Weekend"]);
+		beforeNextBatch(h, () =>
+			combinationActions.save.run(alice, { ...three(ids), tags: [work] }),
+		);
+		// When
+		const again = await combinationActions.save.run(alice, {
+			...three(ids),
+			tags: [weekend],
+		});
+		// Then
+		expect({
+			ok: again.ok,
+			created: again.ok && again.value.created,
+			listed: (await listed(alice)).map((c) => c.tags),
+		}).toEqual({ ok: true, created: false, listed: [[weekend]] });
 	});
 
 	test("keeps no piece of a colour deleted while the save writes", async () => {
@@ -1082,6 +1125,23 @@ describe("filtering the list", () => {
 		expect(
 			found.ok && found.value.map((c) => c.pieces.map((p) => p.typeId)),
 		).toEqual([["chino_p", "tee_s"]]);
+	});
+
+	test("lists no combination for a filter of 100 of the account's tags", async () => {
+		// Given: alice with 100 tags; three(ids) with the first of them
+		const { alice, ids } = await withAlice();
+		const tags = await addTags(
+			alice,
+			Array.from({ length: 100 }, (_, i) => `t${i + 1}`),
+		);
+		await combinationActions.save.run(alice, {
+			...three(ids),
+			tags: [tags[0]],
+		});
+		// When
+		const found = await combinationActions.list.run(alice, { tags });
+		// Then
+		expect(found).toEqual({ ok: true, value: [] });
 	});
 
 	describe("with Pieces I own", () => {

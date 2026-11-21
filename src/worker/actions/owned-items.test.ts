@@ -108,6 +108,13 @@ const NOT_FOUND_ROW = {
 	text: "No owned item with this id.",
 } satisfies Refusal;
 
+const CONFLICT_ROW = {
+	code: "conflict",
+	status: 409,
+	body: { error: "conflict", field: "id" },
+	text: "dressup could not do this. Try again.",
+} satisfies Refusal;
+
 describe("adding an owned item", () => {
 	test("lists the owned items newest first", async () => {
 		// Given: alice adds a Navy long button-up, then a White short tee
@@ -138,6 +145,44 @@ describe("adding an owned item", () => {
 			created: again.ok && again.value.created,
 			count: (await listed(alice)).length,
 		}).toEqual({ ok: true, created: false, count: 1 });
+	});
+
+	test("refuses an id another account added", async () => {
+		// Given: bob added his shirt under FIRST_ID
+		const { h, alice, ids } = await withAlice();
+		await h.addAccount(BOB);
+		held(
+			await ownedItemActions.add.run(
+				scopeOf(h, BOB),
+				shirt(await colourIdsOf(h, BOB)),
+			),
+		);
+		// When
+		const added = await ownedItemActions.add.run(alice, shirt(ids));
+		// Then
+		expect({ added, count: (await listed(alice)).length }).toEqual({
+			added: { ok: false, error: CONFLICT_ROW },
+			count: 0,
+		});
+	});
+
+	test("refuses an id held by an item of another piece", async () => {
+		// Given: alice added the shirt under FIRST_ID
+		const { alice, ids } = await withAlice();
+		held(await ownedItemActions.add.run(alice, shirt(ids)));
+		// When
+		const added = await ownedItemActions.add.run(alice, {
+			...shirt(ids),
+			typeId: "tee_l",
+		});
+		// Then
+		expect({
+			added,
+			types: (await listed(alice)).map((item) => item.typeId),
+		}).toEqual({
+			added: { ok: false, error: CONFLICT_ROW },
+			types: ["shirt_l"],
+		});
 	});
 
 	test("writes the new quantity when the same item is sent again", async () => {
@@ -762,6 +807,28 @@ describe("deleting with pictures", () => {
 			deleted: { ok: true, value: FIRST_ID as OwnedItemId },
 			keys: [d],
 			rows: [d],
+		});
+	});
+
+	test("refuses to delete another account's item", async () => {
+		// Given: alice added the shirt with a picture; bob has an account
+		const { h, alice, ids } = await withAlice();
+		const [a] = await uploads(alice, 1);
+		held(
+			await ownedItemActions.add.run(alice, { ...shirt(ids), pictureIds: [a] }),
+		);
+		await h.addAccount(BOB);
+		// When
+		const deleted = await ownedItemActions.delete.run(scopeOf(h, BOB), {
+			id: FIRST_ID,
+		});
+		// Then
+		expect({
+			deleted,
+			pictures: (await listed(alice)).map((item) => item.pictureIds),
+		}).toEqual({
+			deleted: { ok: false, error: NOT_FOUND_ROW },
+			pictures: [[a]],
 		});
 	});
 });

@@ -678,7 +678,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 			if (!read.ok) return refusal(read.error.text);
 			const headers = new Headers();
 			read.value.writeHttpMetadata(headers);
-			const bytes = await new Response(read.value.body).arrayBuffer();
+			const bytes = await read.value.arrayBuffer();
 			return {
 				content: [
 					{

@@ -1,7 +1,6 @@
 import {
 	and,
 	asc,
-	count,
 	desc,
 	eq,
 	exists,
@@ -27,14 +26,12 @@ import {
 import { LAYER_OF, LAYERS } from "@/dress/clothing-types";
 import type { ColourId } from "@/labels/colour";
 import type { TagId } from "@/tags/tag";
-import { listColours } from "./colour-store";
-import type { Db } from "./db";
-import { user } from "./db/auth-schema";
+import { type Db, hitsIndex } from "./db";
 import { colour } from "./db/colour-schema";
 import { combination, combinationPiece } from "./db/combination-schema";
 import { combinationTag, tag } from "./db/tag-schema";
+import { guardedAdd } from "./guarded-add";
 import type { Result } from "./result";
-import { listTags } from "./tag-store";
 
 // A combination as a website or an AI app sends it, before the rules ran.
 type CombinationDraft = {
@@ -112,19 +109,28 @@ async function readCombinations(
 			)
 			.orderBy(asc(tag.createdAt), asc(sql`${tag}.rowid`)),
 	]);
+	const piecesOf = new Map<string, typeof pieces>();
+	for (const piece of pieces) {
+		const held = piecesOf.get(piece.combinationId) ?? [];
+		held.push(piece);
+		piecesOf.set(piece.combinationId, held);
+	}
+	const tagsOf = new Map<string, TagId[]>();
+	for (const row of tags) {
+		const held = tagsOf.get(row.combinationId) ?? [];
+		held.push(row.tagId as TagId);
+		tagsOf.set(row.combinationId, held);
+	}
 	return rows.map((row) => ({
 		id: row.id as CombinationId,
-		pieces: pieces
-			.filter((p) => p.combinationId === row.id)
+		pieces: (piecesOf.get(row.id) ?? [])
 			.sort((a, b) => LAYERS.indexOf(a.layer) - LAYERS.indexOf(b.layer))
 			.map((p) => ({
 				layer: p.layer,
 				typeId: p.typeId,
 				colour: { id: p.colourId as ColourId, name: p.name, hex: p.hex as Hex },
 			})),
-		tags: tags
-			.filter((t) => t.combinationId === row.id)
-			.map((t) => t.tagId as TagId),
+		tags: tagsOf.get(row.id) ?? [],
 	}));
 }
 
@@ -166,26 +172,51 @@ const keyHolder = async (db: Db, userId: string, key: string) => {
 };
 
 // Two tabs can both pass the duplicate check; the index on (user_id, key)
-// then refuses the second write, with an error that names it. D1 and drizzle
-// may wrap it, so the causes are read too.
-const isKeyTaken = (error: unknown): boolean =>
-	error instanceof Error &&
-	(error.message.includes("combination.user_id, combination.key") ||
-		isKeyTaken(error.cause));
+// then refuses the second write. Both D1 and bun:sqlite name its columns,
+// not the index, so the text is that column list.
+const isKeyTaken = (error: unknown) =>
+	hitsIndex(error, "combination.user_id, combination.key");
+
+// D1 takes at most 100 bound values in one statement, and the account id
+// takes one, so a filter's ids are read 99 at a time.
+const ID_CHUNK = 99;
+
+// The ids among these that are the account's colours or tags.
+async function ownIds(
+	db: Db,
+	table: typeof colour | typeof tag,
+	userId: string,
+	ids: readonly string[],
+): Promise<Set<string>> {
+	const named = [...new Set(ids)];
+	const chunks = [];
+	for (let i = 0; i < named.length; i += ID_CHUNK)
+		chunks.push(named.slice(i, i + ID_CHUNK));
+	const rows = await Promise.all(
+		chunks.map((chunk) =>
+			db
+				.select({ id: table.id })
+				.from(table)
+				.where(and(eq(table.userId, userId), inArray(table.id, chunk))),
+		),
+	);
+	return new Set(rows.flat().map((row) => row.id));
+}
 
 // The first piece whose colour is not one of the account's, as the problem.
-// A filter row may leave its colour out; with no colour named there is
-// nothing to check, and the colour list is not read, since a first read
-// writes the starter colours.
+// A filter row may leave its colour out. Here and in notYourTag only the
+// named ids are read: the colour list read writes the starter colours, and
+// the tag list read counts every tag's combinations.
 async function notYourColour(
 	db: Db,
 	userId: string,
 	pieces: readonly { colourId?: string }[],
 ): Promise<CombinationProblem | null> {
-	if (pieces.every((p) => p.colourId === undefined)) return null;
-	const colourIds = new Set<string>(
-		(await listColours(db, userId)).map((c) => c.id),
+	const named = pieces.flatMap((p) =>
+		p.colourId === undefined ? [] : [p.colourId],
 	);
+	if (named.length === 0) return null;
+	const colourIds = await ownIds(db, colour, userId, named);
 	const i = pieces.findIndex(
 		(p) => p.colourId !== undefined && !colourIds.has(p.colourId),
 	);
@@ -225,7 +256,7 @@ async function notYourTag(
 	tags: readonly string[],
 ): Promise<CombinationProblem | null> {
 	if (tags.length === 0) return null;
-	const tagIds = new Set<string>((await listTags(db, userId)).map((t) => t.id));
+	const tagIds = await ownIds(db, tag, userId, tags);
 	const value = tags.find((id) => !tagIds.has(id));
 	return value === undefined
 		? null
@@ -288,9 +319,10 @@ const replaceTags = (
 // a lost answer gives back the same combination rather than a second one. An
 // id another account holds, or one saved with other pieces, is conflict. A
 // save sent again writes its tags, since the form may have changed them. The
-// same pieces under another id is duplicate, with its id. A
-// new combination past the limit is not saved: combination_limit. The count
-// sits in the insert, so two saves at once cannot both pass it.
+// same pieces under another id is duplicate, with its id: the key index turns
+// it into no row, and the holder is read after the insert. A new combination
+// past the limit is not saved: combination_limit. The count sits in the
+// insert, so two saves at once cannot both pass it.
 export async function saveCombination(
 	db: Db,
 	userId: string,
@@ -304,68 +336,44 @@ export async function saveCombination(
 	const notTag = await notYourTag(db, userId, input.tags);
 	if (notTag) return { ok: false, error: notTag };
 	const key = combinationKey(input.pieces);
-	const conflict = { ok: false, error: { code: "conflict" } } as const;
-	const [before] = await db
-		.select({ userId: combination.userId, key: combination.key })
-		.from(combination)
-		.where(eq(combination.id, input.id));
 	const ours = sql`${eq(combination.id, input.id)} and ${eq(combination.userId, userId)}`;
-	if (before) {
-		if (before.userId !== userId || before.key !== key) return conflict;
-		await db.batch(replaceTags(db, userId, input.id, input.tags, ours));
-		const [same] = await readCombinations(db, userId, input.id);
-		return same
-			? { ok: true, value: { combination: same, created: false } }
-			: conflict;
-	}
-	const held = await keyHolder(db, userId, key);
-	if (held) return { ok: false, error: { code: "duplicate", id: held } };
-	try {
-		await db.batch([
-			db
-				.insert(combination)
-				.select(
-					db
-						.select({
-							id: sql<string>`${input.id}`.as("id"),
-							userId: user.id,
-							key: sql<string>`${key}`.as("key"),
-							createdAt:
-								sql<number>`(cast(unixepoch('subsecond') * 1000 as integer))`.as(
-									"created_at",
-								),
-						})
-						.from(user)
-						.where(
-							and(
-								eq(user.id, userId),
-								sql`(${db
-									.select({ n: count() })
-									.from(combination)
-									.where(
-										eq(combination.userId, userId),
-									)}) < ${COMBINATION_LIMIT}`,
-							),
-						),
-				)
-				.onConflictDoNothing({ target: combination.id }),
-			...pieceWrites(db, input.pieces, ours),
-			...(input.tags.length
-				? [tagLinks(db, userId, input.id, input.tags, ours)]
-				: []),
-		]);
-	} catch (error) {
-		const taken = isKeyTaken(error) && (await keyHolder(db, userId, key));
-		if (!taken) throw error;
-		return { ok: false, error: { code: "duplicate", id: taken } };
-	}
-	const [saved] = await readCombinations(db, userId, input.id);
-	if (saved) return { ok: true, value: { combination: saved, created: true } };
-	const [taken] = await db
-		.select({ id: combination.id })
-		.from(combination)
-		.where(eq(combination.id, input.id));
-	return taken ? conflict : { ok: false, error: { code: "combination_limit" } };
+	const saved = await guardedAdd(db, {
+		table: combination,
+		userId,
+		id: input.id,
+		mine: and(eq(combination.userId, userId), eq(combination.key, key)),
+		values: { key },
+		guards: [],
+		limit: { max: COMBINATION_LIMIT, code: "combination_limit" },
+		write: async (insert) => {
+			const [rows] = await db.batch([
+				insert,
+				...pieceWrites(db, input.pieces, ours),
+				...(input.tags.length
+					? [tagLinks(db, userId, input.id, input.tags, ours)]
+					: []),
+			]);
+			return { ok: true, value: rows };
+		},
+		resend: async () => {
+			await db.batch(replaceTags(db, userId, input.id, input.tags, ours));
+			return { ok: true, value: null };
+		},
+		read: async () => (await readCombinations(db, userId, input.id))[0],
+		refused: async (): Promise<CombinationError | null> => {
+			const held = await keyHolder(db, userId, key);
+			return held ? { code: "duplicate", id: held } : null;
+		},
+	});
+	return saved.ok
+		? {
+				ok: true,
+				value: {
+					combination: saved.value.value,
+					created: saved.value.created,
+				},
+			}
+		: saved;
 }
 
 // Finds the account's combination by id and swaps its pieces whole, in one

@@ -1,10 +1,10 @@
-import { and, count, eq, getTableColumns, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { sameLabelName } from "@/labels/name";
 import { type Db, hitsIndex } from "./db";
-import { user } from "./db/auth-schema";
 import type { brand } from "./db/brand-schema";
 import type { colour } from "./db/colour-schema";
 import type { tag } from "./db/tag-schema";
+import { insertUnder } from "./guarded-add";
 import type { Result } from "./result";
 
 type LabelTable = typeof colour | typeof brand | typeof tag;
@@ -53,42 +53,14 @@ export function nameList<T extends LabelTable, L extends string = never>(list: {
 		userId: string,
 		values: Values<T>,
 		max: number,
-	) => {
-		const columns = getTableColumns(table);
-		const { name, ...extra } = values;
-		const extras = Object.fromEntries(
-			Object.entries(extra).map(([key, value]) => [
-				key,
-				sql`${value}`.as(columns[key as keyof typeof columns].name),
-			]),
-		);
-		return db
-			.insert(table)
-			.select(
-				db
-					.select({
-						id: sql<string>`${crypto.randomUUID()}`.as("id"),
-						userId: user.id,
-						name: sql<string>`${name}`.as("name"),
-						...extras,
-						createdAt:
-							sql<number>`(cast(unixepoch('subsecond') * 1000 as integer))`.as(
-								"created_at",
-							),
-					})
-					.from(user)
-					.where(
-						and(
-							eq(user.id, userId),
-							sql`(${db
-								.select({ n: count() })
-								.from(table)
-								.where(eq(table.userId, userId))}) < ${max}`,
-						),
-					),
-			)
-			.returning();
-	};
+	) =>
+		insertUnder(db, table, {
+			userId,
+			id: crypto.randomUUID(),
+			values,
+			guards: [],
+			limit: { max },
+		}).returning();
 
 	return {
 		// The server makes the id: an add sent again after a lost answer finds

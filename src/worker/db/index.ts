@@ -25,8 +25,10 @@ export const schema = {
 };
 
 // Two tabs can both pass a duplicate check; a unique index then refuses the
-// second write, with an error that names the index. D1 and drizzle may wrap
-// it, so the causes are read too.
+// second write, with an error that names the index, or for an index on plain
+// columns its columns, as "combination.user_id, combination.key". Callers
+// pass the text their index gives. D1 and drizzle may wrap it, so the causes
+// are read too.
 export const hitsIndex = (error: unknown, index: string): boolean =>
 	error instanceof Error &&
 	(error.message.includes(index) || hitsIndex(error.cause, index));

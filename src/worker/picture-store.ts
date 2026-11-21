@@ -362,22 +362,26 @@ export async function deleteDraft(
 		: { ok: false, error: { code: "not_found" } };
 }
 
-// The saved pictures of the account's items or links, or of one owner, each
-// list in the order of upload; drafts never show.
+// The saved pictures of the account's items or links, or of one item, or of
+// one wish's links, each list in the order of upload; drafts never show.
 export async function pictureIdsBy(
 	db: Db,
 	userId: string,
-	column: "ownedItemId" | "shopLinkId",
-	id?: string,
+	of: { kind: "ownedItem" | "wish"; id: string | undefined },
 ): Promise<Map<string, PictureId[]>> {
-	const owner = picture[column];
+	const owner = of.kind === "wish" ? picture.shopLinkId : picture.ownedItemId;
+	const { id } = of;
 	const rows = await db
 		.select({ id: picture.id, owner })
 		.from(picture)
 		.where(
 			and(
 				eq(picture.userId, userId),
-				id === undefined ? isNotNull(owner) : eq(owner, id),
+				id === undefined
+					? isNotNull(owner)
+					: of.kind === "wish"
+						? ofWish(db, id)
+						: eq(owner, id),
 			),
 		)
 		// Two uploads in one millisecond share created_at; rowid keeps their order.
@@ -508,6 +512,34 @@ export async function deleteWithPictures<T extends Statement>(
 		dropped.map((row) => row.id),
 	);
 	return deleted as Awaited<T>;
+}
+
+// Only the account's own owned item, shop link, or wish goes, with its
+// pictures; not found when the account has no such row.
+export async function deleteOwner(
+	db: Db,
+	bucket: R2Bucket,
+	userId: string,
+	owner: PictureOwner | { kind: "wish"; id: string },
+): Promise<Result<string, { code: "not_found" }>> {
+	const table =
+		owner.kind === "ownedItem"
+			? ownedItem
+			: owner.kind === "shopLink"
+				? shopLink
+				: wish;
+	const [row] = await deleteWithPictures(
+		db,
+		bucket,
+		{ userId, owner },
+		db
+			.delete(table)
+			.where(and(eq(table.id, owner.id), eq(table.userId, userId)))
+			.returning({ id: table.id }),
+	);
+	return row
+		? { ok: true, value: row.id }
+		: { ok: false, error: { code: "not_found" } };
 }
 
 // The Bought batch. The item write runs first, so the check sees it; then

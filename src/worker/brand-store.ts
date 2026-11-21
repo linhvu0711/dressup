@@ -34,10 +34,29 @@ export const brandOf = (db: Db, userId: string, brandId: string) =>
 		.from(brand)
 		.where(and(eq(brand.id, brandId), eq(brand.userId, userId)));
 
+// The refusal for a brand that is not the account's; null for no brand or
+// the account's own.
+export async function notYourBrand(
+	db: Db,
+	userId: string,
+	brandId: string | null,
+): Promise<{ code: "invalid"; field: "brandId"; value: string } | null> {
+	if (brandId === null) return null;
+	const [own] = await brandOf(db, userId, brandId);
+	return own ? null : { code: "invalid", field: "brandId", value: brandId };
+}
+
 const toBrand = (row: { id: string; name: string }): Brand => ({
 	id: row.id as BrandId,
 	name: row.name,
 });
+
+// A row's brand from a left join: none when the row has no brand.
+export const brandOrNone = (
+	id: string | null,
+	name: string | null,
+): Brand | null =>
+	id === null || name === null ? null : toBrand({ id, name });
 
 // The account's brands, A to Z, each with the count of owned items and of
 // shop links that have it.
