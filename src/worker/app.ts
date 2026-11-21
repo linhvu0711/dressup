@@ -33,6 +33,7 @@ import type { ActionScope } from "./actions/action";
 import { brandActions } from "./actions/brands";
 import { colourActions } from "./actions/colours";
 import { combinationActions } from "./actions/combinations";
+import { ownedItemActions } from "./actions/owned-items";
 import { tagActions } from "./actions/tags";
 import { disconnectAiApp, listAiApps } from "./ai-app-store";
 import {
@@ -56,15 +57,7 @@ import type { Db } from "./db";
 import { user } from "./db/auth-schema";
 import { loadMannequin, setMannequinColour } from "./mannequin-store";
 import { mcpRoute } from "./mcp";
-import {
-	addOwnedItem,
-	type BoughtError,
-	buyShopLink,
-	changeOwnedItem,
-	deleteOwnedItem,
-	listOwnedItems,
-	type OwnedItemError,
-} from "./owned-item-store";
+import { type BoughtError, buyShopLink } from "./owned-item-store";
 import {
 	addPicture,
 	deleteDraft,
@@ -127,33 +120,6 @@ type Refusal = {
 	status: ContentfulStatusCode;
 	body: ErrorAnswer;
 };
-
-// Only the JSON shape: the Closet module runs the owned item rules.
-const ownedItemBodySchema = z.object({
-	id: z.string(),
-	typeId: z.string(),
-	colourId: z.string(),
-	brandId: z.string().nullable(),
-	quantity: z.number(),
-	pictureIds: z.array(z.string()).optional(),
-});
-
-function ownedItemRefusal(error: OwnedItemError): Refusal {
-	switch (error.code) {
-		case "invalid":
-			return { status: 400, body: { error: "invalid", field: error.field } };
-		case "duplicate":
-			return { status: 409, body: { error: "duplicate", id: error.id } };
-		case "owned_item_limit":
-			return { status: 409, body: { error: "owned_item_limit" } };
-		case "picture_limit":
-			return { status: 409, body: { error: "picture_limit" } };
-		case "conflict":
-			return { status: 409, body: { error: "conflict", field: "id" } };
-		case "not_found":
-			return { status: 404, body: { error: "not_found" } };
-	}
-}
 
 function boughtRefusal(error: BoughtError): Refusal {
 	switch (error.code) {
@@ -249,6 +215,7 @@ export function createApp(getDb: (env: Env) => Db) {
 	const scope = (c: Context<AppEnv>): ActionScope => ({
 		db: getDb(c.env),
 		userId: c.var.user.id,
+		pictures: c.env.PICTURES,
 	});
 	const root = new Hono<AppEnv>();
 	const app = root.basePath("/api");
@@ -395,25 +362,17 @@ export function createApp(getDb: (env: Env) => Db) {
 		return c.body(null, 204);
 	});
 
-	app.get("/owned-items", withAuth, requireUser, async (c) =>
-		c.json({
-			ownedItems: await listOwnedItems(getDb(c.env), c.var.user.id),
-		} satisfies OwnedItemsAnswer),
-	);
+	app.get("/owned-items", withAuth, requireUser, async (c) => {
+		const listed = await ownedItemActions.list.run(scope(c), {});
+		if (!listed.ok) return c.json(listed.error.body, listed.error.status);
+		return c.json({ ownedItems: listed.value } satisfies OwnedItemsAnswer);
+	});
 
 	app.post("/owned-items", withAuth, requireUser, async (c) => {
-		const body = await readBody(c, ownedItemBodySchema);
+		const body = await readBody(c, ownedItemActions.add.input);
 		if (!body.ok) return invalid(c, body.error.field);
-		const added = await addOwnedItem(
-			getDb(c.env),
-			c.env.PICTURES,
-			c.var.user.id,
-			body.value,
-		);
-		if (!added.ok) {
-			const { status, body: refused } = ownedItemRefusal(added.error);
-			return c.json(refused, status);
-		}
+		const added = await ownedItemActions.add.run(scope(c), body.value);
+		if (!added.ok) return c.json(added.error.body, added.error.status);
 		const { ownedItem, created } = added.value;
 		return c.json({ ownedItem } satisfies OwnedItemAnswer, created ? 201 : 200);
 	});
@@ -421,38 +380,22 @@ export function createApp(getDb: (env: Env) => Db) {
 	app.put("/owned-items/:id", withAuth, requireUser, async (c) => {
 		const body = await readBody(
 			c,
-			z.object({
-				brandId: z.string().nullable(),
-				quantity: z.number(),
-				pictureIds: z.array(z.string()).optional(),
-			}),
+			ownedItemActions.change.input.omit({ id: true }),
 		);
 		if (!body.ok) return invalid(c, body.error.field);
-		const changed = await changeOwnedItem(
-			getDb(c.env),
-			c.env.PICTURES,
-			c.var.user.id,
-			c.req.param("id"),
-			body.value,
-		);
-		if (!changed.ok) {
-			const { status, body: refused } = ownedItemRefusal(changed.error);
-			return c.json(refused, status);
-		}
+		const changed = await ownedItemActions.change.run(scope(c), {
+			...body.value,
+			id: c.req.param("id"),
+		});
+		if (!changed.ok) return c.json(changed.error.body, changed.error.status);
 		return c.json({ ownedItem: changed.value } satisfies OwnedItemAnswer, 200);
 	});
 
 	app.delete("/owned-items/:id", withAuth, requireUser, async (c) => {
-		const deleted = await deleteOwnedItem(
-			getDb(c.env),
-			c.env.PICTURES,
-			c.var.user.id,
-			c.req.param("id"),
-		);
-		if (!deleted.ok) {
-			const { status, body: refused } = ownedItemRefusal(deleted.error);
-			return c.json(refused, status);
-		}
+		const deleted = await ownedItemActions.delete.run(scope(c), {
+			id: c.req.param("id"),
+		});
+		if (!deleted.ok) return c.json(deleted.error.body, deleted.error.status);
 		return c.body(null, 204);
 	});
 

@@ -75,6 +75,21 @@ describe("POST /api/owned-items", () => {
 		});
 	});
 
+	test("adds an item with no brand when brandId is left out", async () => {
+		// Given: alice signed in; the shirt with no brandId key
+		const { h, headers, ids } = await alice();
+		const { brandId: _, ...noBrand } = shirt(ids);
+		// When
+		const res = await post(h, headers, noBrand);
+		// Then
+		const { status, body } = await answer(res);
+		const { ownedItem } = body as { ownedItem: Listed };
+		expect({ status, brand: ownedItem.brand }).toEqual({
+			status: 201,
+			brand: null,
+		});
+	});
+
 	test("lists the owned items newest first", async () => {
 		// Given: alice adds a Navy long button-up, then a White short tee
 		const { h, headers, ids } = await alice();
@@ -304,6 +319,22 @@ describe("PUT and DELETE /api/owned-items/:id", () => {
 					pictureIds: [],
 				},
 			},
+		});
+	});
+
+	test("clears the brand when a change leaves brandId out", async () => {
+		// Given: brand Zara; the shirt with brand Zara
+		const { h, headers, ids } = await alice();
+		const zara = await postBrand(h, headers, "Zara");
+		await post(h, headers, { ...shirt(ids), brandId: zara });
+		// When
+		const res = await put(h, headers, FIRST_ID, { quantity: 2 });
+		// Then
+		const { status, body } = await answer(res);
+		const { ownedItem } = body as { ownedItem: Listed };
+		expect({ status, brand: ownedItem.brand }).toEqual({
+			status: 200,
+			brand: null,
 		});
 	});
 

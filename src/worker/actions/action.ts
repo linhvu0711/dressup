@@ -4,8 +4,8 @@ import type { ErrorAnswer } from "@/data/contract";
 import type { Db } from "../db";
 import type { Result } from "../result";
 
-// The account an action acts in.
-export type ActionScope = { db: Db; userId: string };
+// The account an action acts in: its rows and its pictures.
+export type ActionScope = { db: Db; userId: string; pictures: R2Bucket };
 
 // The website answers every bad field with "invalid"; the contract
 // (src/react-app/data/contract.ts) names every code it sends. The website
@@ -58,3 +58,6 @@ export const notAType = (value: unknown) =>
 
 export const notYourColour = (value: unknown) =>
 	`${value} is not one of your colours. list_colours names them.`;
+
+export const notYourBrand = (value: unknown) =>
+	`${value} is not one of your brands. list_brands names them.`;

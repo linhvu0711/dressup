@@ -16,8 +16,15 @@ import {
 	three,
 	two,
 } from "../test/combination-pieces";
-import { ALICE, BOB, count, type Harness, withAccount } from "../test/harness";
-import type { Refusal } from "./action";
+import {
+	ALICE,
+	BOB,
+	count,
+	type Harness,
+	scopeOf,
+	withAccount,
+} from "../test/harness";
+import type { ActionScope, Refusal } from "./action";
 import { colourActions } from "./colours";
 import { combinationActions } from "./combinations";
 import { tagActions } from "./tags";
@@ -32,7 +39,7 @@ const idsOf = async (
 
 async function withAlice() {
 	const { h } = await withAccount();
-	const alice = { db: h.db, userId: ALICE.id };
+	const alice = scopeOf(h);
 	return { h, alice, ids: await idsOf(h, ALICE.id) };
 }
 
@@ -230,7 +237,7 @@ describe("saving a combination", () => {
 		// Given: bob saved a combination with FIRST_ID
 		const { h, alice, ids } = await withAlice();
 		await h.addAccount(BOB);
-		const bob = { db: h.db, userId: BOB.id };
+		const bob = scopeOf(h, BOB);
 		await combinationActions.save.run(bob, three(await idsOf(h, BOB.id)));
 		// When
 		const saved = await combinationActions.save.run(alice, three(ids));
@@ -362,7 +369,7 @@ describe("listing combinations", () => {
 	test("lists with no filter and writes no starter colours", async () => {
 		// Given: alice's account, no colour list read yet
 		const { h } = await withAccount();
-		const alice = { db: h.db, userId: ALICE.id };
+		const alice = scopeOf(h);
 		// When
 		const listed = await combinationActions.list.run(alice, {});
 		// Then
@@ -405,7 +412,7 @@ const NOT_TAG_ROW = (value: string) =>
 		text: `${value} is not one of your tags. list_tags names them.`,
 	}) satisfies Refusal;
 
-type Scope = { db: Harness["db"]; userId: string };
+type Scope = ActionScope;
 
 // Another tab's write, run after this call's checks and before its batch.
 function beforeNextBatch(h: Harness, otherTab: () => Promise<unknown>) {
@@ -643,7 +650,7 @@ describe("tags on a combination", () => {
 		// Given: alice's account; bob's tag Work
 		const { h, alice, ids } = await withAlice();
 		await h.addAccount(BOB);
-		const bob = { db: h.db, userId: BOB.id };
+		const bob = scopeOf(h, BOB);
 		const [bobWork] = await addTags(bob, ["Work"]);
 		// When
 		const saved = await combinationActions.save.run(alice, {
@@ -844,7 +851,7 @@ describe("changing a combination", () => {
 		// no jacket; alice has an account
 		const { h, alice, ids } = await withAlice();
 		await h.addAccount(BOB);
-		const bob = { db: h.db, userId: BOB.id };
+		const bob = scopeOf(h, BOB);
 		const bobIds = await idsOf(h, BOB.id);
 		await combinationActions.save.run(bob, {
 			id: FIRST_ID,
@@ -997,7 +1004,7 @@ describe("deleting a combination", () => {
 		// Given: bob saved three(bobIds); alice has an account
 		const { h, alice } = await withAlice();
 		await h.addAccount(BOB);
-		const bob = { db: h.db, userId: BOB.id };
+		const bob = scopeOf(h, BOB);
 		await combinationActions.save.run(bob, three(await idsOf(h, BOB.id)));
 		// When
 		const deleted = await combinationActions.delete.run(alice, {
@@ -1020,7 +1027,7 @@ describe("listing the account's combinations", () => {
 		const { h, alice, ids } = await withAlice();
 		await combinationActions.save.run(alice, three(ids));
 		await h.addAccount(BOB);
-		const bob = { db: h.db, userId: BOB.id };
+		const bob = scopeOf(h, BOB);
 		// When
 		const listedForBob = await combinationActions.list.run(bob, {});
 		// Then

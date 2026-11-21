@@ -906,6 +906,41 @@ describe("owned items", () => {
 		).toEqual([["shirt_l", "Navy", null, 2]]);
 	});
 
+	test("answers created true for a new owned item", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		// When
+		const { data } = await ai.call("add_owned_item", await shirt(ai));
+		// Then
+		expect({ created: (data as { created: boolean }).created }).toEqual({
+			created: true,
+		});
+	});
+
+	test("clears the brand when a change leaves brandId out", async () => {
+		// Given: brand Zara and the shirt with brand Zara
+		const { ai } = await withAiSession();
+		const brand = await ai.call("add_brand", { name: "Zara" });
+		const zara = (brand.data as { brand: { id: string } }).brand.id;
+		const added = await ai.call("add_owned_item", {
+			...(await shirt(ai)),
+			brandId: zara,
+		});
+		const { id } = (added.data as { ownedItem: Listed }).ownedItem;
+		// When
+		await ai.call("change_owned_item", { id, quantity: 2 });
+		const { data } = await ai.call("list_owned_items");
+		// Then
+		expect(
+			(data as { ownedItems: Listed[] }).ownedItems.map((i) => [
+				i.typeId,
+				i.colour.name,
+				i.brand,
+				i.quantity,
+			]),
+		).toEqual([["shirt_l", "Navy", null, 2]]);
+	});
+
 	test("refuses the same piece and brand a second time as a sentence", async () => {
 		// Given
 		const { ai } = await withAiSession();

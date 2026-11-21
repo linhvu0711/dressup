@@ -5,6 +5,7 @@ import { testUtils } from "better-auth/plugins";
 import { eq, getTableName, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
+import type { ActionScope } from "../actions/action";
 import { createApp } from "../app";
 import { type AuthSettings, authOptions, createClientDiscovery } from "../auth";
 import { type Db, schema } from "../db";
@@ -293,6 +294,13 @@ export const BOB: Person = {
 	email: "bob@example.com",
 	name: "Bob",
 };
+
+// The account an action acts in, for tests at the action module.
+export const scopeOf = (h: Harness, person: Person = ALICE): ActionScope => ({
+	db: h.db,
+	userId: person.id,
+	pictures: h.pictures as unknown as R2Bucket,
+});
 
 // A fresh harness with Alice signed in.
 export async function withAccount() {

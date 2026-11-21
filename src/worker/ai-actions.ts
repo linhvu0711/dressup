@@ -13,34 +13,28 @@ import {
 	combinationTitle,
 } from "@/combinations/combination";
 import { type Holdings, holdingsOf, markOf } from "@/combinations/marks";
-import {
-	isTypeId,
-	LAYER_OF,
-	TYPE_IDS,
-	TYPE_NAMES,
-} from "@/dress/clothing-types";
-import { BRAND_LIMIT, BRAND_NAME_MAX, type BrandId } from "@/labels/brand";
-import { COLOUR_LIMIT, COLOUR_NAME_MAX, type ColourId } from "@/labels/colour";
-import { ITEM_PICTURE_LIMIT } from "@/pictures/picture";
+import { LAYER_OF, TYPE_IDS, TYPE_NAMES } from "@/dress/clothing-types";
+import { BRAND_LIMIT, BRAND_NAME_MAX } from "@/labels/brand";
+import { COLOUR_LIMIT, COLOUR_NAME_MAX } from "@/labels/colour";
 import {
 	filterSize,
 	matchesPieceFilter,
-	NO_FILTER,
-	ownedItemPiece,
 	type PieceFilter,
 	wishPiece,
 } from "@/piece-filter/piece-filter";
 import { TAG_NAME_MAX, type Tag } from "@/tags/tag";
 import { SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";
-import {
-	type ActionScope,
-	notAType,
-	notYourColour,
-	serverError,
-} from "./actions/action";
+import { type ActionScope, serverError } from "./actions/action";
 import { brandActions } from "./actions/brands";
 import { colourActions } from "./actions/colours";
 import { combinationActions } from "./actions/combinations";
+import { ownedItemActions } from "./actions/owned-items";
+import { pictureIdsInput } from "./actions/pictures";
+import {
+	pieceFilterInput,
+	pieceFilterOf,
+	pieceFilterRefusals,
+} from "./actions/piece-filter";
 import { tagActions } from "./actions/tags";
 import { countAiAction } from "./ai-action-store";
 import {
@@ -53,10 +47,8 @@ import {
 	noOwnedItems,
 	noPicture,
 	noTags,
-	notYourBrand,
 	noWishes,
 	noWishMatch,
-	ownedItemRefusalText,
 	tooManyActions,
 	uploadAddressText,
 	wishRefusalText,
@@ -64,14 +56,7 @@ import {
 import { listBrands } from "./brand-store";
 import { listColours } from "./colour-store";
 import type { Db } from "./db";
-import {
-	addOwnedItem,
-	buyShopLink,
-	changeOwnedItem,
-	deleteOwnedItem,
-	listOwnedItems,
-	listOwnedPieces,
-} from "./owned-item-store";
+import { buyShopLink, listOwnedPieces } from "./owned-item-store";
 import { readPicture } from "./picture-store";
 import { listTags } from "./tag-store";
 import {
@@ -141,45 +126,12 @@ const holdingsFor = async (db: Db, userId: string) => {
 
 const noArgs = z.object({});
 
-const field = {
-	types: z
-		.array(z.string())
-		.optional()
-		.describe("Type ids from list_types. A piece of any of them matches."),
-	colourIds: z
-		.array(z.string())
-		.optional()
-		.describe("Colour ids from list_colours. A piece in any of them matches."),
-	brandIds: z
-		.array(z.string().nullable())
-		.optional()
-		.describe(
-			"Brand ids from list_brands, and null for no brand. Any of them matches.",
-		),
-	// Loose strings on purpose, as add_owned_item: a list of 9 must reach the
-	// store to get a sentence.
-	pictureIds: z
-		.array(z.string())
-		.optional()
-		.describe(
-			`The whole picture list, at most ${ITEM_PICTURE_LIMIT}, in order: ids that an upload address answered and ids the item has now. An id left out is deleted for good. Leave pictureIds out to keep the pictures as they are.`,
-		),
-};
-
-// Loose strings on purpose, as the add tools: a type or an id that is not one
-// must reach filterOf to get a sentence.
-const pieceFilterArgs = z.object({
-	types: field.types,
-	colourIds: field.colourIds,
-	brandIds: field.brandIds,
-});
-
 const filterRule =
 	"Filters are optional. Inside one filter any pick matches; an item must fit every filter given.";
 
 export function registerAiActions(server: McpServer, account: Account) {
 	const { db, pictures, userId, baseURL } = account;
-	const scope: ActionScope = { db, userId };
+	const scope: ActionScope = { db, userId, pictures };
 
 	async function combinationViews(list: Combination[]) {
 		const [tags, holdings] = await Promise.all([
@@ -189,36 +141,18 @@ export function registerAiActions(server: McpServer, account: Account) {
 		return list.map((c) => combinationView(c, tags, holdings));
 	}
 
-	// An unknown value is refused, not left out: a list from a wrong id would
-	// read as a true answer.
 	async function filterOf(
-		args: z.output<typeof pieceFilterArgs>,
+		args: z.output<typeof pieceFilterInput>,
 	): Promise<{ ok: true; filter: PieceFilter } | { ok: false; text: string }> {
-		const { types = [], colourIds = [], brandIds = [] } = args;
-		const badType = types.find((t) => !isTypeId(t));
-		if (badType !== undefined) return { ok: false, text: notAType(badType) };
-		if (colourIds.length > 0) {
-			const colours = await listColours(db, userId);
-			const bad = colourIds.find((id) => !colours.some((c) => c.id === id));
-			if (bad !== undefined) return { ok: false, text: notYourColour(bad) };
+		const picked = await pieceFilterOf(scope, args);
+		if (!picked.ok) {
+			const { error } = picked;
+			const row = pieceFilterRefusals[error.code] as (e: typeof error) => {
+				text: string;
+			};
+			return { ok: false, text: row(error).text };
 		}
-		if (brandIds.some((id) => id !== null)) {
-			const brands = await listBrands(db, userId);
-			const bad = brandIds.find(
-				(id) => id !== null && !brands.some((b) => b.id === id),
-			);
-			if (bad !== undefined && bad !== null)
-				return { ok: false, text: notYourBrand(bad) };
-		}
-		return {
-			ok: true,
-			filter: {
-				...NO_FILTER,
-				types: types as PieceFilter["types"],
-				colours: colourIds as ColourId[],
-				brands: brandIds as (BrandId | null)[],
-			},
-		};
+		return { ok: true, filter: picked.value };
 	}
 
 	function tool<S extends z.ZodObject>(
@@ -543,59 +477,35 @@ export function registerAiActions(server: McpServer, account: Account) {
 			title: "List the closet",
 			description: `The account's owned items, newest first. An owned item is one brand of one piece (a type in a colour) with a quantity of 1 to ${QUANTITY_MAX}. An account holds at most ${OWNED_ITEM_LIMIT}. Each item has pictureIds, its pictures in upload order; show_picture shows one. ${filterRule}`,
 			annotations: READ,
-			inputSchema: pieceFilterArgs,
+			inputSchema: ownedItemActions.list.input,
 		},
-		async (args) => {
-			const picked = await filterOf(args);
-			if (!picked.ok) return refusal(picked.text);
-			const ownedItems = (await listOwnedItems(db, userId)).filter((item) =>
-				matchesPieceFilter(picked.filter, ownedItemPiece(item)),
-			);
+		async (input) => {
+			const listed = await ownedItemActions.list.run(scope, input);
+			if (!listed.ok) return refusal(listed.error.text);
+			const ownedItems = listed.value;
 			if (ownedItems.length > 0) return answer({ ownedItems });
-			return answer(
-				{ ownedItems },
-				filterSize(picked.filter) > 0 ? noOwnedItemMatch : noOwnedItems,
-			);
+			const { types = [], colourIds = [], brandIds = [] } = input;
+			const filtered =
+				types.length > 0 || colourIds.length > 0 || brandIds.length > 0;
+			return answer({ ownedItems }, filtered ? noOwnedItemMatch : noOwnedItems);
 		},
 	);
 
-	// Loose types on purpose: a quantity of 0 must reach the store to get a
-	// sentence, since the SDK's own schema error is not one.
 	tool(
 		"add_owned_item",
 		{
 			title: "Add to the closet",
-			description: `Adds one brand of one piece to the closet, with a quantity. The account has each piece and brand once, and at most ${OWNED_ITEM_LIMIT} items.`,
+			description: `Adds one brand of one piece to the closet, with a quantity. The account has each piece and brand once, and at most ${OWNED_ITEM_LIMIT} items. Answers the owned item and created, true for a new item.`,
 			annotations: WRITE,
-			inputSchema: z.object({
-				typeId: z
-					.string()
-					.describe("A type id from list_types, such as shirt_l."),
-				colourId: z.string().describe("A colour id from list_colours."),
-				brandId: z
-					.string()
-					.nullable()
-					.optional()
-					.describe("A brand id from list_brands. Leave it out for no brand."),
-				quantity: z
-					.number()
-					.describe(`How many the account owns, 1 to ${QUANTITY_MAX}.`),
-				pictureIds: field.pictureIds,
-			}),
+			inputSchema: ownedItemActions.add.input.omit({ id: true }),
 		},
-		async ({ typeId, colourId, brandId = null, quantity, pictureIds }) => {
+		async (input) => {
 			// The server makes the id, as save_combination does.
-			const added = await addOwnedItem(db, pictures, userId, {
+			const added = await ownedItemActions.add.run(scope, {
+				...input,
 				id: crypto.randomUUID(),
-				typeId,
-				colourId,
-				brandId,
-				quantity,
-				pictureIds,
 			});
-			return added.ok
-				? answer({ ownedItem: added.value.ownedItem })
-				: refusal(ownedItemRefusalText(added.error));
+			return added.ok ? answer(added.value) : refusal(added.error.text);
 		},
 	);
 
@@ -604,29 +514,15 @@ export function registerAiActions(server: McpServer, account: Account) {
 		{
 			title: "Change an owned item",
 			description:
-				"Changes the brand and the quantity of an owned item. Its piece stays.",
+				"Changes the brand and the quantity of an owned item. Its piece stays. Leave brandId out for no brand.",
 			annotations: WRITE,
-			inputSchema: z.object({
-				id: z.string().describe("The owned item's id."),
-				brandId: z
-					.string()
-					.nullable()
-					.describe("A brand id from list_brands, or null for no brand."),
-				quantity: z
-					.number()
-					.describe(`How many the account owns, 1 to ${QUANTITY_MAX}.`),
-				pictureIds: field.pictureIds,
-			}),
+			inputSchema: ownedItemActions.change.input,
 		},
-		async ({ id, brandId, quantity, pictureIds }) => {
-			const changed = await changeOwnedItem(db, pictures, userId, id, {
-				brandId,
-				quantity,
-				pictureIds,
-			});
+		async (input) => {
+			const changed = await ownedItemActions.change.run(scope, input);
 			return changed.ok
 				? answer({ ownedItem: changed.value })
-				: refusal(ownedItemRefusalText(changed.error));
+				: refusal(changed.error.text);
 		},
 	);
 
@@ -636,15 +532,13 @@ export function registerAiActions(server: McpServer, account: Account) {
 			title: "Delete an owned item",
 			description: "Deletes an owned item from the closet for good.",
 			annotations: DELETE,
-			inputSchema: z.object({
-				id: z.string().describe("The owned item's id."),
-			}),
+			inputSchema: ownedItemActions.delete.input,
 		},
-		async ({ id }) => {
-			const deleted = await deleteOwnedItem(db, pictures, userId, id);
+		async (input) => {
+			const deleted = await ownedItemActions.delete.run(scope, input);
 			return deleted.ok
 				? answer({ deleted: deleted.value })
-				: refusal(ownedItemRefusalText(deleted.error));
+				: refusal(deleted.error.text);
 		},
 	);
 
@@ -654,7 +548,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 			title: "List the wishlist",
 			description: `The account's wishes, newest first, each with its shop links. A wish is one piece (a type in a colour) the account wants to buy. An account holds at most ${WISH_LIMIT} wishes, and a wish at most ${SHOP_LINK_LIMIT} shop links. Each shop link has pictureIds, its pictures in upload order; show_picture shows one. ${filterRule} The brand of a wish is the brand of any of its shop links, so a wish with no link fits no brand filter.`,
 			annotations: READ,
-			inputSchema: pieceFilterArgs,
+			inputSchema: pieceFilterInput,
 		},
 		async (args) => {
 			const picked = await filterOf(args);
@@ -725,7 +619,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 			.nullable()
 			.optional()
 			.describe("The price in whole VND. Leave it out for no price."),
-		pictureIds: field.pictureIds,
+		pictureIds: pictureIdsInput,
 	};
 
 	tool(
