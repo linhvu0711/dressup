@@ -28,19 +28,6 @@ import { pictureActions } from "./actions/pictures";
 import { tagActions } from "./actions/tags";
 import { shopLinkActions, wishActions } from "./actions/wishes";
 import { countAiAction } from "./ai-action-store";
-import {
-	noBrands,
-	noColours,
-	noCombinations,
-	noCombinationsMatch,
-	noOwnedItemMatch,
-	noOwnedItems,
-	noTags,
-	noWishes,
-	noWishMatch,
-	tooManyActions,
-	uploadAddressText,
-} from "./ai-messages";
 import { listBrands } from "./brand-store";
 import { listColours } from "./colour-store";
 import type { Db } from "./db";
@@ -107,6 +94,32 @@ const noArgs = z.object({});
 
 const filterRule =
 	"Filters are optional. Inside one filter any pick matches; an item must fit every filter given.";
+
+// Every refusal an AI app gets names the value it sent and what is allowed,
+// so the AI app can fix its call and try again.
+
+const tooManyActions = "Too many actions. Wait a minute and try again.";
+
+const uploadAddressText = (address: string) =>
+	`Send the picture within ${UPLOAD_ADDRESS_AGE_MS / 60_000} minutes, once: curl -X POST --data-binary @photo.jpg ${address}. It answers with the picture's id.`;
+
+const noTags = "You have no tags yet.";
+
+const noColours = "You have no colours yet.";
+
+const noCombinations = "You have no combinations yet.";
+
+const noCombinationsMatch = "No combination matches these filters.";
+
+const noBrands = "You have no brands yet.";
+
+const noOwnedItems = "Nothing in your closet yet.";
+
+const noOwnedItemMatch = "No owned item matches the filter.";
+
+const noWishes = "Nothing on your wishlist yet.";
+
+const noWishMatch = "No wish matches the filter.";
 
 export function registerAiActions(server: McpServer, account: Account) {
 	const { db, pictures, userId, baseURL } = account;
