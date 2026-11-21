@@ -22,7 +22,7 @@ import type { Hex } from "@/colour/hex";
 import type { PieceRef } from "@/combinations/marks";
 import type { TypeId } from "@/dress/clothing-types";
 import type { ColourId } from "@/labels/colour";
-import { brandOf, brandOrNone, notYourBrand } from "./brand-store";
+import { brandOf, brandOrNone } from "./brand-store";
 import { colourOf } from "./colour-store";
 import type { Db } from "./db";
 import { brand } from "./db/brand-schema";
@@ -38,6 +38,7 @@ import {
 	pictureIdsBy,
 	saveWithPictures,
 } from "./picture-store";
+import { pieceRefusal, samePiece } from "./piece-rows";
 import type { Result } from "./result";
 
 type OwnedItemField =
@@ -148,11 +149,9 @@ function invalid(
 
 // The account's items of one piece with one brand; `is` matches no brand
 // to no brand.
-const samePiece = (userId: string, piece: Piece) =>
+const sameItem = (userId: string, piece: Piece) =>
 	and(
-		eq(ownedItem.userId, userId),
-		eq(ownedItem.typeId, piece.typeId),
-		eq(ownedItem.colourId, piece.colourId),
+		samePiece(ownedItem, userId, piece),
 		sql`${ownedItem.brandId} is ${piece.brandId}`,
 	);
 
@@ -174,31 +173,9 @@ const itemGuards = (db: Db, userId: string, piece: Piece) => [
 		? undefined
 		: exists(brandOf(db, userId, piece.brandId)),
 	notExists(
-		db.select({ one: sql`1` }).from(ownedItem).where(samePiece(userId, piece)),
+		db.select({ one: sql`1` }).from(ownedItem).where(sameItem(userId, piece)),
 	),
 ];
-
-// Why a write that the guards stopped did not happen, in the order a person
-// would fix it. `otherThan` is the item a change writes, which holds its own
-// piece and brand.
-async function refusedWrite(
-	db: Db,
-	userId: string,
-	piece: Piece,
-	otherThan?: string,
-): Promise<OwnedItemError | null> {
-	const [ownColour] = await colourOf(db, userId, piece.colourId);
-	if (!ownColour)
-		return { code: "invalid", field: "colourId", value: piece.colourId };
-	const notYours = await notYourBrand(db, userId, piece.brandId);
-	if (notYours) return notYours;
-	const holders = await db
-		.select({ id: ownedItem.id })
-		.from(ownedItem)
-		.where(samePiece(userId, piece));
-	const held = holders.find((row) => row.id !== otherThan);
-	return held ? { code: "duplicate", id: held.id as OwnedItemId } : null;
-}
 
 // The page makes the id when the form opens, so an add sent again after a
 // lost answer gives back the same item rather than a second one, with the
@@ -235,7 +212,7 @@ export async function addOwnedItem(
 		table: ownedItem,
 		userId,
 		id: input.id,
-		mine: samePiece(userId, input),
+		mine: sameItem(userId, input),
 		values: {
 			typeId: input.typeId,
 			colourId: input.colourId,
@@ -257,7 +234,13 @@ export async function addOwnedItem(
 					.where(and(eq(ownedItem.id, input.id), eq(ownedItem.userId, userId))),
 			),
 		read: async () => (await readOwnedItems(db, userId, input.id))[0],
-		refused: () => refusedWrite(db, userId, input),
+		refused: (): Promise<OwnedItemError | null> =>
+			pieceRefusal(
+				db,
+				userId,
+				{ table: ownedItem, where: sameItem(userId, input) },
+				input,
+			),
 	});
 	return added.ok
 		? {
@@ -333,11 +316,17 @@ export async function changeOwnedItem(
 		.from(ownedItem)
 		.where(and(eq(ownedItem.id, id), eq(ownedItem.userId, userId)));
 	if (!held) return { ok: false, error: { code: "not_found" } };
+	const piece = { ...held, brandId };
 	return {
 		ok: false,
-		error: (await refusedWrite(db, userId, { ...held, brandId }, id)) ?? {
-			code: "conflict",
-		},
+		// The item holds its own piece and brand, so it is not a duplicate.
+		error: (await pieceRefusal<OwnedItemId>(
+			db,
+			userId,
+			{ table: ownedItem, where: sameItem(userId, piece) },
+			piece,
+			id,
+		)) ?? { code: "conflict" },
 	};
 }
 
@@ -407,7 +396,7 @@ export async function buyShopLink(
 	const [found] = await db
 		.select({ id: ownedItem.id, quantity: ownedItem.quantity })
 		.from(ownedItem)
-		.where(samePiece(userId, piece))
+		.where(sameItem(userId, piece))
 		.orderBy(asc(ownedItem.createdAt), asc(sql`rowid`))
 		.limit(1);
 	if (found && found.quantity >= QUANTITY_MAX) {

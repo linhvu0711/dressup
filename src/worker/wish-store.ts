@@ -1,7 +1,6 @@
 import { and, asc, desc, eq, exists, notExists, sql } from "drizzle-orm";
 import type { Hex } from "@/colour/hex";
 import type { PieceRef } from "@/combinations/marks";
-import type { TypeId } from "@/dress/clothing-types";
 import type { ColourId } from "@/labels/colour";
 import {
 	SHOP_LINK_LIMIT,
@@ -27,6 +26,7 @@ import {
 	pictureIdsBy,
 	saveWithPictures,
 } from "./picture-store";
+import { pieceRefusal, samePiece } from "./piece-rows";
 import type { Result } from "./result";
 
 type WishField =
@@ -50,8 +50,6 @@ export type WishError =
 	| { code: "not_found" };
 
 type AddedWish = { wish: Wish; created: boolean };
-
-type Piece = { typeId: TypeId; colourId: string };
 
 // The account's wishes, newest first, or the one with this id.
 async function readWishes(
@@ -192,30 +190,6 @@ const listRefusal = (
 				error: { code: "invalid", field: "pictureIds", value: ids },
 			};
 
-const samePiece = (userId: string, piece: Piece) =>
-	and(
-		eq(wish.userId, userId),
-		eq(wish.typeId, piece.typeId),
-		eq(wish.colourId, piece.colourId),
-	);
-
-// Why an add that the guards stopped did not happen, in the order a person
-// would fix it.
-async function refusedWrite(
-	db: Db,
-	userId: string,
-	piece: Piece,
-): Promise<WishError | null> {
-	const [ownColour] = await colourOf(db, userId, piece.colourId);
-	if (!ownColour)
-		return { code: "invalid", field: "colourId", value: piece.colourId };
-	const [held] = await db
-		.select({ id: wish.id })
-		.from(wish)
-		.where(samePiece(userId, piece));
-	return held ? { code: "duplicate", id: held.id as WishId } : null;
-}
-
 // The page makes the id when the form opens, so an add sent again after a
 // lost answer gives back the same wish rather than a second one; the same id
 // with another piece, or another account's id, is conflict. The colour, the
@@ -235,17 +209,26 @@ export async function addWish(
 		table: wish,
 		userId,
 		id: input.id,
-		mine: samePiece(userId, input),
+		mine: samePiece(wish, userId, input),
 		values: { typeId: input.typeId, colourId: input.colourId },
 		guards: [
 			exists(colourOf(db, userId, input.colourId)),
 			notExists(
-				db.select({ one: sql`1` }).from(wish).where(samePiece(userId, input)),
+				db
+					.select({ one: sql`1` })
+					.from(wish)
+					.where(samePiece(wish, userId, input)),
 			),
 		],
 		limit: { max: WISH_LIMIT, code: "wish_limit" },
 		read: async () => (await readWishes(db, userId, input.id))[0],
-		refused: () => refusedWrite(db, userId, input),
+		refused: (): Promise<WishError | null> =>
+			pieceRefusal(
+				db,
+				userId,
+				{ table: wish, where: samePiece(wish, userId, input) },
+				input,
+			),
 	});
 	return added.ok
 		? {
