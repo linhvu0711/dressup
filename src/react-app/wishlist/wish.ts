@@ -64,6 +64,12 @@ export const shopLinkInputSchema = z.object({
 
 export const shopLinkChangeSchema = shopLinkInputSchema.omit({ id: true });
 
+// One add from the Wishlist: the piece, and its first shop link when the
+// user gave an address.
+export const wishlistAddSchema = wishInputSchema.extend({
+	shopLink: shopLinkInputSchema.optional(),
+});
+
 const shopLinkSchema = z.object({
 	id: shopLinkIdSchema,
 	url: z.string(),

@@ -308,6 +308,17 @@ export function createApp(getDb: (env: Env) => Db) {
 		return c.json({ wish } satisfies WishAnswer, created ? 201 : 200);
 	});
 
+	// One add from the Wishlist form: the piece, with its first shop link when
+	// the user gave an address.
+	app.post("/wishlist", withAuth, requireUser, async (c) => {
+		const body = await readBody(c, wishActions.addToWishlist.input);
+		if (!body.ok) return invalid(c, body.error.field);
+		const added = await wishActions.addToWishlist.run(scope(c), body.value);
+		if (!added.ok) return c.json(added.error.body, added.error.status);
+		const { wish, created } = added.value;
+		return c.json({ wish } satisfies WishAnswer, created ? 201 : 200);
+	});
+
 	app.post("/wishes/:id/shop-links", withAuth, requireUser, async (c) => {
 		const body = await readBody(
 			c,

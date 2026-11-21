@@ -438,19 +438,26 @@ export type PictureListSave = {
 // The owner's write and its picture list in one batch: the owner first, so
 // the owner check sees it, then the drafts in the list attach, then the
 // owner's pictures left out go, rows and objects; with the check false,
-// neither. It gives back the owner write's result.
+// neither. A parent write, the row the owner hangs under, as a new wish under
+// its first shop link, runs before the owner in the same batch. It gives back
+// the owner write's result.
 export async function saveWithPictures<T extends Statement>(
 	db: Db,
 	bucket: R2Bucket,
 	{ userId, owner, ids }: PictureListSave,
 	ownerWrite: T,
+	parentWrite?: Statement,
 ): Promise<Result<Awaited<T>, PictureListError>> {
-	if (ids === undefined)
-		return { ok: true, value: (await ownerWrite) as Awaited<T> };
+	if (ids === undefined) {
+		if (!parentWrite)
+			return { ok: true, value: (await ownerWrite) as Awaited<T> };
+		const [, written] = await db.batch([parentWrite, ownerWrite]);
+		return { ok: true, value: written as Awaited<T> };
+	}
 	const refused = await checkPictureList(db, userId, owner, ids);
 	if (refused) return { ok: false, error: refused };
 	const held = ownerHeld(db, userId, owner);
-	const [written, , , dropped] = await db.batch([
+	const writes: [Statement, ...Statement[]] = [
 		ownerWrite,
 		db
 			.update(picture)
@@ -472,7 +479,16 @@ export async function saveWithPictures<T extends Statement>(
 				held,
 			),
 		),
-	]);
+	];
+	const results = await db.batch(
+		parentWrite ? [parentWrite, ...writes] : writes,
+	);
+	const [written, , , dropped] = results.slice(parentWrite ? 1 : 0) as [
+		unknown,
+		unknown,
+		unknown,
+		{ id: string }[],
+	];
 	await removeObjects(
 		bucket,
 		dropped.map((row) => row.id),

@@ -30,6 +30,9 @@ type Listed = {
 const post = (h: Harness, headers: Headers, body: unknown) =>
 	send(h, headers, "POST", "/api/wishes", body);
 
+const postWishlist = (h: Harness, headers: Headers, body: unknown) =>
+	send(h, headers, "POST", "/api/wishlist", body);
+
 const list = async (h: Harness, headers: Headers) =>
 	(
 		(await (await send(h, headers, "GET", "/api/wishes")).json()) as {
@@ -118,6 +121,70 @@ describe("POST /api/wishes", () => {
 			count: 1,
 		});
 	});
+});
+
+describe("POST /api/wishlist", () => {
+	// The Navy wool jacket with the Zara link, as the one form sends it.
+	const jacketWithLink = (ids: Ids) => ({
+		...jacket(ids),
+		shopLink: zaraLink(null),
+	});
+
+	const added = (ids: Ids) => ({
+		wish: {
+			id: FIRST_ID,
+			typeId: "wool",
+			colour: { id: ids.Navy, name: "Navy", hex: "#1F3A5F" },
+			shopLinks: [
+				{
+					id: LINK_ID,
+					url: ZARA_URL,
+					brand: null,
+					name: "Wool blend jacket",
+					price: 2990000,
+					pictureIds: [],
+				},
+			],
+		},
+	});
+
+	test("adds a wish with its first shop link", async () => {
+		// Given: alice signed in, her colour ids by name
+		const { h, headers, ids } = await alice();
+		// When
+		const res = await postWishlist(h, headers, jacketWithLink(ids));
+		// Then
+		expect(await answer(res)).toEqual({ status: 201, body: added(ids) });
+	});
+
+	const refusals: [string, Record<string, unknown>, string][] = [
+		[
+			"an address that is not http or https",
+			{ url: "ftp://zara.com/jacket" },
+			"url",
+		],
+		["a name of 81 characters", { name: "a".repeat(81) }, "name"],
+		["a price of 1.000.000.000", { price: 1000000000 }, "price"],
+	];
+	for (const [what, change, field] of refusals)
+		test(`refuses a wishlist add with ${what}`, async () => {
+			// Given: the Navy wool jacket with the Zara link, one field changed
+			const { h, headers, ids } = await alice();
+			// When
+			const res = await postWishlist(h, headers, {
+				...jacket(ids),
+				shopLink: { ...zaraLink(null), ...change },
+			});
+			// Then
+			expect({
+				...(await answer(res)),
+				wishes: await list(h, headers),
+			}).toEqual({
+				status: 400,
+				body: { error: "invalid", field },
+				wishes: [],
+			});
+		});
 });
 
 describe("DELETE /api/wishes/:id", () => {

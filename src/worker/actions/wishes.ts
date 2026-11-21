@@ -4,6 +4,7 @@ import { matchesPieceFilter, wishPiece } from "@/piece-filter/piece-filter";
 import { PRICE_MAX, SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";
 import {
 	addShopLink,
+	addToWishlist,
 	addWish,
 	changeShopLink,
 	deleteShopLink,
@@ -98,6 +99,10 @@ const shopLinkRefusals: Refusals<WishError> = {
 	}),
 };
 
+const wishId = z.string().describe("The wish's id.");
+
+const shopLinkId = z.string().describe("The shop link's id.");
+
 // Loose types on purpose, as add_owned_item: a bad price must reach the
 // store to get a sentence.
 const shopLinkFields = {
@@ -118,9 +123,11 @@ const shopLinkFields = {
 	pictureIds: pictureIdsInput,
 };
 
-const wishId = z.string().describe("The wish's id.");
-
-const shopLinkId = z.string().describe("The shop link's id.");
+const pieceFields = {
+	id: wishId,
+	typeId: z.string().describe("A type id from list_types, such as wool."),
+	colourId: z.string().describe("A colour id from list_colours."),
+};
 
 export const wishActions = {
 	list: action(pieceFilterInput, pieceFilterRefusals, async (scope, input) => {
@@ -134,14 +141,24 @@ export const wishActions = {
 			),
 		};
 	}),
-	add: action(
+	add: action(z.object(pieceFields), wishRefusals, ({ db, userId }, input) =>
+		addWish(db, userId, input),
+	),
+	addToWishlist: action(
 		z.object({
-			id: wishId,
-			typeId: z.string().describe("A type id from list_types, such as wool."),
-			colourId: z.string().describe("A colour id from list_colours."),
+			...pieceFields,
+			shopLink: z.object({ id: shopLinkId, ...shopLinkFields }).optional(),
 		}),
 		wishRefusals,
-		({ db, userId }, input) => addWish(db, userId, input),
+		({ db, pictures, userId }, { shopLink, ...piece }) =>
+			addToWishlist(db, pictures, userId, {
+				...piece,
+				shopLink: shopLink && {
+					...shopLink,
+					brandId: shopLink.brandId ?? null,
+					price: shopLink.price ?? null,
+				},
+			}),
 	),
 	delete: action(
 		z.object({ id: wishId }),

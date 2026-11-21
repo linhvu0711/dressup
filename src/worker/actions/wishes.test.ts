@@ -384,6 +384,152 @@ describe("wish adds at once", () => {
 	});
 });
 
+describe("adding to the wishlist", () => {
+	// The Navy wool jacket with the Zara link, as the one form sends it.
+	const jacketWithLink = (ids: Ids) => ({
+		...jacket(ids),
+		shopLink: zaraLink(null),
+	});
+
+	const linkRows = (h: Harness) => h.accountRows(ALICE.id).shop_link ?? 0;
+
+	test("refuses a new wish with its link at 200 wishes", async () => {
+		// Given: alice with 200 wishes
+		const { h, alice, ids } = await withAlice();
+		await h.seedWishes(ALICE.id, 200);
+		// When: a Mustard training pant, a piece the seed does not hold
+		const added = await wishActions.addToWishlist.run(alice, {
+			id: FIRST_ID,
+			typeId: "train_p",
+			colourId: ids.Mustard,
+			shopLink: zaraLink(null),
+		});
+		// Then
+		expect({
+			added,
+			wishes: (await listed(alice)).length,
+			links: linkRows(h),
+		}).toEqual({
+			added: { ok: false, error: WISH_LIMIT_ROW },
+			wishes: 200,
+			links: 0,
+		});
+	});
+
+	test("refuses a wishlist add with a colour of another account", async () => {
+		// Given: the Navy wool jacket with bob's Navy
+		const { h, alice } = await withAlice();
+		await h.addAccount(BOB);
+		const bobIds = await colourIdsOf(h, BOB);
+		// When
+		const added = await wishActions.addToWishlist.run(
+			alice,
+			jacketWithLink(bobIds),
+		);
+		// Then
+		expect({ added, wishes: await listed(alice) }).toEqual({
+			added: {
+				ok: false,
+				error: {
+					code: "invalid",
+					status: 400,
+					body: { error: "invalid", field: "colourId" },
+					text: `${bobIds.Navy} is not one of your colours. list_colours names them.`,
+				},
+			},
+			wishes: [],
+		});
+	});
+
+	test("refuses a wishlist add with a brand of another account", async () => {
+		// Given: the Zara link with bob's brand Zara
+		const { h, alice, ids } = await withAlice();
+		await h.addAccount(BOB);
+		const bobZara = await addBrand(scopeOf(h, BOB), "Zara");
+		// When
+		const added = await wishActions.addToWishlist.run(alice, {
+			...jacket(ids),
+			shopLink: zaraLink(bobZara),
+		});
+		// Then
+		expect({ added, wishes: await listed(alice) }).toEqual({
+			added: {
+				ok: false,
+				error: {
+					code: "invalid",
+					status: 400,
+					body: { error: "invalid", field: "brandId" },
+					text: `${bobZara} is not one of your brands. list_brands names them.`,
+				},
+			},
+			wishes: [],
+		});
+	});
+
+	test("refuses a wishlist add with a wish id another account holds", async () => {
+		// Given: bob's wish FIRST_ID for his Navy wool jacket
+		const { h, alice, ids } = await withAlice();
+		await h.addAccount(BOB);
+		await wishActions.add.run(
+			scopeOf(h, BOB),
+			jacket(await colourIdsOf(h, BOB)),
+		);
+		// When
+		const added = await wishActions.addToWishlist.run(
+			alice,
+			jacketWithLink(ids),
+		);
+		// Then
+		expect({
+			added,
+			wishes: await listed(alice),
+			links: linkRows(h),
+		}).toEqual({
+			added: { ok: false, error: CONFLICT_ROW },
+			wishes: [],
+			links: 0,
+		});
+	});
+
+	test("refuses one of two wishlist adds that overlap at 199 wishes", async () => {
+		// Given: alice with 199 wishes; two adds of pieces the seed does not
+		// hold, each with its own link, both read before either batch runs
+		const { h, alice, ids } = await withAlice();
+		await h.seedWishes(ALICE.id, 199);
+		const hold = h.holdBatches();
+		// When
+		const adds = [
+			wishActions.addToWishlist.run(alice, {
+				id: FIRST_ID,
+				typeId: "train_p",
+				colourId: ids.Mustard,
+				shopLink: zaraLink(null),
+			}),
+			wishActions.addToWishlist.run(alice, {
+				id: SECOND_ID,
+				typeId: "train_sh",
+				colourId: ids.Mustard,
+				shopLink: { ...zaraLink(null), id: OTHER_LINK_ID },
+			}),
+		];
+		await hold.queued(2);
+		hold.release();
+		const results = await Promise.all(adds);
+		// Then
+		expect({
+			wishes: (await listed(alice)).length,
+			links: linkRows(h),
+			oks: results.map((r) => r.ok).sort(),
+			refused: results.flatMap((r) => (r.ok ? [] : [r.error])),
+		}).toEqual({
+			wishes: 200,
+			links: 1,
+			oks: [false, true],
+			refused: [WISH_LIMIT_ROW],
+		});
+	});
+});
+
 describe("adding a shop link", () => {
 	// Alice with the wish FIRST_ID for a Navy wool jacket and the brand Zara.
 	async function aliceWithWish() {
