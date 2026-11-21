@@ -5,6 +5,7 @@ import {
 	isWebAddress,
 	linksLine,
 	priceText,
+	removeLinkText,
 	removeWishText,
 	type ShopLink,
 	type ShopLinkId,
@@ -150,5 +151,16 @@ test("says how many shop links go with a wish", () => {
 		"It has no shop link.",
 		"Its 1 shop link goes with it.",
 		"Its 2 shop links go with it.",
+	]);
+});
+
+test("says what goes with a removed shop link", () => {
+	// Given: a last link and a link with others
+	// When
+	const texts = [removeLinkText(true), removeLinkText(false)];
+	// Then
+	expect(texts).toEqual([
+		"This is the last shop link, so the wish goes too.",
+		"Only this shop link goes. The wish keeps its other shop links.",
 	]);
 });

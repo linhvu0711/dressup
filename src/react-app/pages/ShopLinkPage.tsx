@@ -1,6 +1,6 @@
 import { CircleCheck, ExternalLink, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { useLocation, useParams } from "react-router";
+import { useLocation, useNavigate, useParams } from "react-router";
 import { PieceCombinations } from "@/combinations/PieceCombinations";
 import { Button } from "@/components/ui/button";
 import { TYPE_NAMES } from "@/dress/clothing-types";
@@ -11,6 +11,7 @@ import { tabSearch } from "@/shell/piece-link";
 import { useWishlist } from "@/wishlist/api";
 import { BoughtDialog } from "@/wishlist/BoughtDialog";
 import { OtherShops } from "@/wishlist/OtherShops";
+import { RemoveDialog } from "@/wishlist/RemoveDialog";
 import { ShopLinkSheet } from "@/wishlist/ShopLinkSheet";
 import {
 	isWebAddress,
@@ -52,7 +53,7 @@ export function ShopLinkPage() {
 						label={shopName(link)}
 					/>
 				),
-				details: <LinkDetails wish={wish} link={link} />,
+				details: <LinkDetails wish={wish} link={link} back={back} />,
 				below: (
 					<>
 						<OtherShops
@@ -68,8 +69,17 @@ export function ShopLinkPage() {
 	);
 }
 
-function LinkDetails({ wish, link }: { wish: Wish; link: ShopLink }) {
-	const [open, setOpen] = useState<"bought" | "edit" | null>(null);
+function LinkDetails({
+	wish,
+	link,
+	back,
+}: {
+	wish: Wish;
+	link: ShopLink;
+	back: string;
+}) {
+	const navigate = useNavigate();
+	const [open, setOpen] = useState<"bought" | "edit" | "remove" | null>(null);
 	const price = link.price === null ? null : priceText(link.price);
 	return (
 		<>
@@ -122,6 +132,7 @@ function LinkDetails({ wish, link }: { wish: Wish; link: ShopLink }) {
 					className="border-destructive/40 text-destructive"
 					aria-label="Remove from wishlist"
 					title="Remove from wishlist"
+					onClick={() => setOpen("remove")}
 				>
 					<Trash2 {...ICON} />
 				</Button>
@@ -142,7 +153,19 @@ function LinkDetails({ wish, link }: { wish: Wish; link: ShopLink }) {
 					onClose={() => setOpen(null)}
 				/>
 			) : open === "edit" ? (
-				<ShopLinkSheet mode="edit" link={link} onClose={() => setOpen(null)} />
+				<ShopLinkSheet
+					mode="edit"
+					link={link}
+					lastLink={wish.shopLinks.length === 1}
+					onClose={() => setOpen(null)}
+				/>
+			) : open === "remove" ? (
+				<RemoveDialog
+					wish={wish}
+					link={link}
+					onClose={() => setOpen(null)}
+					onRemoved={() => navigate(back, { replace: true })}
+				/>
 			) : null}
 		</>
 	);

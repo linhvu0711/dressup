@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 import { isPhone, postCombinations } from "./combination-helpers";
 import { expect, test } from "./fixtures";
 import { colourIds } from "./label-helpers";
-import { sheet } from "./locators";
+import { sheet, toast } from "./locators";
 import {
 	jacketAndPolo,
 	poloWithLink,
@@ -240,4 +240,106 @@ test("shows five combinations with the piece on a wide screen and four on a phon
 		cards,
 		seeAll: await part.getByRole("link", { name: /^See all/ }).textContent(),
 	}).toEqual({ cards: isPhone(page) ? 4 : 5, seeAll: "See all 6" });
+});
+
+const confirm = (page: Page) => page.getByRole("alertdialog");
+
+test("removes one shop link after its confirm and keeps the wish", async ({
+	page,
+}) => {
+	// Given: the COS link's page open
+	const { cosLink } = await jacketAndPolo(page);
+	await page.goto(`/wishlist/link/${cosLink}`);
+	await expect(title(page)).toHaveText("Single-breasted wool jacket");
+	// When
+	await actions(page)
+		.getByRole("button", { name: "Remove from wishlist" })
+		.click();
+	const text = await confirm(page).locator("p").textContent();
+	await confirm(page).getByRole("button", { name: "Remove" }).click();
+	await expect(page).toHaveURL("/wishlist");
+	await expect(wishCards(page)).toHaveCount(2);
+	// Then
+	expect({
+		confirm: text,
+		url: new URL(page.url()).pathname,
+		cards: await wishCards(page).evaluateAll((links) =>
+			links.map((l) => l.getAttribute("aria-label")),
+		),
+	}).toEqual({
+		confirm: "Only this shop link goes. The wish keeps its other shop links.",
+		url: "/wishlist",
+		cards: [
+			"Olive long polo, No shop link yet",
+			"Zara jacket, zara.com · Charcoal wool jacket",
+		],
+	});
+});
+
+test("removes the last shop link and its wish", async ({ page }) => {
+	// Given: one Olive long polo wish holding one link "Polo"; its page open
+	const { link } = await poloWithLink(page);
+	await page.goto(`/wishlist/link/${link}`);
+	await expect(title(page)).toHaveText("Polo");
+	// When
+	await actions(page)
+		.getByRole("button", { name: "Remove from wishlist" })
+		.click();
+	const text = await confirm(page).locator("p").textContent();
+	await confirm(page).getByRole("button", { name: "Remove" }).click();
+	const empty = page.getByRole("heading", {
+		name: "Nothing on your wishlist yet",
+	});
+	await expect(empty).toBeVisible();
+	// Then
+	expect({
+		confirm: text,
+		url: new URL(page.url()).pathname,
+		empty: await empty.textContent(),
+	}).toEqual({
+		confirm: "This is the last shop link, so the wish goes too.",
+		url: "/wishlist",
+		empty: "Nothing on your wishlist yet",
+	});
+});
+
+test("warns in the edit sheet when the shop link is the last one", async ({
+	page,
+}) => {
+	// Given: the one-link account with the link's brand COS; its page open
+	const { link } = await poloWithLink(page, "COS");
+	await page.goto(`/wishlist/link/${link}`);
+	await expect(title(page)).toHaveText("Polo");
+	// When
+	await actions(page).getByRole("button", { name: "Edit" }).click();
+	await sheet(page, "Edit shop link")
+		.getByRole("button", { name: "Delete" })
+		.click();
+	// Then
+	await expect(sheet(page, "Delete this shop link?")).toContainText(
+		"COS · Polo. This is the last shop link, so the wish goes too.",
+	);
+});
+
+test("keeps the shop link page when the remove fails", async ({ page }) => {
+	// Given: the one-link account; DELETE /api/shop-links/* answers 500
+	const { link } = await poloWithLink(page);
+	await page.route("**/api/shop-links/*", (route) =>
+		route.request().method() === "DELETE"
+			? route.fulfill({ status: 500 })
+			: route.continue(),
+	);
+	await page.goto(`/wishlist/link/${link}`);
+	await expect(title(page)).toHaveText("Polo");
+	// When
+	await actions(page)
+		.getByRole("button", { name: "Remove from wishlist" })
+		.click();
+	await confirm(page).getByRole("button", { name: "Remove" }).click();
+	await expect(toast(page)).toBeVisible();
+	// Then
+	expect({
+		toast: await toast(page).textContent(),
+		title: await title(page).textContent(),
+	}).toEqual({ toast: "Not removed. Try again.", title: "Polo" });
 });

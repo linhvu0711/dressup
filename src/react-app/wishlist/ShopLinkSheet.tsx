@@ -9,6 +9,7 @@ import { useAddShopLink, useChangeShopLink, useDeleteShopLink } from "./api";
 import {
 	ADDRESS_MAX,
 	isWebAddress,
+	removeLinkText,
 	SHOP_LINK_NAME_MAX,
 	type ShopLink,
 	type ShopLinkId,
@@ -35,7 +36,7 @@ const priceShown = (price: number | null) =>
 export function ShopLinkSheet(
 	props: { onClose: () => void } & (
 		| { mode: "add"; wishId: WishId }
-		| { mode: "edit"; link: ShopLink }
+		| { mode: "edit"; link: ShopLink; lastLink: boolean }
 	),
 ) {
 	const { onClose } = props;
@@ -101,7 +102,10 @@ export function ShopLinkSheet(
 				editing
 					? {
 							title: "Delete this shop link?",
-							text: `${shopName(editing)} · ${editing.name}`,
+							text:
+								props.mode === "edit" && props.lastLink
+									? `${shopName(editing)} · ${editing.name}. ${removeLinkText(true)}`
+									: `${shopName(editing)} · ${editing.name}`,
 							deleted: "Shop link deleted",
 							del,
 						}

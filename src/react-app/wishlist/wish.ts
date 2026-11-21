@@ -160,3 +160,9 @@ export function removeWishText(shopLinks: number): string {
 	if (shopLinks === 0) return "It has no shop link.";
 	return `Its ${countText(shopLinks, "shop link")} ${shopLinks === 1 ? "goes" : "go"} with it.`;
 }
+
+// What the remove confirm says goes with one shop link.
+export const removeLinkText = (last: boolean): string =>
+	last
+		? "This is the last shop link, so the wish goes too."
+		: "Only this shop link goes. The wish keeps its other shop links.";
