@@ -712,6 +712,34 @@ describe("picture lists at once", () => {
 			owner: null,
 		});
 	});
+
+	test("attaches no picture when the brand changes during a repeat add", async () => {
+		// Given: the item holds a; another tab sets its brand to Zara just
+		// before the repeat add's batch, with no picture list, so no batch
+		const { h, alice, ids } = await withAlice();
+		const zara = await addBrand(alice, "Zara");
+		const [a, b] = await uploads(alice, 2);
+		await ownedItemActions.add.run(alice, { ...shirt(ids), pictureIds: [a] });
+		const { db } = h;
+		const batch = db.batch;
+		const otherTabFirst: typeof batch = async (items) => {
+			db.batch = batch;
+			await ownedItemActions.change.run(alice, {
+				id: FIRST_ID,
+				brandId: zara,
+				quantity: 2,
+			});
+			return batch(items);
+		};
+		db.batch = otherTabFirst;
+		// When
+		await ownedItemActions.add.run(alice, { ...shirt(ids), pictureIds: [b] });
+		// Then
+		expect({
+			pictureIds: (await listed(alice))[0]?.pictureIds,
+			keys: h.pictures.keys(),
+		}).toEqual({ pictureIds: [a], keys: sorted([a, b]) });
+	});
 });
 
 describe("deleting with pictures", () => {
