@@ -36,6 +36,7 @@ import {
 	buyWithPictures,
 	deleteWithPictures,
 	type PictureListError,
+	type PictureListSave,
 	pictureIdsBy,
 	saveWithPictures,
 } from "./picture-store";
@@ -177,7 +178,7 @@ const listRefusal = (
 function insertItem(
 	db: Db,
 	userId: string,
-	item: Piece & { id: string; quantity: number },
+	item: Piece & { id: string; quantity: number; writeId?: string },
 	also?: SQL,
 ) {
 	return db
@@ -191,6 +192,7 @@ function insertItem(
 					colourId: sql<string>`${item.colourId}`.as("colour_id"),
 					brandId: sql<string | null>`${item.brandId}`.as("brand_id"),
 					quantity: sql<number>`${item.quantity}`.as("quantity"),
+					writeId: sql<string | null>`${item.writeId ?? null}`.as("write_id"),
 					createdAt:
 						sql<number>`(cast(unixepoch('subsecond') * 1000 as integer))`.as(
 							"created_at",
@@ -267,16 +269,18 @@ export async function addOwnedItem(
 	const conflict = { ok: false, error: { code: "conflict" } } as const;
 	// Only this account's item of this piece and brand takes the pictures, so
 	// a conflict or a refused insert attaches none.
-	const pictures = {
+	const pictures: PictureListSave = {
 		userId,
-		owner: { ownedItemId: input.id },
+		owner: {
+			kind: "ownedItem",
+			id: input.id,
+			holds: {
+				typeId: input.typeId,
+				colourId: input.colourId,
+				brandId: input.brandId,
+			},
+		},
 		ids: input.pictureIds,
-		itemHeld: exists(
-			db
-				.select({ one: sql`1` })
-				.from(ownedItem)
-				.where(and(eq(ownedItem.id, input.id), samePiece(userId, input))),
-		),
 	};
 	const [before] = await db
 		.select({
@@ -350,22 +354,10 @@ export async function changeOwnedItem(
 		bucket,
 		{
 			userId,
-			owner: { ownedItemId: id },
+			// The item holds the new brand only when the update wrote, since it
+			// runs first in the batch; a refused change attaches and drops nothing.
+			owner: { kind: "ownedItem", id, holds: { brandId } },
 			ids: pictureIds,
-			// The brand is the new one only when the update wrote, since it runs
-			// first in the batch; a refused change attaches and drops nothing.
-			itemHeld: exists(
-				db
-					.select({ one: sql`1` })
-					.from(ownedItem)
-					.where(
-						and(
-							eq(ownedItem.id, id),
-							eq(ownedItem.userId, userId),
-							sql`${ownedItem.brandId} is ${brandId}`,
-						),
-					),
-			),
 		},
 		db
 			.update(ownedItem)
@@ -427,7 +419,7 @@ export async function deleteOwnedItem(
 	const [row] = await deleteWithPictures(
 		db,
 		bucket,
-		{ userId, owner: { ownedItemId: id } },
+		{ userId, owner: { kind: "ownedItem", id } },
 		db
 			.delete(ownedItem)
 			.where(and(eq(ownedItem.id, id), eq(ownedItem.userId, userId)))
@@ -479,10 +471,6 @@ export async function buyShopLink(
 				),
 			),
 	);
-	const wishDelete = (held: SQL) =>
-		db
-			.delete(wish)
-			.where(and(eq(wish.id, wishId), eq(wish.userId, userId), held));
 	const [found] = await db
 		.select({ id: ownedItem.id, quantity: ownedItem.quantity })
 		.from(ownedItem)
@@ -493,16 +481,11 @@ export async function buyShopLink(
 		return { ok: false, error: { code: "quantity_limit" } };
 	}
 	const id = found?.id ?? crypto.randomUUID();
-	const written = found
-		? and(eq(ownedItem.id, id), eq(ownedItem.quantity, found.quantity + 1))
-		: eq(ownedItem.id, id);
-	const held = sql`${linkHeld} and ${exists(
-		db.select({ one: sql`1` }).from(ownedItem).where(written),
-	)}`;
+	const writeId = crypto.randomUUID();
 	const ownerWrite = found
 		? db
 				.update(ownedItem)
-				.set({ quantity: found.quantity + 1 })
+				.set({ quantity: found.quantity + 1, writeId })
 				.where(
 					and(
 						eq(ownedItem.id, id),
@@ -512,15 +495,21 @@ export async function buyShopLink(
 					),
 				)
 				.returning({ id: ownedItem.id })
-		: insertItem(db, userId, { id, ...piece, quantity: 1 }, linkHeld).returning(
-				{ id: ownedItem.id },
-			);
+		: insertItem(
+				db,
+				userId,
+				{ id, ...piece, quantity: 1, writeId },
+				linkHeld,
+			).returning({ id: ownedItem.id });
 	const [row] = await buyWithPictures(
 		db,
 		bucket,
-		{ userId, shopLinkId, wishId, ownedItemId: id, held },
+		{
+			userId,
+			link: { id: shopLinkId, wishId, brandId: piece.brandId },
+			item: { id, writeId },
+		},
 		ownerWrite,
-		wishDelete(held),
 	);
 	if (row) {
 		const [bought] = await readOwnedItems(db, userId, id);

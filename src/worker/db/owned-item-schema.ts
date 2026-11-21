@@ -26,6 +26,9 @@ export const ownedItem = sqliteTable(
 			onDelete: "set null",
 		}),
 		quantity: integer("quantity").notNull(),
+		// A fresh id each Bought sets with its own write, so the rest of its
+		// batch can tell that write from another one that set the same quantity.
+		writeId: text("write_id"),
 		createdAt: integer("created_at", { mode: "timestamp_ms" })
 			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
 			.notNull(),

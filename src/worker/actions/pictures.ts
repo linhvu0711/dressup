@@ -6,9 +6,9 @@ import {
 	pictureIdSchema,
 } from "@/pictures/picture";
 import {
+	type AddPictureError,
 	addPicture,
 	deleteDraft,
-	type PictureError,
 	readPicture,
 } from "../picture-store";
 import type { Result } from "../result";
@@ -23,7 +23,7 @@ export const pictureIdsInput = z
 		`The whole picture list, at most ${ITEM_PICTURE_LIMIT}, in order: ids that an upload address answered and ids the item has now. An id left out is deleted for good. Leave pictureIds out to keep the pictures as they are.`,
 	);
 
-type PictureActionError = PictureError | { code: "not_stored" };
+type PictureActionError = AddPictureError | { code: "not_stored" };
 
 const notStored =
 	"dressup could not store the picture and kept nothing. Try again with a new upload address.";
@@ -35,12 +35,6 @@ const pictureRefusals: Refusals<PictureActionError> = {
 		status: 400,
 		body: { error: "invalid", field: error.field },
 		text: "This file is not a JPEG, PNG, or WebP picture. Send one of these to a new upload address.",
-	}),
-	// No picture action returns it: the store's error holds the list error.
-	picture_limit: () => ({
-		status: 409,
-		body: { error: "picture_limit" },
-		text: notStored,
 	}),
 	account_picture_limit: () => ({
 		status: 409,

@@ -1,0 +1,1 @@
+ALTER TABLE `owned_item` ADD `write_id` text;

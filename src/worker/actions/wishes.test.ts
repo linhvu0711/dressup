@@ -650,6 +650,73 @@ describe("shop link pictures", () => {
 		}).toEqual({ ok: true, price: 2490000, pictureIds: [a] });
 	});
 
+	test("keeps a shop link's pictures when a change is refused", async () => {
+		// Given: the link holds a and b; the change names a brand Alice lacks
+		const { h, alice } = await aliceWithWish();
+		const [a, b] = await uploads(alice, 2);
+		await addLink(alice, FIRST_ID, { ...zaraLink(null), pictureIds: [a, b] });
+		const NO_SUCH_BRAND = "55555555-5555-4555-8555-555555555555";
+		// When
+		const changed = await shopLinkActions.change.run(alice, {
+			...change([]),
+			brandId: NO_SUCH_BRAND,
+		});
+		// Then
+		expect({
+			changed,
+			pictureIds: (await linksOf(alice))?.[0]?.pictureIds,
+			keys: h.pictures.keys(),
+		}).toEqual({
+			changed: {
+				ok: false,
+				error: {
+					code: "invalid",
+					status: 400,
+					body: { error: "invalid", field: "brandId" },
+					text: "55555555-5555-4555-8555-555555555555 is not one of your brands. list_brands names them.",
+				},
+			},
+			pictureIds: [a, b],
+			keys: [a, b].sort(),
+		});
+	});
+
+	test("attaches no picture when the link id lands on another wish during the add", async () => {
+		// Given: a second wish; another tab adds the link to the first wish
+		// just before this add's batch
+		const { h, alice, ids } = await aliceWithWish();
+		await wishActions.add.run(alice, {
+			id: SECOND_ID,
+			typeId: "tee_s",
+			colourId: ids.Navy,
+		});
+		const [a, b] = await uploads(alice, 2);
+		const { db } = h;
+		const batch = db.batch;
+		const otherTabFirst: typeof batch = async (items) => {
+			db.batch = batch;
+			await addLink(alice, FIRST_ID, { ...zaraLink(null), pictureIds: [a] });
+			return batch(items);
+		};
+		db.batch = otherTabFirst;
+		// When
+		await addLink(alice, SECOND_ID, { ...zaraLink(null), pictureIds: [b] });
+		// Then
+		expect({
+			links: (await listed(alice)).map((w) => ({
+				id: w.id,
+				pictureIds: w.shopLinks.map((l) => l.pictureIds),
+			})),
+			keys: h.pictures.keys(),
+		}).toEqual({
+			links: [
+				{ id: SECOND_ID as WishId, pictureIds: [] },
+				{ id: FIRST_ID as WishId, pictureIds: [[a]] },
+			],
+			keys: [a, b].sort(),
+		});
+	});
+
 	// LINK_ID holds a and b, OTHER_LINK_ID holds c.
 	async function twoLinksWithPictures() {
 		const { h, alice, ids } = await aliceWithWish();
