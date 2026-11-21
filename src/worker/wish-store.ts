@@ -1,6 +1,18 @@
-import { and, asc, desc, eq, exists, notExists, sql } from "drizzle-orm";
+import {
+	and,
+	asc,
+	desc,
+	eq,
+	exists,
+	notExists,
+	type SQL,
+	sql,
+} from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
+import type { z } from "zod";
 import type { Hex } from "@/colour/hex";
 import type { PieceRef } from "@/combinations/marks";
+import type { TypeId } from "@/dress/clothing-types";
 import type { ColourId } from "@/labels/colour";
 import {
 	SHOP_LINK_LIMIT,
@@ -12,6 +24,7 @@ import {
 	type Wish,
 	type WishId,
 	wishInputSchema,
+	wishlistAddSchema,
 } from "@/wishlist/wish";
 import { brandOf, brandOrNone, notYourBrand } from "./brand-store";
 import { colourOf } from "./colour-store";
@@ -19,7 +32,7 @@ import type { Db } from "./db";
 import { brand } from "./db/brand-schema";
 import { colour } from "./db/colour-schema";
 import { shopLink, wish } from "./db/wish-schema";
-import { guardedAdd } from "./guarded-add";
+import { guardedAdd, insertUnder } from "./guarded-add";
 import { deleteOwner, pictureIdsBy, saveWithPictures } from "./picture-store";
 import { pieceRefusal, samePiece } from "./piece-rows";
 import { invalidField, type Result } from "./result";
@@ -45,6 +58,8 @@ export type WishError =
 	| { code: "not_found" };
 
 type AddedWish = { wish: Wish; created: boolean };
+
+type Statement = BatchItem<"sqlite">;
 
 // The account's wishes, newest first, or the one with this id.
 async function readWishes(
@@ -156,6 +171,19 @@ const WISH_FIELDS: readonly WishField[] = [
 	"pictureIds",
 ];
 
+type Piece = { id: string; typeId: TypeId; colourId: string };
+
+// A new wish needs the account's colour and no wish for its piece yet.
+const wishGuards = (db: Db, userId: string, piece: Piece) => [
+	exists(colourOf(db, userId, piece.colourId)),
+	notExists(
+		db
+			.select({ one: sql`1` })
+			.from(wish)
+			.where(samePiece(wish, userId, piece)),
+	),
+];
+
 // The page makes the id when the form opens, so an add sent again after a
 // lost answer gives back the same wish rather than a second one; the same id
 // with another piece, or another account's id, is conflict. The colour, the
@@ -177,15 +205,7 @@ export async function addWish(
 		id: input.id,
 		mine: samePiece(wish, userId, input),
 		values: { typeId: input.typeId, colourId: input.colourId },
-		guards: [
-			exists(colourOf(db, userId, input.colourId)),
-			notExists(
-				db
-					.select({ one: sql`1` })
-					.from(wish)
-					.where(samePiece(wish, userId, input)),
-			),
-		],
+		guards: wishGuards(db, userId, input),
 		limit: { max: WISH_LIMIT, code: "wish_limit" },
 		read: async () => (await readWishes(db, userId, input.id))[0],
 		refused: (): Promise<WishError | null> =>
@@ -202,6 +222,56 @@ export async function addWish(
 				value: { wish: added.value.value, created: added.value.created },
 			}
 		: added;
+}
+
+// One add from the Wishlist form: the piece, with its first shop link when
+// the user gave an address, the whole of it in one request.
+export async function addToWishlist(
+	db: Db,
+	bucket: R2Bucket,
+	userId: string,
+	draft: unknown,
+): Promise<Result<AddedWish, WishError>> {
+	const parsed = wishlistAddSchema.safeParse(draft);
+	if (!parsed.success) {
+		const path = parsed.error.issues[0]?.path ?? [];
+		// A link field is named as the add-a-link route names it.
+		return path[0] === "shopLink"
+			? invalidField(
+					WISH_FIELDS,
+					(draft as { shopLink?: unknown }).shopLink,
+					path.slice(1),
+				)
+			: invalidField(WISH_FIELDS, draft, path);
+	}
+	const { shopLink: link, ...piece } = parsed.data;
+	// The link joins the wish with this id; with no link, that wish comes back
+	// as it is.
+	const join = async (
+		wishId: string,
+	): Promise<Result<AddedWish, WishError>> => {
+		if (link) return addShopLink(db, bucket, userId, wishId, link);
+		const [held] = await readWishes(db, userId, wishId);
+		return held
+			? { ok: true, value: { wish: held, created: false } }
+			: { ok: false, error: { code: "not_found" } };
+	};
+	const [held] = await db
+		.select({ id: wish.id })
+		.from(wish)
+		.where(samePiece(wish, userId, piece));
+	if (held) {
+		const joined = await join(held.id);
+		// not_found: the wish went since the read, so the piece gets a new one.
+		if (joined.ok || joined.error.code !== "not_found") return joined;
+	}
+	const added = link
+		? await addWishWithLink(db, bucket, userId, piece, link)
+		: await addWish(db, userId, piece);
+	// Another add of this piece landed first: join its wish.
+	if (!added.ok && added.error.code === "duplicate")
+		return join(added.error.id);
+	return added;
 }
 
 // Only the account's own wish goes; not found when the account has no wish
@@ -233,29 +303,52 @@ export async function addShopLink(
 	if (!parsed.success)
 		return invalidField(WISH_FIELDS, draft, parsed.error.issues[0]?.path ?? []);
 	const input = parsed.data;
+	return addLinkUnder(db, bucket, userId, {
+		wishId,
+		parent: and(eq(wish.id, wishId), eq(wish.userId, userId)),
+		link: input,
+		refused: () => refusedLink(db, userId, wishId, input),
+	});
+}
+
+type LinkInput = z.output<typeof shopLinkInputSchema>;
+
+// A shop link under the wish `wishId`, the row `parent` finds. A parent
+// write, the new wish itself, runs first in the link's batch.
+async function addLinkUnder(
+	db: Db,
+	bucket: R2Bucket,
+	userId: string,
+	{
+		wishId,
+		parent,
+		link,
+		parentWrite,
+		refused,
+	}: {
+		wishId: string;
+		parent: SQL | undefined;
+		link: LinkInput;
+		parentWrite?: Statement;
+		refused: () => Promise<WishError | null>;
+	},
+): Promise<Result<AddedShopLink, WishError>> {
 	const writeId = crypto.randomUUID();
 	const added = await guardedAdd(db, {
 		table: shopLink,
 		userId,
-		id: input.id,
+		id: link.id,
 		mine: and(eq(shopLink.userId, userId), eq(shopLink.wishId, wishId)),
-		parent: {
-			table: wish,
-			where: and(eq(wish.id, wishId), eq(wish.userId, userId)),
-		},
+		parent: { table: wish, where: parent },
 		values: {
 			wishId,
-			url: input.url,
-			brandId: input.brandId,
-			name: input.name,
-			price: input.price,
+			url: link.url,
+			brandId: link.brandId,
+			name: link.name,
+			price: link.price,
 			writeId,
 		},
-		guards: [
-			input.brandId === null
-				? undefined
-				: exists(brandOf(db, userId, input.brandId)),
-		],
+		guards: [brandGuard(db, userId, link.brandId)],
 		limit: {
 			max: SHOP_LINK_LIMIT,
 			code: "shop_link_limit",
@@ -272,15 +365,16 @@ export async function addShopLink(
 					userId,
 					owner: {
 						kind: "shopLink",
-						id: input.id,
+						id: link.id,
 						holds: { wishId, writeId },
 					},
-					ids: input.pictureIds,
+					ids: link.pictureIds,
 				},
 				insert,
+				parentWrite,
 			),
 		read: async () => (await readWishes(db, userId, wishId))[0],
-		refused: () => refusedLink(db, userId, wishId, input),
+		refused,
 	});
 	return added.ok
 		? {
@@ -288,6 +382,59 @@ export async function addShopLink(
 				value: { wish: added.value.value, created: added.value.created },
 			}
 		: added;
+}
+
+const brandGuard = (db: Db, userId: string, brandId: string | null) =>
+	brandId === null ? undefined : exists(brandOf(db, userId, brandId));
+
+// A new wish with its first shop link, in one batch. The wish insert holds
+// the link's checks too, so a refused link leaves no wish.
+async function addWishWithLink(
+	db: Db,
+	bucket: R2Bucket,
+	userId: string,
+	piece: Piece,
+	link: LinkInput,
+): Promise<Result<AddedShopLink, WishError>> {
+	const wishInsert = insertUnder(db, wish, {
+		userId,
+		id: piece.id,
+		values: { typeId: piece.typeId, colourId: piece.colourId },
+		guards: [
+			...wishGuards(db, userId, piece),
+			brandGuard(db, userId, link.brandId),
+			notExists(
+				db
+					.select({ one: sql`1` })
+					.from(shopLink)
+					.where(eq(shopLink.id, link.id)),
+			),
+		],
+		limit: { max: WISH_LIMIT },
+	}).onConflictDoNothing();
+	return addLinkUnder(db, bucket, userId, {
+		wishId: piece.id,
+		parent: and(eq(wish.id, piece.id), samePiece(wish, userId, piece)),
+		link,
+		parentWrite: wishInsert,
+		refused: async () => {
+			const why = await pieceRefusal<WishId>(
+				db,
+				userId,
+				{ table: wish, where: samePiece(wish, userId, piece) },
+				{ colourId: piece.colourId, brandId: link.brandId },
+			);
+			if (why) return why;
+			// The id is another piece's or another account's wish, as addWish
+			// answers; else only the wish cap is left, since a new wish holds no
+			// link.
+			const [taken] = await db
+				.select({ id: wish.id })
+				.from(wish)
+				.where(eq(wish.id, piece.id));
+			return taken ? { code: "conflict" } : { code: "wish_limit" };
+		},
+	});
 }
 
 // Why a shop link add that the guards stopped did not happen, in the order
@@ -363,17 +510,41 @@ export async function changeShopLink(
 }
 
 // Only the account's own link goes; not found when the account has no link
-// with this id.
+// with this id. The wish goes with its last link. Its delete sits in the
+// link's batch and checks that no link is left, so a link another add puts on
+// the wish in the meantime keeps it.
 export async function deleteShopLink(
 	db: Db,
 	bucket: R2Bucket,
 	userId: string,
 	id: string,
 ): Promise<Result<ShopLinkId, WishError>> {
-	const deleted = await deleteOwner(db, bucket, userId, {
-		kind: "shopLink",
-		id,
-	});
+	const [link] = await db
+		.select({ wishId: shopLink.wishId })
+		.from(shopLink)
+		.where(and(eq(shopLink.id, id), eq(shopLink.userId, userId)));
+	if (!link) return { ok: false, error: { code: "not_found" } };
+	// A link never moves to another wish, so the wish read here stays its own.
+	const deleted = await deleteOwner(
+		db,
+		bucket,
+		userId,
+		{ kind: "shopLink", id },
+		db
+			.delete(wish)
+			.where(
+				and(
+					eq(wish.id, link.wishId),
+					eq(wish.userId, userId),
+					notExists(
+						db
+							.select({ one: sql`1` })
+							.from(shopLink)
+							.where(eq(shopLink.wishId, link.wishId)),
+					),
+				),
+			),
+	);
 	return deleted.ok
 		? { ok: true, value: deleted.value as ShopLinkId }
 		: deleted;

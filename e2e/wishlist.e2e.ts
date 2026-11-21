@@ -611,7 +611,7 @@ test("deletes a shop link after its confirm", async ({ page }) => {
 	await confirm.getByRole("button", { name: "Delete" }).click();
 	// Then
 	await expect(toast(page)).toHaveText("Shop link deleted");
-	await expect(page.getByText("No shop link yet.")).toBeVisible();
+	await expect(page).toHaveURL("/closet");
 });
 
 test("turns Add a shop link off at 10 links", async ({ page }) => {

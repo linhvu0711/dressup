@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { PictureId } from "@/pictures/picture";
-import type { WishId } from "@/wishlist/wish";
+import type { ShopLinkId, WishId } from "@/wishlist/wish";
 import { listColours } from "../colour-store";
 import type { Result } from "../result";
 import {
@@ -384,6 +384,309 @@ describe("wish adds at once", () => {
 	});
 });
 
+describe("adding to the wishlist", () => {
+	// The Navy wool jacket with the Zara link, as the one form sends it.
+	const jacketWithLink = (ids: Ids) => ({
+		...jacket(ids),
+		shopLink: zaraLink(null),
+	});
+
+	const linkRows = (h: Harness) => h.accountRows(ALICE.id).shop_link ?? 0;
+
+	test("refuses a new wish with its link at 200 wishes", async () => {
+		// Given: alice with 200 wishes
+		const { h, alice, ids } = await withAlice();
+		await h.seedWishes(ALICE.id, 200);
+		// When: a Mustard training pant, a piece the seed does not hold
+		const added = await wishActions.addToWishlist.run(alice, {
+			id: FIRST_ID,
+			typeId: "train_p",
+			colourId: ids.Mustard,
+			shopLink: zaraLink(null),
+		});
+		// Then
+		expect({
+			added,
+			wishes: (await listed(alice)).length,
+			links: linkRows(h),
+		}).toEqual({
+			added: { ok: false, error: WISH_LIMIT_ROW },
+			wishes: 200,
+			links: 0,
+		});
+	});
+
+	test("refuses a wishlist add with a colour of another account", async () => {
+		// Given: the Navy wool jacket with bob's Navy
+		const { h, alice } = await withAlice();
+		await h.addAccount(BOB);
+		const bobIds = await colourIdsOf(h, BOB);
+		// When
+		const added = await wishActions.addToWishlist.run(
+			alice,
+			jacketWithLink(bobIds),
+		);
+		// Then
+		expect({ added, wishes: await listed(alice) }).toEqual({
+			added: {
+				ok: false,
+				error: {
+					code: "invalid",
+					status: 400,
+					body: { error: "invalid", field: "colourId" },
+					text: `${bobIds.Navy} is not one of your colours. list_colours names them.`,
+				},
+			},
+			wishes: [],
+		});
+	});
+
+	test("refuses a wishlist add with a brand of another account", async () => {
+		// Given: the Zara link with bob's brand Zara
+		const { h, alice, ids } = await withAlice();
+		await h.addAccount(BOB);
+		const bobZara = await addBrand(scopeOf(h, BOB), "Zara");
+		// When
+		const added = await wishActions.addToWishlist.run(alice, {
+			...jacket(ids),
+			shopLink: zaraLink(bobZara),
+		});
+		// Then
+		expect({ added, wishes: await listed(alice) }).toEqual({
+			added: {
+				ok: false,
+				error: {
+					code: "invalid",
+					status: 400,
+					body: { error: "invalid", field: "brandId" },
+					text: `${bobZara} is not one of your brands. list_brands names them.`,
+				},
+			},
+			wishes: [],
+		});
+	});
+
+	test("refuses a wishlist add with a wish id another account holds", async () => {
+		// Given: bob's wish FIRST_ID for his Navy wool jacket
+		const { h, alice, ids } = await withAlice();
+		await h.addAccount(BOB);
+		await wishActions.add.run(
+			scopeOf(h, BOB),
+			jacket(await colourIdsOf(h, BOB)),
+		);
+		// When
+		const added = await wishActions.addToWishlist.run(
+			alice,
+			jacketWithLink(ids),
+		);
+		// Then
+		expect({
+			added,
+			wishes: await listed(alice),
+			links: linkRows(h),
+		}).toEqual({
+			added: { ok: false, error: CONFLICT_ROW },
+			wishes: [],
+			links: 0,
+		});
+	});
+
+	test("refuses one of two wishlist adds that overlap at 199 wishes", async () => {
+		// Given: alice with 199 wishes; two adds of pieces the seed does not
+		// hold, each with its own link, both read before either batch runs
+		const { h, alice, ids } = await withAlice();
+		await h.seedWishes(ALICE.id, 199);
+		const hold = h.holdBatches();
+		// When
+		const adds = [
+			wishActions.addToWishlist.run(alice, {
+				id: FIRST_ID,
+				typeId: "train_p",
+				colourId: ids.Mustard,
+				shopLink: zaraLink(null),
+			}),
+			wishActions.addToWishlist.run(alice, {
+				id: SECOND_ID,
+				typeId: "train_sh",
+				colourId: ids.Mustard,
+				shopLink: { ...zaraLink(null), id: OTHER_LINK_ID },
+			}),
+		];
+		await hold.queued(2);
+		hold.release();
+		const results = await Promise.all(adds);
+		// Then
+		expect({
+			wishes: (await listed(alice)).length,
+			links: linkRows(h),
+			oks: results.map((r) => r.ok).sort(),
+			refused: results.flatMap((r) => (r.ok ? [] : [r.error])),
+		}).toEqual({
+			wishes: 200,
+			links: 1,
+			oks: [false, true],
+			refused: [WISH_LIMIT_ROW],
+		});
+	});
+
+	// The piece of each wish with the ids of its links, newest wish first.
+	const held = async (
+		alice: ActionScope,
+	): Promise<{ id: string; links: string[] }[]> =>
+		(await listed(alice)).map((wish) => ({
+			id: wish.id,
+			links: wish.shopLinks.map((link) => link.id),
+		}));
+
+	test("adds the shop link to the wish the piece has", async () => {
+		// Given: alice's wish FIRST_ID for the Navy wool jacket, no link
+		const { alice, ids } = await withAlice();
+		await wishActions.add.run(alice, jacket(ids));
+		// When: the one form's add of that piece with a new wish id
+		const added = await wishActions.addToWishlist.run(alice, {
+			...jacketWithLink(ids),
+			id: SECOND_ID,
+		});
+		// Then
+		expect({
+			ok: added.ok,
+			created: added.ok && added.value.created,
+			id: added.ok && (added.value.wish.id as string),
+			wishes: await held(alice),
+		}).toEqual({
+			ok: true,
+			created: true,
+			id: FIRST_ID,
+			wishes: [{ id: FIRST_ID, links: [LINK_ID] }],
+		});
+	});
+
+	test("adds a wish alone when no shop link comes", async () => {
+		// Given: alice
+		const { alice, ids } = await withAlice();
+		// When
+		const added = await wishActions.addToWishlist.run(alice, jacket(ids));
+		// Then
+		expect({
+			ok: added.ok,
+			created: added.ok && added.value.created,
+			id: added.ok && (added.value.wish.id as string),
+			shopLinks: added.ok && added.value.wish.shopLinks,
+		}).toEqual({ ok: true, created: true, id: FIRST_ID, shopLinks: [] });
+	});
+
+	test("gives back the piece's wish when no shop link comes", async () => {
+		// Given: alice's wish FIRST_ID with the Zara link
+		const { alice, ids } = await withAlice();
+		await wishActions.add.run(alice, jacket(ids));
+		await addLink(alice, FIRST_ID, zaraLink(null));
+		// When: the one form's add of that piece with no link, a new wish id
+		const added = await wishActions.addToWishlist.run(alice, {
+			...jacket(ids),
+			id: SECOND_ID,
+		});
+		// Then
+		expect({
+			ok: added.ok,
+			created: added.ok && added.value.created,
+			id: added.ok && (added.value.wish.id as string),
+			wishes: await held(alice),
+		}).toEqual({
+			ok: true,
+			created: false,
+			id: FIRST_ID,
+			wishes: [{ id: FIRST_ID, links: [LINK_ID] }],
+		});
+	});
+
+	test("refuses an 11th shop link through the wishlist add", async () => {
+		// Given: alice's wish FIRST_ID with 10 links
+		const { h, alice, ids } = await withAlice();
+		await wishActions.add.run(alice, jacket(ids));
+		await h.seedShopLinks(ALICE.id, FIRST_ID, 10);
+		// When
+		const added = await wishActions.addToWishlist.run(alice, {
+			...jacketWithLink(ids),
+			id: SECOND_ID,
+		});
+		// Then
+		expect({
+			added,
+			links: linkRows(h),
+			wishes: (await listed(alice)).length,
+		}).toEqual({
+			added: { ok: false, error: SHOP_LINK_LIMIT_ROW },
+			links: 10,
+			wishes: 1,
+		});
+	});
+
+	test("joins two overlapping adds of one new piece into one wish", async () => {
+		// Given: two adds of the Navy wool jacket with their own wish and link
+		// ids, both read no wish before either batch runs
+		const { h, alice, ids } = await withAlice();
+		const hold = h.holdBatches();
+		// When
+		const adds = [
+			wishActions.addToWishlist.run(alice, jacketWithLink(ids)),
+			wishActions.addToWishlist.run(alice, {
+				...jacket(ids),
+				id: SECOND_ID,
+				shopLink: { ...zaraLink(null), id: OTHER_LINK_ID },
+			}),
+		];
+		await hold.queued(2);
+		hold.release();
+		const results = await Promise.all(adds);
+		// Then
+		expect({
+			oks: results.map((r) => r.ok),
+			wishes: await held(alice),
+		}).toEqual({
+			oks: [true, true],
+			wishes: [{ id: FIRST_ID, links: [LINK_ID, OTHER_LINK_ID] }],
+		});
+	});
+
+	test("adds the wish again when it is removed during a wishlist add", async () => {
+		// Given: alice's wish FIRST_ID with no link; its delete waits in a
+		// batch, so the add below reads the wish before it goes
+		const { h, alice, ids } = await withAlice();
+		await wishActions.add.run(alice, jacket(ids));
+		const [a] = await uploads(alice, 1);
+		const hold = h.holdBatches();
+		const removing = wishActions.delete.run(alice, { id: FIRST_ID });
+		await hold.queued(1);
+		// When: the one form's add of that piece, with a picture, so its write
+		// waits behind the delete
+		const adding = wishActions.addToWishlist.run(alice, {
+			...jacket(ids),
+			id: SECOND_ID,
+			shopLink: { ...zaraLink(null), pictureIds: [a ?? ""] },
+		});
+		await hold.queued(2);
+		hold.release();
+		const [, added] = await Promise.all([removing, adding]);
+		// Then
+		const [wish] = await listed(alice);
+		expect({
+			ok: added.ok,
+			created: added.ok && added.value.created,
+			wishes: (await held(alice)).length,
+			id: wish?.id as string | undefined,
+			links: wish?.shopLinks.map((link) => link.id as string),
+			pictureIds: wish?.shopLinks[0]?.pictureIds as string[] | undefined,
+		}).toEqual({
+			ok: true,
+			created: true,
+			wishes: 1,
+			id: SECOND_ID,
+			links: [LINK_ID],
+			pictureIds: [a],
+		});
+	});
+});
+
 describe("adding a shop link", () => {
 	// Alice with the wish FIRST_ID for a Navy wool jacket and the brand Zara.
 	async function aliceWithWish() {
@@ -598,6 +901,89 @@ describe("changing and deleting a shop link that is gone", () => {
 		});
 		// Then
 		expect(deleted).toEqual({ ok: false, error: SHOP_LINK_NOT_FOUND });
+	});
+});
+
+describe("the last shop link", () => {
+	// Alice's wish FIRST_ID for a Navy wool jacket with the Zara link.
+	async function aliceWithLink() {
+		const { h, alice, ids } = await withAlice();
+		await wishActions.add.run(alice, jacket(ids));
+		await addLink(alice, FIRST_ID, zaraLink(null));
+		return { h, alice, ids };
+	}
+
+	const held = async (
+		alice: ActionScope,
+	): Promise<{ id: string; links: string[] }[]> =>
+		(await listed(alice)).map((wish) => ({
+			id: wish.id,
+			links: wish.shopLinks.map((link) => link.id),
+		}));
+
+	test("removes the wish with its last shop link", async () => {
+		// Given
+		const { h, alice } = await aliceWithLink();
+		// When
+		const deleted = await shopLinkActions.delete.run(alice, { id: LINK_ID });
+		// Then
+		expect({
+			deleted,
+			wishes: await listed(alice),
+			links: h.accountRows(ALICE.id).shop_link ?? 0,
+		}).toEqual({
+			deleted: { ok: true, value: LINK_ID as ShopLinkId },
+			wishes: [],
+			links: 0,
+		});
+	});
+
+	test("keeps the wish when another shop link stays", async () => {
+		// Given: plus a second link on the wish
+		const { alice } = await aliceWithLink();
+		await addLink(alice, FIRST_ID, { ...zaraLink(null), id: OTHER_LINK_ID });
+		// When
+		await shopLinkActions.delete.run(alice, { id: LINK_ID });
+		// Then
+		expect(await held(alice)).toEqual([
+			{ id: FIRST_ID, links: [OTHER_LINK_ID] },
+		]);
+	});
+
+	test("keeps a wish added with no shop link when another wish's last link goes", async () => {
+		// Given: plus a White short tee wish added with no link
+		const { alice, ids } = await aliceWithLink();
+		await wishActions.addToWishlist.run(alice, {
+			id: SECOND_ID,
+			typeId: "tee_s",
+			colourId: ids.White,
+		});
+		// When
+		await shopLinkActions.delete.run(alice, { id: LINK_ID });
+		// Then
+		expect((await listed(alice)).map((wish) => wish.id as string)).toEqual([
+			SECOND_ID,
+		]);
+	});
+
+	test("keeps the wish when a link joins it during its last link's delete", async () => {
+		// Given: the delete read the wish, and its batch waits
+		const { h, alice, ids } = await aliceWithLink();
+		const hold = h.holdBatches();
+		const deleting = shopLinkActions.delete.run(alice, { id: LINK_ID });
+		await hold.queued(1);
+		// When: a link with no pictures joins the wish, with no batch
+		await wishActions.addToWishlist.run(alice, {
+			...jacket(ids),
+			id: SECOND_ID,
+			shopLink: { ...zaraLink(null), id: OTHER_LINK_ID },
+		});
+		hold.release();
+		await deleting;
+		// Then
+		expect(await held(alice)).toEqual([
+			{ id: FIRST_ID, links: [OTHER_LINK_ID] },
+		]);
 	});
 });
 
