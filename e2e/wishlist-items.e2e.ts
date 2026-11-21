@@ -343,3 +343,72 @@ test("keeps the shop link page when the remove fails", async ({ page }) => {
 		title: await title(page).textContent(),
 	}).toEqual({ toast: "Not removed. Try again.", title: "Polo" });
 });
+
+const buy = async (page: Page) => {
+	await actions(page).getByRole("button", { name: "Bought" }).click();
+	await confirm(page).getByRole("button", { name: "Bought" }).click();
+};
+
+test("opens the piece page of the bought item after Bought", async ({
+	page,
+}) => {
+	// Given: the COS link's page open
+	const { ids, cosLink } = await jacketAndPolo(page);
+	await page.goto(`/wishlist/link/${cosLink}`);
+	await expect(title(page)).toHaveText("Single-breasted wool jacket");
+	// When
+	await buy(page);
+	await expect(page).toHaveURL(`/piece/wool/${ids.Charcoal}`);
+	const closet = page.getByRole("heading", { name: "In your closet" });
+	await expect(closet).toBeVisible();
+	// Then
+	expect({
+		url: new URL(page.url()).pathname,
+		title: await title(page).textContent(),
+		closet: await closet.textContent(),
+		toast: await toast(page).textContent(),
+	}).toEqual({
+		url: `/piece/wool/${ids.Charcoal}`,
+		title: "Charcoal wool jacket",
+		closet: "In your closet",
+		toast: "Moved to your closet",
+	});
+});
+
+test("says the closet limit when Bought answers owned_item_limit", async ({
+	page,
+}) => {
+	// Given: the one-link account; Bought answers 409 owned_item_limit
+	const { link } = await poloWithLink(page);
+	await page.route("**/api/shop-links/*/bought", (route) =>
+		route.fulfill({ status: 409, json: { error: "owned_item_limit" } }),
+	);
+	await page.goto(`/wishlist/link/${link}`);
+	await expect(title(page)).toHaveText("Polo");
+	// When
+	await buy(page);
+	// Then
+	await expect(confirm(page).getByRole("alert")).toHaveText(
+		"You have 500 items. That is the limit. Delete one to add a new one.",
+	);
+	// The open confirm hides the page from roles, so the title goes by its tag.
+	await expect(page.locator("h1")).toHaveText("Polo");
+});
+
+test("keeps the dialog open with Not saved when Bought fails", async ({
+	page,
+}) => {
+	// Given: the one-link account; Bought answers 500
+	const { link } = await poloWithLink(page);
+	await page.route("**/api/shop-links/*/bought", (route) =>
+		route.fulfill({ status: 500 }),
+	);
+	await page.goto(`/wishlist/link/${link}`);
+	await expect(title(page)).toHaveText("Polo");
+	// When
+	await buy(page);
+	// Then
+	await expect(confirm(page).getByRole("alert")).toHaveText(
+		"Not saved. Try again.",
+	);
+});

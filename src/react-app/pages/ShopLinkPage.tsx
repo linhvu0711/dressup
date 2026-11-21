@@ -1,13 +1,14 @@
 import { CircleCheck, ExternalLink, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router";
+import { Navigate, useLocation, useNavigate, useParams } from "react-router";
+import type { OwnedItem } from "@/closet/owned-item";
 import { PieceCombinations } from "@/combinations/PieceCombinations";
 import { Button } from "@/components/ui/button";
 import { TYPE_NAMES } from "@/dress/clothing-types";
 import { ColourValue, Facts } from "@/item/Facts";
 import { ItemPage } from "@/item/ItemPage";
 import { ItemPictures } from "@/item/ItemPictures";
-import { tabSearch } from "@/shell/piece-link";
+import { pieceLink, tabSearch } from "@/shell/piece-link";
 import { useWishlist } from "@/wishlist/api";
 import { BoughtDialog } from "@/wishlist/BoughtDialog";
 import { OtherShops } from "@/wishlist/OtherShops";
@@ -32,10 +33,20 @@ export function ShopLinkPage() {
 	const { shopLinkId } = useParams();
 	const location = useLocation();
 	const back = `/wishlist${tabSearch(location.state)}`;
+	const wishlist = useWishlist();
+	const [bought, setBought] = useState<OwnedItem | null>(null);
+	// Bought takes the wish off the list, so the page leaves before the frame
+	// can find the link gone and send the person back. The closet Item page
+	// comes with #142, which switches this to it; the piece page shows the
+	// bought item till then.
+	if (bought) {
+		const to = pieceLink(bought, "/wishlist", tabSearch(location.state));
+		return <Navigate to={to.to} state={to.state} replace />;
+	}
 	return (
 		<ItemPage
 			back={back}
-			query={useWishlist()}
+			query={wishlist}
 			find={(wishes) => {
 				const card = wishlistCards(wishes).find(
 					(c) => c.link?.id === shopLinkId,
@@ -53,7 +64,14 @@ export function ShopLinkPage() {
 						label={shopName(link)}
 					/>
 				),
-				details: <LinkDetails wish={wish} link={link} back={back} />,
+				details: (
+					<LinkDetails
+						wish={wish}
+						link={link}
+						back={back}
+						onBought={setBought}
+					/>
+				),
 				below: (
 					<>
 						<OtherShops
@@ -73,10 +91,12 @@ function LinkDetails({
 	wish,
 	link,
 	back,
+	onBought,
 }: {
 	wish: Wish;
 	link: ShopLink;
 	back: string;
+	onBought: (item: OwnedItem) => void;
 }) {
 	const navigate = useNavigate();
 	const [open, setOpen] = useState<"bought" | "edit" | "remove" | null>(null);
@@ -151,6 +171,7 @@ function LinkDetails({
 					link={link}
 					wishId={wish.id}
 					onClose={() => setOpen(null)}
+					onBought={onBought}
 				/>
 			) : open === "edit" ? (
 				<ShopLinkSheet

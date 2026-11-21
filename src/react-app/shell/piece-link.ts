@@ -15,12 +15,18 @@ type LinkPiece = { typeId: string; colour: { id: string } };
 
 // The one way in to a piece page, so every link writes the address and the
 // back state alike, and none forgets the filter in the tab's address.
+export const pieceLink = (
+	piece: LinkPiece,
+	from: PieceFrom,
+	search: string,
+) => ({
+	to: `/piece/${piece.typeId}/${piece.colour.id}`,
+	state: { from, search },
+});
+
 export function usePieceLink(from: PieceFrom) {
 	const { search } = useLocation();
-	return (piece: LinkPiece) => ({
-		to: `/piece/${piece.typeId}/${piece.colour.id}`,
-		state: { from, search },
-	});
+	return (piece: LinkPiece) => pieceLink(piece, from, search);
 }
 
 const searchRule = z
