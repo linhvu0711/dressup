@@ -168,6 +168,23 @@ describe("upload and load", () => {
 		]);
 	});
 
+	test("answers 401 to a signed-out draft delete", async () => {
+		// Given: no session headers
+		const h = await makeHarness();
+		// When
+		const res = await send(
+			h,
+			new Headers(),
+			"DELETE",
+			`/api/pictures/${NO_SUCH_ID}`,
+		);
+		// Then
+		expect(await answer(res)).toEqual({
+			status: 401,
+			body: { error: "unauthorized" },
+		});
+	});
+
 	test("removes the row when the bucket refuses the upload", async () => {
 		// Given
 		const { h, headers } = await withAccount();

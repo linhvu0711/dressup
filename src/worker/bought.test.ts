@@ -171,6 +171,19 @@ describe("POST /api/shop-links/:id/bought", () => {
 		});
 	});
 
+	test("answers 401 to a signed-out Bought", async () => {
+		// Given: alice has an account; no session headers
+		const h = await makeHarness();
+		await h.addAccount(ALICE);
+		// When
+		const res = await buy(h, new Headers(), LINK_ID);
+		// Then
+		expect(await answer(res)).toEqual({
+			status: 401,
+			body: { error: "unauthorized" },
+		});
+	});
+
 	test("answers not_found to a second Bought of one link", async () => {
 		// Given
 		const { h, headers } = await aliceWithLinks();

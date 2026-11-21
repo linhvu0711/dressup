@@ -472,6 +472,25 @@ describe("PUT /api/shop-links/:id", () => {
 			links: [{ brand: null, price: 2490000 }],
 		});
 	});
+
+	test("refuses a shop link change with an empty name", async () => {
+		// Given: the Zara link on alice's wish
+		const { h, headers, ids } = await alice();
+		await post(h, headers, jacket(ids));
+		await postLink(h, headers, FIRST_ID, zaraLink(null));
+		// When
+		const res = await send(h, headers, "PUT", `/api/shop-links/${LINK_ID}`, {
+			url: ZARA_URL,
+			brandId: null,
+			name: "",
+			price: 2990000,
+		});
+		// Then
+		expect(await answer(res)).toEqual({
+			status: 400,
+			body: { error: "invalid", field: "name" },
+		});
+	});
 });
 
 describe("DELETE /api/shop-links/:id", () => {
@@ -517,6 +536,25 @@ describe("DELETE /api/shop-links/:id", () => {
 			status: res.status,
 			links: h.accountRows("alice-id").shop_link,
 		}).toEqual({ status: 204, links: 0 });
+	});
+
+	test("answers 401 to signed-out wish and shop link writes", async () => {
+		// Given: alice has an account; no session headers
+		const h = await makeHarness();
+		await h.addAccount(ALICE);
+		const none = new Headers();
+		// When
+		const answers = [
+			await post(h, none, { id: FIRST_ID, typeId: "wool", colourId: "x" }),
+			await send(h, none, "DELETE", `/api/wishes/${FIRST_ID}`),
+			await postLink(h, none, FIRST_ID, zaraLink(null)),
+			await send(h, none, "PUT", `/api/shop-links/${LINK_ID}`, zaraLink(null)),
+			await send(h, none, "DELETE", `/api/shop-links/${LINK_ID}`),
+		];
+		// Then
+		expect(await Promise.all(answers.map(answer))).toEqual(
+			Array(5).fill({ status: 401, body: { error: "unauthorized" } }),
+		);
 	});
 });
 

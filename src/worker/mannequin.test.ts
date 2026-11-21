@@ -103,6 +103,18 @@ describe("PUT /api/mannequin/:part", () => {
 			body: { error: "invalid", field: "part" },
 		});
 	});
+
+	test("refuses a colour change without a session", async () => {
+		// Given: no session
+		const h = await makeHarness();
+		// When
+		const res = await putColour(h, new Headers(), "skin", "#8D5524");
+		// Then
+		expect(await answer(res)).toEqual({
+			status: 401,
+			body: { error: "unauthorized" },
+		});
+	});
 });
 
 describe("the old dress and looks routes", () => {

@@ -965,6 +965,24 @@ describe("owned items", () => {
 		expect((data as { ownedItem: Listed }).ownedItem.quantity).toBe(5);
 	});
 
+	test("refuses a quantity of 100 on change as a sentence", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		const added = await ai.call("add_owned_item", await shirt(ai));
+		const { id } = (added.data as { ownedItem: Listed }).ownedItem;
+		// When
+		const { isError, text } = await ai.call("change_owned_item", {
+			id,
+			brandId: null,
+			quantity: 100,
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "Quantity is a whole number from 1 to 99.",
+		});
+	});
+
 	test("deletes an owned item", async () => {
 		// Given
 		const { ai } = await withAiSession();
@@ -1356,6 +1374,39 @@ describe("wishes", () => {
 			price: (changed.data as { wish: Listed }).wish.shopLinks[0]?.price,
 			after: (data as { wishes: Listed[] }).wishes[0]?.shopLinks,
 		}).toEqual({ price: 3990000, after: [] });
+	});
+
+	test("refuses a shop link that is gone on change as a sentence", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		await addJacketLink(ai);
+		// When
+		const { isError, text } = await ai.call("change_shop_link", {
+			id: "5b1f2c3d-0000-4000-8000-000000000000",
+			url: "https://cos.com/jacket",
+			name: "Wool jacket",
+			price: 4290000,
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "No shop link with this id.",
+		});
+	});
+
+	test("refuses to delete a shop link that is gone as a sentence", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		await addJacketLink(ai);
+		// When
+		const { isError, text } = await ai.call("delete_shop_link", {
+			id: "5b1f2c3d-0000-4000-8000-000000000000",
+		});
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "No shop link with this id.",
+		});
 	});
 
 	test("refuses an address that is not http as a sentence", async () => {

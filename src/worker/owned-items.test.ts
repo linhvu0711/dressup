@@ -432,6 +432,41 @@ describe("PUT and DELETE /api/owned-items/:id", () => {
 			listed: { ownedItems: [] },
 		});
 	});
+
+	test("answers 401 to a signed-out add, change, and delete", async () => {
+		// Given: alice has an account; no session headers
+		const h = await makeHarness();
+		await h.addAccount(ALICE);
+		const none = new Headers();
+		// When
+		const added = await post(h, none, {
+			id: FIRST_ID,
+			typeId: "shirt_l",
+			colourId: "x",
+			brandId: null,
+			quantity: 2,
+		});
+		const changed = await put(h, none, FIRST_ID, {
+			brandId: null,
+			quantity: 1,
+		});
+		const deleted = await send(
+			h,
+			none,
+			"DELETE",
+			`/api/owned-items/${FIRST_ID}`,
+		);
+		// Then
+		expect([
+			await answer(added),
+			await answer(changed),
+			await answer(deleted),
+		]).toEqual([
+			{ status: 401, body: { error: "unauthorized" } },
+			{ status: 401, body: { error: "unauthorized" } },
+			{ status: 401, body: { error: "unauthorized" } },
+		]);
+	});
 });
 
 describe("adds at once", () => {
