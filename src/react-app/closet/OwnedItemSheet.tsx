@@ -66,6 +66,16 @@ export function OwnedItemSheet(
 	const [price, setPrice] = useState(() =>
 		typedPrice(String(editing?.price ?? "")),
 	);
+	// The text a paste or a drop puts in, for the change it makes. The browser
+	// makes that change before the next task, so the text is dropped then: a
+	// paste that changes nothing, as of an image, leaves none behind.
+	const put = useRef<string | undefined>(undefined);
+	const inserted = (text: string) => {
+		put.current = text;
+		setTimeout(() => {
+			put.current = undefined;
+		});
+	};
 	const colours = useColours();
 	const colour = colours.data?.find((c) => c.id === colourId);
 	const slots = usePictureSlots(editing?.pictureIds ?? []);
@@ -237,22 +247,9 @@ export function OwnedItemSheet(
 						inputMode="numeric"
 						autoComplete="off"
 						value={price.shown}
-						onPaste={(e) => {
-							// The field puts the text in itself, so the price is judged on
-							// what was pasted: its own dots move as it reformats.
-							const text = e.clipboardData.getData("text");
-							// A paste with no text, as of an image, puts nothing in.
-							if (text === "") return;
-							e.preventDefault();
-							const { value, selectionStart, selectionEnd } = e.currentTarget;
-							const at = selectionStart ?? value.length;
-							const next =
-								value.slice(0, at) + text + value.slice(selectionEnd ?? at);
-							setPrice(typedPrice(next, text));
-						}}
-						// A drop lands where the pointer is, which the field cannot read.
-						onDrop={(e) => e.preventDefault()}
-						onChange={(e) => setPrice(typedPrice(e.target.value))}
+						onPaste={(e) => inserted(e.clipboardData.getData("text"))}
+						onDrop={(e) => inserted(e.dataTransfer.getData("text"))}
+						onChange={(e) => setPrice(typedPrice(e.target.value, put.current))}
 						className={cn(INPUT, "min-w-0 flex-1")}
 					/>
 					<span aria-hidden>₫</span>
