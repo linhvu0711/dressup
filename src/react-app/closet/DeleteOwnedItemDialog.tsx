@@ -1,11 +1,10 @@
 import { AlertDialog } from "radix-ui";
 import { useNavigate } from "react-router";
-import { pieceName } from "@/combinations/combination";
 import { Button } from "@/components/ui/button";
 import { FOOTER_ROW, SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
 import { useDeleteOwnedItem } from "./api";
-import type { OwnedItem } from "./owned-item";
+import { itemCard, type OwnedItem } from "./owned-item";
 
 // The confirm. "Delete" waits for the server's answer before the confirm
 // closes; an item another tab deleted first is gone all the same.
@@ -30,7 +29,7 @@ export function DeleteOwnedItemDialog({
 						Remove this item?
 					</AlertDialog.Title>
 					<AlertDialog.Description className="text-muted-foreground">
-						{`${pieceName(item)} · ${item.brand?.name ?? "No brand"}`}
+						{`${itemCard(item).title} · ${item.brand?.name ?? "No brand"}`}
 					</AlertDialog.Description>
 					<div className={FOOTER_ROW}>
 						<AlertDialog.Cancel asChild>

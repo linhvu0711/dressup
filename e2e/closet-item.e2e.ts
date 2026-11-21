@@ -157,6 +157,26 @@ test("deletes the item from Delete item and goes back to the Closet", async ({
 	await expect(page).toHaveURL("/closet");
 });
 
+test("names the item in its delete confirm", async ({ page }) => {
+	// Given: White short tee named Gym tee, no brand, its page open
+	await page.goto("/");
+	const ids = await colourIds(page);
+	const [id] = await postOwnedItems(page, {
+		typeId: "tee_s",
+		colourId: ids.White,
+		brandId: null,
+		quantity: 1,
+		name: "Gym tee",
+	});
+	await page.goto(`/closet/${id}`);
+	// When
+	await page.getByRole("button", { name: "Delete item" }).click();
+	// Then
+	await expect(
+		page.getByRole("alertdialog", { name: "Remove this item?" }),
+	).toHaveAccessibleDescription("Gym tee · No brand");
+});
+
 test("shows Could not load your closet on the item page and loads on Retry", async ({
 	page,
 }) => {
