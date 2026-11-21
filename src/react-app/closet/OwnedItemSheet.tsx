@@ -64,7 +64,7 @@ export function OwnedItemSheet(
 	const [name, setName] = useState(editing?.name ?? "");
 	const [nameCut, setNameCut] = useState(false);
 	const [price, setPrice] = useState(() =>
-		typedPrice(String(editing?.price ?? "")),
+		typedPrice(String(editing?.price ?? ""), ""),
 	);
 	const colours = useColours();
 	const colour = colours.data?.find((c) => c.id === colourId);
@@ -237,7 +237,7 @@ export function OwnedItemSheet(
 						inputMode="numeric"
 						autoComplete="off"
 						value={price.shown}
-						onChange={(e) => setPrice(typedPrice(e.target.value))}
+						onChange={(e) => setPrice(typedPrice(e.target.value, price.shown))}
 						className={cn(INPUT, "min-w-0 flex-1")}
 					/>
 					<span aria-hidden>₫</span>
