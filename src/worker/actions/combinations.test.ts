@@ -513,6 +513,27 @@ describe("two saves at the same time", () => {
 		});
 	});
 
+	test("gives back the combination when its first save lands during a resend", async () => {
+		// Given: alice with Work and Weekend; her resend's write waits until
+		// the first save of the same id, with Work, landed
+		const { h, alice, ids } = await withAlice();
+		const [work, weekend] = await addTags(alice, ["Work", "Weekend"]);
+		beforeNextBatch(h, () =>
+			combinationActions.save.run(alice, { ...three(ids), tags: [work] }),
+		);
+		// When
+		const again = await combinationActions.save.run(alice, {
+			...three(ids),
+			tags: [weekend],
+		});
+		// Then
+		expect({
+			ok: again.ok,
+			created: again.ok && again.value.created,
+			listed: (await listed(alice)).map((c) => c.tags),
+		}).toEqual({ ok: true, created: false, listed: [[weekend]] });
+	});
+
 	test("keeps no piece of a colour deleted while the save writes", async () => {
 		// Given: alice; a trigger deletes Navy just before its piece is written,
 		// after the save's colour check passed

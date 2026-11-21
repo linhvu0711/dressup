@@ -172,12 +172,14 @@ export async function guardedAdd<
 			.from(table)
 			.where(and(eq(table.id, add.id), add.mine)),
 	);
-	const [stored] = await db
-		.select({ mine: sql<number>`${held}` })
-		.from(table)
-		.where(eq(table.id, add.id));
-	if (stored) {
-		if (!stored.mine) return conflict;
+	const storedRow = async () => {
+		const [row] = await db
+			.select({ mine: sql<number>`${held}` })
+			.from(table)
+			.where(eq(table.id, add.id));
+		return row;
+	};
+	const replay = async () => {
 		if (add.resend) {
 			const resent = await add.resend();
 			if (!resent.ok) return resent;
@@ -185,8 +187,10 @@ export async function guardedAdd<
 		const value = await add.read();
 		return value === undefined
 			? conflict
-			: { ok: true, value: { value, created: false } };
-	}
+			: { ok: true as const, value: { value, created: false } };
+	};
+	const stored = await storedRow();
+	if (stored) return stored.mine ? replay() : conflict;
 	const insert = insertIds(db, add.table, add);
 	const written = add.write
 		? await add.write(insert)
@@ -197,11 +201,10 @@ export async function guardedAdd<
 		if (value !== undefined)
 			return { ok: true, value: { value, created: true } };
 	}
-	const [taken] = await db
-		.select({ id: table.id })
-		.from(table)
-		.where(eq(table.id, add.id));
-	if (taken) return conflict;
+	// The first send of this add may land between the read above and the
+	// insert, as when a retry overtakes it; it is a replay too.
+	const landed = await storedRow();
+	if (landed) return landed.mine ? replay() : conflict;
 	return {
 		ok: false,
 		error: (await add.refused()) ?? { code: add.limit.code },

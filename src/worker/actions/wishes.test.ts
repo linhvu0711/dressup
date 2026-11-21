@@ -339,6 +339,22 @@ describe("wish adds at once", () => {
 		});
 	});
 
+	test("gives back the same wish to two adds of one id that overlap", async () => {
+		// Given: alice; the add of a Navy wool jacket sent twice at once
+		const { alice, ids } = await withAlice();
+		// When
+		const results = await Promise.all([
+			wishActions.add.run(alice, jacket(ids)),
+			wishActions.add.run(alice, jacket(ids)),
+		]);
+		// Then
+		expect({
+			created: results.map((r) => r.ok && r.value.created).sort(),
+			oks: results.map((r) => r.ok),
+			count: (await listed(alice)).length,
+		}).toEqual({ created: [false, true], oks: [true, true], count: 1 });
+	});
+
 	test("refuses the second of two adds of one piece that overlap", async () => {
 		// Given: alice; two adds of a Navy wool jacket
 		const { alice, ids } = await withAlice();
