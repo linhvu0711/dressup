@@ -1132,18 +1132,19 @@ describe("owned items", () => {
 		).toEqual([["shirt_l", "Navy", null, 2]]);
 	});
 
-	test("refuses the same piece and brand a second time as a sentence", async () => {
+	test("adds the same piece and brand a second time", async () => {
 		// Given
 		const { ai } = await withAiSession();
 		const args = await shirt(ai);
 		await ai.call("add_owned_item", args);
 		// When
-		const { isError, text } = await ai.call("add_owned_item", args);
+		const { data } = await ai.call("add_owned_item", args);
+		const listed = await ai.call("list_owned_items");
 		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "You have this item already. Change its number.",
-		});
+		expect({
+			created: (data as { created: boolean }).created,
+			count: (listed.data as { ownedItems: Listed[] }).ownedItems.length,
+		}).toEqual({ created: true, count: 2 });
 	});
 
 	test("changes an owned item", async () => {

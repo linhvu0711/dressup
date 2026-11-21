@@ -187,7 +187,7 @@ test("adds an item from the form and shows its tile", async ({ page }) => {
 	await expect(tiles(page)).toHaveAccessibleName("Navy long button-up, 2");
 });
 
-test("refuses the same piece and brand a second time", async ({ page }) => {
+test("adds the same piece and brand a second time", async ({ page }) => {
 	// Given: a fresh account with a Navy long button-up, no brand
 	await page.goto("/");
 	const ids = await colourIds(page);
@@ -203,10 +203,9 @@ test("refuses the same piece and brand a second time", async ({ page }) => {
 	await pickNavyShirt(page);
 	await addSheet(page).getByRole("button", { name: "Save" }).click();
 	// Then
-	await expect(addSheet(page).getByRole("alert")).toHaveText(
-		"You have this item already. Change its number.",
-	);
-	await expect(addSheet(page)).toBeVisible();
+	await expect(toast(page)).toHaveText("Added to your closet");
+	await expect(tiles(page)).toHaveCount(1);
+	await expect(tiles(page)).toHaveAccessibleName("Navy long button-up, 2");
 });
 
 test("takes only whole numbers from 1 to 99 for the quantity", async ({

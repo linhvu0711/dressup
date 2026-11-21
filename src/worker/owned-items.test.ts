@@ -103,7 +103,7 @@ describe("POST /api/owned-items", () => {
 		});
 	});
 
-	test("refuses the same piece and brand a second time", async () => {
+	test("adds a second item of the same piece and brand", async () => {
 		// Given: alice has Zara and a Navy long button-up from Zara
 		const { h, headers, ids } = await alice();
 		const zara = await postBrand(h, headers, "Zara");
@@ -117,13 +117,9 @@ describe("POST /api/owned-items", () => {
 		});
 		// Then
 		expect({
-			...(await answer(res)),
+			status: res.status,
 			count: (await list(h, headers)).length,
-		}).toEqual({
-			status: 409,
-			body: { error: "duplicate", id: FIRST_ID },
-			count: 1,
-		});
+		}).toEqual({ status: 201, count: 2 });
 	});
 
 	test("answers 401 without a session", async () => {

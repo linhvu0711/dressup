@@ -20,7 +20,6 @@ import { pictureActions } from "./pictures";
 
 const FIRST_ID = "11111111-1111-4111-8111-111111111111";
 const SECOND_ID = "22222222-2222-4222-8222-222222222222";
-const THIRD_ID = "33333333-3333-4333-8333-333333333333";
 
 const colourIdsOf = async (h: Harness, person = ALICE): Promise<Ids> =>
 	Object.fromEntries(
@@ -71,14 +70,6 @@ const QUANTITY_REFUSED = {
 	body: { error: "invalid", field: "quantity" },
 	text: "Quantity is a whole number from 1 to 99.",
 } satisfies Refusal;
-
-const DUPLICATE_ROW = (id: string) =>
-	({
-		code: "duplicate",
-		status: 409,
-		body: { error: "duplicate", id },
-		text: "You have this item already. Change its number.",
-	}) satisfies Refusal;
 
 const ITEM_LIMIT_ROW = {
 	code: "owned_item_limit",
@@ -229,19 +220,6 @@ describe("adding an owned item", () => {
 		});
 	});
 
-	test("refuses the same piece with no brand a second time", async () => {
-		// Given: alice has a Navy long button-up with no brand
-		const { alice, ids } = await withAlice();
-		await ownedItemActions.add.run(alice, shirt(ids));
-		// When
-		const added = await ownedItemActions.add.run(alice, {
-			...shirt(ids),
-			id: SECOND_ID,
-		});
-		// Then
-		expect(added).toEqual({ ok: false, error: DUPLICATE_ROW(FIRST_ID) });
-	});
-
 	test("adds the same piece with another brand", async () => {
 		// Given: alice has Zara and COS, and a Navy long button-up from Zara
 		const { alice, ids } = await withAlice();
@@ -380,7 +358,7 @@ describe("adding an owned item", () => {
 });
 
 describe("changing an owned item", () => {
-	test("refuses a change to a brand another item of the piece has", async () => {
+	test("changes the brand to the brand of another item of the piece", async () => {
 		// Given: brand Zara; item A shirt_l Navy Zara; item B shirt_l Navy no brand
 		const { alice, ids } = await withAlice();
 		const zara = await addBrand(alice, "Zara");
@@ -393,7 +371,10 @@ describe("changing an owned item", () => {
 			quantity: 1,
 		});
 		// Then
-		expect(changed).toEqual({ ok: false, error: DUPLICATE_ROW(FIRST_ID) });
+		expect({
+			ok: changed.ok,
+			brands: (await listed(alice)).map((item) => item.brand?.name),
+		}).toEqual({ ok: true, brands: ["Zara", "Zara"] });
 	});
 
 	test("changes the quantity of one of two no-brand items of a piece", async () => {
@@ -448,26 +429,6 @@ describe("adds at once", () => {
 			count: 500,
 			oks: [false, true],
 			refused: [ITEM_LIMIT_ROW],
-		});
-	});
-
-	test("refuses the second of two adds of one piece and brand that overlap", async () => {
-		// Given: alice; two adds of a Navy long button-up with no brand
-		const { alice, ids } = await withAlice();
-		// When
-		const [first, second] = await Promise.all([
-			ownedItemActions.add.run(alice, shirt(ids)),
-			ownedItemActions.add.run(alice, { ...shirt(ids), id: THIRD_ID }),
-		]);
-		// Then
-		expect({
-			first: first.ok,
-			second,
-			count: (await listed(alice)).length,
-		}).toEqual({
-			first: true,
-			second: { ok: false, error: DUPLICATE_ROW(FIRST_ID) },
-			count: 1,
 		});
 	});
 
@@ -564,38 +525,6 @@ describe("pictures of an item", () => {
 		}).toEqual({
 			ok: true,
 			quantity: 3,
-			pictureIds: [a, b],
-			keys: sorted([a, b]),
-		});
-	});
-
-	test("keeps the pictures when a change is refused as duplicate", async () => {
-		// Given: a Zara shirt, and a no-brand shirt of the same piece with two
-		// pictures
-		const { h, alice, ids } = await withAlice();
-		const zara = await addBrand(alice, "Zara");
-		await ownedItemActions.add.run(alice, { ...shirt(ids), brandId: zara });
-		const [a, b] = await uploads(alice, 2);
-		await ownedItemActions.add.run(alice, {
-			...shirt(ids),
-			id: SECOND_ID,
-			pictureIds: [a, b],
-		});
-		// When
-		const refused = await ownedItemActions.change.run(alice, {
-			id: SECOND_ID,
-			brandId: zara,
-			quantity: 1,
-			pictureIds: [],
-		});
-		const second = (await listed(alice)).find((i) => i.id === SECOND_ID);
-		// Then
-		expect({
-			refused,
-			pictureIds: second?.pictureIds,
-			keys: h.pictures.keys(),
-		}).toEqual({
-			refused: { ok: false, error: DUPLICATE_ROW(FIRST_ID) },
 			pictureIds: [a, b],
 			keys: sorted([a, b]),
 		});

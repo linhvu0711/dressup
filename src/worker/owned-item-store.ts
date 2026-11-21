@@ -1,15 +1,4 @@
-import {
-	and,
-	asc,
-	count,
-	desc,
-	eq,
-	exists,
-	ne,
-	notExists,
-	sql,
-} from "drizzle-orm";
-import { alias } from "drizzle-orm/sqlite-core";
+import { and, asc, count, desc, eq, exists, sql } from "drizzle-orm";
 import {
 	OWNED_ITEM_LIMIT,
 	type OwnedItem,
@@ -22,8 +11,8 @@ import type { Hex } from "@/colour/hex";
 import type { PieceRef } from "@/combinations/marks";
 import type { TypeId } from "@/dress/clothing-types";
 import type { ColourId } from "@/labels/colour";
-import { brandOf, brandOrNone } from "./brand-store";
-import { colourOf } from "./colour-store";
+import { brandOf, brandOrNone, notYourBrand } from "./brand-store";
+import { colourOf, notYourColour } from "./colour-store";
 import type { Db } from "./db";
 import { brand } from "./db/brand-schema";
 import { colour } from "./db/colour-schema";
@@ -37,7 +26,7 @@ import {
 	pictureIdsBy,
 	saveWithPictures,
 } from "./picture-store";
-import { pieceRefusal, samePiece } from "./piece-rows";
+import { samePiece } from "./piece-rows";
 import { invalidField, type Result } from "./result";
 
 type OwnedItemField =
@@ -53,7 +42,6 @@ type OwnedItemField =
 
 export type OwnedItemError =
 	| { code: "invalid"; field: OwnedItemField; value?: unknown }
-	| { code: "duplicate"; id: OwnedItemId }
 	| { code: "owned_item_limit" }
 	| { code: "picture_limit" }
 	| { code: "not_found" }
@@ -140,31 +128,27 @@ const OWNED_ITEM_FIELDS: readonly OwnedItemField[] = [
 	"pictureIds",
 ];
 
-// The account's items of one piece with one brand; `is` matches no brand
-// to no brand.
+// The account's items of one piece with one brand, which tell an add's own
+// stored row; `is` matches no brand to no brand.
 const sameItem = (userId: string, piece: Piece) =>
 	and(
 		samePiece(ownedItem, userId, piece),
 		sql`${ownedItem.brandId} is ${piece.brandId}`,
 	);
 
-// The colour, the brand, and the duplicate rule of an owned item's insert.
+// The colour and the brand of an owned item's insert.
 const itemGuards = (db: Db, userId: string, piece: Piece) => [
 	exists(colourOf(db, userId, piece.colourId)),
 	piece.brandId === null
 		? undefined
 		: exists(brandOf(db, userId, piece.brandId)),
-	notExists(
-		db.select({ one: sql`1` }).from(ownedItem).where(sameItem(userId, piece)),
-	),
 ];
 
 // The page makes the id when the form opens, so an add sent again after a
 // lost answer gives back the same item rather than a second one, with the
 // quantity, name, and price sent last, as the person may have changed them
-// before the retry;
-// the same id with another piece or brand, or another account's id, is
-// conflict. The colour, the brand, the limit, and the duplicate rule are the
+// before the retry; the same id with another piece or brand, or another
+// account's id, is conflict. The colour, the brand, and the limit are the
 // shared add's guards, so two adds at once cannot both pass them.
 export async function addOwnedItem(
 	db: Db,
@@ -227,13 +211,9 @@ export async function addOwnedItem(
 					.where(and(eq(ownedItem.id, input.id), eq(ownedItem.userId, userId))),
 			),
 		read: async () => (await readOwnedItems(db, userId, input.id))[0],
-		refused: (): Promise<OwnedItemError | null> =>
-			pieceRefusal(
-				db,
-				userId,
-				{ table: ownedItem, where: sameItem(userId, input) },
-				input,
-			),
+		refused: async (): Promise<OwnedItemError | null> =>
+			(await notYourColour(db, userId, input.colourId)) ??
+			notYourBrand(db, userId, input.brandId),
 	});
 	return added.ok
 		? {
@@ -246,10 +226,8 @@ export async function addOwnedItem(
 		: added;
 }
 
-// Only the brand and the quantity change; the piece stays. The brand and the
-// duplicate rule sit in the update itself, as in the add. The duplicate rule
-// holds only when the brand changes: a brand delete can leave two items of
-// one piece with no brand, and each must still take a new quantity.
+// Only the brand, the quantity, the name, and the price change; the piece
+// stays. The brand check sits in the update itself, as in the add.
 export async function changeOwnedItem(
 	db: Db,
 	bucket: R2Bucket,
@@ -265,7 +243,6 @@ export async function changeOwnedItem(
 			parsed.error.issues[0]?.path ?? [],
 		);
 	const { brandId, quantity, name, price, pictureIds } = parsed.data;
-	const other = alias(ownedItem, "other");
 	const saved = await saveWithPictures(
 		db,
 		bucket,
@@ -284,20 +261,6 @@ export async function changeOwnedItem(
 					eq(ownedItem.id, id),
 					eq(ownedItem.userId, userId),
 					brandId === null ? undefined : exists(brandOf(db, userId, brandId)),
-					sql`(${ownedItem.brandId} is ${brandId} or ${notExists(
-						db
-							.select({ one: sql`1` })
-							.from(other)
-							.where(
-								and(
-									eq(other.userId, userId),
-									eq(other.typeId, ownedItem.typeId),
-									eq(other.colourId, ownedItem.colourId),
-									sql`${other.brandId} is ${brandId}`,
-									ne(other.id, ownedItem.id),
-								),
-							),
-					)})`,
 				),
 			)
 			.returning({ id: ownedItem.id }),
@@ -309,21 +272,13 @@ export async function changeOwnedItem(
 		if (changed) return { ok: true, value: changed };
 	}
 	const [held] = await db
-		.select({ typeId: ownedItem.typeId, colourId: ownedItem.colourId })
+		.select({ id: ownedItem.id })
 		.from(ownedItem)
 		.where(and(eq(ownedItem.id, id), eq(ownedItem.userId, userId)));
 	if (!held) return { ok: false, error: { code: "not_found" } };
-	const piece = { ...held, brandId };
 	return {
 		ok: false,
-		// The item holds its own piece and brand, so it is not a duplicate.
-		error: (await pieceRefusal<OwnedItemId>(
-			db,
-			userId,
-			{ table: ownedItem, where: sameItem(userId, piece) },
-			piece,
-			id,
-		)) ?? { code: "conflict" },
+		error: (await notYourBrand(db, userId, brandId)) ?? { code: "conflict" },
 	};
 }
 

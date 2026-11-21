@@ -71,11 +71,6 @@ const ownedItemRefusals: Refusals<OwnedItemError> = {
 		body: { error: "invalid", field: error.field },
 		text: fieldText(error),
 	}),
-	duplicate: (error) => ({
-		status: 409,
-		body: { error: "duplicate", id: error.id },
-		text: "You have this item already. Change its number.",
-	}),
 	owned_item_limit: ownedItemLimit,
 	picture_limit: () => ({
 		status: 409,

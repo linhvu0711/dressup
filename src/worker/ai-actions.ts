@@ -460,7 +460,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		"list_owned_items",
 		{
 			title: "List the closet",
-			description: `The account's owned items, newest first. An owned item is one brand of one piece (a type in a colour) with a quantity of 1 to ${QUANTITY_MAX}. An account holds at most ${OWNED_ITEM_LIMIT}. Each item has pictureIds, its pictures in upload order; show_picture shows one. ${filterRule}`,
+			description: `The account's owned items, newest first. An owned item is one piece (a type in a colour) with a quantity of 1 to ${QUANTITY_MAX}, and an optional brand, name, and price paid in VND. Two items can share a piece and a brand. An account holds at most ${OWNED_ITEM_LIMIT}. Each item has pictureIds, its pictures in upload order; show_picture shows one. ${filterRule}`,
 			annotations: READ,
 			inputSchema: ownedItemActions.list.input,
 		},
@@ -480,7 +480,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		"add_owned_item",
 		{
 			title: "Add to the closet",
-			description: `Adds one brand of one piece to the closet, with a quantity. The account has each piece and brand once, and at most ${OWNED_ITEM_LIMIT} items. Answers the owned item and created, true for a new item.`,
+			description: `Adds one piece to the closet, with a quantity, and an optional brand, name, and price paid in VND. An account holds at most ${OWNED_ITEM_LIMIT} items. Answers the owned item and created, true for a new item.`,
 			annotations: WRITE,
 			inputSchema: ownedItemActions.add.input.omit({ id: true }),
 		},

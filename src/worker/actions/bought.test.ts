@@ -404,36 +404,4 @@ describe("Bought while another write runs", () => {
 			keys: [a, b, c, d, e].sort(),
 		});
 	});
-
-	test("refuses Bought when the same item is added during it", async () => {
-		// Given
-		const { h, alice, ids, cos, a, b, c } = await aliceWithLinks();
-		const hold = h.holdBatches();
-		// When
-		const bought = buy(alice, LINK_ID);
-		await hold.queued(1);
-		await ownedItemActions.add.run(alice, {
-			id: ITEM_ID,
-			typeId: "wool",
-			colourId: ids.Navy,
-			brandId: cos,
-			quantity: 1,
-		});
-		hold.release();
-		const result = await bought;
-		// Then
-		expect({
-			result,
-			items: (await closet(alice)).map((i) => ({
-				id: i.id,
-				quantity: i.quantity,
-				pictureIds: i.pictureIds,
-			})),
-			links: await linkPictures(alice),
-		}).toEqual({
-			result: { ok: false, error: CONFLICT_ROW },
-			items: [{ id: ITEM_ID, quantity: 1, pictureIds: [] }],
-			links: [[a, b], [c]],
-		});
-	});
 });
