@@ -13,8 +13,9 @@ import type { BrandId } from "@/labels/brand";
 import type { ColourId } from "@/labels/colour";
 import type { Wish, WishlistCard } from "@/wishlist/wish";
 
-// One rule for the closet, the wishlist, and the AI list tools, so an AI app
-// and the page never disagree on what a filter shows.
+// One rule for the closet, the wishlist, and the AI list tools. The Wishlist
+// page matches each card on its own shop link, while the AI tools list whole
+// wishes, so there a wish fits the brand of any of its links.
 
 // null in brands is No brand.
 export type PieceFilter = {
