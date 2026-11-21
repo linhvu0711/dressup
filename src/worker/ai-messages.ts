@@ -1,4 +1,3 @@
-import { ACCOUNT_PICTURE_LIMIT } from "@/pictures/picture";
 import { UPLOAD_ADDRESS_AGE_MS } from "./upload-address-store";
 
 // Every refusal an AI app gets names the value it sent and what is allowed,
@@ -6,27 +5,8 @@ import { UPLOAD_ADDRESS_AGE_MS } from "./upload-address-store";
 
 export const tooManyActions = "Too many actions. Wait a minute and try again.";
 
-export const addressGone =
-	"This upload address was used or has expired. get_upload_address gives a new one.";
-
-export const notAPicture =
-	"This file is not a JPEG, PNG, or WebP picture. Send one of these to a new upload address.";
-
-export const tooLargeUpload =
-	"This picture is over 1 MB. Shrink it to 1 MB or less and send it to a new upload address.";
-
-export const accountPictureLimit = `You have ${ACCOUNT_PICTURE_LIMIT.toLocaleString("en")} pictures. That is the limit. Take pictures off an owned item or a shop link to add new ones.`;
-
-// The web app's words, src/react-app/pictures/PictureSlots.tsx.
-export const storageFull = "Picture storage is full. No new pictures for now.";
-
-export const notStored =
-	"dressup could not store the picture and kept nothing. Try again with a new upload address.";
-
 export const uploadAddressText = (address: string) =>
 	`Send the picture within ${UPLOAD_ADDRESS_AGE_MS / 60_000} minutes, once: curl -X POST --data-binary @photo.jpg ${address}. It answers with the picture's id.`;
-
-export const noPicture = "No picture with this id.";
 
 export const noTags = "You have no tags yet.";
 

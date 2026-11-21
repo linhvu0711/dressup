@@ -24,6 +24,7 @@ import { brandActions } from "./actions/brands";
 import { colourActions } from "./actions/colours";
 import { combinationActions } from "./actions/combinations";
 import { ownedItemActions } from "./actions/owned-items";
+import { pictureActions } from "./actions/pictures";
 import { tagActions } from "./actions/tags";
 import { shopLinkActions, wishActions } from "./actions/wishes";
 import { countAiAction } from "./ai-action-store";
@@ -34,7 +35,6 @@ import {
 	noCombinationsMatch,
 	noOwnedItemMatch,
 	noOwnedItems,
-	noPicture,
 	noTags,
 	noWishes,
 	noWishMatch,
@@ -45,7 +45,6 @@ import { listBrands } from "./brand-store";
 import { listColours } from "./colour-store";
 import type { Db } from "./db";
 import { listOwnedPieces } from "./owned-item-store";
-import { readPicture } from "./picture-store";
 import { listTags } from "./tag-store";
 import {
 	giveUploadAddress,
@@ -652,15 +651,11 @@ export function registerAiActions(server: McpServer, account: Account) {
 			description:
 				"Gives one picture of an owned item or a shop link as an image. list_owned_items and list_wishes give the picture ids.",
 			annotations: READ,
-			inputSchema: z.object({
-				id: z
-					.string()
-					.describe("A picture id from list_owned_items or list_wishes."),
-			}),
+			inputSchema: pictureActions.read.input,
 		},
-		async ({ id }) => {
-			const read = await readPicture(db, pictures, userId, id);
-			if (!read.ok) return refusal(noPicture);
+		async (input) => {
+			const read = await pictureActions.read.run(scope, input);
+			if (!read.ok) return refusal(read.error.text);
 			const headers = new Headers();
 			read.value.writeHttpMetadata(headers);
 			const bytes = await new Response(read.value.body).arrayBuffer();

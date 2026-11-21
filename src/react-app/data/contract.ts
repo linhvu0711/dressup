@@ -30,6 +30,7 @@ const errorCodes = [
 	"quantity_limit",
 	"account_picture_limit",
 	"storage_full",
+	"not_stored",
 ] as const;
 
 export type ErrorCode = (typeof errorCodes)[number];

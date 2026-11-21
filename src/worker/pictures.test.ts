@@ -198,6 +198,19 @@ describe("upload and load", () => {
 		});
 	});
 
+	test("answers not_stored as JSON when the bucket refuses the upload", async () => {
+		// Given
+		const { h, headers } = await withAccount();
+		h.pictures.failPuts = true;
+		// When
+		const res = await upload(h, headers);
+		// Then
+		expect({ status: res.status, text: await res.text() }).toEqual({
+			status: 500,
+			text: '{"error":"not_stored"}',
+		});
+	});
+
 	test("takes back the month's count when the bucket refuses the upload", async () => {
 		// Given
 		const { h, headers } = await withAccount();

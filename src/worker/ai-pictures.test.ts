@@ -429,9 +429,10 @@ describe("refusals at the address", () => {
 		const refused = await answer(await postTo(h, address, PDF));
 		// Then
 		expect({ ...refused, keys: h.pictures.keys() }).toEqual({
-			status: 415,
+			status: 400,
 			body: {
-				error: "not_an_image",
+				error: "invalid",
+				field: "body",
 				message:
 					"This file is not a JPEG, PNG, or WebP picture. Send one of these to a new upload address.",
 			},
