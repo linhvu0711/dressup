@@ -1,6 +1,7 @@
 import { CircleCheck, ExternalLink, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useLocation, useParams } from "react-router";
+import { PieceCombinations } from "@/combinations/PieceCombinations";
 import { Button } from "@/components/ui/button";
 import { TYPE_NAMES } from "@/dress/clothing-types";
 import { ColourValue, Facts } from "@/item/Facts";
@@ -53,11 +54,14 @@ export function ShopLinkPage() {
 				),
 				details: <LinkDetails wish={wish} link={link} />,
 				below: (
-					<OtherShops
-						wish={wish}
-						link={link}
-						state={{ search: tabSearch(location.state) }}
-					/>
+					<>
+						<OtherShops
+							wish={wish}
+							link={link}
+							state={{ search: tabSearch(location.state) }}
+						/>
+						<PieceCombinations piece={wish} shown={5} />
+					</>
 				),
 			})}
 		</ItemPage>

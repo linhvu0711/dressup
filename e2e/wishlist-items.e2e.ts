@@ -1,7 +1,14 @@
 import type { Page } from "@playwright/test";
+import { isPhone, postCombinations } from "./combination-helpers";
 import { expect, test } from "./fixtures";
+import { colourIds } from "./label-helpers";
 import { sheet } from "./locators";
-import { jacketAndPolo, poloWithLink } from "./wishlist-helpers";
+import {
+	jacketAndPolo,
+	poloWithLink,
+	postShopLink,
+	postWish,
+} from "./wishlist-helpers";
 
 const wishCards = (page: Page) => page.locator('[data-slot="wish-card"]');
 
@@ -190,4 +197,47 @@ test("hides Other shops for a wish with one link", async ({ page }) => {
 		.count();
 	// Then
 	expect(sections).toBe(0);
+});
+
+test("shows five combinations with the piece on a wide screen and four on a phone", async ({
+	page,
+}) => {
+	// Given: six combinations that hold the Charcoal wool jacket, each with a
+	// White top of another type; a Charcoal wool jacket wish with one link;
+	// its page open
+	await page.goto("/");
+	const ids = await colourIds(page);
+	await postCombinations(
+		page,
+		...["tee_s", "tee_l", "polo_s", "polo_l", "shirt_s", "shirt_l"].map(
+			(typeId) => ({
+				id: crypto.randomUUID(),
+				pieces: [
+					{ typeId: "wool", colourId: ids.Charcoal },
+					{ typeId, colourId: ids.White },
+				],
+			}),
+		),
+	);
+	const wish = await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
+	const link = await postShopLink(page, wish, {
+		url: "https://www.cos.com/a",
+		brandId: null,
+		name: "Wool coat",
+		price: null,
+	});
+	await page.goto(`/wishlist/link/${link}`);
+	const part = page.getByRole("region", {
+		name: "Combinations with this piece",
+	});
+	await expect(part.getByRole("link", { name: /^See all/ })).toBeVisible();
+	// When
+	const titles = part.locator('[data-slot="combination-title"]');
+	let cards = 0;
+	for (const t of await titles.all()) if (await t.isVisible()) cards++;
+	// Then
+	expect({
+		cards,
+		seeAll: await part.getByRole("link", { name: /^See all/ }).textContent(),
+	}).toEqual({ cards: isPhone(page) ? 4 : 5, seeAll: "See all 6" });
 });
