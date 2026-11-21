@@ -9,11 +9,13 @@ import { limitText } from "@/count-text";
 import { RequestError } from "@/data/client";
 import type { TypeId } from "@/dress/clothing-types";
 import { TypeFigure } from "@/dress/figure/TypeFigure";
+import { useColours } from "@/labels/api";
 import { BrandField, useBrandPick } from "@/labels/BrandField";
 import { ColourSwatches } from "@/labels/ColourSwatches";
 import type { ColourId } from "@/labels/colour";
 import { PICTURES_LABEL, PictureSlots } from "@/pictures/PictureSlots";
 import { usePictureSlots } from "@/pictures/usePictureSlots";
+import { typedPrice } from "@/price";
 import {
 	useAddOwnedItem,
 	useChangeOwnedItem,
@@ -22,6 +24,7 @@ import {
 } from "./api";
 import {
 	OWNED_ITEM_LIMIT,
+	OWNED_ITEM_NAME_MAX,
 	type OwnedItem,
 	type OwnedItemId,
 	QUANTITY_MAX,
@@ -35,6 +38,10 @@ const PROBLEM_TEXT: Record<Problem, string> = {
 	full: limitText(OWNED_ITEM_LIMIT, "items"),
 	failed: "Not saved. Try again.",
 };
+
+// The server's own texts for a name or a price it refuses.
+const NAME_CUT = `Name is at most ${OWNED_ITEM_NAME_MAX} characters.`;
+const PRICE_CUT = "Price is a whole number of VND from 1 to 999.999.999.";
 
 // The form to add an owned item, a type, a colour, a brand, and a quantity,
 // or to change the brand and quantity of the one it is given.
@@ -51,6 +58,16 @@ export function OwnedItemSheet(
 		editing?.colour.id,
 	);
 	const [quantity, setQuantity] = useState(String(editing?.quantity ?? 1));
+	// Set straight, not through panel.change: a change there takes a new id in
+	// the add form, and a Save again after a lost answer must keep the id, so
+	// the server saves the name and price sent last.
+	const [name, setName] = useState(editing?.name ?? "");
+	const [nameCut, setNameCut] = useState(false);
+	const [price, setPrice] = useState(() =>
+		typedPrice(String(editing?.price ?? "")),
+	);
+	const colours = useColours();
+	const colour = colours.data?.find((c) => c.id === colourId);
 	const slots = usePictureSlots(editing?.pictureIds ?? []);
 	const first = useRef<HTMLButtonElement>(null);
 	const closet = useCloset();
@@ -88,14 +105,23 @@ export function OwnedItemSheet(
 		const pictureIds = await slots.settle();
 		if (pictureIds === null) return;
 		const { brandId } = brand;
+		const named = { name: name.trim() || null, price: price.value };
 		if (editing)
 			update.mutate(
-				{ id: panel.id, brandId, quantity: n, pictureIds },
+				{ id: panel.id, brandId, quantity: n, ...named, pictureIds },
 				{ onSuccess: () => panel.done("Changes saved") },
 			);
 		else
 			add.mutate(
-				{ id: panel.id, typeId, colourId, brandId, quantity: n, pictureIds },
+				{
+					id: panel.id,
+					typeId,
+					colourId,
+					brandId,
+					quantity: n,
+					...named,
+					pictureIds,
+				},
 				{ onSuccess: () => panel.done("Added to your closet") },
 			);
 	};
@@ -149,6 +175,22 @@ export function OwnedItemSheet(
 					</Field>
 				</>
 			)}
+			<Field label="Name" problem={nameCut ? NAME_CUT : undefined}>
+				<input
+					aria-label="Name"
+					autoComplete="off"
+					placeholder={
+						typeId && colour ? pieceName({ typeId, colour }) : undefined
+					}
+					value={name}
+					onChange={(e) => {
+						const typed = e.target.value;
+						setName(typed.slice(0, OWNED_ITEM_NAME_MAX));
+						setNameCut(typed.length > OWNED_ITEM_NAME_MAX);
+					}}
+					className={INPUT}
+				/>
+			</Field>
 			<BrandField pick={brand} ref={editing ? first : undefined} />
 			<Field label="Quantity">
 				<div className="flex items-center gap-2">
@@ -186,6 +228,19 @@ export function OwnedItemSheet(
 					>
 						<Plus size={16} strokeWidth={1.9} aria-hidden />
 					</Button>
+				</div>
+			</Field>
+			<Field label="Price paid" problem={price.cut ? PRICE_CUT : undefined}>
+				<div className="flex items-center gap-2">
+					<input
+						aria-label="Price paid"
+						inputMode="numeric"
+						autoComplete="off"
+						value={price.shown}
+						onChange={(e) => setPrice(typedPrice(e.target.value))}
+						className={cn(INPUT, "min-w-0 flex-1")}
+					/>
+					<span aria-hidden>₫</span>
 				</div>
 			</Field>
 			<Field label={PICTURES_LABEL}>

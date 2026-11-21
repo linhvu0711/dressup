@@ -12,15 +12,16 @@ test("writes a price in VND with dots", () => {
 
 test("keeps the digits of a typed price and shows its dots", () => {
 	// Given
-	const typed = ["2990000", "2.990.000a", "0", "1234567890", ""];
+	const typed = ["2990000", "2.990.000a", "0", "1234567890", "", "1.234"];
 	// When
 	const prices = typed.map(typedPrice);
 	// Then
 	expect(prices).toEqual([
-		{ value: 2990000, shown: "2.990.000" },
-		{ value: 2990000, shown: "2.990.000" },
-		{ value: null, shown: "" },
-		{ value: 123456789, shown: "123.456.789" },
-		{ value: null, shown: "" },
+		{ value: 2990000, shown: "2.990.000", cut: false },
+		{ value: 2990000, shown: "2.990.000", cut: true },
+		{ value: null, shown: "", cut: false },
+		{ value: 123456789, shown: "123.456.789", cut: true },
+		{ value: null, shown: "", cut: false },
+		{ value: 1234, shown: "1.234", cut: false },
 	]);
 });

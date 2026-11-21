@@ -299,6 +299,62 @@ test("keeps the form open with Not saved when the save fails", async ({
 	);
 });
 
+test("keeps the typed name and price when the save fails", async ({ page }) => {
+	// Given: a fresh account; the save answers 500
+	await page.route("**/api/owned-items", (route) =>
+		route.request().method() === "POST"
+			? route.fulfill({ status: 500 })
+			: route.continue(),
+	);
+	await page.goto("/closet");
+	// When
+	await openAddSheet(page);
+	await pickNavyShirt(page);
+	await addSheet(page).getByLabel("Name").fill("Oxford shirt");
+	await addSheet(page).getByLabel("Price paid").fill("784000");
+	await addSheet(page).getByRole("button", { name: "Save" }).click();
+	// Then
+	await expect(addSheet(page).getByRole("alert")).toBeVisible();
+	expect({
+		alert: await addSheet(page).getByRole("alert").textContent(),
+		name: await addSheet(page).getByLabel("Name").inputValue(),
+		price: await addSheet(page).getByLabel("Price paid").inputValue(),
+	}).toEqual({
+		alert: "Not saved. Try again.",
+		name: "Oxford shirt",
+		price: "784.000",
+	});
+});
+
+test("saves the later name after a save whose answer was lost", async ({
+	page,
+}) => {
+	// Given: a fresh account on /closet; the first save reaches the server,
+	// but its answer is lost
+	let first = true;
+	await page.route("**/api/owned-items", async (route) => {
+		if (!first || route.request().method() !== "POST") return route.continue();
+		first = false;
+		await route.fetch();
+		await route.abort();
+	});
+	await page.goto("/closet");
+	// When
+	await openAddSheet(page);
+	await pickNavyShirt(page);
+	await addSheet(page).getByLabel("Name").fill("Oxford shirt");
+	await addSheet(page).getByRole("button", { name: "Save" }).click();
+	await expect(addSheet(page).getByRole("alert")).toHaveText(
+		"Not saved. Try again.",
+	);
+	await addSheet(page).getByLabel("Name").fill("Linen shirt");
+	await addSheet(page).getByRole("button", { name: "Save" }).click();
+	// Then
+	await expect(toast(page)).toHaveText("Added to your closet");
+	await expect(cards(page)).toHaveCount(1);
+	expect(await cardLabels(page)).toEqual(["Linen shirt, Navy long button-up"]);
+});
+
 test.describe("at the closet limit", () => {
 	test.use({ storageState: CLOSET_FULL_FILE });
 

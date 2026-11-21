@@ -309,3 +309,127 @@ test("opens the wall filtered to the piece from See all", async ({ page }) => {
 	// Then
 	await expect(page).toHaveURL(`/combinations?piece=shirt_l.${navy}`);
 });
+
+const addSheet = (page: Page) => sheet(page, "Add to closet");
+
+// The header's "+", which comes before the empty notice's button.
+async function openAddSheet(page: Page) {
+	await page.goto("/closet");
+	await page
+		.getByRole("button", { name: "Add to closet", exact: true })
+		.first()
+		.click();
+}
+
+test("adds a named item with a price, opens its card, and sees both", async ({
+	page,
+}) => {
+	// Given: a fresh account on /closet
+	await openAddSheet(page);
+	// When
+	await addSheet(page).getByRole("button", { name: "Pick a type" }).click();
+	await sheet(page, "Pick a type")
+		.getByRole("button", { name: "Long button-up", exact: true })
+		.click();
+	await addSheet(page)
+		.getByRole("radiogroup", { name: "Colour" })
+		.getByRole("radio", { name: "Navy", exact: true })
+		.click();
+	await addSheet(page).getByLabel("Name").fill("Oxford shirt");
+	await addSheet(page).getByLabel("Price paid").fill("784000");
+	await addSheet(page).getByRole("button", { name: "Save" }).click();
+	await page
+		.getByRole("link", {
+			name: "Oxford shirt, Navy long button-up, 784.000 ₫",
+			exact: true,
+		})
+		.click();
+	await expect(page).toHaveURL(/^[^?]*\/closet\/[^/]+$/);
+	await page.locator('[data-slot="item-price"]').waitFor();
+	// Then
+	expect({
+		heading: await page.getByRole("heading", { level: 1 }).textContent(),
+		price: await page.locator('[data-slot="item-price"]').textContent(),
+	}).toEqual({ heading: "Oxford shirt", price: "784.000 ₫" });
+});
+
+test("changes the name and price from the edit sheet", async ({ page }) => {
+	// Given: Navy long button-up, no brand, 1, "Oxford shirt", 784000, its
+	// page open
+	await page.goto("/");
+	const ids = await colourIds(page);
+	const [id] = await postOwnedItems(page, {
+		typeId: "shirt_l",
+		colourId: ids.Navy,
+		brandId: null,
+		quantity: 1,
+		name: "Oxford shirt",
+		price: 784000,
+	});
+	await page.goto(`/closet/${id}`);
+	// When
+	await page.getByRole("button", { name: "Edit item" }).click();
+	const edit = sheet(page, "Edit item");
+	await edit.getByLabel("Name").fill("Linen shirt");
+	await edit.getByLabel("Price paid").fill("899000");
+	await edit.getByRole("button", { name: "Save" }).click();
+	// Then
+	await expect(toast(page)).toHaveText("Changes saved");
+	await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+		"Linen shirt",
+	);
+	expect({
+		toast: await toast(page).textContent(),
+		heading: await page.getByRole("heading", { level: 1 }).textContent(),
+		price: await page.locator('[data-slot="item-price"]').textContent(),
+	}).toEqual({
+		toast: "Changes saved",
+		heading: "Linen shirt",
+		price: "899.000 ₫",
+	});
+});
+
+test("stops the name at 80 characters with its message", async ({ page }) => {
+	// Given: a fresh account, Add to closet open
+	await openAddSheet(page);
+	// When
+	await addSheet(page).getByLabel("Name").fill("a".repeat(81));
+	// Then
+	await expect(addSheet(page).getByRole("alert")).toBeVisible();
+	expect({
+		length: (await addSheet(page).getByLabel("Name").inputValue()).length,
+		message: await addSheet(page).getByRole("alert").textContent(),
+	}).toEqual({ length: 80, message: "Name is at most 80 characters." });
+});
+
+test("keeps only digits in the price with its message", async ({ page }) => {
+	// Given: a fresh account, Add to closet open
+	await openAddSheet(page);
+	// When
+	await addSheet(page).getByLabel("Price paid").pressSequentially("12a");
+	// Then
+	await expect(addSheet(page).getByRole("alert")).toBeVisible();
+	expect({
+		value: await addSheet(page).getByLabel("Price paid").inputValue(),
+		message: await addSheet(page).getByRole("alert").textContent(),
+	}).toEqual({
+		value: "12",
+		message: "Price is a whole number of VND from 1 to 999.999.999.",
+	});
+});
+
+test("stops the price at 999.999.999 with its message", async ({ page }) => {
+	// Given: a fresh account, Add to closet open
+	await openAddSheet(page);
+	// When
+	await addSheet(page).getByLabel("Price paid").pressSequentially("1234567890");
+	// Then
+	await expect(addSheet(page).getByRole("alert")).toBeVisible();
+	expect({
+		value: await addSheet(page).getByLabel("Price paid").inputValue(),
+		message: await addSheet(page).getByRole("alert").textContent(),
+	}).toEqual({
+		value: "123.456.789",
+		message: "Price is a whole number of VND from 1 to 999.999.999.",
+	});
+});

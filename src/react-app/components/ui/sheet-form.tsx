@@ -68,15 +68,22 @@ export function FormSheet({
 
 export function Field({
 	label,
+	problem,
 	children,
 }: {
 	label: string;
+	problem?: string;
 	children: ReactNode;
 }) {
 	return (
 		<div className="flex flex-col gap-1.5">
 			<span className={LABEL}>{label}</span>
 			{children}
+			{problem === undefined ? null : (
+				<p role="alert" className="text-[13px] text-destructive">
+					{problem}
+				</p>
+			)}
 		</div>
 	);
 }

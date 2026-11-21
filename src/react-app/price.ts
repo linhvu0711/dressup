@@ -14,16 +14,17 @@ export const priceText = (price: number): string => `${digits.format(price)} ₫
 const PRICE_DIGITS = String(PRICE_MAX).length;
 
 // A price as the user types it: digits only, no leading zero, at most the
-// digits of the highest price, shown with dots.
+// digits of the highest price, shown with dots. Cut says the typing lost a
+// mark or a digit; the dots are the ones it shows, not a slip.
 export function typedPrice(text: string): {
 	value: number | null;
 	shown: string;
+	cut: boolean;
 } {
-	const kept = text
-		.replace(/\D/g, "")
-		.replace(/^0+/, "")
-		.slice(0, PRICE_DIGITS);
-	if (kept === "") return { value: null, shown: "" };
+	const all = text.replace(/\D/g, "").replace(/^0+/, "");
+	const cut = /[^\d.]/.test(text) || all.length > PRICE_DIGITS;
+	const kept = all.slice(0, PRICE_DIGITS);
+	if (kept === "") return { value: null, shown: "", cut };
 	const value = Number(kept);
-	return { value, shown: digits.format(value) };
+	return { value, shown: digits.format(value), cut };
 }
