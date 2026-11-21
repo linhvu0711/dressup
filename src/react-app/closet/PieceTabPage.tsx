@@ -3,9 +3,12 @@ import { Plus } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import type { Hex } from "@/colour/hex";
 import { Button } from "@/components/ui/button";
-import { ActiveFilters, FilterButton, shownText } from "@/components/ui/filter";
+import { ActiveFilters, FilterButton } from "@/components/ui/filter";
 import { Notice } from "@/components/ui/notice";
+import { PageError } from "@/components/ui/page-error";
+import { PLACEHOLDER, PULSE } from "@/components/ui/placeholder";
 import { useAddressFilter } from "@/components/ui/use-address-filter";
+import { countText } from "@/count-text";
 import type { TypeId } from "@/dress/clothing-types";
 import { useColours } from "@/labels/api";
 import { useBrands } from "@/labels/brand-api";
@@ -23,8 +26,6 @@ import type { PieceTab } from "@/shell/piece-link";
 import { PageHeader } from "../shell/PageHeader";
 import { Wall } from "../shell/Wall";
 import { PieceTile } from "./PieceTile";
-
-const PULSE = "animate-placeholder motion-reduce:animate-none";
 
 type TilePiece = {
 	typeId: TypeId;
@@ -96,7 +97,7 @@ export function PieceTabPage<D, E extends TilePiece>({
 							className={`block aspect-square w-full rounded-[14px] bg-[#D3CFC9] ${PULSE}`}
 						/>
 						<span
-							className={`block h-3.5 w-[70%] rounded-[12px] bg-muted ${PULSE}`}
+							className={`block h-3.5 w-[70%] rounded-[12px] ${PLACEHOLDER}`}
 						/>
 					</div>
 				))}
@@ -105,11 +106,7 @@ export function PieceTabPage<D, E extends TilePiece>({
 	} else if (query.isError) {
 		// Checked before the data: a failed refetch keeps the old list.
 		wall = (
-			<Notice title={failedTitle}>
-				<Button className="mt-2" onClick={() => void query.refetch()}>
-					Retry
-				</Button>
-			</Notice>
+			<PageError title={failedTitle} onRetry={() => void query.refetch()} />
 		);
 	} else if (query.data.length === 0) {
 		wall = (
@@ -180,7 +177,7 @@ export function PieceTabPage<D, E extends TilePiece>({
 				<ActiveFilters
 					chips={pf.chips}
 					onClearAll={pf.clear}
-					shown={shownText(shown.length, "piece")}
+					shown={countText(shown.length, "piece")}
 				/>
 			) : null}
 			{wall}
@@ -189,7 +186,7 @@ export function PieceTabPage<D, E extends TilePiece>({
 				<PieceFilterSheet
 					filter={pf.filter}
 					onChange={pf.set}
-					shownText={shownText(shown.length, "piece")}
+					shownText={countText(shown.length, "piece")}
 					onClose={() => setFiltering(false)}
 				/>
 			) : null}

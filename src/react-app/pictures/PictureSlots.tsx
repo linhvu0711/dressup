@@ -10,6 +10,7 @@ const PICTURE_TEXT: Record<PictureNote | "limit", string> = {
 	limit: `${ITEM_PICTURE_LIMIT} pictures is the limit for one item.`,
 	only: "Only pictures.",
 	unreadable: "This picture cannot be read. Try a JPEG or PNG.",
+	too_big: "This picture is too big, even after shrinking. Try a smaller one.",
 	account_picture_limit: `You have ${ACCOUNT_PICTURE_LIMIT.toLocaleString("en-US")} pictures. That is the limit. Delete some to add new ones.`,
 	storage_full: "Picture storage is full. No new pictures for now.",
 };

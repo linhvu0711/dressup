@@ -4,12 +4,13 @@ import { type ReactNode, useState } from "react";
 import { Link, Navigate, useParams } from "react-router";
 import { useCombinations } from "@/combinations/api";
 import { CombinationFigure } from "@/combinations/CombinationFigure";
-import { CombinationsFailed } from "@/combinations/CombinationsFailed";
 import type { Combination } from "@/combinations/combination";
 import { SaveCombinationDialog } from "@/combinations/SaveCombinationDialog";
 import { useWallAddress } from "@/combinations/wall-address";
 import { Button } from "@/components/ui/button";
 import { CHIP } from "@/components/ui/chip";
+import { PageError } from "@/components/ui/page-error";
+import { LABEL } from "@/components/ui/sheet-form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
 	LAYER_NAMES,
@@ -30,8 +31,6 @@ import { PageHeader } from "../shell/PageHeader";
 
 type Picks = Partial<Record<Layer, { typeId: TypeId; colourId: ColourId }>>;
 
-const LABEL = "font-medium text-[12.5px] text-muted-foreground";
-
 const NONE = "none";
 
 // The builder at /build makes a new combination; at /build/<id> it changes a
@@ -47,7 +46,10 @@ export function BuildPage() {
 	if (combinations.isError)
 		return (
 			<ChangeShell id={combinationId}>
-				<CombinationsFailed onRetry={() => void combinations.refetch()} />
+				<PageError
+					title="Could not load your combinations"
+					onRetry={() => void combinations.refetch()}
+				/>
 			</ChangeShell>
 		);
 	if (combinations.isPending)

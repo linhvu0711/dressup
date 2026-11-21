@@ -7,6 +7,7 @@ import {
 	useId,
 } from "react";
 import type { Hex } from "@/dress/clothing-types";
+import { STARTER_MANNEQUIN } from "@/mannequin/mannequin";
 
 type Figure = {
 	prefix: string;
@@ -18,8 +19,7 @@ type Figure = {
 export const FigureContext = createContext<Figure>({
 	prefix: "f",
 	lite: false,
-	skin: "#D6A27B",
-	hair: "#141418",
+	...STARTER_MANNEQUIN,
 });
 
 export const useFigure = () => useContext(FigureContext);
@@ -229,7 +229,7 @@ export function Piece({
 						height="820"
 						filter={url("grain")}
 						style={{ mixBlendMode: "soft-light" }}
-						opacity={opt.grain || 0.16}
+						opacity={opt.grain ?? 0.16}
 					/>
 				)}
 			</g>
@@ -266,6 +266,12 @@ export function Defs() {
 	const id = (name: string) => `${prefix}${name}`;
 	return (
 		<defs>
+			<filter id={id("b1")} {...BOX}>
+				<feGaussianBlur stdDeviation="0.8" />
+			</filter>
+			<filter id={id("b1.5")} {...BOX}>
+				<feGaussianBlur stdDeviation="1.2" />
+			</filter>
 			<filter id={id("b2")} {...BOX}>
 				<feGaussianBlur stdDeviation="1.6" />
 			</filter>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ColourField } from "@/colour/ColourPicker";
 import type { Hex } from "@/colour/hex";
+import { limitText } from "@/count-text";
 import { useAddColour, useChangeColour, useDeleteColour } from "./api";
 import { COLOUR_LIMIT, COLOUR_NAME_MAX, type ListedColour } from "./colour";
 import { LabelSheet, type LabelWords } from "./LabelSheet";
@@ -43,7 +44,7 @@ export function ColourSheet({
 			limit={{
 				max: COLOUR_LIMIT,
 				code: "colour_limit",
-				full: `You have ${COLOUR_LIMIT} colours. That is the limit. Delete one to add a new one.`,
+				full: limitText(COLOUR_LIMIT, "colours"),
 			}}
 			inUseCode="colour_in_use"
 			nameMax={COLOUR_NAME_MAX}

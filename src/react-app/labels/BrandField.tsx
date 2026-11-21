@@ -1,7 +1,9 @@
+import { cn } from "cn";
 import { ChevronRight } from "lucide-react";
 import { type Ref, useState } from "react";
-import { Button } from "@/components/ui/button";
 import type { Panel, PanelStepView } from "@/components/ui/panel-sheet";
+import { PartError } from "@/components/ui/part-error";
+import { PLACEHOLDER } from "@/components/ui/placeholder";
 import { Field, LIST_ROW, ROW } from "@/components/ui/sheet-form";
 import type { Brand, BrandId } from "./brand";
 import { useBrands } from "./brand-api";
@@ -84,19 +86,16 @@ function BrandOptions({
 						// biome-ignore lint/suspicious/noArrayIndexKey: the rows are all alike and never move.
 						key={i}
 						data-slot="brand-skeleton"
-						className="h-11 rounded-[12px] bg-muted animate-placeholder motion-reduce:animate-none"
+						className={cn("h-11 rounded-[12px]", PLACEHOLDER)}
 					/>
 				))}
 			</div>
 		);
 	if (brands.isError)
 		return (
-			<div className="flex items-center gap-3">
-				<p role="alert" className="text-[13px] text-destructive">
-					Could not load your brands
-				</p>
-				<Button onClick={() => void brands.refetch()}>Retry</Button>
-			</div>
+			<PartError onRetry={() => void brands.refetch()}>
+				Could not load your brands
+			</PartError>
 		);
 	return (
 		<div className="flex flex-col">

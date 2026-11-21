@@ -5,6 +5,7 @@ import { pieceName } from "@/combinations/combination";
 import { Button } from "@/components/ui/button";
 import { PanelSheet, usePanel } from "@/components/ui/panel-sheet";
 import { Field, INPUT } from "@/components/ui/sheet-form";
+import { limitText } from "@/count-text";
 import { RequestError } from "@/data/client";
 import type { TypeId } from "@/dress/clothing-types";
 import { TypeFigure } from "@/dress/figure/TypeFigure";
@@ -31,7 +32,7 @@ import { TypeField, TypeOptions } from "./TypeOptions";
 type Problem = "full" | "duplicate" | "failed";
 
 const PROBLEM_TEXT: Record<Problem, string> = {
-	full: `You have ${OWNED_ITEM_LIMIT} items. That is the limit. Delete one to add a new one.`,
+	full: limitText(OWNED_ITEM_LIMIT, "items"),
 	duplicate: "You have this item already. Change its number.",
 	failed: "Not saved. Try again.",
 };

@@ -1,5 +1,6 @@
 import { type ReactNode, type RefObject, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { FOOTER_ROW } from "@/components/ui/sheet";
 import { FormSheet } from "@/components/ui/sheet-form";
 import { useToast } from "@/components/ui/toast";
 import { nextPanel, type PanelEvent, type PanelState } from "./panel";
@@ -171,7 +172,7 @@ export function PanelSheet<Id extends string>({
 				) : (
 					line
 				)}
-				<div className="mt-0.5 flex flex-wrap justify-end gap-2 [&>button]:flex-1 wide:[&>button]:flex-none">
+				<div className={FOOTER_ROW}>
 					{del ? (
 						<Button type="button" variant="destructive" onClick={del}>
 							Delete
@@ -196,7 +197,7 @@ export function PanelSheet<Id extends string>({
 									Not deleted. Try again.
 								</p>
 							) : null}
-							<div className="mt-0.5 flex flex-wrap justify-end gap-2 [&>button]:flex-1 wide:[&>button]:flex-none">
+							<div className={FOOTER_ROW}>
 								<Button
 									variant="destructive"
 									disabled={remove.del.isPending}

@@ -1,15 +1,16 @@
 import { AlertDialog } from "radix-ui";
 import { OWNED_ITEM_LIMIT, QUANTITY_MAX } from "@/closet/owned-item";
 import { Button } from "@/components/ui/button";
-import { SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
+import { FOOTER_ROW, SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
+import { limitText } from "@/count-text";
 import { after, cachedUserId, isGone, RequestError } from "@/data/client";
 import { useMarkBought } from "./api";
 import type { ShopLink, WishId } from "./wish";
 
 const refusalText = (error: Error) => {
 	if (error instanceof RequestError && error.code === "owned_item_limit")
-		return `You have ${OWNED_ITEM_LIMIT} items. That is the limit. Delete one to add a new one.`;
+		return limitText(OWNED_ITEM_LIMIT, "items");
 	if (error instanceof RequestError && error.code === "quantity_limit")
 		return `You have ${QUANTITY_MAX} of this item. That is the limit.`;
 	return "Not saved. Try again.";
@@ -46,7 +47,7 @@ export function BoughtDialog({
 							{refusalText(bought.error)}
 						</p>
 					) : null}
-					<div className="mt-0.5 flex flex-wrap justify-end gap-2 [&>button]:flex-1 wide:[&>button]:flex-none">
+					<div className={FOOTER_ROW}>
 						<AlertDialog.Cancel asChild>
 							<Button>Cancel</Button>
 						</AlertDialog.Cancel>

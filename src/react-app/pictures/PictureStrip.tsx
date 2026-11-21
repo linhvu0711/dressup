@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { PictureViewer } from "./PictureViewer";
-import type { PictureId } from "./picture";
+import { type PictureId, pictureAddress } from "./picture";
 
 // One owned item's pictures as a row of 3:4 thumbnails that scrolls
 // sideways; a tap opens the viewer at that picture. No pictures, no row.
@@ -28,7 +28,7 @@ export function PictureStrip({
 							className="block aspect-[3/4] w-[104px] overflow-hidden rounded-[12px] bg-muted focus-visible:outline-2 focus-visible:outline-ring wide:w-[132px]"
 						>
 							<img
-								src={`/api/pictures/${id}`}
+								src={pictureAddress(id)}
 								alt=""
 								loading="lazy"
 								className="size-full object-cover"

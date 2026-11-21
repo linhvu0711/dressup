@@ -5,8 +5,7 @@ import { ClosetPart } from "@/closet/ClosetPart";
 import { closetPieces } from "@/closet/owned-item";
 import { pieceName } from "@/combinations/combination";
 import { PieceCombinations } from "@/combinations/PieceCombinations";
-import { Button } from "@/components/ui/button";
-import { Notice } from "@/components/ui/notice";
+import { PageError } from "@/components/ui/page-error";
 import { PartError } from "@/components/ui/part-error";
 import { PLACEHOLDER } from "@/components/ui/placeholder";
 import { TypeFigure } from "@/dress/figure/TypeFigure";
@@ -80,11 +79,10 @@ export function PiecePage() {
 		body = <span className={`${PICTURE} ${PLACEHOLDER}`} />;
 	else
 		body = (
-			<Notice title={failedTitle(closetFailed, wishlistFailed)}>
-				<Button className="mt-2" onClick={retry}>
-					Retry
-				</Button>
-			</Notice>
+			<PageError
+				title={failedTitle(closetFailed, wishlistFailed)}
+				onRetry={retry}
+			/>
 		);
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">

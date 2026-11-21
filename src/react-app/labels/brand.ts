@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { countText } from "@/count-text";
 
 export const BRAND_NAME_MAX = 24;
 
@@ -32,15 +33,14 @@ export type ListedBrand = z.infer<typeof listedBrandSchema>;
 export function brandDeleteText(items: number, shopLinks: number): string {
 	if (shopLinks === 0) {
 		if (items === 0) return "No item uses it.";
-		if (items === 1) return "1 item loses its brand.";
-		return `${items} items lose their brand.`;
+		return `${countText(items, "item")} ${items === 1 ? "loses its" : "lose their"} brand.`;
 	}
-	const links = shopLinks === 1 ? "1 shop link" : `${shopLinks} shop links`;
+	const links = countText(shopLinks, "shop link");
 	if (items === 0)
 		return shopLinks === 1
 			? `${links} loses its brand.`
 			: `${links} lose their brand.`;
-	const owned = items === 1 ? "1 item" : `${items} items`;
+	const owned = countText(items, "item");
 	return `${owned} and ${links} lose their brand.`;
 }
 

@@ -1,10 +1,9 @@
 import { cn } from "cn";
 import { ToggleGroup } from "radix-ui";
-import { Button } from "@/components/ui/button";
+import { PartError } from "@/components/ui/part-error";
+import { PLACEHOLDER } from "@/components/ui/placeholder";
 import { useColours } from "./api";
 import type { ColourId } from "./colour";
-
-const PULSE = "animate-placeholder motion-reduce:animate-none";
 
 const GRID = "grid grid-cols-[repeat(auto-fill,minmax(56px,1fr))] gap-y-3";
 
@@ -24,19 +23,16 @@ export function ColourSwatches(picks: Picks) {
 					<span
 						// biome-ignore lint/suspicious/noArrayIndexKey: the squares are all alike and never move.
 						key={i}
-						className={`size-[34px] rounded-[10px] bg-muted ${PULSE}`}
+						className={cn("size-[34px] rounded-[10px]", PLACEHOLDER)}
 					/>
 				))}
 			</div>
 		);
 	if (colours.isError)
 		return (
-			<div className="flex items-center gap-3">
-				<p role="alert" className="text-[13px] text-destructive">
-					Could not load your colours
-				</p>
-				<Button onClick={() => void colours.refetch()}>Retry</Button>
-			</div>
+			<PartError onRetry={() => void colours.refetch()}>
+				Could not load your colours
+			</PartError>
 		);
 	const picked = (id: ColourId) =>
 		"values" in picks ? picks.values.includes(id) : id === picks.value;

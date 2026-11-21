@@ -1,3 +1,4 @@
+import { limitText } from "@/count-text";
 import {
 	BRAND_LIMIT,
 	BRAND_NAME_MAX,
@@ -45,7 +46,7 @@ export function BrandSheet({
 			limit={{
 				max: BRAND_LIMIT,
 				code: "brand_limit",
-				full: `You have ${BRAND_LIMIT} brands. That is the limit. Delete one to add a new one.`,
+				full: limitText(BRAND_LIMIT, "brands"),
 			}}
 			nameMax={BRAND_NAME_MAX}
 			editing={editing}

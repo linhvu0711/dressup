@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { RequestError, SignedOut } from "@/data/client";
 import { dropDraft, uploadPicture } from "./api";
-import { ITEM_PICTURE_LIMIT, type PictureId } from "./picture";
-import { shrinkPicture } from "./shrink";
+import { ITEM_PICTURE_LIMIT, type PictureId, pictureAddress } from "./picture";
+import { shrinkPicture, TooBig } from "./shrink";
 
 type Slot = {
 	key: string;
@@ -17,6 +17,7 @@ type Slot = {
 export type PictureNote =
 	| "only"
 	| "unreadable"
+	| "too_big"
 	| "account_picture_limit"
 	| "storage_full";
 
@@ -31,7 +32,7 @@ export function usePictureSlots(saved: readonly PictureId[]) {
 	const slots = useRef<Slot[]>(
 		saved.map((id) => ({
 			key: id,
-			url: `/api/pictures/${id}`,
+			url: pictureAddress(id),
 			state: "saved",
 			id,
 		})),
@@ -86,8 +87,8 @@ export function usePictureSlots(saved: readonly PictureId[]) {
 		let blob: Blob;
 		try {
 			blob = await shrinkPicture(file);
-		} catch {
-			setNote("unreadable");
+		} catch (error) {
+			setNote(error instanceof TooBig ? "too_big" : "unreadable");
 			return;
 		} finally {
 			shrinking.current -= 1;

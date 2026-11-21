@@ -4,16 +4,17 @@ import { Dialog } from "radix-ui";
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
-import { SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
+import { FOOTER_ROW, SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
 import { remove, signedOut } from "../data/client";
+import { SETTINGS_ROW } from "./settings-row";
 
 // The "Delete my account" row of the Settings page and its confirm.
 export function DeleteAccount() {
 	const [asking, setAsking] = useState(false);
 	return (
 		<>
-			<div className="flex min-h-[58px] min-w-0 items-center gap-2.5 border-b border-border py-[11px]">
+			<div className={SETTINGS_ROW}>
 				<div className="min-w-0">
 					Delete my account
 					<small className="block text-xs text-muted-foreground">
@@ -67,7 +68,7 @@ function DeleteConfirm({ onClose }: { onClose: () => void }) {
 							Not deleted. Try again.
 						</p>
 					) : null}
-					<div className="mt-0.5 flex flex-wrap justify-end gap-2 [&>button]:flex-1 wide:[&>button]:flex-none">
+					<div className={FOOTER_ROW}>
 						<Button type="button" onClick={onClose}>
 							Cancel
 						</Button>

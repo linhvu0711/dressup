@@ -6,7 +6,6 @@ import { useCloset } from "@/closet/api";
 import { useCombinations } from "@/combinations/api";
 import { CombinationCard } from "@/combinations/CombinationCard";
 import { CombinationFilterSheet } from "@/combinations/CombinationFilterSheet";
-import { CombinationsFailed } from "@/combinations/CombinationsFailed";
 import { CombinationView } from "@/combinations/CombinationView";
 import type { Combination } from "@/combinations/combination";
 import { DeleteCombinationDialog } from "@/combinations/DeleteCombinationDialog";
@@ -22,9 +21,12 @@ import {
 import { pieceKeys } from "@/combinations/marks";
 import { useWallAddress, wallAddress } from "@/combinations/wall-address";
 import { Button } from "@/components/ui/button";
-import { ActiveFilters, FilterButton, shownText } from "@/components/ui/filter";
+import { ActiveFilters, FilterButton } from "@/components/ui/filter";
 import { Notice } from "@/components/ui/notice";
+import { PageError } from "@/components/ui/page-error";
+import { PLACEHOLDER, PULSE } from "@/components/ui/placeholder";
 import { useAddressFilter } from "@/components/ui/use-address-filter";
+import { countText } from "@/count-text";
 import { TypeFigure } from "@/dress/figure/TypeFigure";
 import { useColours } from "@/labels/api";
 import { useMannequin } from "@/mannequin/api";
@@ -32,8 +34,6 @@ import { MannequinFailed } from "@/mannequin/MannequinFailed";
 import { useTags } from "@/tags/api";
 import { PageHeader } from "../shell/PageHeader";
 import { Wall } from "../shell/Wall";
-
-const PULSE = "animate-placeholder motion-reduce:animate-none";
 
 // The wall of saved combinations, newest first. The address may name one,
 // which opens beside the wall from 900 px and as its own page under it, with
@@ -133,7 +133,7 @@ export function CombinationsPage() {
 							className={`block aspect-[2/3] w-full rounded-[14px] bg-[#D3CFC9] ${PULSE}`}
 						/>
 						<span
-							className={`block h-3.5 w-[70%] rounded-[12px] bg-muted ${PULSE}`}
+							className={`block h-3.5 w-[70%] rounded-[12px] ${PLACEHOLDER}`}
 						/>
 					</div>
 				))}
@@ -141,14 +141,18 @@ export function CombinationsPage() {
 		);
 	} else if (combinations.isError) {
 		// Checked before the data: a failed refetch keeps the old list.
-		wall = <CombinationsFailed onRetry={() => void combinations.refetch()} />;
+		wall = (
+			<PageError
+				title="Could not load your combinations"
+				onRetry={() => void combinations.refetch()}
+			/>
+		);
 	} else if (waitsForCloset && closet.isError && !closet.data) {
 		wall = (
-			<Notice title="Could not load your closet">
-				<Button className="mt-2" onClick={() => void closet.refetch()}>
-					Retry
-				</Button>
-			</Notice>
+			<PageError
+				title="Could not load your closet"
+				onRetry={() => void closet.refetch()}
+			/>
 		);
 	} else if (combinations.data.length === 0) {
 		wall = (
@@ -228,7 +232,7 @@ export function CombinationsPage() {
 					<ActiveFilters
 						chips={cf.chips}
 						onClearAll={cf.clear}
-						shown={shownText(matched.length, "combination")}
+						shown={countText(matched.length, "combination")}
 					/>
 				) : null}
 				{wall}
@@ -250,7 +254,7 @@ export function CombinationsPage() {
 					filter={filter}
 					onChange={cf.set}
 					shown={
-						matched ? shownText(matched.length, "combination") : "combinations"
+						matched ? countText(matched.length, "combination") : "combinations"
 					}
 					onClose={() => setFiltering(false)}
 				/>
