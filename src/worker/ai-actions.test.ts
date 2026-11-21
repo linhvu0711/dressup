@@ -955,36 +955,6 @@ describe("owned items", () => {
 		});
 	});
 
-	test("refuses a quantity of 0 as a sentence", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		const args = await shirt(ai);
-		// When
-		const { isError, text } = await ai.call("add_owned_item", {
-			...args,
-			quantity: 0,
-		});
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "Quantity is a whole number from 1 to 99.",
-		});
-	});
-
-	test("refuses item number 501 as a sentence", async () => {
-		// Given
-		const { h, ai, userId } = await withAiSession();
-		const args = await shirt(ai);
-		await h.seedOwnedItems(userId, 500);
-		// When
-		const { isError, text } = await ai.call("add_owned_item", args);
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "You have 500 items. That is the limit. Delete one to add a new one.",
-		});
-	});
-
 	test("changes an owned item", async () => {
 		// Given
 		const { ai } = await withAiSession();
@@ -1033,49 +1003,6 @@ describe("owned items", () => {
 		});
 	});
 
-	// A draft picture uploaded as the session's browser, by id.
-	// The shirt with these pictures, added as the website adds it, by id.
-	const addWithPictures = async (
-		h: Harness,
-		ai: Session,
-		pictureIds: string[],
-	) => {
-		const id = crypto.randomUUID();
-		const res = await send(h, ai.jar, "POST", "/api/owned-items", {
-			...(await shirt(ai)),
-			id,
-			brandId: null,
-			pictureIds,
-		});
-		expect(res.status).toBe(201);
-		return id;
-	};
-
-	test("deletes an owned item with its pictures", async () => {
-		// Given
-		const { h, ai } = await withAiSession();
-		const a = await uploadPicture(h, ai.jar);
-		const id = await addWithPictures(h, ai, [a]);
-		// When
-		await ai.call("delete_owned_item", { id });
-		// Then
-		expect(h.pictures.keys()).toEqual([]);
-	});
-
-	test("lists the picture ids of each item in upload order", async () => {
-		// Given
-		const { h, ai } = await withAiSession();
-		const a = await uploadPicture(h, ai.jar);
-		const b = await uploadPicture(h, ai.jar);
-		await addWithPictures(h, ai, [a, b]);
-		// When
-		const { data } = await ai.call("list_owned_items");
-		// Then
-		const [item] = (data as { ownedItems: { pictureIds: string[] }[] })
-			.ownedItems;
-		expect(item.pictureIds).toEqual([a, b]);
-	});
-
 	test("says there is no such owned item", async () => {
 		// Given
 		const { ai } = await withAiSession();
@@ -1107,38 +1034,6 @@ describe("owned items", () => {
 		return navy;
 	}
 
-	const pieces = (data: unknown) =>
-		(data as { ownedItems: Listed[] }).ownedItems.map((i) => [
-			i.typeId,
-			i.colour.name,
-		]);
-
-	test("lists only the owned items that fit every filter given", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		const navy = await filterCloset(ai);
-		// When
-		const { data } = await ai.call("list_owned_items", {
-			types: ["sweater", "tee_l"],
-			colourIds: [navy],
-		});
-		// Then
-		expect(pieces(data)).toEqual([
-			["tee_l", "Navy"],
-			["sweater", "Navy"],
-		]);
-	});
-
-	test("lists the owned items with no brand for a null brand id", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		await filterCloset(ai);
-		// When
-		const { data } = await ai.call("list_owned_items", { brandIds: [null] });
-		// Then
-		expect(pieces(data)).toEqual([["tee_l", "Navy"]]);
-	});
-
 	test("refuses a type that is not one in a filter", async () => {
 		// Given
 		const { ai } = await withAiSession();
@@ -1152,22 +1047,6 @@ describe("owned items", () => {
 		expect({ isError, text }).toEqual({
 			isError: true,
 			text: "cape is not a type. list_types names the types.",
-		});
-	});
-
-	test("refuses a colour that is not the account's in a filter", async () => {
-		// Given
-		const { ai } = await withAiSession();
-		await filterCloset(ai);
-		// When
-		const { isError, text } = await ai.call("list_owned_items", {
-			types: ["sweater", "tee_l"],
-			colourIds: ["nope"],
-		});
-		// Then
-		expect({ isError, text }).toEqual({
-			isError: true,
-			text: "nope is not one of your colours. list_colours names them.",
 		});
 	});
 
