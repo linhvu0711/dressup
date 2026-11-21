@@ -416,11 +416,11 @@ describe("DELETE /api/shop-links/:id", () => {
 		expect({
 			first: first.status,
 			second: await answer(second),
-			links: await linksOf(h, headers),
+			wishes: await list(h, headers),
 		}).toEqual({
 			first: 204,
 			second: { status: 404, body: { error: "not_found" } },
-			links: [],
+			wishes: [],
 		});
 	});
 

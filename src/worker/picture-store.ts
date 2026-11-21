@@ -498,7 +498,8 @@ export async function saveWithPictures<T extends Statement>(
 
 // The owner's delete with its pictures in one batch: the pictures' rows go
 // first, so the owner's foreign key finds none and the stored bytes and the
-// objects follow every picture. It gives back the owner delete's result.
+// objects follow every picture. The writes after run in the same batch, once
+// the owner is gone. It gives back the owner delete's result.
 export async function deleteWithPictures<T extends Statement>(
 	db: Db,
 	bucket: R2Bucket,
@@ -510,6 +511,7 @@ export async function deleteWithPictures<T extends Statement>(
 		owner: PictureOwner | { kind: "wish"; id: string } | { kind: "account" };
 	},
 	ownerDelete: T,
+	...after: Statement[]
 ): Promise<Awaited<T>> {
 	const [, dropped, deleted] = await db.batch([
 		...dropPictures(
@@ -524,6 +526,7 @@ export async function deleteWithPictures<T extends Statement>(
 			),
 		),
 		ownerDelete,
+		...after,
 	]);
 	await removeObjects(
 		bucket,
@@ -533,12 +536,14 @@ export async function deleteWithPictures<T extends Statement>(
 }
 
 // Only the account's own owned item, shop link, or wish goes, with its
-// pictures; not found when the account has no such row.
+// pictures, and the writes after in the same batch; not found when the
+// account has no such row.
 export async function deleteOwner(
 	db: Db,
 	bucket: R2Bucket,
 	userId: string,
 	owner: PictureOwner | { kind: "wish"; id: string },
+	...after: Statement[]
 ): Promise<Result<string, { code: "not_found" }>> {
 	const table =
 		owner.kind === "ownedItem"
@@ -554,6 +559,7 @@ export async function deleteOwner(
 			.delete(table)
 			.where(and(eq(table.id, owner.id), eq(table.userId, userId)))
 			.returning({ id: table.id }),
+		...after,
 	);
 	return row
 		? { ok: true, value: row.id }

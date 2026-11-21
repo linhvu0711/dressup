@@ -619,7 +619,8 @@ export function registerAiActions(server: McpServer, account: Account) {
 		"delete_shop_link",
 		{
 			title: "Delete a shop link",
-			description: "Deletes a shop link from its wish for good.",
+			description:
+				"Deletes a shop link from its wish for good. When it is the wish's last shop link, the wish goes too.",
 			annotations: DELETE,
 			inputSchema: shopLinkActions.delete.input,
 		},

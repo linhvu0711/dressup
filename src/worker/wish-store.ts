@@ -510,17 +510,41 @@ export async function changeShopLink(
 }
 
 // Only the account's own link goes; not found when the account has no link
-// with this id.
+// with this id. The wish goes with its last link. Its delete sits in the
+// link's batch and checks that no link is left, so a link another add puts on
+// the wish in the meantime keeps it.
 export async function deleteShopLink(
 	db: Db,
 	bucket: R2Bucket,
 	userId: string,
 	id: string,
 ): Promise<Result<ShopLinkId, WishError>> {
-	const deleted = await deleteOwner(db, bucket, userId, {
-		kind: "shopLink",
-		id,
-	});
+	const [link] = await db
+		.select({ wishId: shopLink.wishId })
+		.from(shopLink)
+		.where(and(eq(shopLink.id, id), eq(shopLink.userId, userId)));
+	if (!link) return { ok: false, error: { code: "not_found" } };
+	// A link never moves to another wish, so the wish read here stays its own.
+	const deleted = await deleteOwner(
+		db,
+		bucket,
+		userId,
+		{ kind: "shopLink", id },
+		db
+			.delete(wish)
+			.where(
+				and(
+					eq(wish.id, link.wishId),
+					eq(wish.userId, userId),
+					notExists(
+						db
+							.select({ one: sql`1` })
+							.from(shopLink)
+							.where(eq(shopLink.wishId, link.wishId)),
+					),
+				),
+			),
+	);
 	return deleted.ok
 		? { ok: true, value: deleted.value as ShopLinkId }
 		: deleted;

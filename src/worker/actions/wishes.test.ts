@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { PictureId } from "@/pictures/picture";
-import type { WishId } from "@/wishlist/wish";
+import type { ShopLinkId, WishId } from "@/wishlist/wish";
 import { listColours } from "../colour-store";
 import type { Result } from "../result";
 import {
@@ -901,6 +901,89 @@ describe("changing and deleting a shop link that is gone", () => {
 		});
 		// Then
 		expect(deleted).toEqual({ ok: false, error: SHOP_LINK_NOT_FOUND });
+	});
+});
+
+describe("the last shop link", () => {
+	// Alice's wish FIRST_ID for a Navy wool jacket with the Zara link.
+	async function aliceWithLink() {
+		const { h, alice, ids } = await withAlice();
+		await wishActions.add.run(alice, jacket(ids));
+		await addLink(alice, FIRST_ID, zaraLink(null));
+		return { h, alice, ids };
+	}
+
+	const held = async (
+		alice: ActionScope,
+	): Promise<{ id: string; links: string[] }[]> =>
+		(await listed(alice)).map((wish) => ({
+			id: wish.id,
+			links: wish.shopLinks.map((link) => link.id),
+		}));
+
+	test("removes the wish with its last shop link", async () => {
+		// Given
+		const { h, alice } = await aliceWithLink();
+		// When
+		const deleted = await shopLinkActions.delete.run(alice, { id: LINK_ID });
+		// Then
+		expect({
+			deleted,
+			wishes: await listed(alice),
+			links: h.accountRows(ALICE.id).shop_link ?? 0,
+		}).toEqual({
+			deleted: { ok: true, value: LINK_ID as ShopLinkId },
+			wishes: [],
+			links: 0,
+		});
+	});
+
+	test("keeps the wish when another shop link stays", async () => {
+		// Given: plus a second link on the wish
+		const { alice } = await aliceWithLink();
+		await addLink(alice, FIRST_ID, { ...zaraLink(null), id: OTHER_LINK_ID });
+		// When
+		await shopLinkActions.delete.run(alice, { id: LINK_ID });
+		// Then
+		expect(await held(alice)).toEqual([
+			{ id: FIRST_ID, links: [OTHER_LINK_ID] },
+		]);
+	});
+
+	test("keeps a wish added with no shop link when another wish's last link goes", async () => {
+		// Given: plus a White short tee wish added with no link
+		const { alice, ids } = await aliceWithLink();
+		await wishActions.addToWishlist.run(alice, {
+			id: SECOND_ID,
+			typeId: "tee_s",
+			colourId: ids.White,
+		});
+		// When
+		await shopLinkActions.delete.run(alice, { id: LINK_ID });
+		// Then
+		expect((await listed(alice)).map((wish) => wish.id as string)).toEqual([
+			SECOND_ID,
+		]);
+	});
+
+	test("keeps the wish when a link joins it during its last link's delete", async () => {
+		// Given: the delete read the wish, and its batch waits
+		const { h, alice, ids } = await aliceWithLink();
+		const hold = h.holdBatches();
+		const deleting = shopLinkActions.delete.run(alice, { id: LINK_ID });
+		await hold.queued(1);
+		// When: a link with no pictures joins the wish, with no batch
+		await wishActions.addToWishlist.run(alice, {
+			...jacket(ids),
+			id: SECOND_ID,
+			shopLink: { ...zaraLink(null), id: OTHER_LINK_ID },
+		});
+		hold.release();
+		await deleting;
+		// Then
+		expect(await held(alice)).toEqual([
+			{ id: FIRST_ID, links: [OTHER_LINK_ID] },
+		]);
 	});
 });
 

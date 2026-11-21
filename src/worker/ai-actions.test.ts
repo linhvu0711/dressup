@@ -1494,7 +1494,7 @@ describe("wishes", () => {
 		// Then
 		expect({
 			price: (changed.data as { wish: Listed }).wish.shopLinks[0]?.price,
-			after: (data as { wishes: Listed[] }).wishes[0]?.shopLinks,
+			after: (data as { wishes: Listed[] }).wishes,
 		}).toEqual({ price: 3990000, after: [] });
 	});
 
