@@ -1,10 +1,11 @@
 import { z } from "zod";
+import { pieceName } from "@/combinations/combination";
 import { pieceKey } from "@/combinations/marks";
 import { TYPE_IDS } from "@/dress/clothing-types";
 import { brandSchema } from "@/labels/brand";
 import { colourSchema } from "@/labels/colour";
 import { pictureIdSchema } from "@/pictures/picture";
-import { priceSchema } from "@/price";
+import { priceSchema, priceText } from "@/price";
 
 export const OWNED_ITEM_LIMIT = 500;
 
@@ -92,4 +93,24 @@ export function closetPieces(items: readonly OwnedItem[]): ClosetPiece[] {
 			});
 	}
 	return [...pieces.values()];
+}
+
+// The texts of an item's card. The label joins them, so a card is found by
+// what it shows.
+export function itemCard(item: OwnedItem): {
+	title: string;
+	line: string;
+	price: string | null;
+	badge: string | null;
+	label: string;
+} {
+	const piece = pieceName(item);
+	const title = item.name ?? piece;
+	const line = item.brand ? `${item.brand.name} · ${piece}` : piece;
+	const price = item.price === null ? null : priceText(item.price);
+	const badge = item.quantity > 1 ? `×${item.quantity}` : null;
+	const label = [title, line, price, badge]
+		.filter((part) => part !== null)
+		.join(", ");
+	return { title, line, price, badge, label };
 }
