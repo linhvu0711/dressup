@@ -38,7 +38,7 @@ export type PictureListError =
 	| { code: "invalid"; field: "pictureIds" }
 	| { code: "picture_limit" };
 
-export type PictureError =
+export type AddPictureError =
 	| { code: "invalid"; field: "body" }
 	| { code: "account_picture_limit" }
 	| { code: "storage_full" }
@@ -177,7 +177,7 @@ export async function addPicture(
 	bucket: R2Bucket,
 	userId: string,
 	bytes: ArrayBuffer,
-): Promise<Result<{ id: PictureId }, PictureError>> {
+): Promise<Result<{ id: PictureId }, AddPictureError>> {
 	const kind = kindOf(new Uint8Array(bytes));
 	if (kind === null)
 		return { ok: false, error: { code: "invalid", field: "body" } };
@@ -300,7 +300,7 @@ export async function readPicture(
 	bucket: R2Bucket,
 	userId: string,
 	id: string,
-): Promise<Result<R2ObjectBody, PictureError>> {
+): Promise<Result<R2ObjectBody, { code: "not_found" }>> {
 	const [row] = await db
 		.select({ id: picture.id })
 		.from(picture)
@@ -317,7 +317,7 @@ export async function deleteDraft(
 	bucket: R2Bucket,
 	userId: string,
 	id: string,
-): Promise<Result<PictureId, PictureError>> {
+): Promise<Result<PictureId, { code: "not_found" }>> {
 	const { dropped } = await runWithPictures(db, bucket, {
 		drop: dropPictures(db, and(drafts(userId), eq(picture.id, id))),
 	});
