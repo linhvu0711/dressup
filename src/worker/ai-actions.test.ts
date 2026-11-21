@@ -77,6 +77,7 @@ describe("tags", () => {
 			["delete_draft_picture", D],
 			["show_mannequin", R],
 			["set_mannequin_colour", W],
+			["list_ai_apps", R],
 		]);
 		expect(listed.every((t) => typeof t.title === "string")).toBe(true);
 	});
@@ -544,6 +545,57 @@ describe("mannequin", () => {
 	});
 });
 
+describe("AI apps", () => {
+	test("answers an empty list when no other AI app is connected", async () => {
+		// Given: the test app is the only connected app
+		const { ai } = await withAiSession();
+		// When
+		const { isError, text, data } = await ai.call("list_ai_apps");
+		// Then
+		expect({ isError, text, data }).toEqual({
+			isError: false,
+			text: "No other AI app is connected.",
+			data: { apps: [] },
+		});
+	});
+
+	test("lists the other connected AI app with its name, logo, and connect date", async () => {
+		// Given: alice also allowed Other App on 2026-11-14 at 12:00 UTC
+		const { h, ai, userId } = await withAiSession();
+		await h.db.insert(schema.oauthClient).values({
+			id: "other",
+			clientId: "https://other.example/meta.json",
+			name: "Other App",
+			icon: "https://other.example/logo.png",
+			redirectUris: ["http://127.0.0.1/callback"],
+		});
+		await h.db.insert(schema.oauthConsent).values({
+			id: "allow-2",
+			clientId: "https://other.example/meta.json",
+			userId,
+			scopes: ["openid"],
+			createdAt: new Date(1794657600000),
+			updatedAt: new Date(1794657600000),
+		});
+		// When
+		const { isError, data } = await ai.call("list_ai_apps");
+		// Then
+		expect({ isError, data }).toEqual({
+			isError: false,
+			data: {
+				apps: [
+					{
+						id: "allow-2",
+						name: "Other App",
+						logo: "https://other.example/logo.png",
+						connectedAt: "2026-11-14T12:00:00.000Z",
+					},
+				],
+			},
+		});
+	});
+});
+
 describe("AI action limit", () => {
 	// Starts a clock minute so the 61 calls cannot cross into the next one.
 	async function sixtyActions() {
@@ -652,6 +704,18 @@ describe("AI action limit", () => {
 			isError: true,
 			text: "Too many actions. Wait a minute and try again.",
 			loaded: 200,
+		});
+	});
+
+	test("refuses list_ai_apps as the 61st AI action", async () => {
+		// Given
+		const { ai } = await sixtyActions();
+		// When
+		const { isError, text } = await ai.call("list_ai_apps");
+		// Then
+		expect({ isError, text }).toEqual({
+			isError: true,
+			text: "Too many actions. Wait a minute and try again.",
 		});
 	});
 

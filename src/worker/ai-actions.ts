@@ -30,6 +30,7 @@ import { pictureActions } from "./actions/pictures";
 import { tagActions } from "./actions/tags";
 import { shopLinkActions, wishActions } from "./actions/wishes";
 import { countAiAction } from "./ai-action-store";
+import { listAiApps } from "./ai-app-store";
 import { listBrands } from "./brand-store";
 import { listColours } from "./colour-store";
 import type { Db } from "./db";
@@ -47,6 +48,7 @@ type Account = {
 	pictures: R2Bucket;
 	userId: string;
 	baseURL: string;
+	clientId: string;
 };
 
 const READ: ToolAnnotations = { readOnlyHint: true };
@@ -124,8 +126,10 @@ const noWishes = "Nothing on your wishlist yet.";
 
 const noWishMatch = "No wish matches the filter.";
 
+const noOtherAiApps = "No other AI app is connected.";
+
 export function registerAiActions(server: McpServer, account: Account) {
-	const { db, pictures, userId, baseURL } = account;
+	const { db, pictures, userId, baseURL, clientId } = account;
 	const scope: ActionScope = { db, userId, pictures };
 
 	async function combinationViews(list: Combination[]) {
@@ -731,6 +735,23 @@ export function registerAiActions(server: McpServer, account: Account) {
 			return set.ok
 				? answer({ mannequin: set.value })
 				: refusal(set.error.text);
+		},
+	);
+
+	tool(
+		"list_ai_apps",
+		{
+			title: "List the other AI apps",
+			description:
+				"The other AI apps connected to the account, oldest connect first, each with id, name, logo, and connectedAt. The app that asks is not on the list. Only the user can connect or disconnect an AI app, in Settings.",
+			annotations: READ,
+			inputSchema: noArgs,
+		},
+		async () => {
+			const apps = await listAiApps(db, userId, { except: clientId });
+			return apps.length === 0
+				? answer({ apps }, noOtherAiApps)
+				: answer({ apps });
 		},
 	);
 }
