@@ -183,82 +183,47 @@ describe("marking a shop link bought", () => {
 		// Then
 		expect({
 			ok: bought.ok,
-			created: bought.ok && bought.value.created,
 			wishes: await wishlist(alice),
-		}).toEqual({ ok: true, created: true, wishes: [] });
+		}).toEqual({ ok: true, wishes: [] });
 	});
 
-	test("adds 1 to the item of the same piece and brand", async () => {
-		// Given
+	test("adds a new item next to an item of the same piece and brand", async () => {
+		// Given: ITEM_ID, a Navy wool COS jacket with d and e; LINK_ID, a COS
+		// link "Wool jacket" at 4.290.000 with a and b
 		const { h, alice, a, b, d, e } = await aliceWithItem();
 		// When
 		const bought = await buy(alice, LINK_ID);
 		// Then
+		const item = bought.ok ? bought.value : undefined;
 		expect({
-			created: bought.ok && bought.value.created,
-			item: bought.ok && {
-				id: bought.value.ownedItem.id,
-				quantity: bought.value.ownedItem.quantity,
+			item: item && {
+				name: item.name,
+				price: item.price,
+				brand: item.brand?.name,
+				quantity: item.quantity,
+				pictureIds: item.pictureIds,
 			},
-			pictureIds: bought.ok && bought.value.ownedItem.pictureIds,
-			items: (await closet(alice)).length,
-			keys: h.pictures.keys(),
-		}).toEqual({
-			created: false,
-			item: { id: ITEM_ID, quantity: 2 },
-			pictureIds: [d, e, a, b],
-			items: 1,
-			keys: [a, b, d, e].sort(),
-		});
-	});
-
-	test("keeps 8 pictures on the item and deletes the rest", async () => {
-		// Given
-		const owner = await account();
-		const item = await withItem(owner, 1, 6);
-		const { link } = await withLinks(owner, 3);
-		const { h, alice } = owner;
-		// When
-		const bought = await buy(alice, LINK_ID);
-		// Then
-		expect({
-			created: bought.ok && bought.value.created,
-			pictureIds: bought.ok && bought.value.ownedItem.pictureIds,
-			keys: h.pictures.keys(),
-		}).toEqual({
-			created: false,
-			pictureIds: [...item, ...link.slice(0, 2)],
-			keys: [...item, ...link.slice(0, 2)].sort(),
-		});
-	});
-
-	test("refuses Bought at 99 of one item", async () => {
-		// Given
-		const { h, alice, a, b, c, d, e } = await aliceWithItem(99);
-		// When
-		const bought = await buy(alice, LINK_ID);
-		// Then
-		expect({
-			bought,
-			items: (await closet(alice)).map((i) => ({
-				quantity: i.quantity,
-				pictureIds: i.pictureIds,
+			closet: (await closet(alice)).map(({ name, quantity, pictureIds }) => ({
+				name,
+				quantity,
+				pictureIds,
 			})),
-			links: (await wishlist(alice))[0]?.shopLinks.map((l) => l.id),
+			wishes: await wishlist(alice),
 			keys: h.pictures.keys(),
 		}).toEqual({
-			bought: {
-				ok: false,
-				error: {
-					code: "quantity_limit",
-					status: 409,
-					body: { error: "quantity_limit" },
-					text: "You have 99 of this item. That is the limit.",
-				},
+			item: {
+				name: "Wool jacket",
+				price: 4290000,
+				brand: "COS",
+				quantity: 1,
+				pictureIds: [a, b],
 			},
-			items: [{ quantity: 99, pictureIds: [d, e] }],
-			links: [LINK_ID, OTHER_LINK_ID],
-			keys: [a, b, c, d, e].sort(),
+			closet: [
+				{ name: "Wool jacket", quantity: 1, pictureIds: [a, b] },
+				{ name: null, quantity: 1, pictureIds: [d, e] },
+			],
+			wishes: [],
+			keys: [a, b, d, e].sort(),
 		});
 	});
 
@@ -343,97 +308,33 @@ describe("Bought while another write runs", () => {
 		});
 	});
 
-	test("refuses Bought when the quantity changes during it", async () => {
+	test("refuses Bought when the link's name changes during it", async () => {
 		// Given
-		const { h, alice, cos, a, b, c, d, e } = await aliceWithItem();
+		const { h, alice, cos, a, b, c } = await aliceWithLinks();
 		const hold = h.holdBatches();
-		// When
+		// When: the rename writes no pictures, so it runs no batch
 		const bought = buy(alice, LINK_ID);
 		await hold.queued(1);
-		await ownedItemActions.change.run(alice, {
-			id: ITEM_ID,
+		await shopLinkActions.change.run(alice, {
+			id: LINK_ID,
+			url: "https://cos.com/jacket",
 			brandId: cos,
-			quantity: 5,
+			name: "Wool coat",
+			price: 4290000,
 		});
 		hold.release();
 		const result = await bought;
 		// Then
 		expect({
 			result,
-			items: (await closet(alice)).map((i) => ({
-				quantity: i.quantity,
-				pictureIds: i.pictureIds,
-			})),
+			items: await closet(alice),
 			links: await linkPictures(alice),
 			keys: h.pictures.keys(),
 		}).toEqual({
 			result: { ok: false, error: CONFLICT_ROW },
-			items: [{ quantity: 5, pictureIds: [d, e] }],
+			items: [],
 			links: [[a, b], [c]],
-			keys: [a, b, c, d, e].sort(),
-		});
-	});
-
-	test("refuses Bought when the quantity changes during it to the one Bought sets", async () => {
-		// Given
-		const { h, alice, cos, a, b, c, d, e } = await aliceWithItem();
-		const hold = h.holdBatches();
-		// When
-		const bought = buy(alice, LINK_ID);
-		await hold.queued(1);
-		await ownedItemActions.change.run(alice, {
-			id: ITEM_ID,
-			brandId: cos,
-			quantity: 2,
-		});
-		hold.release();
-		const result = await bought;
-		// Then
-		expect({
-			result,
-			items: (await closet(alice)).map((i) => ({
-				quantity: i.quantity,
-				pictureIds: i.pictureIds,
-			})),
-			links: await linkPictures(alice),
-			keys: h.pictures.keys(),
-		}).toEqual({
-			result: { ok: false, error: CONFLICT_ROW },
-			items: [{ quantity: 2, pictureIds: [d, e] }],
-			links: [[a, b], [c]],
-			keys: [a, b, c, d, e].sort(),
-		});
-	});
-
-	test("refuses Bought when the same item is added during it", async () => {
-		// Given
-		const { h, alice, ids, cos, a, b, c } = await aliceWithLinks();
-		const hold = h.holdBatches();
-		// When
-		const bought = buy(alice, LINK_ID);
-		await hold.queued(1);
-		await ownedItemActions.add.run(alice, {
-			id: ITEM_ID,
-			typeId: "wool",
-			colourId: ids.Navy,
-			brandId: cos,
-			quantity: 1,
-		});
-		hold.release();
-		const result = await bought;
-		// Then
-		expect({
-			result,
-			items: (await closet(alice)).map((i) => ({
-				id: i.id,
-				quantity: i.quantity,
-				pictureIds: i.pictureIds,
-			})),
-			links: await linkPictures(alice),
-		}).toEqual({
-			result: { ok: false, error: CONFLICT_ROW },
-			items: [{ id: ITEM_ID, quantity: 1, pictureIds: [] }],
-			links: [[a, b], [c]],
+			keys: [a, b, c].sort(),
 		});
 	});
 });

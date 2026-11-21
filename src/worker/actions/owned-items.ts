@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { OWNED_ITEM_LIMIT, QUANTITY_MAX } from "@/closet/owned-item";
+import {
+	OWNED_ITEM_LIMIT,
+	OWNED_ITEM_NAME_MAX,
+	QUANTITY_MAX,
+} from "@/closet/owned-item";
 import { ITEM_PICTURE_LIMIT } from "@/pictures/picture";
 import {
 	matchesPieceFilter,
@@ -14,6 +18,7 @@ import {
 } from "../owned-item-store";
 import {
 	action,
+	notAPrice,
 	notAType,
 	notYourBrand,
 	notYourColour,
@@ -35,6 +40,10 @@ function fieldText(
 	switch (error.field) {
 		case "quantity":
 			return `Quantity is a whole number from 1 to ${QUANTITY_MAX}.`;
+		case "name":
+			return `Name is at most ${OWNED_ITEM_NAME_MAX} characters.`;
+		case "price":
+			return notAPrice;
 		case "typeId":
 			return notAType(error.value);
 		case "colourId":
@@ -61,11 +70,6 @@ const ownedItemRefusals: Refusals<OwnedItemError> = {
 		status: 400,
 		body: { error: "invalid", field: error.field },
 		text: fieldText(error),
-	}),
-	duplicate: (error) => ({
-		status: 409,
-		body: { error: "duplicate", id: error.id },
-		text: "You have this item already. Change its number.",
 	}),
 	owned_item_limit: ownedItemLimit,
 	picture_limit: () => ({
@@ -98,6 +102,20 @@ const itemFields = {
 	quantity: z
 		.number()
 		.describe(`How many the account owns, 1 to ${QUANTITY_MAX}.`),
+	name: z
+		.string()
+		.nullable()
+		.optional()
+		.describe(
+			`The item's own name, such as AIRism tee, at most ${OWNED_ITEM_NAME_MAX} characters. null for no name. Left out: no name on add, kept on change.`,
+		),
+	price: z
+		.number()
+		.nullable()
+		.optional()
+		.describe(
+			"The price paid in whole VND. null for no price. Left out: no price on add, kept on change.",
+		),
 	pictureIds: pictureIdsInput,
 };
 
@@ -131,10 +149,15 @@ export const ownedItemActions = {
 	change: action(
 		z.object({ id, ...itemFields }),
 		ownedItemRefusals,
-		({ db, pictures, userId }, { id, brandId = null, quantity, pictureIds }) =>
+		(
+			{ db, pictures, userId },
+			{ id, brandId = null, quantity, name, price, pictureIds },
+		) =>
 			changeOwnedItem(db, pictures, userId, id, {
 				brandId,
 				quantity,
+				name,
+				price,
 				pictureIds,
 			}),
 	),

@@ -126,6 +126,8 @@ test("keeps a bought item in the closet when a closet load was under way", async
 		},
 		brand: null,
 		quantity: 1,
+		name: null,
+		price: null,
 		pictureIds: [],
 	};
 	let release = () => {};

@@ -30,6 +30,17 @@ export const colourOf = (db: Db, userId: string, colourId: string) =>
 		.from(colour)
 		.where(and(eq(colour.id, colourId), eq(colour.userId, userId)));
 
+// The refusal for a colour that is not the account's; null for the account's
+// own.
+export async function notYourColour(
+	db: Db,
+	userId: string,
+	colourId: string,
+): Promise<{ code: "invalid"; field: "colourId"; value: string } | null> {
+	const [own] = await colourOf(db, userId, colourId);
+	return own ? null : { code: "invalid", field: "colourId", value: colourId };
+}
+
 const STARTER_COLOURS: readonly { name: string; hex: Hex }[] = [
 	{ name: "White", hex: "#F4F2ED" },
 	{ name: "Black", hex: "#1B1B1F" },

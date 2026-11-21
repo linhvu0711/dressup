@@ -27,14 +27,14 @@ import {
 	wishlistAddSchema,
 } from "@/wishlist/wish";
 import { brandOf, brandOrNone, notYourBrand } from "./brand-store";
-import { colourOf } from "./colour-store";
+import { colourOf, notYourColour } from "./colour-store";
 import type { Db } from "./db";
 import { brand } from "./db/brand-schema";
 import { colour } from "./db/colour-schema";
 import { shopLink, wish } from "./db/wish-schema";
 import { guardedAdd, insertUnder } from "./guarded-add";
 import { deleteOwner, pictureIdsBy, saveWithPictures } from "./picture-store";
-import { pieceRefusal, samePiece } from "./piece-rows";
+import { samePiece } from "./piece-rows";
 import { invalidField, type Result } from "./result";
 
 type WishField =
@@ -208,13 +208,17 @@ export async function addWish(
 		guards: wishGuards(db, userId, input),
 		limit: { max: WISH_LIMIT, code: "wish_limit" },
 		read: async () => (await readWishes(db, userId, input.id))[0],
-		refused: (): Promise<WishError | null> =>
-			pieceRefusal(
-				db,
-				userId,
-				{ table: wish, where: samePiece(wish, userId, input) },
-				input,
-			),
+		// The colour first, then the wish that holds the piece, in the order a
+		// person would fix them.
+		refused: async (): Promise<WishError | null> => {
+			const notYours = await notYourColour(db, userId, input.colourId);
+			if (notYours) return notYours;
+			const [held] = await db
+				.select({ id: wish.id })
+				.from(wish)
+				.where(samePiece(wish, userId, input));
+			return held ? { code: "duplicate", id: held.id as WishId } : null;
+		},
 	});
 	return added.ok
 		? {

@@ -460,7 +460,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		"list_owned_items",
 		{
 			title: "List the closet",
-			description: `The account's owned items, newest first. An owned item is one brand of one piece (a type in a colour) with a quantity of 1 to ${QUANTITY_MAX}. An account holds at most ${OWNED_ITEM_LIMIT}. Each item has pictureIds, its pictures in upload order; show_picture shows one. ${filterRule}`,
+			description: `The account's owned items, newest first. An owned item is one piece (a type in a colour) with a quantity of 1 to ${QUANTITY_MAX}, and an optional brand, name, and price paid in VND. Two items can share a piece and a brand. An account holds at most ${OWNED_ITEM_LIMIT}. Each item has pictureIds, its pictures in upload order; show_picture shows one. ${filterRule}`,
 			annotations: READ,
 			inputSchema: ownedItemActions.list.input,
 		},
@@ -480,7 +480,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		"add_owned_item",
 		{
 			title: "Add to the closet",
-			description: `Adds one brand of one piece to the closet, with a quantity. The account has each piece and brand once, and at most ${OWNED_ITEM_LIMIT} items. Answers the owned item and created, true for a new item.`,
+			description: `Adds one piece to the closet, with a quantity, and an optional brand, name, and price paid in VND. An account holds at most ${OWNED_ITEM_LIMIT} items. Answers the owned item and created, true for a new item.`,
 			annotations: WRITE,
 			inputSchema: ownedItemActions.add.input.omit({ id: true }),
 		},
@@ -499,7 +499,7 @@ export function registerAiActions(server: McpServer, account: Account) {
 		{
 			title: "Change an owned item",
 			description:
-				"Changes the brand and the quantity of an owned item. Its piece stays. Leave brandId out for no brand.",
+				"Changes the brand, the quantity, the name, and the price paid of an owned item. Its piece stays. Leave brandId out for no brand. Leave name or price out to keep it; send null to clear it.",
 			annotations: WRITE,
 			inputSchema: ownedItemActions.change.input,
 		},
@@ -637,13 +637,15 @@ export function registerAiActions(server: McpServer, account: Account) {
 		{
 			title: "Mark a shop link as bought",
 			description:
-				"Moves a shop link to the closet as an owned item with its brand, quantity 1, and its pictures, and removes its wish with the other shop links and their pictures. When the closet holds this piece with this brand, adds 1 to that item. Answers the owned item and created: true for a new item, false when it added 1.",
+				"Moves a shop link to the closet as a new owned item with the link's brand, name, price, quantity 1, and pictures, and removes its wish with the other shop links and their pictures. Answers the owned item.",
 			annotations: DELETE,
 			inputSchema: boughtActions.buy.input,
 		},
 		async (input) => {
 			const bought = await boughtActions.buy.run(scope, input);
-			return bought.ok ? answer(bought.value) : refusal(bought.error.text);
+			return bought.ok
+				? answer({ ownedItem: bought.value })
+				: refusal(bought.error.text);
 		},
 	);
 

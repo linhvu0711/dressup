@@ -1,0 +1,35 @@
+{
+  "set": [
+    {
+      "path": [
+        "tables",
+        "owned_item",
+        "columns",
+        "name"
+      ],
+      "value": {
+        "name": "name",
+        "type": "text",
+        "primaryKey": false,
+        "notNull": false,
+        "autoincrement": false
+      }
+    },
+    {
+      "path": [
+        "tables",
+        "owned_item",
+        "columns",
+        "price"
+      ],
+      "value": {
+        "name": "price",
+        "type": "integer",
+        "primaryKey": false,
+        "notNull": false,
+        "autoincrement": false
+      }
+    }
+  ],
+  "remove": []
+}

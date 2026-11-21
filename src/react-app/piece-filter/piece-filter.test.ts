@@ -45,6 +45,8 @@ const item = (
 	colour: colour(colourId),
 	brand: brand === null ? null : { id: brand, name: brand },
 	quantity: 1,
+	name: null,
+	price: null,
 	pictureIds: [],
 });
 

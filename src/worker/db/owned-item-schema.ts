@@ -5,12 +5,11 @@ import { user } from "./auth-schema";
 import { brand } from "./brand-schema";
 import { colour } from "./colour-schema";
 
-// One owned item: one brand of one piece, with a quantity. The key to colour
-// has no delete rule, so a colour in use cannot go
+// One owned item: one piece with a quantity, and an optional brand, name, and
+// price paid in VND. Two items can share a piece and a brand. The key to
+// colour has no delete rule, so a colour in use cannot go
 // (docs/adr/0013-colour-belongs-to-the-account.md). A deleted brand leaves
-// its items with no brand. No unique index on the piece and brand: two items
-// of one piece that both lost their brand stay two items, so the store checks
-// the duplicate rule in its write.
+// its items with no brand.
 export const ownedItem = sqliteTable(
 	"owned_item",
 	{
@@ -26,8 +25,10 @@ export const ownedItem = sqliteTable(
 			onDelete: "set null",
 		}),
 		quantity: integer("quantity").notNull(),
-		// A fresh id each Bought sets with its own write, so the rest of its
-		// batch can tell that write from another one that set the same quantity.
+		name: text("name"),
+		price: integer("price"),
+		// A fresh id each Bought sets with its insert, so the rest of its batch
+		// runs only once that insert wrote.
 		writeId: text("write_id"),
 		createdAt: integer("created_at", { mode: "timestamp_ms" })
 			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
