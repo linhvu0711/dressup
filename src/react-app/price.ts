@@ -13,45 +13,31 @@ export const priceText = (price: number): string => `${digits.format(price)} ₫
 
 const PRICE_DIGITS = String(PRICE_MAX).length;
 
+// Digits, with dots only as vi-VN thousands: "784.000" is one, "784000.00"
+// and "784.50" are not.
+const THOUSANDS = /^\d{1,3}(\.\d{3})*$|^\d+$/;
+
 // A price as the user types it: digits only, no leading zero, at most the
-// digits of the highest price, shown with dots. Before is what the field
-// showed, so its dots are the field's own. Cut says the edit lost a mark or a
-// digit, or put in a dot that is not a thousands dot, as the decimal dot of a
-// pasted "784000.00" is.
+// digits of the highest price, shown with dots. Cut says the typing lost a
+// mark or a digit; the dots are the ones it shows, not a slip. A paste is
+// judged on its own text, since the field's dots move as it reformats: a
+// pasted dot that is not a thousands dot is cut, so "784000.00" does not
+// pass as 78.400.000 unseen.
 export function typedPrice(
 	text: string,
-	before: string,
+	pasted?: string,
 ): {
 	value: number | null;
 	shown: string;
 	cut: boolean;
 } {
 	const all = text.replace(/\D/g, "").replace(/^0+/, "");
-	const kept = all.slice(0, PRICE_DIGITS);
-	const shown = kept === "" ? "" : digits.format(Number(kept));
 	const cut =
 		/[^\d.]/.test(text) ||
 		all.length > PRICE_DIGITS ||
-		(edited(before, text).includes(".") && text !== shown);
-	return { value: kept === "" ? null : Number(kept), shown, cut };
-}
-
-// What an edit put in: the new text past the start and the end it shares
-// with the old text.
-function edited(before: string, text: string): string {
-	let start = 0;
-	while (
-		start < before.length &&
-		start < text.length &&
-		before[start] === text[start]
-	)
-		start++;
-	let end = 0;
-	while (
-		end < before.length - start &&
-		end < text.length - start &&
-		before[before.length - 1 - end] === text[text.length - 1 - end]
-	)
-		end++;
-	return text.slice(start, text.length - end);
+		(pasted !== undefined && !THOUSANDS.test(pasted.trim()));
+	const kept = all.slice(0, PRICE_DIGITS);
+	if (kept === "") return { value: null, shown: "", cut };
+	const value = Number(kept);
+	return { value, shown: digits.format(value), cut };
 }

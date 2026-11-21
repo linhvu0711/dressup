@@ -28,7 +28,7 @@ const PROBLEM_TEXT: Record<Problem, string> = {
 };
 
 const priceShown = (price: number | null) =>
-	price === null ? "" : typedPrice(String(price), "").shown;
+	price === null ? "" : typedPrice(String(price)).shown;
 
 // The form to add a shop link to a wish, or to change or delete the one it
 // is given.
@@ -139,9 +139,7 @@ export function ShopLinkSheet(
 					inputMode="numeric"
 					autoComplete="off"
 					value={price.shown}
-					onChange={(e) =>
-						panel.change(setPrice)(typedPrice(e.target.value, price.shown))
-					}
+					onChange={(e) => panel.change(setPrice)(typedPrice(e.target.value))}
 					className={INPUT}
 				/>
 			</Field>
