@@ -2,8 +2,7 @@ import { eq } from "drizzle-orm";
 import { type Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { createMiddleware } from "hono/factory";
-import { z } from "zod";
-import { hexSchema } from "@/colour/hex";
+import type { z } from "zod";
 import type {
 	AiAppsAnswer,
 	BrandAnswer,
@@ -25,7 +24,6 @@ import type {
 } from "@/data/contract";
 import { brandIdSchema } from "@/labels/brand";
 import { colourIdSchema } from "@/labels/colour";
-import { mannequinPartSchema } from "@/mannequin/mannequin";
 import { PICTURE_BYTES_MAX } from "@/pictures/picture";
 import { tagIdSchema } from "@/tags/tag";
 import type { ActionScope, Refusal } from "./actions/action";
@@ -33,6 +31,7 @@ import { boughtActions } from "./actions/bought";
 import { brandActions } from "./actions/brands";
 import { colourActions } from "./actions/colours";
 import { combinationActions } from "./actions/combinations";
+import { mannequinActions } from "./actions/mannequin";
 import { ownedItemActions } from "./actions/owned-items";
 import { pictureActions, tooLarge } from "./actions/pictures";
 import { tagActions } from "./actions/tags";
@@ -49,7 +48,7 @@ import { listBrands } from "./brand-store";
 import { listColours } from "./colour-store";
 import type { Db } from "./db";
 import { user } from "./db/auth-schema";
-import { loadMannequin, setMannequinColour } from "./mannequin-store";
+import { loadMannequin } from "./mannequin-store";
 import { mcpRoute } from "./mcp";
 import { deleteWithPictures } from "./picture-store";
 import type { Result } from "./result";
@@ -466,21 +465,17 @@ export function createApp(getDb: (env: Env) => Db) {
 	);
 
 	app.put("/mannequin/:part", withAuth, requireUser, async (c) => {
-		const part = mannequinPartSchema.safeParse(c.req.param("part"));
-		if (!part.success)
-			return c.json(
-				{ error: "invalid", field: "part" } satisfies ErrorAnswer,
-				400,
-			);
-		const body = await readBody(c, z.object({ hex: hexSchema }));
-		if (!body.ok) return invalid(c, body.error.field);
-		const mannequin = await setMannequinColour(
-			getDb(c.env),
-			c.var.user.id,
-			part.data,
-			body.value.hex,
+		const body = await readBody(
+			c,
+			mannequinActions.set.input.omit({ part: true }),
 		);
-		return c.json({ mannequin } satisfies MannequinAnswer, 200);
+		if (!body.ok) return invalid(c, body.error.field);
+		const set = await mannequinActions.set.run(scope(c), {
+			...body.value,
+			part: c.req.param("part"),
+		});
+		if (!set.ok) return c.json(set.error.body, set.error.status);
+		return c.json({ mannequin: set.value } satisfies MannequinAnswer, 200);
 	});
 
 	app.get("/brands", withAuth, requireUser, async (c) =>

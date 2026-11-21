@@ -53,6 +53,9 @@ export const issueField = (path: readonly PropertyKey[]) =>
 
 export const serverError = "dressup could not do this. Try again.";
 
+export const notAColourCode =
+	"That is not a colour written as #RRGGBB with capital letters, such as #1F3A5F.";
+
 export const notAType = (value: unknown) =>
 	`${value} is not a type. list_types names the types.`;
 
