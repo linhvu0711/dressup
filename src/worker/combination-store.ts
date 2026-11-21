@@ -26,14 +26,12 @@ import {
 import { LAYER_OF, LAYERS } from "@/dress/clothing-types";
 import type { ColourId } from "@/labels/colour";
 import type { TagId } from "@/tags/tag";
-import { listColours } from "./colour-store";
 import type { Db } from "./db";
 import { colour } from "./db/colour-schema";
 import { combination, combinationPiece } from "./db/combination-schema";
 import { combinationTag, tag } from "./db/tag-schema";
 import { guardedAdd } from "./guarded-add";
 import type { Result } from "./result";
-import { listTags } from "./tag-store";
 
 // A combination as a website or an AI app sends it, before the rules ran.
 type CombinationDraft = {
@@ -173,18 +171,23 @@ const isKeyTaken = (error: unknown): boolean =>
 		isKeyTaken(error.cause));
 
 // The first piece whose colour is not one of the account's, as the problem.
-// A filter row may leave its colour out; with no colour named there is
-// nothing to check, and the colour list is not read, since a first read
-// writes the starter colours.
+// A filter row may leave its colour out. Here and in notYourTag only the
+// named ids are read: the colour list read writes the starter colours, and
+// the tag list read counts every tag's combinations.
 async function notYourColour(
 	db: Db,
 	userId: string,
 	pieces: readonly { colourId?: string }[],
 ): Promise<CombinationProblem | null> {
-	if (pieces.every((p) => p.colourId === undefined)) return null;
-	const colourIds = new Set<string>(
-		(await listColours(db, userId)).map((c) => c.id),
+	const named = pieces.flatMap((p) =>
+		p.colourId === undefined ? [] : [p.colourId],
 	);
+	if (named.length === 0) return null;
+	const rows = await db
+		.select({ id: colour.id })
+		.from(colour)
+		.where(and(eq(colour.userId, userId), inArray(colour.id, named)));
+	const colourIds = new Set(rows.map((row) => row.id));
 	const i = pieces.findIndex(
 		(p) => p.colourId !== undefined && !colourIds.has(p.colourId),
 	);
@@ -224,7 +227,11 @@ async function notYourTag(
 	tags: readonly string[],
 ): Promise<CombinationProblem | null> {
 	if (tags.length === 0) return null;
-	const tagIds = new Set<string>((await listTags(db, userId)).map((t) => t.id));
+	const rows = await db
+		.select({ id: tag.id })
+		.from(tag)
+		.where(and(eq(tag.userId, userId), inArray(tag.id, [...tags])));
+	const tagIds = new Set(rows.map((row) => row.id));
 	const value = tags.find((id) => !tagIds.has(id));
 	return value === undefined
 		? null

@@ -124,6 +124,28 @@ describe("saving a combination", () => {
 		});
 	});
 
+	test("refuses a colour of another account and writes no starter colours", async () => {
+		// Given: alice, who has not read her colour list yet; bob's 13 starter colours
+		const { h } = await withAccount();
+		await h.addAccount(BOB);
+		const bobIds = await idsOf(h, BOB.id);
+		// When
+		const saved = await combinationActions.save.run(scopeOf(h), three(bobIds));
+		// Then
+		expect({ saved, colours: await count(h, schema.colour) }).toEqual({
+			saved: {
+				ok: false,
+				error: {
+					code: "not_colour",
+					status: 400,
+					body: { error: "invalid", field: "pieces.0.colourId" },
+					text: `${bobIds.Khaki} is not one of your colours. list_colours names them.`,
+				},
+			},
+			colours: 13,
+		});
+	});
+
 	test("refuses a tag that is not the account's", async () => {
 		// Given: alice's account
 		const { alice, ids } = await withAlice();
