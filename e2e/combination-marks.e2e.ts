@@ -126,6 +126,8 @@ test("goes back to the combination from its piece page", async ({ page }) => {
 	const { id } = await markedFour(page);
 	await page.goto(`/combinations/${id}`);
 	await line(page, "Black long tee").getByRole("link").click();
+	// The combination page has a Back of its own, to the wall.
+	await expect(page).toHaveURL(/\/piece\//);
 	// When
 	await page.getByRole("link", { name: "Back" }).click();
 	// Then
