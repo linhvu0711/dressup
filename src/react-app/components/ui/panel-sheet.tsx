@@ -28,7 +28,10 @@ export function usePanel<Id extends string>({
 		id: id ?? (crypto.randomUUID() as Id),
 		step: "form",
 	}));
-	const [checked, setChecked] = useState<string | null>(null);
+	const [checked, setChecked] = useState<{
+		text: string;
+		field?: string;
+	} | null>(null);
 	const toast = useToast();
 	// Each move reads the state it follows, so two in one handler never undo
 	// each other.
@@ -62,9 +65,12 @@ export function usePanel<Id extends string>({
 		change: tried("change"),
 		// A pick from a list step is a new try that also goes back to the form.
 		pick: tried("pick"),
-		// What a check the page makes before it sends found wrong.
-		checked,
-		check: (text: string) => setChecked(text),
+		// What a check the page makes before it sends found wrong. A check that
+		// names its field shows under that field, else under the form.
+		checked: checked && checked.field === undefined ? checked.text : null,
+		check: (text: string, field?: string) => setChecked({ text, field }),
+		problemFor: (field: string): string | null =>
+			checked?.field === field ? checked.text : null,
 		done,
 		remove,
 		// The record is deleted, so what was picked for it goes too.

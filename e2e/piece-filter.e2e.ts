@@ -9,7 +9,7 @@ const mainNav = (page: Page) => page.getByRole("navigation", { name: "Main" });
 
 const closetTiles = (page: Page) => page.locator('[data-slot="closet-tile"]');
 
-const wishTiles = (page: Page) => page.locator('[data-slot="wish-tile"]');
+const wishTiles = (page: Page) => page.locator('[data-slot="wish-card"]');
 
 const chips = (page: Page) => page.locator('[data-slot="filter-chip"]');
 
@@ -40,8 +40,6 @@ async function pickTypes(page: Page, ...names: string[]) {
 		await sheet(page).getByRole("button", { name, exact: true }).click();
 	await sheet(page).getByRole("button", { name: "Back" }).click();
 }
-
-const typeOfTile = (href: string | null) => href?.split("/")[2];
 
 // Owned items, oldest first, each one of its kind.
 async function seedCloset(
@@ -236,59 +234,55 @@ test("drops a deleted brand from the closet filter", async ({ page }) => {
 test("filters the wishlist by the brands of its shop links", async ({
 	page,
 }) => {
-	// Given: both projects, the three wishes of seedWishlist
+	// Given: both projects, the four cards of seedWishlist
 	await seedWishlist(page);
 	await page.goto("/wishlist");
-	await expect(wishTiles(page)).toHaveCount(3);
+	await expect(wishTiles(page)).toHaveCount(4);
 	// When
 	await openFilter(page);
 	await pick(page, "Brand", "No brand");
-	await show(page, "Show 1 piece");
+	await show(page, "Show 1 item");
 	await expect(wishTiles(page)).toHaveCount(1);
-	const noBrand = await wishTiles(page).evaluateAll((links) =>
-		links.map((l) => l.getAttribute("href")),
-	);
+	const noBrand = await tileNames(wishTiles(page));
 	await page.getByRole("button", { name: "Remove No brand" }).click();
 	await openFilter(page);
 	await pick(page, "Brand", "Uniqlo");
-	await show(page, "Show 1 piece");
+	await show(page, "Show 1 item");
 	await expect(wishTiles(page)).toHaveCount(1);
-	const uniqlo = await wishTiles(page).evaluateAll((links) =>
-		links.map((l) => l.getAttribute("href")),
-	);
+	const uniqlo = await tileNames(wishTiles(page));
 	// Then
-	expect({
-		noBrand: noBrand.map(typeOfTile),
-		uniqlo: uniqlo.map(typeOfTile),
-	}).toEqual({ noBrand: ["sweater"], uniqlo: ["tee_l"] });
+	expect({ noBrand, uniqlo }).toEqual({
+		noBrand: ["A piece, shop.example · Navy sweater"],
+		uniqlo: ["A piece, Uniqlo · White long tee"],
+	});
 });
 
 test("filters the wishlist by type and colour at once", async ({ page }) => {
-	// Given: both projects, the three wishes of seedWishlist
+	// Given: both projects, the four cards of seedWishlist
 	await seedWishlist(page);
 	await page.goto("/wishlist");
-	await expect(wishTiles(page)).toHaveCount(3);
+	await expect(wishTiles(page)).toHaveCount(4);
 	// When
 	await openFilter(page);
 	await pick(page, "Type", "Sweaters");
 	await pick(page, "Type", "Inner tops");
 	await pick(page, "Colour", "Navy");
-	await show(page, "Show 1 piece");
-	await expect(wishTiles(page)).toHaveCount(1);
+	await show(page, "Show 2 items");
+	await expect(wishTiles(page)).toHaveCount(2);
 	// Then
 	expect({
 		tiles: await wishTiles(page).count(),
 		chips: await chips(page).allTextContents(),
 		count: await page.locator('[data-slot="filter-count"]').textContent(),
 	}).toEqual({
-		tiles: 1,
+		tiles: 2,
 		chips: ["Inner tops", "Sweaters", "Navy"],
 		count: "3",
 	});
 });
 
 test("shows Nothing here on the wishlist and clears it", async ({ page }) => {
-	// Given: both projects, the three wishes of seedWishlist, filtered by
+	// Given: both projects, the four cards of seedWishlist, filtered by
 	// Jackets
 	await seedWishlist(page);
 	await page.goto("/wishlist?layer=jacket");
@@ -300,7 +294,7 @@ test("shows Nothing here on the wishlist and clears it", async ({ page }) => {
 	};
 	// When
 	await noMatch(page).getByRole("button", { name: "Clear all" }).click();
-	await expect(wishTiles(page)).toHaveCount(3);
+	await expect(wishTiles(page)).toHaveCount(4);
 	// Then
 	expect({
 		before,
@@ -310,7 +304,7 @@ test("shows Nothing here on the wishlist and clears it", async ({ page }) => {
 		},
 	}).toEqual({
 		before: { title: "Nothing here", tiles: 0 },
-		after: { tiles: 3, chips: 0 },
+		after: { tiles: 4, chips: 0 },
 	});
 });
 

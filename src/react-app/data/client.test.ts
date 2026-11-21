@@ -160,3 +160,30 @@ test("keeps a bought item in the closet when a closet load was under way", async
 		"00000000-0000-4000-8000-000000000001",
 	]);
 });
+
+test("drops a wish when its last shop link is deleted", () => {
+	// Given: wish-a with link-1, wish-b with link-2 and link-3, wish-c with no
+	// link
+	const wish = (id: string, links: string[]) => ({
+		id,
+		shopLinks: links.map((l) => ({ id: l })),
+	});
+	queryClient.setQueryData(keys.wishlist(null), [
+		wish("wish-a", ["link-1"]),
+		wish("wish-b", ["link-2", "link-3"]),
+		wish("wish-c", []),
+	]);
+	// When
+	after.shopLinkDeleted(null, "link-1");
+	after.shopLinkDeleted(null, "link-2");
+	// Then
+	const cache = queryClient.getQueryData<
+		{ id: string; shopLinks: { id: string }[] }[]
+	>(keys.wishlist(null));
+	expect(
+		cache?.map((w) => ({ id: w.id, links: w.shopLinks.map((l) => l.id) })),
+	).toEqual([
+		{ id: "wish-b", links: ["link-3"] },
+		{ id: "wish-c", links: [] },
+	]);
+});

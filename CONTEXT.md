@@ -21,7 +21,7 @@
 - Label: a colour, a brand, or a tag. The account makes it once on the Labels page and uses it everywhere.
 - Labels page: the page with the lists that the account makes once and uses everywhere.
 - Closet: the pieces the account owns, shown as one tile for each piece. The user filters it by type, colour, and brand.
-- Wishlist: the pieces the account wants to buy, shown as one tile for each piece. The user filters it by type, colour, and brand.
+- Wishlist: the account's shop links, one card each, plus one card for each wish with no shop link. A card opens its Item page. The user filters the Wishlist by type, colour, and brand.
 - Wish: one wanted piece, with its shop links. A piece has at most one wish. When the user removes the last shop link of a wish, the wish goes too. An account holds at most 200.
 - Shop link: one place to buy a wish: a web address with its own brand, name, and price in VND. A wish holds at most 10.
 - Bought: the action that turns one shop link into a new owned item with the link's brand, name, price, and pictures. It deletes the wish and the wish's other shop links.

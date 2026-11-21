@@ -2,20 +2,43 @@ import { AlertDialog } from "radix-ui";
 import { Button } from "@/components/ui/button";
 import { FOOTER_ROW, SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
-import { useDeleteWish } from "./api";
-import { removeWishText, type Wish } from "./wish";
+import { useDeleteShopLink, useDeleteWish } from "./api";
+import {
+	removeLinkText,
+	removeWishText,
+	type ShopLink,
+	type Wish,
+} from "./wish";
 
-// The confirm. "Remove" waits for the server's answer before the confirm
-// closes. The piece page then shows what is left, or goes back.
-export function RemoveWishDialog({
+// The confirm for a whole wish, or for one of its shop links. "Remove" waits
+// for the server's answer before the confirm closes. The page then shows
+// what is left, or goes back.
+export function RemoveDialog({
 	wish,
+	link,
 	onClose,
+	onRemoved,
 }: {
 	wish: Wish;
+	link?: ShopLink;
 	onClose: () => void;
+	onRemoved?: () => void;
 }) {
-	const del = useDeleteWish();
+	const delWish = useDeleteWish();
+	const delLink = useDeleteShopLink();
 	const toast = useToast();
+	const handlers = {
+		onSuccess: () => {
+			onClose();
+			toast("Removed from your wishlist");
+			onRemoved?.();
+		},
+		onError: () => {
+			onClose();
+			toast("Not removed. Try again.");
+		},
+	};
+	const pending = delWish.isPending || delLink.isPending;
 	return (
 		<AlertDialog.Root open onOpenChange={(open) => open || onClose()}>
 			<AlertDialog.Portal>
@@ -25,7 +48,9 @@ export function RemoveWishDialog({
 						Remove from wishlist?
 					</AlertDialog.Title>
 					<AlertDialog.Description className="text-muted-foreground">
-						{removeWishText(wish.shopLinks.length)}
+						{link
+							? removeLinkText(wish.shopLinks.length === 1)
+							: removeWishText(wish.shopLinks.length)}
 					</AlertDialog.Description>
 					<div className={FOOTER_ROW}>
 						<AlertDialog.Cancel asChild>
@@ -33,18 +58,11 @@ export function RemoveWishDialog({
 						</AlertDialog.Cancel>
 						<Button
 							variant="destructive"
-							disabled={del.isPending}
+							disabled={pending}
 							onClick={() =>
-								del.mutate(wish.id, {
-									onSuccess: () => {
-										onClose();
-										toast("Removed from your wishlist");
-									},
-									onError: () => {
-										onClose();
-										toast("Not removed. Try again.");
-									},
-								})
+								link
+									? delLink.mutate(link.id, handlers)
+									: delWish.mutate(wish.id, handlers)
 							}
 						>
 							Remove

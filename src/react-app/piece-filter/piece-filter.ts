@@ -11,10 +11,11 @@ import {
 } from "@/dress/clothing-types";
 import type { BrandId } from "@/labels/brand";
 import type { ColourId } from "@/labels/colour";
-import type { Wish } from "@/wishlist/wish";
+import type { Wish, WishlistCard } from "@/wishlist/wish";
 
-// One rule for the closet, the wishlist, and the AI list tools, so an AI app
-// and the page never disagree on what a filter shows.
+// One rule for the closet, the wishlist, and the AI list tools. The Wishlist
+// page matches each card on its own shop link, while the AI tools list whole
+// wishes, so there a wish fits the brand of any of its links.
 
 // null in brands is No brand.
 export type PieceFilter = {
@@ -54,9 +55,6 @@ export function matchesPieceFilter(
 	return typeFits && colourFits && brandFits;
 }
 
-export const filterSize = (f: PieceFilter) =>
-	f.layers.length + f.types.length + f.colours.length + f.brands.length;
-
 export const ownedItemPiece = (item: OwnedItem): FilterPiece => ({
 	typeId: item.typeId,
 	colourId: item.colour.id,
@@ -75,6 +73,14 @@ export const wishPiece = (wish: Wish): FilterPiece => ({
 	typeId: wish.typeId,
 	colourId: wish.colour.id,
 	brandIds: wish.shopLinks.map((l) => l.brand?.id ?? null),
+});
+
+// A card fits only its own link's brand, and a card with no link fits no
+// brand pick, No brand too.
+export const wishCardPiece = (card: WishlistCard): FilterPiece => ({
+	typeId: card.wish.typeId,
+	colourId: card.wish.colour.id,
+	brandIds: card.link ? [card.link.brand?.id ?? null] : [],
 });
 
 const unique = <T>(values: T[]) => [...new Set(values)];

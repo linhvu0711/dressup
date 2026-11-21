@@ -19,14 +19,14 @@ export function PageHeader({
 	start = <SettingsLink className="wide:hidden" />,
 	end,
 }: {
-	title: string;
+	title?: string;
 	start?: ReactNode;
 	end?: ReactNode;
 }) {
 	return (
 		<div className="flex min-h-[62px] flex-none items-center gap-3 px-4 pt-[14px] pb-2 text-[28px] leading-[1.1] wide:px-6 wide:pt-[18px]">
 			{start}
-			<h1>{title}</h1>
+			{title === undefined ? null : <h1>{title}</h1>}
 			{end ? (
 				<>
 					<span className="flex-1" />

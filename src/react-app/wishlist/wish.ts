@@ -87,6 +87,21 @@ export const wishSchema = z.object({
 
 export type Wish = z.infer<typeof wishSchema>;
 
+export type WishlistCard = { wish: Wish; link: ShopLink | null };
+
+// The Wishlist's cards: each wish in list order, newest first, gives one card
+// for each shop link, oldest first, or one card when it has none.
+export const wishlistCards = (wishes: Wish[]): WishlistCard[] =>
+	wishes.flatMap((wish): WishlistCard[] =>
+		wish.shopLinks.length === 0
+			? [{ wish, link: null }]
+			: wish.shopLinks.map((link) => ({ wish, link })),
+	);
+
+export const linkPage = (id: ShopLinkId) => `/wishlist/link/${id}`;
+
+export const wishPage = (id: WishId) => `/wishlist/wish/${id}`;
+
 export const isWebAddress = (url: string): boolean =>
 	webAddressSchema.safeParse(url).success;
 
@@ -126,18 +141,15 @@ export function typedPrice(text: string): {
 	return { value, shown: digits.format(value) };
 }
 
-// The second line of a wish's tile: how many links, and the lowest price
-// when any link has one.
-export function linksLine(wish: Wish): string {
-	const n = wish.shopLinks.length;
-	if (n === 0) return "No link yet";
-	const count = countText(n, "link");
-	const prices = wish.shopLinks.flatMap((link) =>
-		link.price === null ? [] : [link.price],
-	);
-	return prices.length === 0
-		? count
-		: `${count} · from ${priceText(Math.min(...prices))}`;
+// The page a Wishlist add opens: the link it sent, else the wish's newest
+// link, else the wish's own page.
+export function pageAfterAdd(
+	wish: Wish,
+	sentLinkId: ShopLinkId | null,
+): string {
+	if (sentLinkId !== null) return linkPage(sentLinkId);
+	const newest = wish.shopLinks[wish.shopLinks.length - 1];
+	return newest ? linkPage(newest.id) : wishPage(wish.id);
 }
 
 // What the remove confirm says goes with the wish.
@@ -145,3 +157,9 @@ export function removeWishText(shopLinks: number): string {
 	if (shopLinks === 0) return "It has no shop link.";
 	return `Its ${countText(shopLinks, "shop link")} ${shopLinks === 1 ? "goes" : "go"} with it.`;
 }
+
+// What the remove confirm says goes with one shop link.
+export const removeLinkText = (last: boolean): string =>
+	last
+		? "This is the last shop link, so the wish goes too."
+		: "Only this shop link goes. The wish keeps its other shop links.";
