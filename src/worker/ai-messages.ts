@@ -1,15 +1,8 @@
 import { OWNED_ITEM_LIMIT, QUANTITY_MAX } from "@/closet/owned-item";
-import { ACCOUNT_PICTURE_LIMIT, ITEM_PICTURE_LIMIT } from "@/pictures/picture";
-import { PRICE_MAX, SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";
-import {
-	notAType,
-	notYourBrand,
-	notYourColour,
-	serverError,
-} from "./actions/action";
+import { ACCOUNT_PICTURE_LIMIT } from "@/pictures/picture";
+import { serverError } from "./actions/action";
 import type { BoughtError } from "./owned-item-store";
 import { UPLOAD_ADDRESS_AGE_MS } from "./upload-address-store";
-import type { WishError } from "./wish-store";
 
 // Every refusal an AI app gets names the value it sent and what is allowed,
 // so the AI app can fix its call and try again.
@@ -22,54 +15,6 @@ export function boughtRefusalText(error: BoughtError): string {
 			return `You have ${OWNED_ITEM_LIMIT} items. That is the limit. Delete one to add a new one.`;
 		case "quantity_limit":
 			return `You have ${QUANTITY_MAX} of this item. That is the limit.`;
-		case "conflict":
-			return serverError;
-	}
-}
-
-// The sentence for one bad field of a wish or a shop link, with the value
-// sent.
-function wishFieldText(error: Extract<WishError, { code: "invalid" }>): string {
-	switch (error.field) {
-		case "url":
-			return "Enter a web address that starts with https://.";
-		case "name":
-			return "Enter a name.";
-		case "price":
-			return `Price is a whole number of VND from 1 to ${new Intl.NumberFormat("vi-VN").format(PRICE_MAX)}.`;
-		case "typeId":
-			return notAType(error.value);
-		case "colourId":
-			return notYourColour(error.value);
-		case "brandId":
-			return notYourBrand(error.value);
-		case "pictureIds":
-			return "pictureIds holds an id that is not your upload or a picture of this shop link. list_wishes names the link's pictures; get_upload_address gives a new upload.";
-		case "id":
-		case "body":
-			return serverError;
-	}
-}
-
-// One tool acts on a wish or on a shop link; `subject` says which an id that
-// is not found names.
-export function wishRefusalText(
-	error: WishError,
-	subject: "wish" | "shop link",
-): string {
-	switch (error.code) {
-		case "invalid":
-			return wishFieldText(error);
-		case "duplicate":
-			return "You have this wish already.";
-		case "wish_limit":
-			return `You have ${WISH_LIMIT} wishes. That is the limit. Delete one to add a new one.`;
-		case "shop_link_limit":
-			return `${SHOP_LINK_LIMIT} shop links is the limit for one wish.`;
-		case "picture_limit":
-			return `A shop link has at most ${ITEM_PICTURE_LIMIT} pictures.`;
-		case "not_found":
-			return `No ${subject} with this id.`;
 		case "conflict":
 			return serverError;
 	}

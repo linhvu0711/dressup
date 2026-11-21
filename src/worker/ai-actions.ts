@@ -16,12 +16,6 @@ import { type Holdings, holdingsOf, markOf } from "@/combinations/marks";
 import { LAYER_OF, TYPE_IDS, TYPE_NAMES } from "@/dress/clothing-types";
 import { BRAND_LIMIT, BRAND_NAME_MAX } from "@/labels/brand";
 import { COLOUR_LIMIT, COLOUR_NAME_MAX } from "@/labels/colour";
-import {
-	filterSize,
-	matchesPieceFilter,
-	type PieceFilter,
-	wishPiece,
-} from "@/piece-filter/piece-filter";
 import { TAG_NAME_MAX, type Tag } from "@/tags/tag";
 import { SHOP_LINK_LIMIT, WISH_LIMIT } from "@/wishlist/wish";
 import { type ActionScope, serverError } from "./actions/action";
@@ -29,13 +23,8 @@ import { brandActions } from "./actions/brands";
 import { colourActions } from "./actions/colours";
 import { combinationActions } from "./actions/combinations";
 import { ownedItemActions } from "./actions/owned-items";
-import { pictureIdsInput } from "./actions/pictures";
-import {
-	pieceFilterInput,
-	pieceFilterOf,
-	pieceFilterRefusals,
-} from "./actions/piece-filter";
 import { tagActions } from "./actions/tags";
+import { shopLinkActions, wishActions } from "./actions/wishes";
 import { countAiAction } from "./ai-action-store";
 import {
 	boughtRefusalText,
@@ -51,7 +40,6 @@ import {
 	noWishMatch,
 	tooManyActions,
 	uploadAddressText,
-	wishRefusalText,
 } from "./ai-messages";
 import { listBrands } from "./brand-store";
 import { listColours } from "./colour-store";
@@ -63,15 +51,7 @@ import {
 	giveUploadAddress,
 	UPLOAD_ADDRESS_AGE_MS,
 } from "./upload-address-store";
-import {
-	addShopLink,
-	addWish,
-	changeShopLink,
-	deleteShopLink,
-	deleteWish,
-	listWishedPieces,
-	listWishes,
-} from "./wish-store";
+import { listWishedPieces } from "./wish-store";
 
 type Account = {
 	db: Db;
@@ -139,20 +119,6 @@ export function registerAiActions(server: McpServer, account: Account) {
 			holdingsFor(db, userId),
 		]);
 		return list.map((c) => combinationView(c, tags, holdings));
-	}
-
-	async function filterOf(
-		args: z.output<typeof pieceFilterInput>,
-	): Promise<{ ok: true; filter: PieceFilter } | { ok: false; text: string }> {
-		const picked = await pieceFilterOf(scope, args);
-		if (!picked.ok) {
-			const { error } = picked;
-			const row = pieceFilterRefusals[error.code] as (e: typeof error) => {
-				text: string;
-			};
-			return { ok: false, text: row(error).text };
-		}
-		return { ok: true, filter: picked.value };
 	}
 
 	function tool<S extends z.ZodObject>(
@@ -548,19 +514,17 @@ export function registerAiActions(server: McpServer, account: Account) {
 			title: "List the wishlist",
 			description: `The account's wishes, newest first, each with its shop links. A wish is one piece (a type in a colour) the account wants to buy. An account holds at most ${WISH_LIMIT} wishes, and a wish at most ${SHOP_LINK_LIMIT} shop links. Each shop link has pictureIds, its pictures in upload order; show_picture shows one. ${filterRule} The brand of a wish is the brand of any of its shop links, so a wish with no link fits no brand filter.`,
 			annotations: READ,
-			inputSchema: pieceFilterInput,
+			inputSchema: wishActions.list.input,
 		},
-		async (args) => {
-			const picked = await filterOf(args);
-			if (!picked.ok) return refusal(picked.text);
-			const wishes = (await listWishes(db, userId)).filter((wish) =>
-				matchesPieceFilter(picked.filter, wishPiece(wish)),
-			);
+		async (input) => {
+			const listed = await wishActions.list.run(scope, input);
+			if (!listed.ok) return refusal(listed.error.text);
+			const wishes = listed.value;
 			if (wishes.length > 0) return answer({ wishes });
-			return answer(
-				{ wishes },
-				filterSize(picked.filter) > 0 ? noWishMatch : noWishes,
-			);
+			const { types = [], colourIds = [], brandIds = [] } = input;
+			const filtered =
+				types.length > 0 || colourIds.length > 0 || brandIds.length > 0;
+			return answer({ wishes }, filtered ? noWishMatch : noWishes);
 		},
 	);
 
@@ -568,23 +532,17 @@ export function registerAiActions(server: McpServer, account: Account) {
 		"add_wish",
 		{
 			title: "Add to the wishlist",
-			description: `Adds a wish for one piece. The account has each piece once on the wishlist, and at most ${WISH_LIMIT} wishes.`,
+			description: `Adds a wish for one piece. The account has each piece once on the wishlist, and at most ${WISH_LIMIT} wishes. Answers the wish and created, true for a new wish.`,
 			annotations: WRITE,
-			inputSchema: z.object({
-				typeId: z.string().describe("A type id from list_types, such as wool."),
-				colourId: z.string().describe("A colour id from list_colours."),
-			}),
+			inputSchema: wishActions.add.input.omit({ id: true }),
 		},
-		async ({ typeId, colourId }) => {
+		async (input) => {
 			// The server makes the id, as add_owned_item does.
-			const added = await addWish(db, userId, {
+			const added = await wishActions.add.run(scope, {
+				...input,
 				id: crypto.randomUUID(),
-				typeId,
-				colourId,
 			});
-			return added.ok
-				? answer({ wish: added.value.wish })
-				: refusal(wishRefusalText(added.error, "wish"));
+			return added.ok ? answer(added.value) : refusal(added.error.text);
 		},
 	);
 
@@ -594,57 +552,30 @@ export function registerAiActions(server: McpServer, account: Account) {
 			title: "Remove a wish",
 			description: "Removes a wish and its shop links for good.",
 			annotations: DELETE,
-			inputSchema: z.object({ id: z.string().describe("The wish's id.") }),
+			inputSchema: wishActions.delete.input,
 		},
-		async ({ id }) => {
-			const deleted = await deleteWish(db, pictures, userId, id);
+		async (input) => {
+			const deleted = await wishActions.delete.run(scope, input);
 			return deleted.ok
 				? answer({ deleted: deleted.value })
-				: refusal(wishRefusalText(deleted.error, "wish"));
+				: refusal(deleted.error.text);
 		},
 	);
-
-	// Loose types on purpose, as add_owned_item: a bad price must reach the
-	// store to get a sentence.
-	const shopLinkFields = {
-		url: z.string().describe("The shop's web address, starting with https://."),
-		brandId: z
-			.string()
-			.nullable()
-			.optional()
-			.describe("A brand id from list_brands. Leave it out for no brand."),
-		name: z.string().describe("The shop's name for the piece."),
-		price: z
-			.number()
-			.nullable()
-			.optional()
-			.describe("The price in whole VND. Leave it out for no price."),
-		pictureIds: pictureIdsInput,
-	};
 
 	tool(
 		"add_shop_link",
 		{
 			title: "Add a shop link",
-			description: `Adds a shop that sells the piece of a wish, with its brand, name, and price in VND. A wish holds at most ${SHOP_LINK_LIMIT} shop links. Answers the whole wish.`,
+			description: `Adds a shop that sells the piece of a wish, with its brand, name, and price in VND. A wish holds at most ${SHOP_LINK_LIMIT} shop links. Answers the whole wish and created, true for a new shop link.`,
 			annotations: WRITE,
-			inputSchema: z.object({
-				wishId: z.string().describe("The wish's id."),
-				...shopLinkFields,
-			}),
+			inputSchema: shopLinkActions.add.input.omit({ id: true }),
 		},
-		async ({ wishId, url, brandId = null, name, price = null, pictureIds }) => {
-			const added = await addShopLink(db, pictures, userId, wishId, {
+		async (input) => {
+			const added = await shopLinkActions.add.run(scope, {
+				...input,
 				id: crypto.randomUUID(),
-				url,
-				brandId,
-				name,
-				price,
-				pictureIds,
 			});
-			return added.ok
-				? answer({ wish: added.value.wish })
-				: refusal(wishRefusalText(added.error, "wish"));
+			return added.ok ? answer(added.value) : refusal(added.error.text);
 		},
 	);
 
@@ -655,22 +586,13 @@ export function registerAiActions(server: McpServer, account: Account) {
 			description:
 				"Writes the whole shop link: its address, brand, name, and price. Answers the whole wish.",
 			annotations: WRITE,
-			inputSchema: z.object({
-				id: z.string().describe("The shop link's id."),
-				...shopLinkFields,
-			}),
+			inputSchema: shopLinkActions.change.input,
 		},
-		async ({ id, url, brandId = null, name, price = null, pictureIds }) => {
-			const changed = await changeShopLink(db, pictures, userId, id, {
-				url,
-				brandId,
-				name,
-				price,
-				pictureIds,
-			});
+		async (input) => {
+			const changed = await shopLinkActions.change.run(scope, input);
 			return changed.ok
 				? answer({ wish: changed.value })
-				: refusal(wishRefusalText(changed.error, "shop link"));
+				: refusal(changed.error.text);
 		},
 	);
 
@@ -680,15 +602,13 @@ export function registerAiActions(server: McpServer, account: Account) {
 			title: "Delete a shop link",
 			description: "Deletes a shop link from its wish for good.",
 			annotations: DELETE,
-			inputSchema: z.object({
-				id: z.string().describe("The shop link's id."),
-			}),
+			inputSchema: shopLinkActions.delete.input,
 		},
-		async ({ id }) => {
-			const deleted = await deleteShopLink(db, pictures, userId, id);
+		async (input) => {
+			const deleted = await shopLinkActions.delete.run(scope, input);
 			return deleted.ok
 				? answer({ deleted: deleted.value })
-				: refusal(wishRefusalText(deleted.error, "shop link"));
+				: refusal(deleted.error.text);
 		},
 	);
 

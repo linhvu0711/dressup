@@ -1356,6 +1356,32 @@ describe("wishes", () => {
 		).toEqual([[pictureIds]]);
 	});
 
+	test("answers created true for a new wish", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		// When
+		const { data } = await ai.call("add_wish", {
+			typeId: "wool",
+			colourId: await colourId(ai, "Navy"),
+		});
+		// Then
+		expect({ created: (data as { created: boolean }).created }).toEqual({
+			created: true,
+		});
+	});
+
+	test("answers created true for a new shop link", async () => {
+		// Given
+		const { ai } = await withAiSession();
+		const wishId = await addJacket(ai);
+		// When
+		const { data } = await ai.call("add_shop_link", cos(wishId));
+		// Then
+		expect({ created: (data as { created: boolean }).created }).toEqual({
+			created: true,
+		});
+	});
+
 	test("refuses a second wish for one piece as a sentence", async () => {
 		// Given
 		const { ai } = await withAiSession();

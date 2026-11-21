@@ -345,6 +345,38 @@ describe("POST /api/wishes/:id/shop-links", () => {
 		}).toEqual({ status: 201, brand: null, price: null });
 	});
 
+	test("adds a shop link with no brand when brandId is left out", async () => {
+		// Given: alice's jacket wish; the Zara link with no brandId key
+		const { h, headers, ids } = await alice();
+		await post(h, headers, jacket(ids));
+		const { brandId: _, ...noBrand } = zaraLink(null);
+		// When
+		const res = await postLink(h, headers, FIRST_ID, noBrand);
+		// Then
+		const { status, body } = await answer(res);
+		const { wish } = body as { wish: Listed };
+		expect({ status, brand: wish.shopLinks[0]?.brand }).toEqual({
+			status: 201,
+			brand: null,
+		});
+	});
+
+	test("adds a shop link with no price when price is left out", async () => {
+		// Given: alice's jacket wish; the Zara link with no price key
+		const { h, headers, ids } = await alice();
+		await post(h, headers, jacket(ids));
+		const { price: _, ...noPrice } = zaraLink(null);
+		// When
+		const res = await postLink(h, headers, FIRST_ID, noPrice);
+		// Then
+		const { status, body } = await answer(res);
+		const { wish } = body as { wish: Listed };
+		expect({ status, price: wish.shopLinks[0]?.price }).toEqual({
+			status: 201,
+			price: null,
+		});
+	});
+
 	test("gives back the same shop link when an add is sent twice", async () => {
 		// Given: the Zara link added once
 		const { h, headers, zara } = await aliceWithWish();
@@ -470,6 +502,27 @@ describe("PUT /api/shop-links/:id", () => {
 		}).toEqual({
 			statuses: [200, 200],
 			links: [{ brand: null, price: 2490000 }],
+		});
+	});
+
+	test("clears a shop link's brand when a change leaves brandId out", async () => {
+		// Given: the Zara link with brand Zara on alice's wish
+		const { h, headers, ids } = await alice();
+		await post(h, headers, jacket(ids));
+		const zara = await postBrand(h, headers, "Zara");
+		await postLink(h, headers, FIRST_ID, zaraLink(zara));
+		// When
+		const res = await send(h, headers, "PUT", `/api/shop-links/${LINK_ID}`, {
+			url: ZARA_URL,
+			name: "Wool blend jacket",
+			price: 2990000,
+		});
+		// Then
+		const { status, body } = await answer(res);
+		const { wish } = body as { wish: Listed };
+		expect({ status, brand: wish.shopLinks[0]?.brand }).toEqual({
+			status: 200,
+			brand: null,
 		});
 	});
 

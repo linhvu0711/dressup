@@ -35,6 +35,7 @@ import { colourActions } from "./actions/colours";
 import { combinationActions } from "./actions/combinations";
 import { ownedItemActions } from "./actions/owned-items";
 import { tagActions } from "./actions/tags";
+import { shopLinkActions, wishActions } from "./actions/wishes";
 import { disconnectAiApp, listAiApps } from "./ai-app-store";
 import {
 	accountPictureLimit,
@@ -68,15 +69,6 @@ import {
 import type { Result } from "./result";
 import { listTags } from "./tag-store";
 import { claimUploadAddress } from "./upload-address-store";
-import {
-	addShopLink,
-	addWish,
-	changeShopLink,
-	deleteShopLink,
-	deleteWish,
-	listWishes,
-	type WishError,
-} from "./wish-store";
 
 type User = Auth["$Infer"]["Session"]["user"];
 type AppEnv = {
@@ -131,40 +123,6 @@ function boughtRefusal(error: BoughtError): Refusal {
 			return { status: 409, body: { error: "quantity_limit" } };
 		case "conflict":
 			return { status: 409, body: { error: "conflict", field: "id" } };
-	}
-}
-
-// Only the JSON shape: the Wishlist module runs the wish rules.
-const wishBodySchema = z.object({
-	id: z.string(),
-	typeId: z.string(),
-	colourId: z.string(),
-});
-
-const shopLinkBodySchema = z.object({
-	url: z.string(),
-	brandId: z.string().nullable(),
-	name: z.string(),
-	price: z.number().nullable(),
-	pictureIds: z.array(z.string()).optional(),
-});
-
-function wishRefusal(error: WishError): Refusal {
-	switch (error.code) {
-		case "invalid":
-			return { status: 400, body: { error: "invalid", field: error.field } };
-		case "duplicate":
-			return { status: 409, body: { error: "duplicate", id: error.id } };
-		case "wish_limit":
-			return { status: 409, body: { error: "wish_limit" } };
-		case "shop_link_limit":
-			return { status: 409, body: { error: "shop_link_limit" } };
-		case "picture_limit":
-			return { status: 409, body: { error: "picture_limit" } };
-		case "conflict":
-			return { status: 409, body: { error: "conflict", field: "id" } };
-		case "not_found":
-			return { status: 404, body: { error: "not_found" } };
 	}
 }
 
@@ -414,20 +372,17 @@ export function createApp(getDb: (env: Env) => Db) {
 		return c.json({ ownedItem } satisfies OwnedItemAnswer, created ? 201 : 200);
 	});
 
-	app.get("/wishes", withAuth, requireUser, async (c) =>
-		c.json({
-			wishes: await listWishes(getDb(c.env), c.var.user.id),
-		} satisfies WishesAnswer),
-	);
+	app.get("/wishes", withAuth, requireUser, async (c) => {
+		const listed = await wishActions.list.run(scope(c), {});
+		if (!listed.ok) return c.json(listed.error.body, listed.error.status);
+		return c.json({ wishes: listed.value } satisfies WishesAnswer);
+	});
 
 	app.post("/wishes", withAuth, requireUser, async (c) => {
-		const body = await readBody(c, wishBodySchema);
+		const body = await readBody(c, wishActions.add.input);
 		if (!body.ok) return invalid(c, body.error.field);
-		const added = await addWish(getDb(c.env), c.var.user.id, body.value);
-		if (!added.ok) {
-			const { status, body: refused } = wishRefusal(added.error);
-			return c.json(refused, status);
-		}
+		const added = await wishActions.add.run(scope(c), body.value);
+		if (!added.ok) return c.json(added.error.body, added.error.status);
 		const { wish, created } = added.value;
 		return c.json({ wish } satisfies WishAnswer, created ? 201 : 200);
 	});
@@ -435,66 +390,45 @@ export function createApp(getDb: (env: Env) => Db) {
 	app.post("/wishes/:id/shop-links", withAuth, requireUser, async (c) => {
 		const body = await readBody(
 			c,
-			shopLinkBodySchema.extend({ id: z.string() }),
+			shopLinkActions.add.input.omit({ wishId: true }),
 		);
 		if (!body.ok) return invalid(c, body.error.field);
-		const added = await addShopLink(
-			getDb(c.env),
-			c.env.PICTURES,
-			c.var.user.id,
-			c.req.param("id"),
-			body.value,
-		);
-		if (!added.ok) {
-			const { status, body: refused } = wishRefusal(added.error);
-			return c.json(refused, status);
-		}
+		const added = await shopLinkActions.add.run(scope(c), {
+			...body.value,
+			wishId: c.req.param("id"),
+		});
+		if (!added.ok) return c.json(added.error.body, added.error.status);
 		const { wish, created } = added.value;
 		return c.json({ wish } satisfies WishAnswer, created ? 201 : 200);
 	});
 
 	app.put("/shop-links/:id", withAuth, requireUser, async (c) => {
-		const body = await readBody(c, shopLinkBodySchema);
-		if (!body.ok) return invalid(c, body.error.field);
-		const changed = await changeShopLink(
-			getDb(c.env),
-			c.env.PICTURES,
-			c.var.user.id,
-			c.req.param("id"),
-			body.value,
+		const body = await readBody(
+			c,
+			shopLinkActions.change.input.omit({ id: true }),
 		);
-		if (!changed.ok) {
-			const { status, body: refused } = wishRefusal(changed.error);
-			return c.json(refused, status);
-		}
+		if (!body.ok) return invalid(c, body.error.field);
+		const changed = await shopLinkActions.change.run(scope(c), {
+			...body.value,
+			id: c.req.param("id"),
+		});
+		if (!changed.ok) return c.json(changed.error.body, changed.error.status);
 		return c.json({ wish: changed.value } satisfies WishAnswer, 200);
 	});
 
 	app.delete("/shop-links/:id", withAuth, requireUser, async (c) => {
-		const deleted = await deleteShopLink(
-			getDb(c.env),
-			c.env.PICTURES,
-			c.var.user.id,
-			c.req.param("id"),
-		);
-		if (!deleted.ok) {
-			const { status, body: refused } = wishRefusal(deleted.error);
-			return c.json(refused, status);
-		}
+		const deleted = await shopLinkActions.delete.run(scope(c), {
+			id: c.req.param("id"),
+		});
+		if (!deleted.ok) return c.json(deleted.error.body, deleted.error.status);
 		return c.body(null, 204);
 	});
 
 	app.delete("/wishes/:id", withAuth, requireUser, async (c) => {
-		const deleted = await deleteWish(
-			getDb(c.env),
-			c.env.PICTURES,
-			c.var.user.id,
-			c.req.param("id"),
-		);
-		if (!deleted.ok) {
-			const { status, body: refused } = wishRefusal(deleted.error);
-			return c.json(refused, status);
-		}
+		const deleted = await wishActions.delete.run(scope(c), {
+			id: c.req.param("id"),
+		});
+		if (!deleted.ok) return c.json(deleted.error.body, deleted.error.status);
 		return c.body(null, 204);
 	});
 
