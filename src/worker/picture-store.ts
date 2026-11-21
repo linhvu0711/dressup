@@ -362,22 +362,26 @@ export async function deleteDraft(
 		: { ok: false, error: { code: "not_found" } };
 }
 
-// The saved pictures of the account's items or links, or of one owner, each
-// list in the order of upload; drafts never show.
+// The saved pictures of the account's items or links, or of one item, or of
+// one wish's links, each list in the order of upload; drafts never show.
 export async function pictureIdsBy(
 	db: Db,
 	userId: string,
-	column: "ownedItemId" | "shopLinkId",
-	id?: string,
+	of: { ownedItemId: string | undefined } | { wishId: string | undefined },
 ): Promise<Map<string, PictureId[]>> {
-	const owner = picture[column];
+	const owner = "wishId" in of ? picture.shopLinkId : picture.ownedItemId;
+	const id = "wishId" in of ? of.wishId : of.ownedItemId;
 	const rows = await db
 		.select({ id: picture.id, owner })
 		.from(picture)
 		.where(
 			and(
 				eq(picture.userId, userId),
-				id === undefined ? isNotNull(owner) : eq(owner, id),
+				id === undefined
+					? isNotNull(owner)
+					: "wishId" in of
+						? ofWish(db, id)
+						: eq(owner, id),
 			),
 		)
 		// Two uploads in one millisecond share created_at; rowid keeps their order.

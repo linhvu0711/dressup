@@ -91,7 +91,7 @@ async function readShopLinks(
 	wishId?: string,
 ): Promise<Map<string, ShopLink[]>> {
 	const byWish = new Map<string, ShopLink[]>();
-	const pictures = await pictureIdsBy(db, userId, "shopLinkId");
+	const pictures = await pictureIdsBy(db, userId, { wishId });
 	const rows = await db
 		.select({
 			id: shopLink.id,
