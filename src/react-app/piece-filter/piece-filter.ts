@@ -54,9 +54,6 @@ export function matchesPieceFilter(
 	return typeFits && colourFits && brandFits;
 }
 
-export const filterSize = (f: PieceFilter) =>
-	f.layers.length + f.types.length + f.colours.length + f.brands.length;
-
 export const ownedItemPiece = (item: OwnedItem): FilterPiece => ({
 	typeId: item.typeId,
 	colourId: item.colour.id,
