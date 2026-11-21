@@ -227,7 +227,8 @@ export const after = {
 		refresh(keys.colours(userId));
 		refresh(keys.brands(userId));
 	},
-	// As combinationSaved; a new wish also makes its colour in use.
+	// As combinationSaved; a new wish also makes its colour in use, and its
+	// shop link can carry a brand.
 	wishAdded(userId: string | null, wish: Wish) {
 		queryClient.setQueryData<Wish[]>(
 			keys.wishlist(userId),
@@ -239,6 +240,7 @@ export const after = {
 		);
 		refresh(keys.wishlist(userId));
 		refresh(keys.colours(userId));
+		refresh(keys.brands(userId));
 	},
 	// A shop link write answers its whole wish. A link's brand counts on the
 	// brand list.

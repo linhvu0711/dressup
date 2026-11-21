@@ -36,6 +36,31 @@ async function pickPiece(page: Page, type: string, colour: string) {
 		.click();
 }
 
+// Types the shop link's fields of the open add sheet.
+async function fillLink(
+	page: Page,
+	link: { address?: string; name?: string; price?: string },
+) {
+	const form = addSheet(page);
+	if (link.address !== undefined)
+		await form.getByRole("textbox", { name: "Address" }).fill(link.address);
+	if (link.name !== undefined)
+		await form.getByRole("textbox", { name: "Name" }).fill(link.name);
+	if (link.price !== undefined)
+		await form.getByRole("textbox", { name: "Price in ₫" }).fill(link.price);
+}
+
+const saveForm = (page: Page) =>
+	addSheet(page).getByRole("button", { name: "Save" }).click();
+
+const fieldAlert = (page: Page, name: string) =>
+	addSheet(page)
+		.locator('[data-slot="field"]')
+		.filter({ has: page.getByRole("textbox", { name, exact: true }) })
+		.getByRole("alert");
+
+const title = (page: Page) => page.getByRole("heading", { level: 1 });
+
 test("opens the wishlist from the Wishlist tab", async ({ page }) => {
 	// Given: a fresh account on /closet
 	await page.goto("/closet");
@@ -161,8 +186,8 @@ test("shows Nothing on your wishlist yet with a button to the form", async ({
 test("keeps the form open with Not saved when the save fails", async ({
 	page,
 }) => {
-	// Given: a fresh account; the save answers 500
-	await page.route("**/api/wishes", (route) =>
+	// Given: a fresh account; POST /api/wishlist answers 500
+	await page.route("**/api/wishlist", (route) =>
 		route.request().method() === "POST"
 			? route.fulfill({ status: 500 })
 			: route.continue(),
@@ -171,11 +196,134 @@ test("keeps the form open with Not saved when the save fails", async ({
 	// When
 	await openAddSheet(page);
 	await pickPiece(page, "Long polo", "Olive");
-	await addSheet(page).getByRole("button", { name: "Save" }).click();
+	await fillLink(page, { address: "https://shop.example/p", name: "Polo" });
+	await saveForm(page);
+	await expect(addSheet(page).getByRole("alert")).toBeVisible();
 	// Then
+	expect({
+		alert: await addSheet(page).getByRole("alert").textContent(),
+		address: await addSheet(page)
+			.getByRole("textbox", { name: "Address" })
+			.inputValue(),
+		name: await addSheet(page)
+			.getByRole("textbox", { name: "Name" })
+			.inputValue(),
+	}).toEqual({
+		alert: "Not saved. Try again.",
+		address: "https://shop.example/p",
+		name: "Polo",
+	});
+});
+
+test("saves one wish and one link when a lost answer is sent again", async ({
+	page,
+}) => {
+	// Given: a fresh account; the first POST /api/wishlist reaches the server
+	// and then answers 500, the next passes on
+	let lost = false;
+	await page.route("**/api/wishlist", async (route) => {
+		if (lost || route.request().method() !== "POST") return route.continue();
+		lost = true;
+		await route.fetch();
+		return route.fulfill({ status: 500 });
+	});
+	await page.goto("/wishlist");
+	// When
+	await openAddSheet(page);
+	await pickPiece(page, "Long polo", "Olive");
+	await fillLink(page, { address: "https://shop.example/p", name: "Polo" });
+	await saveForm(page);
 	await expect(addSheet(page).getByRole("alert")).toHaveText(
 		"Not saved. Try again.",
 	);
+	await saveForm(page);
+	await expect(title(page)).toHaveText("Polo");
+	// Then
+	const { wishes } = (await (await page.request.get("/api/wishes")).json()) as {
+		wishes: { shopLinks: { name: string }[] }[];
+	};
+	expect({
+		wishes: wishes.map((w) => ({ links: w.shopLinks.map((l) => l.name) })),
+		title: await title(page).textContent(),
+	}).toEqual({ wishes: [{ links: ["Polo"] }], title: "Polo" });
+});
+
+test("says a full wish when another tab filled it", async ({ page }) => {
+	// Given: a fresh account; POST /api/wishlist answers 409 shop_link_limit
+	await page.route("**/api/wishlist", (route) =>
+		route.request().method() === "POST"
+			? route.fulfill({ status: 409, json: { error: "shop_link_limit" } })
+			: route.continue(),
+	);
+	await page.goto("/wishlist");
+	// When
+	await openAddSheet(page);
+	await pickPiece(page, "Long polo", "Olive");
+	await fillLink(page, { address: "https://shop.example/p", name: "Polo" });
+	await saveForm(page);
+	await expect(addSheet(page).getByRole("alert")).toBeVisible();
+	// Then
+	expect({
+		alert: await addSheet(page).getByRole("alert").textContent(),
+		save: (await addSheet(page)
+			.getByRole("button", { name: "Save" })
+			.isDisabled())
+			? "disabled"
+			: "enabled",
+	}).toEqual({
+		alert: "10 shop links is the limit for one wish.",
+		save: "disabled",
+	});
+});
+
+test("asks for a web address under the Address field", async ({ page }) => {
+	// Given: the form with Short tee, White
+	await page.goto("/wishlist");
+	await openAddSheet(page);
+	await pickPiece(page, "Short tee", "White");
+	// When
+	await fillLink(page, { address: "www.zara.com" });
+	await saveForm(page);
+	// Then
+	await expect(fieldAlert(page, "Address")).toHaveText(
+		"Enter a web address that starts with https://.",
+	);
+});
+
+test("asks for a name under the Name field", async ({ page }) => {
+	// Given: the form with Short tee, White
+	await page.goto("/wishlist");
+	await openAddSheet(page);
+	await pickPiece(page, "Short tee", "White");
+	// When
+	await fillLink(page, { address: "https://www.zara.com/t" });
+	await saveForm(page);
+	// Then
+	await expect(fieldAlert(page, "Name")).toHaveText("Enter a name.");
+});
+
+test("keeps the price to digits with dots and the name to 80 characters", async ({
+	page,
+}) => {
+	// Given: the form open
+	await page.goto("/wishlist");
+	await openAddSheet(page);
+	// When
+	await addSheet(page)
+		.getByRole("textbox", { name: "Price in ₫" })
+		.pressSequentially("12a3456");
+	await addSheet(page)
+		.getByRole("textbox", { name: "Name" })
+		.pressSequentially("x".repeat(81));
+	// Then
+	expect({
+		price: await addSheet(page)
+			.getByRole("textbox", { name: "Price in ₫" })
+			.inputValue(),
+		name: (
+			await addSheet(page).getByRole("textbox", { name: "Name" }).inputValue()
+		).length,
+	}).toEqual({ price: "123.456", name: 80 });
 });
 
 test.describe("at the wishlist limit", () => {
@@ -196,6 +344,57 @@ test.describe("at the wishlist limit", () => {
 			addSheet(page).getByRole("button", { name: "Save" }),
 		).toBeDisabled();
 	});
+	test("says a full wish when the piece has 10 shop links", async ({
+		page,
+	}) => {
+		// Given: the account with 200 wishes; the form with Short tee, White,
+		// the wish with 10 links
+		await page.goto("/wishlist");
+		await openAddSheet(page);
+		await pickPiece(page, "Short tee", "White");
+		// When
+		await fillLink(page, {
+			address: "https://shop.example/11",
+			name: "Link 11",
+		});
+		// Then
+		expect({
+			alert: await addSheet(page).getByRole("alert").textContent(),
+			save: (await addSheet(page)
+				.getByRole("button", { name: "Save" })
+				.isDisabled())
+				? "disabled"
+				: "enabled",
+		}).toEqual({
+			alert: "10 shop links is the limit for one wish.",
+			save: "disabled",
+		});
+	});
+
+	test("keeps Save on at 200 wishes for a piece already wished for", async ({
+		page,
+	}) => {
+		// Given: the account with 200 wishes; the form with Long tee, White, a
+		// wish with no link
+		await page.goto("/wishlist");
+		await openAddSheet(page);
+		await pickPiece(page, "Long tee", "White");
+		// When
+		await fillLink(page, {
+			address: "https://shop.example/l",
+			name: "Long tee",
+		});
+		// Then
+		expect({
+			alerts: await addSheet(page).getByRole("alert").count(),
+			save: (await addSheet(page)
+				.getByRole("button", { name: "Save" })
+				.isDisabled())
+				? "disabled"
+				: "enabled",
+		}).toEqual({ alerts: 0, save: "enabled" });
+	});
+
 	const openWall = async (page: Page) => {
 		await page.goto("/wishlist");
 		await expect(wishCards(page).first().locator("svg")).toHaveCount(1);
@@ -243,43 +442,110 @@ test.describe("at the wishlist limit", () => {
 	});
 });
 
-test("adds a wish from the form and opens its piece page", async ({ page }) => {
-	// Given: a fresh account on /wishlist
-	await page.goto("/");
-	const ids = await colourIds(page);
-	await page.goto("/wishlist");
-	// When
-	await openAddSheet(page);
-	await pickPiece(page, "Wool jacket", "Charcoal");
-	await addSheet(page).getByRole("button", { name: "Save" }).click();
-	// Then
-	await expect(toast(page)).toHaveText("Added to your wishlist");
-	await expect(page).toHaveURL(`/piece/wool/${ids.Charcoal}`);
-	await expect(
-		page.getByRole("heading", { name: "Charcoal wool jacket" }),
-	).toBeVisible();
-});
-
-test("refuses a second wish for one piece and opens the first", async ({
+test("adds a wish with its first shop link from the one form and opens its page", async ({
 	page,
 }) => {
-	// Given: a fresh account with a Charcoal wool jacket wish
-	await page.goto("/");
-	const ids = await colourIds(page);
-	await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
+	// Given: a fresh account on /wishlist
 	await page.goto("/wishlist");
 	// When
 	await openAddSheet(page);
 	await pickPiece(page, "Wool jacket", "Charcoal");
-	await addSheet(page).getByRole("button", { name: "Save" }).click();
+	await fillLink(page, {
+		address: "https://www.cos.com/c",
+		name: "Wool coat",
+		price: "3500000",
+	});
+	await saveForm(page);
+	await expect(title(page)).toHaveText("Wool coat");
 	// Then
-	await expect(addSheet(page).getByRole("alert")).toHaveText(
-		"You have this wish already.",
-	);
+	expect({
+		toast: await toast(page).textContent(),
+		title: await title(page).textContent(),
+		price: await page.getByText("3.500.000 ₫").first().textContent(),
+		path: new URL(page.url()).pathname,
+	}).toEqual({
+		toast: "Added to your wishlist",
+		title: "Wool coat",
+		price: "3.500.000 ₫",
+		path: expect.stringMatching(/^\/wishlist\/link\//),
+	});
+});
+
+test("adds a shop link to the wish a piece already has", async ({ page }) => {
+	// Given: a fresh account with a Charcoal wool jacket wish holding the COS
+	// link "Single-breasted wool jacket"
+	await page.goto("/");
+	const ids = await colourIds(page);
+	const cos = await postBrand(page, "COS");
+	const jacket = await postWish(page, {
+		typeId: "wool",
+		colourId: ids.Charcoal,
+	});
+	await postShopLink(page, jacket, {
+		url: "https://www.cos.com/a",
+		brandId: cos,
+		name: "Single-breasted wool jacket",
+		price: 4290000,
+	});
+	await page.goto("/wishlist");
 	// When
-	await addSheet(page).getByRole("link", { name: "Open it" }).click();
+	await openAddSheet(page);
+	await pickPiece(page, "Wool jacket", "Charcoal");
+	await fillLink(page, {
+		address: "https://www.zara.com/c",
+		name: "Zara coat",
+	});
+	await saveForm(page);
+	await expect(title(page)).toHaveText("Zara coat");
 	// Then
-	await expect(page).toHaveURL(`/piece/wool/${ids.Charcoal}`);
+	expect({
+		title: await title(page).textContent(),
+		others: await page
+			.locator('[data-slot="other-shop"]')
+			.evaluateAll((links) => links.map((l) => l.getAttribute("aria-label"))),
+		duplicate: await page.getByText("You have this wish already.").count(),
+	}).toEqual({
+		title: "Zara coat",
+		others: ["Single-breasted wool jacket, COS · Charcoal wool jacket"],
+		duplicate: 0,
+	});
+});
+
+test("saves a wish alone with no address and opens its page", async ({
+	page,
+}) => {
+	// Given: a fresh account on /wishlist
+	await page.goto("/wishlist");
+	// When
+	await openAddSheet(page);
+	await pickPiece(page, "Long polo", "Navy");
+	await saveForm(page);
+	await expect(title(page)).toHaveText("Navy long polo");
+	// Then
+	expect({
+		title: await title(page).textContent(),
+		note: await page.getByText("No shop link yet.").textContent(),
+		path: new URL(page.url()).pathname,
+	}).toEqual({
+		title: "Navy long polo",
+		note: "No shop link yet.",
+		path: expect.stringMatching(/^\/wishlist\/wish\//),
+	});
+});
+
+test("opens the newest card of a piece already wished for when there is no address", async ({
+	page,
+}) => {
+	// Given: a fresh account with a Charcoal wool jacket wish holding the COS
+	// link, then the link "Zara jacket"
+	await jacketAndPolo(page);
+	await page.goto("/wishlist");
+	// When
+	await openAddSheet(page);
+	await pickPiece(page, "Wool jacket", "Charcoal");
+	await saveForm(page);
+	// Then
+	await expect(title(page)).toHaveText("Zara jacket");
 });
 
 const cards = (page: Page) => page.locator('[data-slot="shop-link"]');

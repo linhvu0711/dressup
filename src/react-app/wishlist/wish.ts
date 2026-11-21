@@ -141,18 +141,15 @@ export function typedPrice(text: string): {
 	return { value, shown: digits.format(value) };
 }
 
-// The second line of a wish's tile: how many links, and the lowest price
-// when any link has one.
-export function linksLine(wish: Wish): string {
-	const n = wish.shopLinks.length;
-	if (n === 0) return "No link yet";
-	const count = countText(n, "link");
-	const prices = wish.shopLinks.flatMap((link) =>
-		link.price === null ? [] : [link.price],
-	);
-	return prices.length === 0
-		? count
-		: `${count} · from ${priceText(Math.min(...prices))}`;
+// The page a Wishlist add opens: the link it sent, else the wish's newest
+// link, else the wish's own page.
+export function pageAfterAdd(
+	wish: Wish,
+	sentLinkId: ShopLinkId | null,
+): string {
+	if (sentLinkId !== null) return linkPage(sentLinkId);
+	const newest = wish.shopLinks[wish.shopLinks.length - 1];
+	return newest ? linkPage(newest.id) : wishPage(wish.id);
 }
 
 // What the remove confirm says goes with the wish.

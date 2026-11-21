@@ -3,7 +3,7 @@ import type { BrandId } from "@/labels/brand";
 import type { ColourId } from "@/labels/colour";
 import {
 	isWebAddress,
-	linksLine,
+	pageAfterAdd,
 	priceText,
 	removeLinkText,
 	removeWishText,
@@ -36,25 +36,6 @@ const wishWith = (shopLinks: ShopLink[]): Wish => ({
 	typeId: "wool",
 	colour: { id: "navy" as ColourId, name: "Navy", hex: "#1F3A5F" },
 	shopLinks,
-});
-
-test("says the links and the lowest price of a wish", () => {
-	// Given
-	const wishes = [
-		wishWith([]),
-		wishWith([link(490000)]),
-		wishWith([link(4290000), link(2990000)]),
-		wishWith([link(null), link(null)]),
-	];
-	// When
-	const lines = wishes.map(linksLine);
-	// Then
-	expect(lines).toEqual([
-		"No link yet",
-		"1 link · from 490.000 ₫",
-		"2 links · from 2.990.000 ₫",
-		"2 links",
-	]);
 });
 
 test("makes one card for each shop link and one for each wish with no link", () => {
@@ -162,5 +143,30 @@ test("says what goes with a removed shop link", () => {
 	expect(texts).toEqual([
 		"This is the last shop link, so the wish goes too.",
 		"Only this shop link goes. The wish keeps its other shop links.",
+	]);
+});
+
+test("opens the sent link's page, else the wish's newest link, else the wish", () => {
+	// Given
+	const withId = (l: ShopLink, id: string): ShopLink => ({
+		...l,
+		id: id as ShopLinkId,
+	});
+	const a = {
+		...wishWith([withId(link(null), "link-1"), withId(link(null), "link-2")]),
+		id: "wish-a" as WishId,
+	};
+	const b = { ...wishWith([]), id: "wish-b" as WishId };
+	// When
+	const pages = [
+		pageAfterAdd(a, "link-9" as ShopLinkId),
+		pageAfterAdd(a, null),
+		pageAfterAdd(b, null),
+	];
+	// Then
+	expect(pages).toEqual([
+		"/wishlist/link/link-9",
+		"/wishlist/link/link-2",
+		"/wishlist/wish/wish-b",
 	]);
 });
