@@ -2,6 +2,7 @@ import { useRef } from "react";
 import { Link } from "react-router";
 import type { Hex } from "@/colour/hex";
 import { pieceName } from "@/combinations/combination";
+import { PLACEHOLDER, PULSE } from "@/components/ui/placeholder";
 import type { TypeId } from "@/dress/clothing-types";
 import { TypeFigure } from "@/dress/figure/TypeFigure";
 import { type PieceTab, usePieceLink } from "@/shell/piece-link";
@@ -61,5 +62,16 @@ export function PieceTile({
 				)}
 			</span>
 		</Link>
+	);
+}
+
+export function PieceTilePlaceholder({ slot }: { slot: string }) {
+	return (
+		<div data-slot={slot} className="flex flex-col gap-[7px]">
+			<span
+				className={`block aspect-square w-full rounded-[14px] bg-[#D3CFC9] ${PULSE}`}
+			/>
+			<span className={`block h-3.5 w-[70%] rounded-[12px] ${PLACEHOLDER}`} />
+		</div>
 	);
 }

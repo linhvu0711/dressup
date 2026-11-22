@@ -7,7 +7,7 @@ import type {
 	shopLinkChangeSchema,
 	shopLinkInputSchema,
 	WishId,
-	wishInputSchema,
+	wishlistAddSchema,
 } from "./wish";
 
 export function useWishlist() {
@@ -20,13 +20,15 @@ export function useWishlist() {
 	});
 }
 
-export function useAddWish() {
+// One request adds the wish with its first shop link, or joins the link to
+// the wish the piece has; it answers the whole wish.
+export function useAddToWishlist() {
 	const userId = cachedUserId();
 	return useMutation({
-		mutationFn: async (wish: z.infer<typeof wishInputSchema>) =>
+		mutationFn: async (body: z.infer<typeof wishlistAddSchema>) =>
 			(
-				await request("POST", "/api/wishes", {
-					body: wish,
+				await request("POST", "/api/wishlist", {
+					body,
 					answer: wishAnswer,
 				})
 			).wish,

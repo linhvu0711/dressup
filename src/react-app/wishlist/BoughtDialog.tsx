@@ -1,5 +1,9 @@
 import { AlertDialog } from "radix-ui";
-import { OWNED_ITEM_LIMIT, QUANTITY_MAX } from "@/closet/owned-item";
+import {
+	OWNED_ITEM_LIMIT,
+	type OwnedItem,
+	QUANTITY_MAX,
+} from "@/closet/owned-item";
 import { Button } from "@/components/ui/button";
 import { FOOTER_ROW, SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
@@ -22,10 +26,12 @@ export function BoughtDialog({
 	link,
 	wishId,
 	onClose,
+	onBought,
 }: {
 	link: ShopLink;
 	wishId: WishId;
 	onClose: () => void;
+	onBought?: (item: OwnedItem) => void;
 }) {
 	const userId = cachedUserId();
 	const bought = useMarkBought(wishId);
@@ -56,9 +62,10 @@ export function BoughtDialog({
 							disabled={bought.isPending}
 							onClick={() =>
 								bought.mutate(link.id, {
-									onSuccess: () => {
+									onSuccess: (item) => {
 										onClose();
 										toast("Moved to your closet");
+										onBought?.(item);
 									},
 									onError: (error) => {
 										if (isGone(error)) {

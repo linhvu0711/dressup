@@ -4,11 +4,16 @@ import { expect, test } from "./fixtures";
 import { colourIds, postBrand } from "./label-helpers";
 import { sheet, toast } from "./locators";
 import { WISHLIST_FULL_FILE } from "./paths";
-import { postShopLink, postWish } from "./wishlist-helpers";
+import { jacketAndPolo, postShopLink, postWish } from "./wishlist-helpers";
 
 const mainNav = (page: Page) => page.getByRole("navigation", { name: "Main" });
 
-const tiles = (page: Page) => page.locator('[data-slot="wish-tile"]');
+const wishCards = (page: Page) => page.locator('[data-slot="wish-card"]');
+
+const labelsOf = (cards: ReturnType<Page["locator"]>) =>
+	cards.evaluateAll((links) =>
+		links.map((link) => link.getAttribute("aria-label")),
+	);
 
 const addSheet = (page: Page) => sheet(page, "Add to wishlist");
 
@@ -31,6 +36,31 @@ async function pickPiece(page: Page, type: string, colour: string) {
 		.click();
 }
 
+// Types the shop link's fields of the open add sheet.
+async function fillLink(
+	page: Page,
+	link: { address?: string; name?: string; price?: string },
+) {
+	const form = addSheet(page);
+	if (link.address !== undefined)
+		await form.getByRole("textbox", { name: "Address" }).fill(link.address);
+	if (link.name !== undefined)
+		await form.getByRole("textbox", { name: "Name" }).fill(link.name);
+	if (link.price !== undefined)
+		await form.getByRole("textbox", { name: "Price in ₫" }).fill(link.price);
+}
+
+const saveForm = (page: Page) =>
+	addSheet(page).getByRole("button", { name: "Save" }).click();
+
+const fieldAlert = (page: Page, name: string) =>
+	addSheet(page)
+		.locator('[data-slot="field"]')
+		.filter({ has: page.getByRole("textbox", { name, exact: true }) })
+		.getByRole("alert");
+
+const title = (page: Page) => page.getByRole("heading", { level: 1 });
+
 test("opens the wishlist from the Wishlist tab", async ({ page }) => {
 	// Given: a fresh account on /closet
 	await page.goto("/closet");
@@ -49,37 +79,29 @@ test("opens the wishlist from the Wishlist tab", async ({ page }) => {
 	]);
 });
 
-test("shows one tile for each wish, newest first, with its links", async ({
+test("shows one card for each shop link and one for each wish with no link", async ({
 	page,
 }) => {
-	// Given: a fresh account with a Beige chino pants wish holding links at
-	// 588.000 and 790.000, then a Charcoal wool jacket wish with none
-	await page.goto("/");
-	const ids = await colourIds(page);
-	const chinos = await postWish(page, {
-		typeId: "chino_p",
-		colourId: ids.Beige,
-	});
-	for (const price of [588000, 790000])
-		await postShopLink(page, chinos, {
-			url: "https://www.uniqlo.com/vn/en/chino-pants",
-			brandId: null,
-			name: "Chino pants",
-			price,
-		});
-	await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
+	// Given: a fresh account; a Charcoal wool jacket wish with a COS link and
+	// a no-brand link; then an Olive long polo wish with no link
+	await jacketAndPolo(page);
 	// When
 	await page.goto("/wishlist");
 	// Then
-	await expect(tiles(page)).toHaveCount(2);
-	expect(
-		await tiles(page).evaluateAll((links) =>
-			links.map((link) => link.getAttribute("aria-label")),
-		),
-	).toEqual([
-		"Charcoal wool jacket, No link yet",
-		"Beige chino pants, 2 links · from 588.000 ₫",
-	]);
+	await expect(wishCards(page)).toHaveCount(3);
+	expect({
+		labels: await labelsOf(wishCards(page)),
+		prices: await wishCards(page)
+			.locator('[data-slot="item-price"]')
+			.allInnerTexts(),
+	}).toEqual({
+		labels: [
+			"Olive long polo, No shop link yet",
+			"Single-breasted wool jacket, COS · Charcoal wool jacket",
+			"Zara jacket, zara.com · Charcoal wool jacket",
+		],
+		prices: ["4.290.000 ₫", "588.000 ₫"],
+	});
 });
 
 test("shows skeleton tiles while the wishlist loads", async ({ page }) => {
@@ -164,8 +186,8 @@ test("shows Nothing on your wishlist yet with a button to the form", async ({
 test("keeps the form open with Not saved when the save fails", async ({
 	page,
 }) => {
-	// Given: a fresh account; the save answers 500
-	await page.route("**/api/wishes", (route) =>
+	// Given: a fresh account; POST /api/wishlist answers 500
+	await page.route("**/api/wishlist", (route) =>
 		route.request().method() === "POST"
 			? route.fulfill({ status: 500 })
 			: route.continue(),
@@ -174,11 +196,160 @@ test("keeps the form open with Not saved when the save fails", async ({
 	// When
 	await openAddSheet(page);
 	await pickPiece(page, "Long polo", "Olive");
-	await addSheet(page).getByRole("button", { name: "Save" }).click();
+	await fillLink(page, { address: "https://shop.example/p", name: "Polo" });
+	await saveForm(page);
+	await expect(addSheet(page).getByRole("alert")).toBeVisible();
 	// Then
+	expect({
+		alert: await addSheet(page).getByRole("alert").textContent(),
+		address: await addSheet(page)
+			.getByRole("textbox", { name: "Address" })
+			.inputValue(),
+		name: await addSheet(page)
+			.getByRole("textbox", { name: "Name" })
+			.inputValue(),
+	}).toEqual({
+		alert: "Not saved. Try again.",
+		address: "https://shop.example/p",
+		name: "Polo",
+	});
+});
+
+test("saves one wish and one link when a lost answer is sent again", async ({
+	page,
+}) => {
+	// Given: a fresh account; the first POST /api/wishlist reaches the server
+	// and then answers 500, the next passes on
+	let lost = false;
+	await page.route("**/api/wishlist", async (route) => {
+		if (lost || route.request().method() !== "POST") return route.continue();
+		lost = true;
+		await route.fetch();
+		return route.fulfill({ status: 500 });
+	});
+	await page.goto("/wishlist");
+	// When
+	await openAddSheet(page);
+	await pickPiece(page, "Long polo", "Olive");
+	await fillLink(page, { address: "https://shop.example/p", name: "Polo" });
+	await saveForm(page);
 	await expect(addSheet(page).getByRole("alert")).toHaveText(
 		"Not saved. Try again.",
 	);
+	await saveForm(page);
+	await expect(title(page)).toHaveText("Polo");
+	// Then
+	const { wishes } = (await (await page.request.get("/api/wishes")).json()) as {
+		wishes: { shopLinks: { name: string }[] }[];
+	};
+	expect({
+		wishes: wishes.map((w) => ({ links: w.shopLinks.map((l) => l.name) })),
+		title: await title(page).textContent(),
+	}).toEqual({ wishes: [{ links: ["Polo"] }], title: "Polo" });
+});
+
+test("says a full wish when another tab filled it", async ({ page }) => {
+	// Given: a fresh account; POST /api/wishlist answers 409 shop_link_limit
+	await page.route("**/api/wishlist", (route) =>
+		route.request().method() === "POST"
+			? route.fulfill({ status: 409, json: { error: "shop_link_limit" } })
+			: route.continue(),
+	);
+	await page.goto("/wishlist");
+	// When
+	await openAddSheet(page);
+	await pickPiece(page, "Long polo", "Olive");
+	await fillLink(page, { address: "https://shop.example/p", name: "Polo" });
+	await saveForm(page);
+	await expect(addSheet(page).getByRole("alert")).toBeVisible();
+	// Then
+	expect({
+		alert: await addSheet(page).getByRole("alert").textContent(),
+		save: (await addSheet(page)
+			.getByRole("button", { name: "Save" })
+			.isDisabled())
+			? "disabled"
+			: "enabled",
+	}).toEqual({
+		alert: "10 shop links is the limit for one wish.",
+		save: "disabled",
+	});
+});
+
+test("asks for a web address under the Address field", async ({ page }) => {
+	// Given: the form with Short tee, White
+	await page.goto("/wishlist");
+	await openAddSheet(page);
+	await pickPiece(page, "Short tee", "White");
+	// When
+	await fillLink(page, { address: "www.zara.com" });
+	await saveForm(page);
+	// Then
+	await expect(fieldAlert(page, "Address")).toHaveText(
+		"Enter a web address that starts with https://.",
+	);
+});
+
+test("asks for a web address when only a picture still shrinking is set", async ({
+	page,
+}) => {
+	// Given: the form with Short tee, White; the browser never finishes
+	// reading a picked picture, so it stays shrinking
+	await page.addInitScript(() => {
+		window.createImageBitmap = () => new Promise(() => {});
+	});
+	await page.goto("/wishlist");
+	await openAddSheet(page);
+	await pickPiece(page, "Short tee", "White");
+	// When
+	await addSheet(page)
+		.locator('input[type="file"]')
+		.setInputFiles({
+			name: "tee.jpg",
+			mimeType: "image/jpeg",
+			buffer: Buffer.from("tee"),
+		});
+	await saveForm(page);
+	// Then
+	await expect(fieldAlert(page, "Address")).toHaveText(
+		"Enter a web address that starts with https://.",
+	);
+});
+
+test("asks for a name under the Name field", async ({ page }) => {
+	// Given: the form with Short tee, White
+	await page.goto("/wishlist");
+	await openAddSheet(page);
+	await pickPiece(page, "Short tee", "White");
+	// When
+	await fillLink(page, { address: "https://www.zara.com/t" });
+	await saveForm(page);
+	// Then
+	await expect(fieldAlert(page, "Name")).toHaveText("Enter a name.");
+});
+
+test("keeps the price to digits with dots and the name to 80 characters", async ({
+	page,
+}) => {
+	// Given: the form open
+	await page.goto("/wishlist");
+	await openAddSheet(page);
+	// When
+	await addSheet(page)
+		.getByRole("textbox", { name: "Price in ₫" })
+		.pressSequentially("12a3456");
+	await addSheet(page)
+		.getByRole("textbox", { name: "Name" })
+		.pressSequentially("x".repeat(81));
+	// Then
+	expect({
+		price: await addSheet(page)
+			.getByRole("textbox", { name: "Price in ₫" })
+			.inputValue(),
+		name: (
+			await addSheet(page).getByRole("textbox", { name: "Name" }).inputValue()
+		).length,
+	}).toEqual({ price: "123.456", name: 80 });
 });
 
 test.describe("at the wishlist limit", () => {
@@ -199,88 +370,208 @@ test.describe("at the wishlist limit", () => {
 			addSheet(page).getByRole("button", { name: "Save" }),
 		).toBeDisabled();
 	});
+	test("says a full wish when the piece has 10 shop links", async ({
+		page,
+	}) => {
+		// Given: the account with 200 wishes; the form with Short tee, White,
+		// the wish with 10 links
+		await page.goto("/wishlist");
+		await openAddSheet(page);
+		await pickPiece(page, "Short tee", "White");
+		// When
+		await fillLink(page, {
+			address: "https://shop.example/11",
+			name: "Link 11",
+		});
+		// Then
+		expect({
+			alert: await addSheet(page).getByRole("alert").textContent(),
+			save: (await addSheet(page)
+				.getByRole("button", { name: "Save" })
+				.isDisabled())
+				? "disabled"
+				: "enabled",
+		}).toEqual({
+			alert: "10 shop links is the limit for one wish.",
+			save: "disabled",
+		});
+	});
+
+	test("keeps Save on at 200 wishes for a piece already wished for", async ({
+		page,
+	}) => {
+		// Given: the account with 200 wishes; the form with Long tee, White, a
+		// wish with no link
+		await page.goto("/wishlist");
+		await openAddSheet(page);
+		await pickPiece(page, "Long tee", "White");
+		// When
+		await fillLink(page, {
+			address: "https://shop.example/l",
+			name: "Long tee",
+		});
+		// Then
+		expect({
+			alerts: await addSheet(page).getByRole("alert").count(),
+			save: (await addSheet(page)
+				.getByRole("button", { name: "Save" })
+				.isDisabled())
+				? "disabled"
+				: "enabled",
+		}).toEqual({ alerts: 0, save: "enabled" });
+	});
+
 	const openWall = async (page: Page) => {
 		await page.goto("/wishlist");
-		await expect(tiles(page).first().locator("svg")).toHaveCount(1);
+		await expect(wishCards(page).first().locator("svg")).toHaveCount(1);
 	};
 
-	test("draws only the tiles near the screen", async ({ page }) => {
+	test("draws only the cards near the screen", async ({ page }) => {
 		// Given: both projects, the account with 200 wishes
 		// When
 		await openWall(page);
 		// Then
-		const count = await tiles(page)
-			.filter({ has: page.locator("svg") })
+		const count = await wishCards(page)
+			.filter({ has: page.locator("svg, img") })
 			.count();
 		expect(count).toBeGreaterThanOrEqual(1);
 		expect(count).toBeLessThanOrEqual(60);
 	});
 
-	test("draws a far tile when it scrolls near and drops the first one", async ({
+	test("draws a far card when it scrolls near and drops the first one", async ({
 		page,
 	}) => {
-		// Given: both projects, the account with 200 wishes, the wall open with the first tile
+		// Given: both projects, the account with 200 wishes, the wall open with the first card
 		// drawn
 		await openWall(page);
 		const last = page.getByRole("link", {
-			name: "Burgundy chino pants, No link yet",
+			name: "Burgundy chino pants, No shop link yet",
 		});
 		// When
 		await last.scrollIntoViewIfNeeded();
 		// Then
 		await expect(last.locator("svg")).toHaveCount(1);
-		await expect(tiles(page).first().locator("svg")).toHaveCount(0);
+		await expect(wishCards(page).first().locator("svg")).toHaveCount(0);
 	});
 
-	test("keeps every tile on the page", async ({ page }) => {
+	test("keeps every card on the page", async ({ page }) => {
 		// Given: both projects, the account with 200 wishes
 		// When
 		await openWall(page);
 		// Then
-		await expect(tiles(page)).toHaveCount(200);
+		await expect(wishCards(page)).toHaveCount(209);
 		await expect(
-			page.getByRole("link", { name: "Burgundy chino pants, No link yet" }),
+			page.getByRole("link", {
+				name: "Burgundy chino pants, No shop link yet",
+			}),
 		).toBeAttached();
 	});
 });
 
-test("adds a wish from the form and opens its piece page", async ({ page }) => {
-	// Given: a fresh account on /wishlist
-	await page.goto("/");
-	const ids = await colourIds(page);
-	await page.goto("/wishlist");
-	// When
-	await openAddSheet(page);
-	await pickPiece(page, "Wool jacket", "Charcoal");
-	await addSheet(page).getByRole("button", { name: "Save" }).click();
-	// Then
-	await expect(toast(page)).toHaveText("Added to your wishlist");
-	await expect(page).toHaveURL(`/piece/wool/${ids.Charcoal}`);
-	await expect(
-		page.getByRole("heading", { name: "Charcoal wool jacket" }),
-	).toBeVisible();
-});
-
-test("refuses a second wish for one piece and opens the first", async ({
+test("adds a wish with its first shop link from the one form and opens its page", async ({
 	page,
 }) => {
-	// Given: a fresh account with a Charcoal wool jacket wish
-	await page.goto("/");
-	const ids = await colourIds(page);
-	await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
+	// Given: a fresh account on /wishlist
 	await page.goto("/wishlist");
 	// When
 	await openAddSheet(page);
 	await pickPiece(page, "Wool jacket", "Charcoal");
-	await addSheet(page).getByRole("button", { name: "Save" }).click();
+	await fillLink(page, {
+		address: "https://www.cos.com/c",
+		name: "Wool coat",
+		price: "3500000",
+	});
+	await saveForm(page);
+	await expect(title(page)).toHaveText("Wool coat");
 	// Then
-	await expect(addSheet(page).getByRole("alert")).toHaveText(
-		"You have this wish already.",
-	);
+	expect({
+		toast: await toast(page).textContent(),
+		title: await title(page).textContent(),
+		price: await page.getByText("3.500.000 ₫").first().textContent(),
+		path: new URL(page.url()).pathname,
+	}).toEqual({
+		toast: "Added to your wishlist",
+		title: "Wool coat",
+		price: "3.500.000 ₫",
+		path: expect.stringMatching(/^\/wishlist\/link\//),
+	});
+});
+
+test("adds a shop link to the wish a piece already has", async ({ page }) => {
+	// Given: a fresh account with a Charcoal wool jacket wish holding the COS
+	// link "Single-breasted wool jacket"
+	await page.goto("/");
+	const ids = await colourIds(page);
+	const cos = await postBrand(page, "COS");
+	const jacket = await postWish(page, {
+		typeId: "wool",
+		colourId: ids.Charcoal,
+	});
+	await postShopLink(page, jacket, {
+		url: "https://www.cos.com/a",
+		brandId: cos,
+		name: "Single-breasted wool jacket",
+		price: 4290000,
+	});
+	await page.goto("/wishlist");
 	// When
-	await addSheet(page).getByRole("link", { name: "Open it" }).click();
+	await openAddSheet(page);
+	await pickPiece(page, "Wool jacket", "Charcoal");
+	await fillLink(page, {
+		address: "https://www.zara.com/c",
+		name: "Zara coat",
+	});
+	await saveForm(page);
+	await expect(title(page)).toHaveText("Zara coat");
 	// Then
-	await expect(page).toHaveURL(`/piece/wool/${ids.Charcoal}`);
+	expect({
+		title: await title(page).textContent(),
+		others: await page
+			.locator('[data-slot="other-shop"]')
+			.evaluateAll((links) => links.map((l) => l.getAttribute("aria-label"))),
+		duplicate: await page.getByText("You have this wish already.").count(),
+	}).toEqual({
+		title: "Zara coat",
+		others: ["Single-breasted wool jacket, COS · Charcoal wool jacket"],
+		duplicate: 0,
+	});
+});
+
+test("saves a wish alone with no address and opens its page", async ({
+	page,
+}) => {
+	// Given: a fresh account on /wishlist
+	await page.goto("/wishlist");
+	// When
+	await openAddSheet(page);
+	await pickPiece(page, "Long polo", "Navy");
+	await saveForm(page);
+	await expect(title(page)).toHaveText("Navy long polo");
+	// Then
+	expect({
+		title: await title(page).textContent(),
+		note: await page.getByText("No shop link yet.").textContent(),
+		path: new URL(page.url()).pathname,
+	}).toEqual({
+		title: "Navy long polo",
+		note: "No shop link yet.",
+		path: expect.stringMatching(/^\/wishlist\/wish\//),
+	});
+});
+
+test("opens the newest card of a piece already wished for when there is no address", async ({
+	page,
+}) => {
+	// Given: a fresh account with a Charcoal wool jacket wish holding the COS
+	// link, then the link "Zara jacket"
+	await jacketAndPolo(page);
+	await page.goto("/wishlist");
+	// When
+	await openAddSheet(page);
+	await pickPiece(page, "Wool jacket", "Charcoal");
+	await saveForm(page);
+	// Then
+	await expect(title(page)).toHaveText("Zara jacket");
 });
 
 const cards = (page: Page) => page.locator('[data-slot="shop-link"]');
@@ -307,19 +598,16 @@ async function jacketWithLinks(page: Page) {
 	return { ids, wish };
 }
 
-const openJacket = async (page: Page) => {
-	await page.goto("/wishlist");
-	await page
-		.getByRole("link", { name: /^Charcoal wool jacket,/ })
-		.first()
-		.click();
-};
+// A Wishlist card opens its own Item page, so the piece page opens by its
+// address.
+const openJacket = (page: Page, ids: Record<string, string>) =>
+	page.goto(`/piece/wool/${ids.Charcoal}`);
 
 test("lists the shop links of a wish on its piece page", async ({ page }) => {
 	// Given
-	await jacketWithLinks(page);
+	const { ids } = await jacketWithLinks(page);
 	// When
-	await openJacket(page);
+	await openJacket(page, ids);
 	// Then
 	await expect(
 		page.getByRole("heading", { name: "On your wishlist" }),
@@ -338,8 +626,8 @@ test("opens the shop in a new tab with noopener noreferrer", async ({
 	page,
 }) => {
 	// Given: the account of the case above, on the piece page
-	await jacketWithLinks(page);
-	await openJacket(page);
+	const { ids } = await jacketWithLinks(page);
+	await openJacket(page, ids);
 	// When
 	const address = page.locator('[data-slot="shop-address"]').first();
 	// Then
@@ -468,29 +756,6 @@ test("shows Could not load your closet and wishlist when both fail on the piece 
 		"In your closet",
 		"On your wishlist",
 	]);
-});
-
-test("sends a piece page with no item and no wish back to the wishlist", async ({
-	page,
-}) => {
-	// Given: a fresh account with an Olive long polo wish, on /wishlist
-	await page.goto("/");
-	const ids = await colourIds(page);
-	const wish = await postWish(page, { typeId: "polo_l", colourId: ids.Olive });
-	await page.goto("/wishlist");
-	// When: the tile; the wish deleted elsewhere
-	await page.getByRole("link", { name: /^Olive long polo,/ }).click();
-	await expect(page).toHaveURL(`/piece/polo_l/${ids.Olive}`);
-	await page.request.delete(`/api/wishes/${wish}`);
-	// Then: once the tab comes back into view, the page loads its lists again
-	// and goes back. A load still running when the tab comes back is joined,
-	// not sent again, so the tab comes back until a load sees the delete.
-	await expect(async () => {
-		await page.evaluate(() =>
-			document.dispatchEvent(new Event("visibilitychange", { bubbles: true })),
-		);
-		await expect(page).toHaveURL("/wishlist", { timeout: 1000 });
-	}).toPass();
 });
 
 const linkSheet = (page: Page, name = "Add a shop link") => sheet(page, name);
