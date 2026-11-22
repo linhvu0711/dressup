@@ -8,7 +8,9 @@ import { PieceCombinations } from "@/combinations/PieceCombinations";
 import { PageError } from "@/components/ui/page-error";
 import { PartError } from "@/components/ui/part-error";
 import { PLACEHOLDER } from "@/components/ui/placeholder";
+import { isTypeId } from "@/dress/clothing-types";
 import { TypeFigure } from "@/dress/figure/TypeFigure";
+import { useColours } from "@/labels/api";
 import { useWishlist } from "@/wishlist/api";
 import { WishlistCard } from "@/wishlist/WishlistCard";
 import { wishlistCards } from "@/wishlist/wish";
@@ -35,7 +37,22 @@ export function PiecePage() {
 	const wish = wishlist.data?.find(
 		(w) => w.typeId === typeId && w.colour.id === colourId,
 	);
-	const piece = owned ?? wish;
+	const listed = owned ?? wish;
+	const colours = useColours();
+	// A piece in neither list still has its page, drawn from the account's
+	// colour, so removing its last wish or item keeps the person on it.
+	const colour = colours.data?.find((c) => c.id === colourId);
+	const empty =
+		!listed &&
+		closet.data &&
+		wishlist.data &&
+		typeId &&
+		isTypeId(typeId) &&
+		colour
+			? { typeId, colour }
+			: undefined;
+	const piece = listed ?? empty;
+	const coloursFailed = colours.isError && !colours.data;
 	// A list that answered once keeps its data through a failed reload, so
 	// only a list with no data at all counts as failed.
 	const closetFailed = closet.isError && !closet.data;
@@ -44,9 +61,12 @@ export function PiecePage() {
 		if (closetFailed) void closet.refetch();
 		if (wishlistFailed) void wishlist.refetch();
 	};
-	// A typed address, or the piece gone from both lists since.
-	if (closet.data && wishlist.data && !piece)
+	// A typed address of a type or colour the account does not have.
+	if (closet.data && wishlist.data && colours.data && !piece)
 		return <Navigate to={back.to} state={back.state} replace />;
+	const skeleton = (
+		<span data-slot="piece-skeleton" className={`${PICTURE} ${PLACEHOLDER}`} />
+	);
 	let body: ReactNode;
 	if (piece)
 		body = (
@@ -85,19 +105,31 @@ export function PiecePage() {
 						Could not load your wishlist.
 					</PartError>
 				) : null}
+				{empty ? (
+					<p className="text-[14px] text-muted-foreground">
+						Not in your closet or on your wishlist.
+					</p>
+				) : null}
 				<PieceCombinations piece={piece} />
 			</>
 		);
 	// The piece may be in the list still loading, so a failure waits for it.
-	else if (closet.isPending || wishlist.isPending)
-		body = <span className={`${PICTURE} ${PLACEHOLDER}`} />;
-	else
+	else if (closet.isPending || wishlist.isPending) body = skeleton;
+	else if (closetFailed || wishlistFailed)
 		body = (
 			<PageError
 				title={failedTitle(closetFailed, wishlistFailed)}
 				onRetry={retry}
 			/>
 		);
+	else if (coloursFailed)
+		body = (
+			<PageError
+				title="Could not load your colours"
+				onRetry={() => void colours.refetch()}
+			/>
+		);
+	else body = skeleton;
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
 			<PageHeader

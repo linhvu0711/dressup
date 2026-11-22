@@ -182,3 +182,125 @@ test("goes back to the piece page from a shop link's page", async ({
 	// Then
 	await expect(page).toHaveURL(`/piece/sweater/${ids.Grey}`);
 });
+
+test("says Not in your closet or on your wishlist after the last wish goes", async ({
+	page,
+}) => {
+	// Given: both projects, the four pieces of markedFour, the combination open
+	const { id, ids } = await markedFour(page);
+	await page.goto(`/combinations/${id}`);
+	// When
+	await line(page, "Grey sweater").getByRole("link").click();
+	await page
+		.getByRole("link", { name: "Grey sweater, No shop link yet" })
+		.click();
+	await page.getByRole("button", { name: "Remove from wishlist" }).click();
+	await page
+		.getByRole("alertdialog", { name: "Remove from wishlist?" })
+		.getByRole("button", { name: "Remove" })
+		.click();
+	// Then
+	await expect(page).toHaveURL(`/piece/sweater/${ids.Grey}`);
+	await expect(
+		page.getByText("Not in your closet or on your wishlist."),
+	).toBeVisible();
+});
+
+// A fresh account with a Navy long button-up owned.
+async function navyShirt(page: Page) {
+	await page.goto("/");
+	const ids = await colourIds(page);
+	await postOwnedItems(page, {
+		typeId: "shirt_l",
+		colourId: ids.Navy,
+		brandId: null,
+		quantity: 1,
+	});
+	return ids;
+}
+
+test("goes back to the closet from a piece of a colour the account does not have", async ({
+	page,
+}) => {
+	// Given: both projects, a Navy long button-up owned
+	await navyShirt(page);
+	// When
+	await page.goto("/piece/shirt_l/00000000-0000-4000-8000-000000000000");
+	// Then
+	await expect(page).toHaveURL("/closet");
+});
+
+test("goes back to the closet from a piece of a type that does not exist", async ({
+	page,
+}) => {
+	// Given: both projects, as the test above
+	const ids = await navyShirt(page);
+	// When
+	await page.goto(`/piece/cape/${ids.Navy}`);
+	// Then
+	await expect(page).toHaveURL("/closet");
+});
+
+test("shows Could not load your colours and loads them on Retry", async ({
+	page,
+}) => {
+	// Given: both projects, a fresh account with no item and no wish; each GET
+	// /api/colours answered 500 until Retry
+	await page.goto("/");
+	const ids = await colourIds(page);
+	let failing = true;
+	await page.route("**/api/colours", (route) => {
+		if (!failing || route.request().method() !== "GET") return route.continue();
+		return route.fulfill({ status: 500 });
+	});
+	// When
+	await page.goto(`/piece/shirt_l/${ids.Navy}`);
+	await expect(
+		page.getByRole("heading", { name: "Could not load your colours" }),
+	).toBeVisible();
+	failing = false;
+	await page.getByRole("button", { name: "Retry" }).click();
+	// Then
+	await expect(
+		page.getByText("Not in your closet or on your wishlist."),
+	).toBeVisible();
+});
+
+// Holds every GET of this path until the test lets it go.
+async function hold(page: Page, path: string) {
+	let release = () => {};
+	const released = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	await page.route(path, async (route) => {
+		if (route.request().method() === "GET") await released;
+		await route.continue();
+	});
+	return release;
+}
+
+test("shows the placeholder while the lists load", async ({ page }) => {
+	// Given: both projects, a Navy long button-up owned; GET
+	// /api/owned-items held
+	const ids = await navyShirt(page);
+	const release = await hold(page, "**/api/owned-items");
+	// When
+	await page.goto(`/piece/shirt_l/${ids.Navy}`);
+	// Then
+	await expect(page.locator('[data-slot="piece-skeleton"]')).toBeVisible();
+	release();
+});
+
+test("shows the placeholder while the colours load", async ({ page }) => {
+	// Given: both projects, a fresh account with no item and no wish; GET
+	// /api/colours held
+	await page.goto("/");
+	const ids = await colourIds(page);
+	const release = await hold(page, "**/api/colours");
+	// When
+	await page.goto(`/piece/shirt_l/${ids.Navy}`);
+	// Then
+	await expect(page.locator('[data-slot="piece-skeleton"]')).toBeVisible();
+	await expect(page).toHaveURL(`/piece/shirt_l/${ids.Navy}`);
+	release();
+});

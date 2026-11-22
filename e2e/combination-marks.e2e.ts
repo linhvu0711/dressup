@@ -112,7 +112,8 @@ test("drops Want after the wish is removed, with no reload", async ({
 	const { id } = await markedFour(page);
 	await page.goto(`/combinations/${id}`);
 	await markWindow(page);
-	// When: the Grey sweater, wanted only, leaves the wishlist
+	// When: the Grey sweater, wanted only, leaves the wishlist, then Back from
+	// its piece page
 	await line(page, "Grey sweater").getByRole("link").click();
 	await page
 		.getByRole("link", { name: "Grey sweater, No shop link yet" })
@@ -122,6 +123,10 @@ test("drops Want after the wish is removed, with no reload", async ({
 		.getByRole("alertdialog", { name: "Remove from wishlist?" })
 		.getByRole("button", { name: "Remove" })
 		.click();
+	await expect(
+		page.getByText("Not in your closet or on your wishlist."),
+	).toBeVisible();
+	await page.getByRole("link", { name: "Back" }).click();
 	// Then
 	await expect(page).toHaveURL(`/combinations/${id}`);
 	await expect(line(page, "Grey sweater")).toHaveText("Grey sweater#8C8A84");
