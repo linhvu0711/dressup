@@ -39,7 +39,7 @@ export function ClosetItemPage() {
 					/>
 				),
 				details: <ItemDetails item={item} back={back} />,
-				below: <PieceCombinations piece={item} shown={5} />,
+				below: <PieceCombinations piece={item} />,
 			})}
 		</ItemPage>
 	);

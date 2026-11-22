@@ -72,7 +72,7 @@ export function ShopLinkPage() {
 				below: (
 					<>
 						<OtherShops wish={wish} link={link} state={back} />
-						<PieceCombinations piece={wish} shown={5} />
+						<PieceCombinations piece={wish} />
 					</>
 				),
 			})}

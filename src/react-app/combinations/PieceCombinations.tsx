@@ -8,19 +8,10 @@ import { type CombinationFilter, filterCombinations } from "./filter";
 import { NO_PIECES, type PieceRef } from "./marks";
 import { wallAddress } from "./wall-address";
 
-// The piece page's part for the combinations that hold the piece, newest
-// first, with See all to the wall filtered by the piece. A piece in no
-// combination has no part.
-// One row of cards. The Item page has room for five on a wide screen; the
-// piece page's column is 540 px (PiecePage.tsx), so it keeps four in the
-// page, as e2e/piece-combinations.e2e.ts reads.
-export function PieceCombinations({
-	piece,
-	shown = 4,
-}: {
-	piece: PieceRef;
-	shown?: 4 | 5;
-}) {
+// The combinations that hold the piece, newest first, with See all to the
+// wall filtered by the piece. A piece in no combination has no part. One row
+// of cards: five on a wide screen, four on a phone.
+export function PieceCombinations({ piece }: { piece: PieceRef }) {
 	const title = useId();
 	const combinations = useCombinations();
 	// A failed first load has no data: retry is off for every list.
@@ -52,21 +43,13 @@ export function PieceCombinations({
 					<Link to={wallAddress(filter)}>See all {held.length}</Link>
 				</Button>
 			</div>
-			{shown === 4 ? (
-				<div className="grid grid-cols-4 gap-2.5">
-					{held.slice(0, 4).map((c) => (
-						<CombinationCard key={c.id} combination={c} />
-					))}
-				</div>
-			) : (
-				<div className="grid grid-cols-4 gap-2.5 wide:grid-cols-5">
-					{held.slice(0, 5).map((c, i) => (
-						<div key={c.id} className={i === 4 ? "max-wide:hidden" : undefined}>
-							<CombinationCard combination={c} />
-						</div>
-					))}
-				</div>
-			)}
+			<div className="grid grid-cols-4 gap-2.5 wide:grid-cols-5">
+				{held.slice(0, 5).map((c, i) => (
+					<div key={c.id} className={i === 4 ? "max-wide:hidden" : undefined}>
+						<CombinationCard combination={c} />
+					</div>
+				))}
+			</div>
 		</section>
 	);
 }

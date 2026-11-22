@@ -37,7 +37,7 @@ async function seedChinos(page: Page) {
 	return ids;
 }
 
-test("shows four combinations that hold the piece, newest first", async ({
+test("shows five combinations that hold the piece, newest first", async ({
 	page,
 }) => {
 	// Given: both projects, a fresh account with the chinos above
@@ -52,6 +52,7 @@ test("shows four combinations that hold the piece, newest first", async ({
 		"Navy short polo + Beige chino pants",
 		"White long tee + Beige chino pants",
 		"Black short tee + Beige chino pants",
+		"White short tee + Beige chino pants",
 	]);
 });
 

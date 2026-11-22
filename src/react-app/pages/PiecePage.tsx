@@ -104,8 +104,10 @@ export function PiecePage() {
 				start={<BackLink to={back.to} state={back.state} />}
 				title={piece ? pieceName(piece) : ""}
 			/>
-			<div className="flex min-h-0 flex-1 flex-col gap-6 overflow-auto px-4 pt-1 pb-24 wide:mx-auto wide:w-full wide:max-w-[540px]">
-				{body}
+			<div className="flex min-h-0 flex-1 flex-col overflow-auto px-4 pt-1 pb-24 wide:px-6">
+				<div className="mx-auto flex w-full max-w-[928px] flex-col gap-6">
+					{body}
+				</div>
 			</div>
 		</div>
 	);

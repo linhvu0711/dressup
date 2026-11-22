@@ -37,7 +37,7 @@ export function WishPage() {
 					<ItemPictures ids={[]} piece={wish} label={pieceName(wish)} />
 				),
 				details: <WishDetails wish={wish} back={back} />,
-				below: <PieceCombinations piece={wish} shown={5} />,
+				below: <PieceCombinations piece={wish} />,
 			})}
 		</ItemPage>
 	);
