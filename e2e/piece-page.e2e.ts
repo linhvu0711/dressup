@@ -316,10 +316,18 @@ test("shows the placeholder while the colours load", async ({ page }) => {
 	release();
 });
 
-// A fresh account with a Charcoal wool jacket wish and this many shop links.
-async function jacketWithLinks(page: Page, links: number) {
+// A fresh account with a Charcoal wool jacket wish and this many shop links,
+// and the jacket in the closet too when owned.
+async function jacketWithLinks(page: Page, links: number, owned = false) {
 	await page.goto("/");
 	const ids = await colourIds(page);
+	if (owned)
+		await postOwnedItems(page, {
+			typeId: "wool",
+			colourId: ids.Charcoal,
+			brandId: null,
+			quantity: 1,
+		});
 	const wish = await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
 	for (let n = 1; n <= links; n++)
 		await postShopLink(page, wish, {
@@ -393,4 +401,28 @@ test("turns off Add a shop link at 10 links and says the limit", async ({
 	await expect(
 		wished.getByText("10 shop links is the limit for one wish."),
 	).toBeVisible();
+});
+
+test("keeps In your closet after the wish is removed from the piece page", async ({
+	page,
+}) => {
+	// Given: both projects, a Charcoal wool jacket in the closet and on the
+	// wishlist with two links, on its piece page
+	await jacketWithLinks(page, 2, true);
+	// When
+	await group(page, "On your wishlist")
+		.getByRole("button", { name: "Remove from wishlist" })
+		.click();
+	await page
+		.getByRole("alertdialog", { name: "Remove from wishlist?" })
+		.getByRole("button", { name: "Remove" })
+		.click();
+	// Then
+	await expect(toast(page)).toHaveText("Removed from your wishlist");
+	await expect(page.getByRole("heading", { level: 2 })).toHaveText([
+		"In your closet",
+	]);
+	await expect(
+		group(page, "In your closet").locator('[data-slot="closet-card"]'),
+	).toHaveCount(1);
 });
