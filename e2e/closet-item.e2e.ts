@@ -181,6 +181,77 @@ test("names the item in its delete confirm", async ({ page }) => {
 	).toHaveAccessibleDescription("Gym tee · No brand");
 });
 
+async function openSheetDelete(
+	page: Page,
+	item: { typeId: string; colour: string; name?: string },
+) {
+	await page.goto("/");
+	const ids = await colourIds(page);
+	const [id] = await postOwnedItems(page, {
+		typeId: item.typeId,
+		colourId: ids[item.colour],
+		brandId: null,
+		quantity: 1,
+		name: item.name,
+	});
+	await page.goto(`/closet/${id}`);
+	await page.getByRole("button", { name: "Edit item" }).click();
+	await sheet(page, "Edit item")
+		.getByRole("button", { name: "Delete" })
+		.click();
+}
+
+test("names the item in the edit sheet's delete confirm", async ({ page }) => {
+	// Given: White short tee named Gym tee, no brand, its page open
+	// When
+	await openSheetDelete(page, {
+		typeId: "tee_s",
+		colour: "White",
+		name: "Gym tee",
+	});
+	// Then
+	await expect(sheet(page, "Remove this item?")).toContainText(
+		"Gym tee · No brand",
+	);
+});
+
+test("names the piece in the edit sheet's delete confirm of an item with no name", async ({
+	page,
+}) => {
+	// Given: Navy long button-up, no name, no brand, its page open
+	// When
+	await openSheetDelete(page, { typeId: "shirt_l", colour: "Navy" });
+	// Then
+	await expect(sheet(page, "Remove this item?")).toContainText(
+		"Navy long button-up · No brand",
+	);
+});
+
+test("keeps the edit sheet's confirm with Not deleted when the delete fails", async ({
+	page,
+}) => {
+	// Given: White short tee named Gym tee, no brand, its page open; the delete
+	// answered 500
+	await page.route("**/api/owned-items/*", (route) =>
+		route.request().method() === "DELETE"
+			? route.fulfill({ status: 500 })
+			: route.continue(),
+	);
+	await openSheetDelete(page, {
+		typeId: "tee_s",
+		colour: "White",
+		name: "Gym tee",
+	});
+	// When
+	await sheet(page, "Remove this item?")
+		.getByRole("button", { name: "Delete" })
+		.click();
+	// Then
+	await expect(sheet(page, "Remove this item?").getByRole("alert")).toHaveText(
+		"Not deleted. Try again.",
+	);
+});
+
 test("shows Could not load your closet on the item page and loads on Retry", async ({
 	page,
 }) => {

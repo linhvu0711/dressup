@@ -23,6 +23,7 @@ import {
 	useDeleteOwnedItem,
 } from "./api";
 import {
+	itemCard,
 	OWNED_ITEM_LIMIT,
 	OWNED_ITEM_NAME_MAX,
 	type OwnedItem,
@@ -167,7 +168,7 @@ export function OwnedItemSheet(
 				editing
 					? {
 							title: "Remove this item?",
-							text: `${pieceName(editing)} · ${editing.brand?.name ?? "No brand"}`,
+							text: `${itemCard(editing).title} · ${editing.brand?.name ?? "No brand"}`,
 							deleted: "Removed from your closet",
 							del,
 						}
