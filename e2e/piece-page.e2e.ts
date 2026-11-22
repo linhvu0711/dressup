@@ -67,7 +67,7 @@ test("keeps the combination as the piece page's Back after an Item page", async 
 	page,
 }) => {
 	// Given: both projects, as the test above, after its Back
-	const { id } = await markedFour(page);
+	const { id, ids } = await markedFour(page);
 	await page.goto(`/combinations/${id}`);
 	await line(page, "Black long tee").getByRole("link").click();
 	await group(page, "In your closet")
@@ -75,9 +75,9 @@ test("keeps the combination as the piece page's Back after an Item page", async 
 		.click();
 	await expect(page).toHaveURL(/\/closet\/[^/]+$/);
 	await page.getByRole("link", { name: "Back" }).click();
-	await expect(
-		page.getByRole("heading", { level: 1, name: "Black long tee" }),
-	).toBeVisible();
+	// The Item page's heading is "Black long tee" too, so the address says
+	// the piece page is open.
+	await expect(page).toHaveURL(`/piece/tee_l/${ids.Black}`);
 	// When
 	await page.getByRole("link", { name: "Back" }).click();
 	// Then
