@@ -34,16 +34,20 @@ export function usePriceCursor() {
 	});
 	const keep = (e: ChangeEvent<HTMLInputElement>) => {
 		const input = e.target;
+		const typed = input.value.slice(
+			0,
+			input.selectionEnd ?? input.value.length,
+		);
 		kept.current = {
 			// Leading zeros go, as typedPrice drops them.
-			before: digitsOf(
-				input.value.slice(0, input.selectionEnd ?? input.value.length),
-			).replace(/^0+/, "").length,
-			// A Delete that took only a dot gets it back from typedPrice; the
-			// cursor goes past it, so the next Delete reaches the digit.
+			before: digitsOf(typed).replace(/^0+/, "").length,
+			// After a Delete the cursor goes past a dot: one the Delete took, which
+			// typedPrice puts back, or one the browser left the cursor after. So
+			// the next Delete reaches the digit.
 			pastDots:
 				(e.nativeEvent as InputEvent).inputType === "deleteContentForward" &&
-				digitsOf(input.value).length === digitsShown.current,
+				(digitsOf(input.value).length === digitsShown.current ||
+					/\D$/.test(typed)),
 		};
 	};
 	return { ref, keep };
