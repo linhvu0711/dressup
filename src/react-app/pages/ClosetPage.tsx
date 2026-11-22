@@ -1,37 +1,28 @@
 import { useCloset } from "@/closet/api";
+import { ClosetCard } from "@/closet/ClosetCard";
 import { OwnedItemSheet } from "@/closet/OwnedItemSheet";
-import { closetPieces } from "@/closet/owned-item";
 import { PieceTabPage } from "@/closet/PieceTabPage";
-import { PieceTile, PieceTilePlaceholder } from "@/closet/PieceTile";
-import { pieceName } from "@/combinations/combination";
-import { pieceKey } from "@/combinations/marks";
-import { closetPiece } from "@/piece-filter/piece-filter";
+import { PartError } from "@/components/ui/part-error";
+import { ItemCardPlaceholder } from "@/item/ItemCard";
+import { ownedItemPiece } from "@/piece-filter/piece-filter";
 
-// The pieces the account owns, one tile for each, the piece of the newest
-// item first.
+// The items the account owns, one card for each, newest first.
 export function ClosetPage() {
 	return (
 		<PieceTabPage
 			title="Closet"
 			slot="closet"
 			query={useCloset()}
-			entries={closetPieces}
-			toPiece={closetPiece}
-			card={(piece) => (
-				<PieceTile
-					key={pieceKey(piece)}
-					piece={piece}
-					from="/closet"
-					slot="closet-tile"
-					label={`${pieceName(piece)}, ${piece.quantity}`}
-					badge={piece.quantity}
-				/>
-			)}
+			entries={(items) => items}
+			toPiece={ownedItemPiece}
+			card={(item) => <ClosetCard key={item.id} item={item} />}
 			placeholder={(i) => (
-				<PieceTilePlaceholder key={i} slot="closet-skeleton" />
+				<ItemCardPlaceholder key={i} slot="closet-skeleton" />
 			)}
-			unit="piece"
-			failedTitle="Could not load your closet"
+			failed={(retry) => (
+				<PartError onRetry={retry}>Could not load your closet.</PartError>
+			)}
+			unit="item"
 			empty={{ title: "Nothing in your closet yet" }}
 			addLabel="Add to closet"
 			addSheet={(close) => <OwnedItemSheet mode="add" onClose={close} />}

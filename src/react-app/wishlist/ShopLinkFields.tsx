@@ -6,12 +6,12 @@ import type { BrandId } from "@/labels/brand";
 import { PICTURES_LABEL, PictureSlots } from "@/pictures/PictureSlots";
 import type { PictureId } from "@/pictures/picture";
 import type { usePictureSlots } from "@/pictures/usePictureSlots";
+import { typedPrice } from "@/price";
 import {
 	ADDRESS_MAX,
 	isWebAddress,
 	SHOP_LINK_NAME_MAX,
 	type ShopLink,
-	typedPrice,
 } from "./wish";
 
 // What the form says under its fields: a field the Save found wrong, or

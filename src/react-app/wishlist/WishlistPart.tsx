@@ -2,12 +2,12 @@ import { ExternalLink, Pencil, Plus } from "lucide-react";
 import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { PictureStrip } from "@/pictures/PictureStrip";
+import { priceText } from "@/price";
 import { BoughtDialog } from "./BoughtDialog";
 import { RemoveDialog } from "./RemoveDialog";
 import { ShopLinkSheet } from "./ShopLinkSheet";
 import {
 	isWebAddress,
-	priceText,
 	SHOP_LINK_LIMIT,
 	type ShopLink,
 	shopLinkHost,

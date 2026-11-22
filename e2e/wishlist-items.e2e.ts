@@ -349,30 +349,48 @@ const buy = async (page: Page) => {
 	await confirm(page).getByRole("button", { name: "Bought" }).click();
 };
 
-test("opens the piece page of the bought item after Bought", async ({
-	page,
-}) => {
+test("opens the bought item's page after Bought", async ({ page }) => {
 	// Given: the COS link's page open
-	const { ids, cosLink } = await jacketAndPolo(page);
+	const { cosLink } = await jacketAndPolo(page);
 	await page.goto(`/wishlist/link/${cosLink}`);
 	await expect(title(page)).toHaveText("Single-breasted wool jacket");
 	// When
 	await buy(page);
-	await expect(page).toHaveURL(`/piece/wool/${ids.Charcoal}`);
-	const closet = page.getByRole("heading", { name: "In your closet" });
-	await expect(closet).toBeVisible();
+	await expect(page).toHaveURL(/^[^?]*\/closet\/[^/]+$/);
+	await expect(page.getByRole("button", { name: "Edit item" })).toBeVisible();
 	// Then
 	expect({
-		url: new URL(page.url()).pathname,
 		title: await title(page).textContent(),
-		closet: await closet.textContent(),
 		toast: await toast(page).textContent(),
 	}).toEqual({
-		url: `/piece/wool/${ids.Charcoal}`,
-		title: "Charcoal wool jacket",
-		closet: "In your closet",
+		title: "Single-breasted wool jacket",
 		toast: "Moved to your closet",
 	});
+});
+
+test("goes back to the filtered Wishlist from the bought item's page", async ({
+	page,
+}) => {
+	// Given: the Wishlist filtered by COS, the COS link's page opened from it,
+	// then Bought
+	const { cos } = await jacketAndPolo(page);
+	await page.goto(`/wishlist?brand=${cos}`);
+	await page
+		.getByRole("link", {
+			name: "Single-breasted wool jacket, COS · Charcoal wool jacket",
+		})
+		.click();
+	await expect(title(page)).toHaveText("Single-breasted wool jacket");
+	await buy(page);
+	await expect(page.getByRole("button", { name: "Edit item" })).toBeVisible();
+	// When
+	await page.getByRole("link", { name: "Back" }).click();
+	await expect(chips(page)).toHaveCount(1);
+	// Then
+	expect({
+		back: `${new URL(page.url()).pathname}${new URL(page.url()).search}`,
+		chips: await chips(page).allTextContents(),
+	}).toEqual({ back: `/wishlist?brand=${cos}`, chips: ["COS"] });
 });
 
 test("says the closet limit when Bought answers owned_item_limit", async ({

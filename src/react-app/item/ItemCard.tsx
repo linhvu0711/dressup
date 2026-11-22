@@ -12,8 +12,9 @@ const PICTURE =
 
 // One card of an item: its first picture, else the piece drawn in its colour,
 // then its name, a line with the colour's dot, and its price. A price of null
-// says "No price"; no price at all leaves the line out. Each text stays on one
-// line, so every card of a wall has one height.
+// says "No price"; no price at all leaves the line out. A badge, as "×3", sits
+// on the picture's top right. Each text stays on one line, so every card of a
+// wall has one height.
 export function ItemCard({
 	to,
 	state,
@@ -24,6 +25,7 @@ export function ItemCard({
 	name,
 	line,
 	price,
+	badge,
 }: {
 	to: string;
 	state?: unknown;
@@ -34,6 +36,7 @@ export function ItemCard({
 	name: string;
 	line: string;
 	price?: string | null;
+	badge?: string | null;
 }) {
 	const ref = useRef<HTMLAnchorElement>(null);
 	const near = useNearScreen(ref);
@@ -62,6 +65,11 @@ export function ItemCard({
 							className="absolute inset-[10%] size-[80%]"
 						/>
 					)
+				) : null}
+				{badge ? (
+					<span className="absolute top-2 right-2 grid h-6 min-w-6 place-items-center rounded-full bg-foreground px-1.5 font-semibold text-[12px] text-background">
+						{badge}
+					</span>
 				) : null}
 			</span>
 			<span className="flex min-w-0 flex-col">

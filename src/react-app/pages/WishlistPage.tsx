@@ -1,5 +1,6 @@
 import { useLocation } from "react-router";
 import { PieceTabPage } from "@/closet/PieceTabPage";
+import { PageError } from "@/components/ui/page-error";
 import { ItemCardPlaceholder } from "@/item/ItemCard";
 import { wishCardPiece } from "@/piece-filter/piece-filter";
 import { useWishlist } from "@/wishlist/api";
@@ -27,7 +28,9 @@ export function WishlistPage() {
 			)}
 			placeholder={(i) => <ItemCardPlaceholder key={i} slot="wish-skeleton" />}
 			unit="item"
-			failedTitle="Could not load your wishlist"
+			failed={(retry) => (
+				<PageError title="Could not load your wishlist" onRetry={retry} />
+			)}
 			empty={{
 				title: "Nothing on your wishlist yet",
 				text: "Add the pieces you want to buy.",

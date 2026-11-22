@@ -1,9 +1,9 @@
 import { pieceName } from "@/combinations/combination";
 import { ItemCard } from "@/item/ItemCard";
+import { priceText } from "@/price";
 import {
 	type WishlistCard as Card,
 	linkPage,
-	priceText,
 	shopName,
 	wishPage,
 } from "./wish";

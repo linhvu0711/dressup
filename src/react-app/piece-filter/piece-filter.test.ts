@@ -1,9 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import {
-	closetPieces,
-	type OwnedItem,
-	type OwnedItemId,
-} from "@/closet/owned-item";
 import type { TypeId } from "@/dress/clothing-types";
 import type { BrandId } from "@/labels/brand";
 import type { ColourId } from "@/labels/colour";
@@ -15,7 +10,6 @@ import {
 	wishlistCards,
 } from "@/wishlist/wish";
 import {
-	closetPiece,
 	type FilterPiece,
 	matchesPieceFilter,
 	NO_FILTER,
@@ -39,22 +33,6 @@ const colour = (id: ColourId) => ({
 	id,
 	name: "Navy",
 	hex: "#1F3A5F" as const,
-});
-
-const item = (
-	id: string,
-	typeId: TypeId,
-	colourId: ColourId,
-	brand: BrandId | null,
-): OwnedItem => ({
-	id: id as OwnedItemId,
-	typeId,
-	colour: colour(colourId),
-	brand: brand === null ? null : { id: brand, name: brand },
-	quantity: 1,
-	name: null,
-	price: null,
-	pictureIds: [],
 });
 
 const link = (brand: BrandId | null, name = "A piece"): ShopLink => ({
@@ -133,22 +111,6 @@ describe("piece filter", () => {
 		const shown = [A, B, C, D].filter((p) => matchesPieceFilter(NO_FILTER, p));
 		// Then
 		expect(shown).toEqual([A, B, C, D]);
-	});
-
-	test("a closet piece fits a brand of any of its items", () => {
-		// Given: sweater Navy from COS and from Uniqlo; tee_l White, no brand
-		const items = [
-			item("x", "sweater", NAVY, COS),
-			item("y", "sweater", NAVY, UNIQLO),
-			item("z", "tee_l", WHITE, null),
-		];
-		const filter = filterOf({ brands: [UNIQLO] });
-		// When
-		const shown = closetPieces(items)
-			.filter((p) => matchesPieceFilter(filter, closetPiece(p)))
-			.map((p) => p.typeId);
-		// Then
-		expect(shown).toEqual(["sweater"]);
 	});
 
 	test("a wish fits a brand of any shop link, and a wish with no link is not No brand", () => {

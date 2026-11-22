@@ -1,4 +1,4 @@
-import type { ClosetPiece, OwnedItem } from "@/closet/owned-item";
+import type { OwnedItem } from "@/closet/owned-item";
 import {
 	isTypeId,
 	LAYER_GROUP_NAMES,
@@ -59,12 +59,6 @@ export const ownedItemPiece = (item: OwnedItem): FilterPiece => ({
 	typeId: item.typeId,
 	colourId: item.colour.id,
 	brandIds: [item.brand?.id ?? null],
-});
-
-export const closetPiece = (piece: ClosetPiece): FilterPiece => ({
-	typeId: piece.typeId,
-	colourId: piece.colour.id,
-	brandIds: piece.items.map((i) => i.brand?.id ?? null),
 });
 
 // A wish has no brand of its own, only its shop links do, so a wish with no

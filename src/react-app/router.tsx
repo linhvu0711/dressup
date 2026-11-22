@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from "react-router";
 import { AllowPage } from "./pages/AllowPage";
 import { BuildPage } from "./pages/BuildPage";
+import { ClosetItemPage } from "./pages/ClosetItemPage";
 import { ClosetPage } from "./pages/ClosetPage";
 import { CombinationsPage } from "./pages/CombinationsPage";
 import { LabelsPage } from "./pages/LabelsPage";
@@ -24,6 +25,7 @@ export const router = createBrowserRouter([
 			{ path: "build", element: <BuildPage /> },
 			{ path: "build/:combinationId", element: <BuildPage /> },
 			{ path: "closet", element: <ClosetPage /> },
+			{ path: "closet/:itemId", element: <ClosetItemPage /> },
 			{ path: "piece/:typeId/:colourId", element: <PiecePage /> },
 			{ path: "labels", element: <LabelsPage /> },
 			{ path: "wishlist", element: <WishlistPage /> },

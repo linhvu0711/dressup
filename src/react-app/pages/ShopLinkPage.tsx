@@ -8,7 +8,8 @@ import { TYPE_NAMES } from "@/dress/clothing-types";
 import { ColourValue, Facts } from "@/item/Facts";
 import { ItemPage } from "@/item/ItemPage";
 import { ItemPictures } from "@/item/ItemPictures";
-import { pieceLink, tabSearch } from "@/shell/piece-link";
+import { priceText } from "@/price";
+import { itemLink, tabSearch } from "@/shell/piece-link";
 import { useWishlist } from "@/wishlist/api";
 import { BoughtDialog } from "@/wishlist/BoughtDialog";
 import { OtherShops } from "@/wishlist/OtherShops";
@@ -16,7 +17,6 @@ import { RemoveDialog } from "@/wishlist/RemoveDialog";
 import { ShopLinkSheet } from "@/wishlist/ShopLinkSheet";
 import {
 	isWebAddress,
-	priceText,
 	type ShopLink,
 	shopLinkHost,
 	shopName,
@@ -36,11 +36,9 @@ export function ShopLinkPage() {
 	const wishlist = useWishlist();
 	const [bought, setBought] = useState<OwnedItem | null>(null);
 	// Bought takes the wish off the list, so the page leaves before the frame
-	// can find the link gone and send the person back. The closet Item page
-	// comes with #142, which switches this to it; the piece page shows the
-	// bought item till then.
+	// can find the link gone and send the person back.
 	if (bought) {
-		const to = pieceLink(bought, "/wishlist", tabSearch(location.state));
+		const to = itemLink(bought, "/wishlist", tabSearch(location.state));
 		return <Navigate to={to.to} state={to.state} replace />;
 	}
 	return (

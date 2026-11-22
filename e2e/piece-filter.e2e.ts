@@ -7,7 +7,7 @@ import { postShopLink, postWish } from "./wishlist-helpers";
 
 const mainNav = (page: Page) => page.getByRole("navigation", { name: "Main" });
 
-const closetTiles = (page: Page) => page.locator('[data-slot="closet-tile"]');
+const closetCards = (page: Page) => page.locator('[data-slot="closet-card"]');
 
 const wishTiles = (page: Page) => page.locator('[data-slot="wish-card"]');
 
@@ -18,7 +18,7 @@ const activeFilters = (page: Page) =>
 
 const noMatch = (page: Page) => page.locator('[data-slot="no-match"]');
 
-const tileNames = (tiles: ReturnType<typeof closetTiles>) =>
+const tileNames = (tiles: ReturnType<typeof closetCards>) =>
 	tiles.evaluateAll((links) => links.map((l) => l.getAttribute("aria-label")));
 
 // A Radix toggle group with more than one pick is a toolbar.
@@ -122,20 +122,20 @@ test("filters the closet by type and colour at once, with chips and a count", as
 	await openFilter(page);
 	await pickTypes(page, "Sweater", "Long tee");
 	await pick(page, "Colour", "Navy");
-	await show(page, "Show 2 pieces");
+	await show(page, "Show 2 items");
 	// Then
-	await expect(closetTiles(page)).toHaveCount(2);
+	await expect(closetCards(page)).toHaveCount(2);
 	expect({
-		tiles: await tileNames(closetTiles(page)),
+		tiles: await tileNames(closetCards(page)),
 		chips: await chips(page).allTextContents(),
 		last: await activeFilters(page).getByRole("button").last().textContent(),
 		shown: await page.locator('[data-slot="filter-shown"]').textContent(),
 		count: await page.locator('[data-slot="filter-count"]').textContent(),
 	}).toEqual({
-		tiles: ["Navy long tee, 1", "Navy sweater, 1"],
+		tiles: ["Navy long tee, Navy long tee", "Navy sweater, COS · Navy sweater"],
 		chips: ["Long tee", "Sweater", "Navy"],
 		last: "Clear all",
-		shown: "2 pieces",
+		shown: "2 items",
 		count: "3",
 	});
 });
@@ -151,20 +151,24 @@ test("removes one chip by its cross and all by Clear all", async ({ page }) => {
 		["chino_p", "Navy", null],
 	]);
 	await page.goto(`/closet?type=sweater&type=tee_l&colour=${ids.Navy}`);
-	await expect(closetTiles(page)).toHaveCount(2);
+	await expect(closetCards(page)).toHaveCount(2);
 	// When
 	await page.getByRole("button", { name: "Remove Navy" }).click();
-	await expect(closetTiles(page)).toHaveCount(3);
-	const afterCross = await tileNames(closetTiles(page));
+	await expect(closetCards(page)).toHaveCount(3);
+	const afterCross = await tileNames(closetCards(page));
 	await activeFilters(page).getByRole("button", { name: "Clear all" }).click();
-	await expect(closetTiles(page)).toHaveCount(4);
+	await expect(closetCards(page)).toHaveCount(4);
 	// Then
 	expect({
 		afterCross,
-		afterClear: await closetTiles(page).count(),
+		afterClear: await closetCards(page).count(),
 		chips: await chips(page).count(),
 	}).toEqual({
-		afterCross: ["White long tee, 1", "Navy long tee, 1", "Navy sweater, 1"],
+		afterCross: [
+			"White long tee, White long tee",
+			"Navy long tee, Navy long tee",
+			"Navy sweater, COS · Navy sweater",
+		],
 		afterClear: 4,
 		chips: 0,
 	});
@@ -177,26 +181,44 @@ test("shows Nothing here on the closet and clears it", async ({ page }) => {
 	// When
 	await openFilter(page);
 	await pick(page, "Type", "Jackets");
-	await show(page, "Show 0 pieces");
+	await show(page, "Show 0 items");
 	const title = noMatch(page).getByRole("heading", { name: "Nothing here" });
 	await expect(title).toBeVisible();
 	const before = {
 		title: await title.textContent(),
-		tiles: await closetTiles(page).count(),
+		tiles: await closetCards(page).count(),
 	};
 	await noMatch(page).getByRole("button", { name: "Clear all" }).click();
-	await expect(closetTiles(page)).toHaveCount(1);
+	await expect(closetCards(page)).toHaveCount(1);
 	// Then
 	expect({
 		before,
 		after: {
-			tiles: await closetTiles(page).count(),
+			tiles: await closetCards(page).count(),
 			chips: await chips(page).count(),
 		},
 	}).toEqual({
 		before: { title: "Nothing here", tiles: 0 },
 		after: { tiles: 1, chips: 0 },
 	});
+});
+
+test("matches each closet card on its own brand", async ({ page }) => {
+	// Given: both projects, Zara and COS; a Navy long button-up from Zara and
+	// one from COS
+	const zara = await postBrand(page, "Zara");
+	const cos = await postBrand(page, "COS");
+	await seedCloset(page, [
+		["shirt_l", "Navy", zara],
+		["shirt_l", "Navy", cos],
+	]);
+	// When
+	await page.goto(`/closet?brand=${zara}`);
+	await expect(closetCards(page)).toHaveCount(1);
+	// Then
+	expect(await tileNames(closetCards(page))).toEqual([
+		"Navy long button-up, Zara · Navy long button-up",
+	]);
 });
 
 test("drops a deleted brand from the closet filter", async ({ page }) => {
@@ -208,7 +230,7 @@ test("drops a deleted brand from the closet filter", async ({ page }) => {
 		["tee_l", "White", null],
 	]);
 	await page.goto(`/closet?brand=${cos}`);
-	await expect(closetTiles(page)).toHaveCount(1);
+	await expect(closetCards(page)).toHaveCount(1);
 	// When
 	await mainNav(page).getByRole("link", { name: "Labels" }).click();
 	await page.getByRole("tab", { name: "Brands" }).click();
@@ -221,12 +243,12 @@ test("drops a deleted brand from the closet filter", async ({ page }) => {
 		.click();
 	await expect(toast(page)).toHaveText("Brand deleted");
 	await page.goBack();
-	await expect(closetTiles(page)).toHaveCount(2);
+	await expect(closetCards(page)).toHaveCount(2);
 	await expect(page).toHaveURL(/\/closet$/);
 	// Then
 	expect({
 		chips: await chips(page).count(),
-		tiles: await closetTiles(page).count(),
+		tiles: await closetCards(page).count(),
 		address: new URL(page.url()).search,
 	}).toEqual({ chips: 0, tiles: 2, address: "" });
 });
@@ -308,7 +330,7 @@ test("shows Nothing here on the wishlist and clears it", async ({ page }) => {
 	});
 });
 
-test("keeps the closet filter after a piece and Back, and not on the wishlist", async ({
+test("keeps the closet filter after an item page and Back, and not on the wishlist", async ({
 	page,
 }) => {
 	// Given: both projects, a Navy sweater and a White long tee, a wish for
@@ -319,11 +341,13 @@ test("keeps the closet filter after a piece and Back, and not on the wishlist", 
 	]);
 	await postWish(page, { typeId: "chino_p", colourId: ids.Navy });
 	await page.goto("/closet?layer=sweater");
-	await expect(closetTiles(page)).toHaveCount(1);
+	await expect(closetCards(page)).toHaveCount(1);
 	// When
-	await page.getByRole("link", { name: "Navy sweater, 1" }).click();
+	await page
+		.getByRole("link", { name: "Navy sweater, Navy sweater", exact: true })
+		.click();
 	await page.getByRole("link", { name: "Back" }).click();
-	await expect(closetTiles(page)).toHaveCount(1);
+	await expect(closetCards(page)).toHaveCount(1);
 	const closet = await chips(page).allTextContents();
 	await mainNav(page).getByRole("link", { name: "Wishlist" }).click();
 	await expect(wishTiles(page)).toHaveCount(1);

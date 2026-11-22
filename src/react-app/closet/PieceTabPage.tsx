@@ -4,7 +4,6 @@ import { type ReactNode, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ActiveFilters, FilterButton } from "@/components/ui/filter";
 import { Notice } from "@/components/ui/notice";
-import { PageError } from "@/components/ui/page-error";
 import { useAddressFilter } from "@/components/ui/use-address-filter";
 import { countText } from "@/count-text";
 import { useColours } from "@/labels/api";
@@ -22,9 +21,9 @@ import {
 import { PageHeader } from "../shell/PageHeader";
 import { Wall } from "../shell/Wall";
 
-// The Closet and the Wishlist are one page: a wall of cards with its filter
-// and its loading, failed, and empty states. Each tab brings its list, its
-// card, its words, and its add sheet.
+// The Closet and the Wishlist are one page: a wall with its filter and its
+// loading, failed, and empty states. Each tab brings its list, its card, its
+// placeholder, its error, its words, and its add sheet.
 export function PieceTabPage<D, E>({
 	title,
 	slot,
@@ -33,8 +32,8 @@ export function PieceTabPage<D, E>({
 	toPiece,
 	card,
 	placeholder,
+	failed,
 	unit,
-	failedTitle,
 	empty,
 	addLabel,
 	addSheet,
@@ -47,8 +46,9 @@ export function PieceTabPage<D, E>({
 	// The card carries its own key.
 	card: (entry: E) => ReactNode;
 	placeholder: (i: number) => ReactNode;
+	failed: (retry: () => void) => ReactNode;
+	// What the counts count, as "item" or "piece".
 	unit: string;
-	failedTitle: string;
 	empty: { title: string; text?: string };
 	addLabel: string;
 	addSheet: (onClose: () => void) => ReactNode;
@@ -75,9 +75,7 @@ export function PieceTabPage<D, E>({
 		wall = <Wall>{Array.from({ length: 6 }, (_, i) => placeholder(i))}</Wall>;
 	} else if (query.isError) {
 		// Checked before the data: a failed refetch keeps the old list.
-		wall = (
-			<PageError title={failedTitle} onRetry={() => void query.refetch()} />
-		);
+		wall = failed(() => void query.refetch());
 	} else if (query.data.length === 0) {
 		wall = (
 			<Notice title={empty.title}>
