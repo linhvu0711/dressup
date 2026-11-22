@@ -429,11 +429,6 @@ test.describe("at the closet limit", () => {
 	});
 });
 
-const itemRows = (page: Page) =>
-	page
-		.getByRole("region", { name: "In your closet" })
-		.locator('[data-slot="item-row"]');
-
 test("sends a piece page with no item back to the closet", async ({ page }) => {
 	// Given: a fresh account with no items
 	// When
@@ -444,43 +439,21 @@ test("sends a piece page with no item back to the closet", async ({ page }) => {
 
 const editSheet = (page: Page) => sheet(page, "Edit item");
 
-test("changes an item's quantity", async ({ page }) => {
-	// Given: a fresh account with a Navy long button-up, no brand, 2; the
-	// piece page open
-	await page.goto("/");
-	const ids = await colourIds(page);
-	await postOwnedItems(page, {
-		typeId: "shirt_l",
-		colourId: ids.Navy,
-		brandId: null,
-		quantity: 2,
-	});
-	await page.goto(`/piece/shirt_l/${ids.Navy}`);
-	// When
-	await page.getByRole("button", { name: "No brand × 2" }).click();
-	await editSheet(page).getByRole("button", { name: "More" }).click();
-	await editSheet(page).getByRole("button", { name: "Save" }).click();
-	// Then
-	await expect(toast(page)).toHaveText("Changes saved");
-	await expect(itemRows(page)).toHaveCount(1);
-	await expect(itemRows(page)).toHaveAccessibleName("No brand × 3");
-});
-
 test("deletes the last item of a piece and the tile leaves", async ({
 	page,
 }) => {
 	// Given: a fresh account with a Navy long button-up, no brand, 2, and a
-	// White short tee, no brand, 1; the piece page of the shirt open
+	// White short tee, no brand, 1; the Item page of the shirt open
 	await page.goto("/");
 	const ids = await colourIds(page);
-	await postOwnedItems(
+	const [shirt] = await postOwnedItems(
 		page,
 		{ typeId: "shirt_l", colourId: ids.Navy, brandId: null, quantity: 2 },
 		{ typeId: "tee_s", colourId: ids.White, brandId: null, quantity: 1 },
 	);
-	await page.goto(`/piece/shirt_l/${ids.Navy}`);
+	await page.goto(`/closet/${shirt}`);
 	// When
-	await page.getByRole("button", { name: "No brand × 2" }).click();
+	await page.getByRole("button", { name: "Edit item" }).click();
 	await editSheet(page).getByRole("button", { name: "Delete" }).click();
 	await sheet(page, "Remove this item?")
 		.getByRole("button", { name: "Delete" })

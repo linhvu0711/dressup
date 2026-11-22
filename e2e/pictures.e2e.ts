@@ -1,8 +1,8 @@
 import type { Page, Request } from "@playwright/test";
 import { postOwnedItems } from "./closet-helpers";
 import { expect, test } from "./fixtures";
-import { colourIds, postBrand } from "./label-helpers";
-import { sheet, toast } from "./locators";
+import { colourIds } from "./label-helpers";
+import { fact, sheet, toast } from "./locators";
 import {
 	bigJpeg,
 	imageSize,
@@ -47,20 +47,20 @@ async function pickNavyShirt(page: Page) {
 		.click();
 }
 
-// A Navy long button-up with no brand and these pictures, its piece page
+// A Navy long button-up with no brand and these pictures, its Item page
 // open, and its edit sheet open.
 async function openEditSheet(page: Page, pictureIds: string[] = []) {
 	await page.goto("/");
 	const ids = await colourIds(page);
-	await postOwnedItems(page, {
+	const [id] = await postOwnedItems(page, {
 		typeId: "shirt_l",
 		colourId: ids.Navy,
 		brandId: null,
 		quantity: 1,
 		pictureIds,
 	});
-	await page.goto(`/piece/shirt_l/${ids.Navy}`);
-	await page.getByRole("button", { name: "No brand × 1" }).click();
+	await page.goto(`/closet/${id}`);
+	await page.getByRole("button", { name: "Edit item" }).click();
 	await expect(editSheet(page)).toBeVisible();
 	return ids;
 }
@@ -136,9 +136,7 @@ test("keeps the sheet usable and saves after a slow upload", async ({
 	release();
 	// Then
 	await expect(toast(page)).toHaveText("Changes saved");
-	await expect(
-		page.getByRole("button", { name: "No brand × 2" }),
-	).toBeVisible();
+	await expect(fact(page, "Quantity")).toHaveText("2");
 	expect(await itemPictureIds(page)).toHaveLength(1);
 });
 
@@ -219,9 +217,7 @@ test("saves nothing when Cancel comes while Save waits for an upload", async ({
 	await dropped;
 	// Then
 	await page.reload();
-	await expect(
-		page.getByRole("button", { name: "No brand × 1" }),
-	).toBeVisible();
+	await expect(fact(page, "Quantity")).toHaveText("1");
 	expect(changes).toEqual([]);
 	expect(await itemPictureIds(page)).toHaveLength(0);
 });
@@ -378,7 +374,7 @@ test("stops at 8 pictures on one item", async ({ page }) => {
 	).toBeVisible();
 	await editSheet(page).getByRole("button", { name: "Save" }).click();
 	await expect(toast(page)).toHaveText("Changes saved");
-	await page.getByRole("button", { name: "No brand × 1" }).click();
+	await page.getByRole("button", { name: "Edit item" }).click();
 	await expect(slots(page)).toHaveCount(8);
 });
 
@@ -473,68 +469,27 @@ test("turns a picture upright from its EXIF orientation", async ({ page }) => {
 	});
 });
 
-// A Navy long button-up with no brand and n pictures, its piece page open.
-async function openPiecePage(page: Page, n: number) {
+// A Navy long button-up with no brand and n pictures, its Item page open.
+async function openItemPage(page: Page, n: number) {
 	await page.goto("/");
 	const pictureIds: string[] = [];
 	for (let i = 0; i < n; i++) pictureIds.push(await uploadPng(page));
 	const ids = await colourIds(page);
-	await postOwnedItems(page, {
+	const [id] = await postOwnedItems(page, {
 		typeId: "shirt_l",
 		colourId: ids.Navy,
 		brandId: null,
 		quantity: 1,
 		pictureIds,
 	});
-	await page.goto(`/piece/shirt_l/${ids.Navy}`);
-	return ids;
+	await page.goto(`/closet/${id}`);
 }
-
-const strip = (page: Page, brand: string) =>
-	page.getByRole("list", { name: `Pictures of ${brand}` });
 
 const viewer = (page: Page) => page.getByRole("dialog", { name: /^Picture / });
 
-test("shows an item's pictures as a strip of 3:4 thumbnails", async ({
-	page,
-}) => {
-	// Given: an item with 2 pictures
-	// When
-	await openPiecePage(page, 2);
-	// Then
-	await expect(strip(page, "No brand").getByRole("button")).toHaveCount(2);
-	const box = await strip(page, "No brand")
-		.getByRole("button")
-		.first()
-		.boundingBox();
-	const width = test.info().project.name === "laptop" ? 132 : 104;
-	expect({
-		width: box?.width,
-		ratio: Math.abs((box?.height ?? 0) - (width * 4) / 3) <= 1,
-	}).toEqual({ width, ratio: true });
-});
-
-test("shows no strip for an item with no pictures", async ({ page }) => {
-	// Given: the item with 2 pictures, and a Zara one with none
-	await page.goto("/");
-	const ids = await colourIds(page);
-	const zara = await postBrand(page, "Zara");
-	await postOwnedItems(page, {
-		typeId: "shirt_l",
-		colourId: ids.Navy,
-		brandId: zara,
-		quantity: 1,
-	});
-	// When
-	await openPiecePage(page, 2);
-	// Then
-	await expect(strip(page, "No brand")).toBeVisible();
-	await expect(strip(page, "Zara")).toHaveCount(0);
-});
-
 test("opens the viewer and steps to the next picture", async ({ page }) => {
 	// Given: an item with 2 pictures
-	await openPiecePage(page, 2);
+	await openItemPage(page, 2);
 	// When
 	await page.getByRole("button", { name: "Open picture 1 of 2" }).click();
 	await page.getByRole("button", { name: "Next picture" }).click();
@@ -554,7 +509,7 @@ test("closes the viewer with Esc and with a click outside", async ({
 	page,
 }) => {
 	// Given: an item with 2 pictures; the viewer open on picture 1
-	await openPiecePage(page, 2);
+	await openItemPage(page, 2);
 	await page.getByRole("button", { name: "Open picture 1 of 2" }).click();
 	await expect(viewer(page)).toBeVisible();
 	// When
@@ -572,7 +527,7 @@ test("closes the viewer with Esc and with a click outside", async ({
 
 test("shows one picture with no previous and next", async ({ page }) => {
 	// Given: an item with 1 picture
-	await openPiecePage(page, 1);
+	await openItemPage(page, 1);
 	// When
 	await page.getByRole("button", { name: "Open picture 1 of 1" }).click();
 	// Then

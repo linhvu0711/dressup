@@ -1,16 +1,14 @@
 import { ItemCard } from "@/item/ItemCard";
-import { useItemLink } from "@/shell/piece-link";
-import { itemCard, type OwnedItem } from "./owned-item";
+import type { Back } from "@/shell/piece-link";
+import { itemCard, type OwnedItem, ownedItemPage } from "./owned-item";
 
 // One owned item on the Closet's wall. An item with no price has no price
 // line, not "No price": the price paid is a note, not a shop's offer.
-export function ClosetCard({ item }: { item: OwnedItem }) {
-	const linkTo = useItemLink();
+export function ClosetCard({ item, state }: { item: OwnedItem; state: Back }) {
 	const card = itemCard(item);
-	const { to, state } = linkTo(item);
 	return (
 		<ItemCard
-			to={to}
+			to={ownedItemPage(item.id)}
 			state={state}
 			slot="closet-card"
 			label={card.label}

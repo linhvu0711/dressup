@@ -4,10 +4,10 @@ import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { SettingsLink } from "./SettingsLink";
 
-export function BackLink({ to }: { to: string }) {
+export function BackLink({ to, state }: { to: string; state?: unknown }) {
 	return (
 		<Button asChild variant="icon" size="icon">
-			<Link to={to} aria-label="Back" title="Back">
+			<Link to={to} state={state} aria-label="Back" title="Back">
 				<ArrowLeft size={18} strokeWidth={1.9} aria-hidden />
 			</Link>
 		</Button>

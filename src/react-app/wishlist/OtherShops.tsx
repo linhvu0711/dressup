@@ -2,6 +2,7 @@ import { Plus } from "lucide-react";
 import { useId, useState } from "react";
 import { pieceName } from "@/combinations/combination";
 import { countText } from "@/count-text";
+import type { Back } from "@/shell/piece-link";
 import { ShopLinkSheet } from "./ShopLinkSheet";
 import { WishlistCard } from "./WishlistCard";
 import { SHOP_LINK_LIMIT, type ShopLink, type Wish } from "./wish";
@@ -15,7 +16,7 @@ export function OtherShops({
 }: {
 	wish: Wish;
 	link: ShopLink;
-	state: unknown;
+	state: Back;
 }) {
 	const title = useId();
 	const [adding, setAdding] = useState(false);

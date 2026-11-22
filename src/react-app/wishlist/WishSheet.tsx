@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 import { TypeField, TypeOptions } from "@/closet/TypeOptions";
 import { PanelSheet, usePanel } from "@/components/ui/panel-sheet";
 import { Field } from "@/components/ui/sheet-form";
@@ -9,6 +9,7 @@ import type { TypeId } from "@/dress/clothing-types";
 import { ColourSwatches } from "@/labels/ColourSwatches";
 import type { ColourId } from "@/labels/colour";
 import { usePictureSlots } from "@/pictures/usePictureSlots";
+import { useHere } from "@/shell/piece-link";
 import { useAddToWishlist, useWishlist } from "./api";
 import {
 	PROBLEM_TEXT,
@@ -46,7 +47,7 @@ export function WishSheet({ onClose }: { onClose: () => void }) {
 	});
 	const fields = useShopLinkFields(panel, slots, null);
 	const navigate = useNavigate();
-	const location = useLocation();
+	const here = useHere();
 	// One id per try for the link too, as for the wish: the panel turns its id
 	// over on every change or pick, so a Save again with nothing changed sends
 	// both ids again.
@@ -91,7 +92,7 @@ export function WishSheet({ onClose }: { onClose: () => void }) {
 				onSuccess: (wish) => {
 					panel.done("Added to your wishlist");
 					navigate(pageAfterAdd(wish, link ? linkId : null), {
-						state: { search: location.search },
+						state: here,
 					});
 				},
 			},

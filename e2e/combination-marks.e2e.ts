@@ -1,10 +1,8 @@
 import type { Page } from "@playwright/test";
-import { postOwnedItems } from "./closet-helpers";
-import { postCombinations } from "./combination-helpers";
+import { markedFour } from "./combination-helpers";
 import { expect, test } from "./fixtures";
-import { colourIds } from "./label-helpers";
 import { sheet } from "./locators";
-import { postShopLink, postWish } from "./wishlist-helpers";
+import { postShopLink } from "./wishlist-helpers";
 
 const lines = (page: Page) => page.locator('[data-slot="piece-line"]');
 
@@ -21,36 +19,6 @@ const markWindow = (page: Page) =>
 
 const windowStayed = (page: Page) =>
 	page.evaluate(() => (window as unknown as { stay?: boolean }).stay === true);
-
-// Khaki Harrington jacket + Grey sweater + Black long tee + Navy
-// casual pants. The closet has the jacket and the tee; the wishlist has the
-// jacket and the sweater. So the jacket shows both marks, the sweater Want,
-// the tee Own, and the pants none.
-async function markedFour(page: Page) {
-	await page.goto("/");
-	const ids = await colourIds(page);
-	const id = crypto.randomUUID();
-	await postCombinations(page, {
-		id,
-		pieces: [
-			{ typeId: "harrington", colourId: ids.Khaki },
-			{ typeId: "sweater", colourId: ids.Grey },
-			{ typeId: "tee_l", colourId: ids.Black },
-			{ typeId: "casual_p", colourId: ids.Navy },
-		],
-	});
-	await postOwnedItems(
-		page,
-		{ typeId: "tee_l", colourId: ids.Black, brandId: null, quantity: 1 },
-		{ typeId: "harrington", colourId: ids.Khaki, brandId: null, quantity: 1 },
-	);
-	const sweaterWish = await postWish(page, {
-		typeId: "sweater",
-		colourId: ids.Grey,
-	});
-	await postWish(page, { typeId: "harrington", colourId: ids.Khaki });
-	return { id, ids, sweaterWish };
-}
 
 test("marks each piece Own, Want, both, or none", async ({ page }) => {
 	// Given: both projects, a fresh account with the four pieces above

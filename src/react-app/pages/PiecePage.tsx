@@ -1,7 +1,7 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useId } from "react";
 import { Navigate, useLocation, useParams } from "react-router";
 import { useCloset } from "@/closet/api";
-import { ClosetPart } from "@/closet/ClosetPart";
+import { ClosetCard } from "@/closet/ClosetCard";
 import { closetPieces } from "@/closet/owned-item";
 import { pieceName } from "@/combinations/combination";
 import { PieceCombinations } from "@/combinations/PieceCombinations";
@@ -12,7 +12,7 @@ import { TypeFigure } from "@/dress/figure/TypeFigure";
 import { useWishlist } from "@/wishlist/api";
 import { WishlistPart } from "@/wishlist/WishlistPart";
 import { BackLink, PageHeader } from "../shell/PageHeader";
-import { addressBeforePiece } from "../shell/piece-link";
+import { readBack, useHere } from "../shell/piece-link";
 
 const PICTURE =
 	"relative block aspect-square w-full max-w-[280px] overflow-hidden rounded-[14px]";
@@ -23,7 +23,8 @@ const PICTURE =
 export function PiecePage() {
 	const { typeId, colourId } = useParams();
 	const location = useLocation();
-	const back = addressBeforePiece(location.state);
+	const back = readBack(location.state, "/closet");
+	const here = useHere();
 	const closet = useCloset();
 	const wishlist = useWishlist();
 	const owned = closet.data
@@ -45,7 +46,7 @@ export function PiecePage() {
 	};
 	// A typed address, or the piece gone from both lists since.
 	if (closet.data && wishlist.data && !piece)
-		return <Navigate to={back} replace />;
+		return <Navigate to={back.to} state={back.state} replace />;
 	let body: ReactNode;
 	if (piece)
 		body = (
@@ -58,7 +59,11 @@ export function PiecePage() {
 					/>
 				</span>
 				{owned ? (
-					<ClosetPart items={owned.items} />
+					<CardGroup title="In your closet">
+						{owned.items.map((item) => (
+							<ClosetCard key={item.id} item={item} state={here} />
+						))}
+					</CardGroup>
 				) : closetFailed ? (
 					<PartError title="In your closet" onRetry={retry}>
 						Could not load your closet.
@@ -87,7 +92,7 @@ export function PiecePage() {
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
 			<PageHeader
-				start={<BackLink to={back} />}
+				start={<BackLink to={back.to} state={back.state} />}
 				title={piece ? pieceName(piece) : ""}
 			/>
 			<div className="flex min-h-0 flex-1 flex-col gap-6 overflow-auto px-4 pt-1 pb-24 wide:mx-auto wide:w-full wide:max-w-[540px]">
@@ -100,4 +105,24 @@ export function PiecePage() {
 function failedTitle(closet: boolean, wishlist: boolean) {
 	if (closet && wishlist) return "Could not load your closet and wishlist";
 	return closet ? "Could not load your closet" : "Could not load your wishlist";
+}
+
+function CardGroup({
+	title,
+	children,
+}: {
+	title: string;
+	children: ReactNode;
+}) {
+	const id = useId();
+	return (
+		<section aria-labelledby={id} className="flex flex-col gap-2">
+			<h2 id={id} className="text-[22px]">
+				{title}
+			</h2>
+			<div className="grid grid-cols-2 gap-3.5 wide:grid-cols-5">
+				{children}
+			</div>
+		</section>
+	);
 }

@@ -8,7 +8,7 @@ import { TYPE_NAMES } from "@/dress/clothing-types";
 import { ColourValue, Facts } from "@/item/Facts";
 import { ItemPage } from "@/item/ItemPage";
 import { ItemPictures } from "@/item/ItemPictures";
-import { tabSearch } from "@/shell/piece-link";
+import { type Back, readBack } from "@/shell/piece-link";
 import { useWishlist } from "@/wishlist/api";
 import { RemoveDialog } from "@/wishlist/RemoveDialog";
 import { ShopLinkSheet } from "@/wishlist/ShopLinkSheet";
@@ -19,7 +19,7 @@ import { linkPage, type Wish } from "@/wishlist/wish";
 export function WishPage() {
 	const { wishId } = useParams();
 	const location = useLocation();
-	const back = `/wishlist${tabSearch(location.state)}`;
+	const back = readBack(location.state, "/wishlist");
 	const wishlist = useWishlist();
 	const links = wishlist.data?.find((w) => w.id === wishId)?.shopLinks ?? [];
 	const newest = links[links.length - 1];
@@ -43,7 +43,7 @@ export function WishPage() {
 	);
 }
 
-function WishDetails({ wish, back }: { wish: Wish; back: string }) {
+function WishDetails({ wish, back }: { wish: Wish; back: Back }) {
 	const navigate = useNavigate();
 	const [open, setOpen] = useState<"add" | "remove" | null>(null);
 	return (
@@ -78,7 +78,9 @@ function WishDetails({ wish, back }: { wish: Wish; back: string }) {
 				<RemoveDialog
 					wish={wish}
 					onClose={() => setOpen(null)}
-					onRemoved={() => navigate(back, { replace: true })}
+					onRemoved={() =>
+						navigate(back.to, { replace: true, state: back.state })
+					}
 				/>
 			) : null}
 		</>

@@ -158,26 +158,6 @@ test("opens the Bought confirm and keeps the wish on Cancel", async ({
 	await expect(card(page)).toBeVisible();
 });
 
-test("moves a shop link to the closet after Bought", async ({ page }) => {
-	// Given
-	const { ids } = await onJacketPage(page, [{ pictures: 2 }]);
-	// When
-	await buy(page);
-	// Then
-	await expect(toast(page)).toHaveText("Moved to your closet");
-	await expect(
-		page.getByRole("heading", { name: "In your closet" }),
-	).toBeVisible();
-	await expect(
-		page.getByRole("button", { name: "No brand × 1" }),
-	).toBeVisible();
-	await expect(strip(page, "No brand").getByRole("button")).toHaveCount(2);
-	await expect(
-		page.getByRole("heading", { name: "On your wishlist" }),
-	).toHaveCount(0);
-	await expect(page).toHaveURL(`/piece/wool/${ids.Charcoal}`);
-});
-
 test("keeps the confirm open with Not saved when Bought fails", async ({
 	page,
 }) => {

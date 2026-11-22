@@ -17,6 +17,8 @@ const ownedItemIdSchema = z.uuid().brand<"OwnedItemId">();
 
 export type OwnedItemId = z.infer<typeof ownedItemIdSchema>;
 
+export const ownedItemPage = (id: OwnedItemId) => `/closet/${id}`;
+
 const quantitySchema = z.number().int().min(1).max(QUANTITY_MAX);
 
 // A blank name is no name: the item goes by its piece's name.

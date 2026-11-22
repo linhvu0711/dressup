@@ -4,7 +4,7 @@ import { useCloset } from "@/closet/api";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { Stage } from "@/dress/Stage";
-import { usePieceLink } from "@/shell/piece-link";
+import { pieceLink, useHere } from "@/shell/piece-link";
 import { useTags } from "@/tags/api";
 import { useWishlist } from "@/wishlist/api";
 import { CombinationFigure } from "./CombinationFigure";
@@ -33,7 +33,7 @@ export function CombinationView({
 }) {
 	const toast = useToast();
 	const address = useWallAddress();
-	const linkTo = usePieceLink(`/combinations/${combination.id}`);
+	const here = useHere();
 	const title = combinationTitle(combination);
 	// In the tag list's order; a tag deleted on another device is skipped.
 	const tags =
@@ -123,7 +123,7 @@ export function CombinationView({
 							button inside a link is not valid HTML. */}
 							{mark.own || mark.want ? (
 								<Link
-									{...linkTo(p)}
+									{...pieceLink(p, here)}
 									className="flex min-w-0 flex-1 items-center gap-3"
 								>
 									{piece}

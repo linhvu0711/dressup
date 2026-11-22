@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { FOOTER_ROW, SHEET, SHEET_OVERLAY } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
+import type { Back } from "@/shell/piece-link";
 import { useDeleteOwnedItem } from "./api";
 import { itemCard, type OwnedItem } from "./owned-item";
 
@@ -14,7 +15,7 @@ export function DeleteOwnedItemDialog({
 	onClose,
 }: {
 	item: OwnedItem;
-	back: string;
+	back: Back;
 	onClose: () => void;
 }) {
 	const del = useDeleteOwnedItem();
@@ -42,7 +43,7 @@ export function DeleteOwnedItemDialog({
 								del.mutate(item.id, {
 									onSuccess: () => {
 										onClose();
-										navigate(back, { replace: true });
+										navigate(back.to, { replace: true, state: back.state });
 										toast("Removed from your closet");
 									},
 									onError: () => {

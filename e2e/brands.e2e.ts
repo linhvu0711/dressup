@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 import { postOwnedItems } from "./closet-helpers";
 import { expect, test } from "./fixtures";
 import { colourIds, postBrand } from "./label-helpers";
-import { sheet, toast } from "./locators";
+import { fact, sheet, toast } from "./locators";
 import { BRANDS_FULL_FILE } from "./paths";
 import { postShopLink, postWish } from "./wishlist-helpers";
 
@@ -186,7 +186,7 @@ test("says how many items lose the brand and clears it", async ({ page }) => {
 	await page.goto("/");
 	const ids = await colourIds(page);
 	const zara = await postBrand(page, "Zara");
-	await postOwnedItems(
+	const [shirt] = await postOwnedItems(
 		page,
 		{ typeId: "shirt_l", colourId: ids.Navy, brandId: zara, quantity: 1 },
 		{ typeId: "tee_s", colourId: ids.White, brandId: zara, quantity: 1 },
@@ -204,13 +204,9 @@ test("says how many items lose the brand and clears it", async ({ page }) => {
 	// When
 	await confirm.getByRole("button", { name: "Delete" }).click();
 	await expect(toast(page)).toHaveText("Brand deleted");
-	await page.goto(`/piece/shirt_l/${ids.Navy}`);
+	await page.goto(`/closet/${shirt}`);
 	// Then
-	await expect(
-		page
-			.getByRole("region", { name: "In your closet" })
-			.getByRole("button", { name: "No brand × 1" }),
-	).toBeVisible();
+	await expect(fact(page, "Brand")).toHaveText("No brand");
 });
 
 test.describe("an account with 100 brands", () => {
