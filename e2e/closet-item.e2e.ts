@@ -390,7 +390,9 @@ test("adds a named item with a price, opens its card, and sees both", async ({
 		})
 		.click();
 	await expect(page).toHaveURL(/^[^?]*\/closet\/[^/]+$/);
-	await page.locator('[data-slot="item-price"]').waitFor();
+	// The router moves the address before it draws the page, and the Closet's
+	// cards show prices too.
+	await page.getByRole("button", { name: "Edit item" }).waitFor();
 	// Then
 	expect({
 		heading: await page.getByRole("heading", { level: 1 }).textContent(),
