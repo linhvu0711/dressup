@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { postOwnedItems } from "./closet-helpers";
 import { isPhone, postCombinations } from "./combination-helpers";
 import { expect, test } from "./fixtures";
@@ -698,6 +698,215 @@ test("stops the price at 999.999.999 with its message", async ({ page }) => {
 		message: await addSheet(page).getByRole("alert").textContent(),
 	}).toEqual({
 		value: "123.456.789",
+		message: "Price is a whole number of VND from 1 to 999.999.999.",
+	});
+});
+
+const cursorOf = (box: Locator) =>
+	box.evaluate((el: HTMLInputElement) => [el.selectionStart, el.selectionEnd]);
+
+// "123.456" typed in Price paid, then the cursor put at a place in it.
+async function priceWithCursorAt(page: Page, at: number) {
+	const price = addSheet(page).getByLabel("Price paid");
+	await price.pressSequentially("123456");
+	await price.evaluate(
+		(el: HTMLInputElement, at) => el.setSelectionRange(at, at),
+		at,
+	);
+	return price;
+}
+
+test("keeps the cursor after two zeros typed in the middle of the price", async ({
+	page,
+}) => {
+	// Given: a fresh account, Add to closet open, "123.456" in Price paid, the
+	// cursor after its first "1"
+	await openAddSheet(page);
+	const price = await priceWithCursorAt(page, 1);
+	// When
+	await price.press("0");
+	await price.press("0");
+	// Then
+	expect({
+		value: await price.inputValue(),
+		cursor: await cursorOf(price),
+	}).toEqual({ value: "10.023.456", cursor: [4, 4] });
+});
+
+test("keeps the cursor at the end of a price typed in order", async ({
+	page,
+}) => {
+	// Given: a fresh account, Add to closet open
+	await openAddSheet(page);
+	const price = addSheet(page).getByLabel("Price paid");
+	// When
+	await price.pressSequentially("784000");
+	// Then
+	expect({
+		value: await price.inputValue(),
+		cursor: await cursorOf(price),
+	}).toEqual({ value: "784.000", cursor: [7, 7] });
+});
+
+test("puts the cursor after digits pasted in the middle of the price", async ({
+	page,
+}) => {
+	// Given: a fresh account, "00" copied, Add to closet open, "123.456" in
+	// Price paid, the cursor after its first "1"
+	await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+	await openAddSheet(page);
+	await page.evaluate(() => navigator.clipboard.writeText("00"));
+	const price = await priceWithCursorAt(page, 1);
+	// When
+	await page.keyboard.press("ControlOrMeta+V");
+	// Then
+	expect({
+		value: await price.inputValue(),
+		cursor: await cursorOf(price),
+	}).toEqual({ value: "10.023.456", cursor: [4, 4] });
+});
+
+test("puts the cursor after digits dropped in the middle of the price", async ({
+	page,
+}) => {
+	// Given: a fresh account, Add to closet open, "123.456" in Price paid,
+	// its "456" selected
+	await openAddSheet(page);
+	const at = await selectedPriceDigits(page);
+	const price = addSheet(page).getByLabel("Price paid");
+	// When: the selection is dragged to just after the first "1"
+	await drag(page, { x: at.selected, y: at.y }, { x: at.afterOne, y: at.y });
+	await expect(price).toHaveValue("145.623");
+	// Then
+	expect({
+		value: await price.inputValue(),
+		cursor: await cursorOf(price),
+	}).toEqual({ value: "145.623", cursor: [5, 5] });
+});
+
+test("keeps the cursor where Backspace removed a digit of the price", async ({
+	page,
+}) => {
+	// Given: a fresh account, Add to closet open, "123.456" in Price paid, the
+	// cursor after its "4"
+	await openAddSheet(page);
+	const price = await priceWithCursorAt(page, 5);
+	// When
+	await price.press("Backspace");
+	// Then
+	expect({
+		value: await price.inputValue(),
+		cursor: await cursorOf(price),
+	}).toEqual({ value: "12.356", cursor: [4, 4] });
+});
+
+test("keeps the cursor where Delete removed a digit of the price", async ({
+	page,
+}) => {
+	// Given: a fresh account, Add to closet open, "123.456" in Price paid, the
+	// cursor before its "4"
+	await openAddSheet(page);
+	const price = await priceWithCursorAt(page, 4);
+	// When
+	await price.press("Delete");
+	// Then
+	expect({
+		value: await price.inputValue(),
+		cursor: await cursorOf(price),
+	}).toEqual({ value: "12.356", cursor: [4, 4] });
+});
+
+test("lets Delete before a dot of the price reach the next digit", async ({
+	page,
+}) => {
+	// Given: a fresh account, Add to closet open, "123.456" in Price paid, the
+	// cursor before its dot
+	await openAddSheet(page);
+	const price = await priceWithCursorAt(page, 3);
+	// When
+	await price.press("Delete");
+	await price.press("Delete");
+	// Then
+	expect({
+		value: await price.inputValue(),
+		cursor: await cursorOf(price),
+	}).toEqual({ value: "12.356", cursor: [4, 4] });
+});
+
+test("keeps the cursor before a dot when Delete removed the digit before it", async ({
+	page,
+}) => {
+	// Given: a fresh account, Add to closet open, "123.456" in Price paid, the
+	// cursor before its "3"
+	await openAddSheet(page);
+	const price = await priceWithCursorAt(page, 2);
+	// When
+	await price.press("Delete");
+	// Then
+	expect({
+		value: await price.inputValue(),
+		cursor: await cursorOf(price),
+	}).toEqual({ value: "12.456", cursor: [2, 2] });
+});
+
+test("keeps the cursor after a dot that a Delete of a selection left", async ({
+	page,
+}) => {
+	// Given: a fresh account, Add to closet open, "12.345.678" in Price paid,
+	// "345." selected
+	await openAddSheet(page);
+	const price = addSheet(page).getByLabel("Price paid");
+	await price.pressSequentially("12345678");
+	await price.evaluate((el: HTMLInputElement) => el.setSelectionRange(3, 7));
+	// When
+	await price.press("Delete");
+	// Then
+	expect({
+		value: await price.inputValue(),
+		cursor: await cursorOf(price),
+	}).toEqual({ value: "12.678", cursor: [3, 3] });
+});
+
+test("keeps the cursor where a letter was dropped from the price", async ({
+	page,
+}) => {
+	// Given: a fresh account, Add to closet open, "123.456" in Price paid, the
+	// cursor after its first "1"
+	await openAddSheet(page);
+	const price = await priceWithCursorAt(page, 1);
+	// When
+	await price.press("a");
+	await expect(addSheet(page).getByRole("alert")).toBeVisible();
+	// Then
+	expect({
+		value: await price.inputValue(),
+		cursor: await cursorOf(price),
+		message: await addSheet(page).getByRole("alert").textContent(),
+	}).toEqual({
+		value: "123.456",
+		cursor: [1, 1],
+		message: "Price is a whole number of VND from 1 to 999.999.999.",
+	});
+});
+
+test("keeps the cursor where a dot was dropped from the price", async ({
+	page,
+}) => {
+	// Given: a fresh account, Add to closet open, "123.456" in Price paid, the
+	// cursor after its first "1"
+	await openAddSheet(page);
+	const price = await priceWithCursorAt(page, 1);
+	// When
+	await price.press(".");
+	await expect(addSheet(page).getByRole("alert")).toBeVisible();
+	// Then
+	expect({
+		value: await price.inputValue(),
+		cursor: await cursorOf(price),
+		message: await addSheet(page).getByRole("alert").textContent(),
+	}).toEqual({
+		value: "123.456",
+		cursor: [1, 1],
 		message: "Price is a whole number of VND from 1 to 999.999.999.",
 	});
 });

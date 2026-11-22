@@ -7,6 +7,7 @@ import { PICTURES_LABEL, PictureSlots } from "@/pictures/PictureSlots";
 import type { PictureId } from "@/pictures/picture";
 import type { usePictureSlots } from "@/pictures/usePictureSlots";
 import { typedPrice } from "@/price";
+import { usePriceCursor } from "@/usePriceCursor";
 import {
 	ADDRESS_MAX,
 	isWebAddress,
@@ -103,6 +104,7 @@ export function ShopLinkFields<Id extends string>({
 	panel: Panel<Id>;
 	limitHit: boolean;
 }) {
+	const priceCursor = usePriceCursor();
 	return (
 		<>
 			<Field label="Address" problem={panel.problemFor("address")}>
@@ -132,11 +134,15 @@ export function ShopLinkFields<Id extends string>({
 			</Field>
 			<Field label="Price in ₫">
 				<input
+					ref={priceCursor.ref}
 					aria-label="Price in ₫"
 					inputMode="numeric"
 					autoComplete="off"
 					value={fields.price.shown}
-					onChange={(e) => fields.setPrice(typedPrice(e.target.value))}
+					onChange={(e) => {
+						priceCursor.keep(e);
+						fields.setPrice(typedPrice(e.target.value));
+					}}
 					className={INPUT}
 				/>
 			</Field>

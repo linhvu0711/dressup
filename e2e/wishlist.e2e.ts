@@ -960,3 +960,27 @@ test("removes a wish after a confirm that counts its links", async ({
 		"In your closet",
 	]);
 });
+
+test("keeps the cursor after two zeros typed in the middle of the shop link price", async ({
+	page,
+}) => {
+	// Given: a fresh account, Add to wishlist open on an Olive long polo,
+	// "123.456" in Price in ₫, the cursor after its first "1"
+	await page.goto("/wishlist");
+	await openAddSheet(page);
+	await pickPiece(page, "Long polo", "Olive");
+	const price = addSheet(page).getByRole("textbox", { name: "Price in ₫" });
+	await price.pressSequentially("123456");
+	await price.evaluate((el: HTMLInputElement) => el.setSelectionRange(1, 1));
+	// When
+	await price.press("0");
+	await price.press("0");
+	// Then
+	expect({
+		value: await price.inputValue(),
+		cursor: await price.evaluate((el: HTMLInputElement) => [
+			el.selectionStart,
+			el.selectionEnd,
+		]),
+	}).toEqual({ value: "10.023.456", cursor: [4, 4] });
+});

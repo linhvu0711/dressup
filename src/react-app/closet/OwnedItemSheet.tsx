@@ -16,6 +16,7 @@ import type { ColourId } from "@/labels/colour";
 import { PICTURES_LABEL, PictureSlots } from "@/pictures/PictureSlots";
 import { usePictureSlots } from "@/pictures/usePictureSlots";
 import { typedPrice } from "@/price";
+import { usePriceCursor } from "@/usePriceCursor";
 import {
 	useAddOwnedItem,
 	useChangeOwnedItem,
@@ -67,6 +68,7 @@ export function OwnedItemSheet(
 	const [price, setPrice] = useState(() =>
 		typedPrice(String(editing?.price ?? "")),
 	);
+	const priceCursor = usePriceCursor();
 	// The text a paste or a drop puts in, for the change it makes. The browser
 	// makes that change before the next task, so the text is dropped then: a
 	// paste that changes nothing, as of an image, leaves none behind.
@@ -253,6 +255,7 @@ export function OwnedItemSheet(
 			<Field label="Price paid" problem={price.cut ? PRICE_CUT : undefined}>
 				<div className="flex items-center gap-2">
 					<input
+						ref={priceCursor.ref}
 						aria-label="Price paid"
 						inputMode="numeric"
 						autoComplete="off"
@@ -282,6 +285,7 @@ export function OwnedItemSheet(
 									native.inputType === "insertText"
 										? (native.data ?? undefined)
 										: undefined;
+								priceCursor.keep(e);
 								setPrice(typedPrice(e.target.value, put.current ?? key));
 							}
 						}}
