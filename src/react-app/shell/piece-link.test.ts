@@ -50,4 +50,13 @@ describe("back", () => {
 		// Then
 		expect(back).toEqual({ to: "/closet" });
 	});
+
+	test("reads back a combination address with a slash at its end", () => {
+		// Given: a bookmarked combination address, which the router opens too
+		const state = { to: "/combinations/c1/" };
+		// When
+		const back = readBack(state, "/closet");
+		// Then
+		expect(back).toEqual({ to: "/combinations/c1/" });
+	});
 });

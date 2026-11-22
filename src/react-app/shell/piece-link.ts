@@ -28,7 +28,7 @@ const backRule = z.object({
 	to: z
 		.string()
 		.regex(
-			/^\/(closet|wishlist|combinations\/[^/?#]+|piece\/[^/?#]+\/[^/?#]+)(\?.*)?$/,
+			/^\/(closet|wishlist|combinations\/[^/?#]+|piece\/[^/?#]+\/[^/?#]+)\/?(\?.*)?$/,
 		),
 	state: z.unknown().optional(),
 });
