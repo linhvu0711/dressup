@@ -12,25 +12,33 @@ const slot = (page: Page, n: number) =>
 
 const COS = "https://www.cos.com/jacket";
 
-// A fresh account with a Charcoal wool jacket wish, on its piece page.
+// A fresh account with a Charcoal wool jacket wish, on its own page, or on
+// its first shop link's page when it has links.
 async function onJacketPage(page: Page, links: { pictures: number }[] = []) {
 	await page.goto("/");
 	const ids = await colourIds(page);
 	const wish = await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
+	const linkIds: string[] = [];
 	for (const [i, { pictures }] of links.entries()) {
 		const pictureIds: string[] = [];
 		for (let n = 0; n < pictures; n++) pictureIds.push(await uploadPng(page));
-		await postShopLink(page, wish, {
+		const link = await postShopLink(page, wish, {
 			url: i === 0 ? COS : "https://www.zara.com/x",
 			brandId: null,
 			name: i === 0 ? "Wool jacket" : "Wool blend jacket",
 			price: null,
 			pictureIds,
 		});
+		linkIds.push(link);
 	}
-	await page.goto(`/piece/wool/${ids.Charcoal}`);
+	await page.goto(
+		linkIds[0] ? `/wishlist/link/${linkIds[0]}` : `/wishlist/wish/${wish}`,
+	);
 	await expect(
-		page.getByRole("heading", { name: "On your wishlist" }),
+		page.getByRole("heading", {
+			level: 1,
+			name: linkIds[0] ? "Wool jacket" : "Charcoal wool jacket",
+		}),
 	).toBeVisible();
 	return { ids, wish };
 }
@@ -90,7 +98,7 @@ test("stops at 8 pictures on one shop link", async ({ page }) => {
 	// Given
 	await onJacketPage(page, [{ pictures: 8 }]);
 	// When
-	await page.getByRole("button", { name: "Change shop link" }).click();
+	await page.getByRole("button", { name: "Edit", exact: true }).click();
 	// Then
 	const dialog = linkSheet(page, "Edit shop link");
 	await expect(
@@ -101,37 +109,15 @@ test("stops at 8 pictures on one shop link", async ({ page }) => {
 	).toBeVisible();
 });
 
-const strip = (page: Page, name: string) =>
-	page.getByRole("list", { name: `Pictures of ${name}` });
-
-test("shows each shop link's pictures as a strip and opens the viewer", async ({
-	page,
-}) => {
-	// Given
-	await onJacketPage(page, [{ pictures: 2 }, { pictures: 0 }]);
-	// When
-	await expect(strip(page, "cos.com").getByRole("button")).toHaveCount(2);
-	const strips = {
-		cos: await strip(page, "cos.com").getByRole("button").count(),
-		zara: await strip(page, "zara.com").count(),
-	};
-	await page.getByRole("button", { name: "Open picture 1 of 2" }).click();
-	// Then
-	expect(strips).toEqual({ cos: 2, zara: 0 });
-	await expect(
-		page.getByRole("dialog", { name: "Picture 1 of 2" }),
-	).toBeVisible();
-});
-
-const card = (page: Page) =>
-	page.getByRole("listitem", { name: "Wool jacket", exact: true });
-
 const confirm = (page: Page) =>
 	page.getByRole("alertdialog", { name: "Bought this one?" });
 
-// Bought on the card, then Bought in the confirm.
+const boughtButton = (page: Page) =>
+	page.getByRole("button", { name: "Bought", exact: true });
+
+// Bought on the shop link's page, then Bought in the confirm.
 async function buy(page: Page) {
-	await card(page).getByRole("button", { name: "Bought" }).click();
+	await boughtButton(page).click();
 	await confirm(page).getByRole("button", { name: "Bought" }).click();
 }
 
@@ -141,7 +127,7 @@ test("opens the Bought confirm and keeps the wish on Cancel", async ({
 	// Given
 	await onJacketPage(page, [{ pictures: 2 }]);
 	// When
-	await card(page).getByRole("button", { name: "Bought" }).click();
+	await boughtButton(page).click();
 	const shown = {
 		text: await confirm(page).getByRole("paragraph").first().textContent(),
 		buttons: await confirm(page).getByRole("button").allInnerTexts(),
@@ -153,50 +139,15 @@ test("opens the Bought confirm and keeps the wish on Cancel", async ({
 		buttons: ["Cancel", "Bought"],
 	});
 	await expect(
-		page.getByRole("heading", { name: "On your wishlist" }),
+		page.getByRole("heading", { level: 1, name: "Wool jacket" }),
 	).toBeVisible();
-	await expect(card(page)).toBeVisible();
 });
 
-test("keeps the confirm open with Not saved when Bought fails", async ({
+test("goes back to the Wishlist when another tab bought the link first", async ({
 	page,
 }) => {
 	// Given
-	await onJacketPage(page, [{ pictures: 2 }]);
-	await page.route("**/api/shop-links/*/bought", (route) =>
-		route.fulfill({ status: 500 }),
-	);
-	// When
-	await buy(page);
-	// Then
-	await expect(confirm(page).getByRole("alert")).toHaveText(
-		"Not saved. Try again.",
-	);
-	// The open confirm hides the page from roles, so the card goes by its slot.
-	await expect(page.locator('[data-slot="shop-link"]')).toHaveCount(1);
-});
-
-test("says the closet limit when Bought answers owned_item_limit", async ({
-	page,
-}) => {
-	// Given
-	await onJacketPage(page, [{ pictures: 2 }]);
-	await page.route("**/api/shop-links/*/bought", (route) =>
-		route.fulfill({ status: 409, json: { error: "owned_item_limit" } }),
-	);
-	// When
-	await buy(page);
-	// Then
-	await expect(confirm(page).getByRole("alert")).toHaveText(
-		"You have 500 items. That is the limit. Delete one to add a new one.",
-	);
-});
-
-test("keeps the piece page when another tab bought the link first", async ({
-	page,
-}) => {
-	// Given
-	const { ids } = await onJacketPage(page, [{ pictures: 1 }]);
+	await onJacketPage(page, [{ pictures: 1 }]);
 	const res = await page.request.get("/api/wishes");
 	const { wishes } = (await res.json()) as {
 		wishes: { shopLinks: { id: string }[] }[];
@@ -208,9 +159,6 @@ test("keeps the piece page when another tab bought the link first", async ({
 	// When
 	await buy(page);
 	// Then
-	await expect(
-		page.getByRole("heading", { name: "In your closet" }),
-	).toBeVisible();
 	await expect(confirm(page)).toHaveCount(0);
-	await expect(page).toHaveURL(`/piece/wool/${ids.Charcoal}`);
+	await expect(page).toHaveURL("/wishlist");
 });

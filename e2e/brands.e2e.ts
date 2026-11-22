@@ -319,7 +319,7 @@ test("counts shop links in the delete confirm and shows the host after", async (
 	const ids = await colourIds(page);
 	const zara = await postBrand(page, "Zara");
 	const wish = await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
-	await postShopLink(page, wish, {
+	const link = await postShopLink(page, wish, {
 		url: "https://www.zara.com/b",
 		brandId: zara,
 		name: "Wool blend jacket",
@@ -337,9 +337,7 @@ test("counts shop links in the delete confirm and shows the host after", async (
 	// When
 	await confirm.getByRole("button", { name: "Delete" }).click();
 	await expect(toast(page)).toHaveText("Brand deleted");
-	await page.goto(`/piece/wool/${ids.Charcoal}`);
+	await page.goto(`/wishlist/link/${link}`);
 	// Then
-	await expect(
-		page.locator('[data-slot="shop-link"]').first().locator("p").first(),
-	).toHaveText("zara.com");
+	await expect(fact(page, "Shop")).toHaveText("zara.com");
 });

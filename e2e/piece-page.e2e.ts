@@ -3,6 +3,7 @@ import { postOwnedItems } from "./closet-helpers";
 import { markedFour } from "./combination-helpers";
 import { expect, test } from "./fixtures";
 import { colourIds } from "./label-helpers";
+import { postShopLink, postWish } from "./wishlist-helpers";
 
 const line = (page: Page, name: string) =>
 	page.locator('[data-slot="piece-line"]').filter({ hasText: name });
@@ -81,4 +82,103 @@ test("keeps the combination as the piece page's Back after an Item page", async 
 	await page.getByRole("link", { name: "Back" }).click();
 	// Then
 	await expect(page).toHaveURL(`/combinations/${id}`);
+});
+
+test("shows a card for each shop link of the piece", async ({ page }) => {
+	// Given: both projects, a Charcoal wool jacket wish with two links, no
+	// brand and no price
+	await page.goto("/");
+	const ids = await colourIds(page);
+	const wish = await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
+	await postShopLink(page, wish, {
+		url: "https://www.cos.com/jacket",
+		brandId: null,
+		name: "Wool jacket",
+		price: null,
+	});
+	await postShopLink(page, wish, {
+		url: "https://www.zara.com/x",
+		brandId: null,
+		name: "Wool blend jacket",
+		price: null,
+	});
+	// When
+	await page.goto(`/piece/wool/${ids.Charcoal}`);
+	// Then
+	const cards = group(page, "On your wishlist").locator(
+		'[data-slot="wish-card"]',
+	);
+	await expect(cards).toHaveCount(2);
+	expect(
+		await cards.evaluateAll((all) =>
+			all.map((card) => card.getAttribute("aria-label")),
+		),
+	).toEqual([
+		"Wool jacket, cos.com · Charcoal wool jacket",
+		"Wool blend jacket, zara.com · Charcoal wool jacket",
+	]);
+});
+
+test("shows the no-link card for a wish with no shop link", async ({
+	page,
+}) => {
+	// Given: both projects, a Grey sweater wish with no link
+	await page.goto("/");
+	const ids = await colourIds(page);
+	await postWish(page, { typeId: "sweater", colourId: ids.Grey });
+	// When
+	await page.goto(`/piece/sweater/${ids.Grey}`);
+	// Then
+	await expect(
+		group(page, "On your wishlist").locator('[data-slot="wish-card"]'),
+	).toHaveAccessibleName("Grey sweater, No shop link yet");
+});
+
+test("hides On your wishlist for a piece only in the closet", async ({
+	page,
+}) => {
+	// Given: both projects, Olive chino shorts owned and no wish
+	await page.goto("/");
+	const ids = await colourIds(page);
+	await postOwnedItems(page, {
+		typeId: "chino_sh",
+		colourId: ids.Olive,
+		brandId: null,
+		quantity: 1,
+	});
+	// When
+	await page.goto(`/piece/chino_sh/${ids.Olive}`);
+	await expect(
+		page.getByRole("heading", { name: "In your closet" }),
+	).toBeVisible();
+	// Then
+	await expect(
+		page.getByRole("heading", { name: "On your wishlist" }),
+	).toHaveCount(0);
+});
+
+test("goes back to the piece page from a shop link's page", async ({
+	page,
+}) => {
+	// Given: both projects, the four pieces of markedFour, a link "Cos sweater"
+	// on the Grey sweater wish, the combination open
+	const { id, ids, sweaterWish } = await markedFour(page);
+	await postShopLink(page, sweaterWish, {
+		url: "https://cos.com/sweater",
+		brandId: null,
+		name: "Cos sweater",
+		price: null,
+	});
+	await page.goto(`/combinations/${id}`);
+	// When
+	await line(page, "Grey sweater").getByRole("link").click();
+	await group(page, "On your wishlist")
+		.getByRole("link", { name: /^Cos sweater, / })
+		.click();
+	await expect(
+		page.getByRole("heading", { level: 1, name: "Cos sweater" }),
+	).toBeVisible();
+	await page.getByRole("link", { name: "Back" }).click();
+	// Then
+	await expect(page).toHaveURL(`/piece/sweater/${ids.Grey}`);
 });

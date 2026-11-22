@@ -114,6 +114,9 @@ test("drops Want after the wish is removed, with no reload", async ({
 	await markWindow(page);
 	// When: the Grey sweater, wanted only, leaves the wishlist
 	await line(page, "Grey sweater").getByRole("link").click();
+	await page
+		.getByRole("link", { name: "Grey sweater, No shop link yet" })
+		.click();
 	await page.getByRole("button", { name: "Remove from wishlist" }).click();
 	await page
 		.getByRole("alertdialog", { name: "Remove from wishlist?" })
@@ -142,16 +145,17 @@ test("shows Own and drops Want after Bought, with no reload", async ({
 		"Grey sweaterWant#8C8A84",
 	);
 	await markWindow(page);
-	// When: the shop link is Bought on the sweater's piece page
+	// When: the shop link is Bought on its page, opened from the sweater's
+	// piece page, then Back from the bought item to the piece page and on
 	await line(page, "Grey sweater").getByRole("link").click();
-	await page
-		.getByRole("listitem", { name: "Cos sweater", exact: true })
-		.getByRole("button", { name: "Bought" })
-		.click();
+	await page.getByRole("link", { name: /^Cos sweater, / }).click();
+	await page.getByRole("button", { name: "Bought", exact: true }).click();
 	await page
 		.getByRole("alertdialog", { name: "Bought this one?" })
 		.getByRole("button", { name: "Bought" })
 		.click();
+	await expect(page).toHaveURL(/\/closet\/[^/]+$/);
+	await page.getByRole("link", { name: "Back" }).click();
 	await expect(
 		page.getByRole("heading", { name: "In your closet" }),
 	).toBeVisible();

@@ -120,9 +120,12 @@ test("shows the shop link boxes text at 16px on a phone", async ({ page }) => {
 	// Given: the phone project, a Charcoal wool jacket wish
 	await page.goto("/");
 	const ids = await colourIds(page);
-	await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
+	const wish = await postWish(page, {
+		typeId: "wool",
+		colourId: ids.Charcoal,
+	});
 	// When
-	await page.goto(`/piece/wool/${ids.Charcoal}`);
+	await page.goto(`/wishlist/wish/${wish}`);
 	await page.getByRole("button", { name: "Add a shop link" }).click();
 	const dialog = sheet(page, "Add a shop link");
 	// Then

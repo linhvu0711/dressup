@@ -10,16 +10,16 @@ import { PartError } from "@/components/ui/part-error";
 import { PLACEHOLDER } from "@/components/ui/placeholder";
 import { TypeFigure } from "@/dress/figure/TypeFigure";
 import { useWishlist } from "@/wishlist/api";
-import { WishlistPart } from "@/wishlist/WishlistPart";
+import { WishlistCard } from "@/wishlist/WishlistCard";
+import { wishlistCards } from "@/wishlist/wish";
 import { BackLink, PageHeader } from "../shell/PageHeader";
 import { readBack, useHere } from "../shell/piece-link";
 
 const PICTURE =
 	"relative block aspect-square w-full max-w-[280px] overflow-hidden rounded-[14px]";
 
-// One piece and everything the account holds about it, one part under
-// another: the closet's items, the wish with its shop links, then the
-// combinations that hold it.
+// One piece and everything the account holds about it: its owned items and
+// shop links as cards, then the combinations that hold it.
 export function PiecePage() {
 	const { typeId, colourId } = useParams();
 	const location = useLocation();
@@ -70,7 +70,16 @@ export function PiecePage() {
 					</PartError>
 				) : null}
 				{wish ? (
-					<WishlistPart wish={wish} />
+					<CardGroup title="On your wishlist">
+						{wishlistCards([wish]).map((card) => (
+							<WishlistCard
+								key={card.link?.id ?? card.wish.id}
+								card={card}
+								slot="wish-card"
+								state={here}
+							/>
+						))}
+					</CardGroup>
 				) : wishlistFailed ? (
 					<PartError title="On your wishlist" onRetry={retry}>
 						Could not load your wishlist.
