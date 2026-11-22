@@ -3,7 +3,7 @@ import { postOwnedItems } from "./closet-helpers";
 import { markedFour } from "./combination-helpers";
 import { expect, test } from "./fixtures";
 import { colourIds } from "./label-helpers";
-import { sheet, toast } from "./locators";
+import { facts, sheet, toast } from "./locators";
 import { postShopLink, postWish } from "./wishlist-helpers";
 
 const line = (page: Page, name: string) =>
@@ -59,6 +59,9 @@ test("goes back to the piece page from an owned item's page", async ({
 		.locator('[data-slot="closet-card"]')
 		.click();
 	await expect(page).toHaveURL(/\/closet\/[^/]+$/);
+	// The address changes before the page does, so the old page's Back can
+	// still be on screen: wait for the Item page itself.
+	await expect(page.getByRole("button", { name: "Edit item" })).toBeVisible();
 	await page.getByRole("link", { name: "Back" }).click();
 	// Then
 	await expect(page).toHaveURL(`/piece/tee_l/${ids.Black}`);
@@ -75,10 +78,14 @@ test("keeps the combination as the piece page's Back after an Item page", async 
 		.locator('[data-slot="closet-card"]')
 		.click();
 	await expect(page).toHaveURL(/\/closet\/[^/]+$/);
+	// The address changes before the page does, so the old page's Back can
+	// still be on screen: wait for the Item page itself.
+	await expect(page.getByRole("button", { name: "Edit item" })).toBeVisible();
 	await page.getByRole("link", { name: "Back" }).click();
-	// The Item page's heading is "Black long tee" too, so the address says
+	// The Item page's heading is "Black long tee" too, so the closet group says
 	// the piece page is open.
 	await expect(page).toHaveURL(`/piece/tee_l/${ids.Black}`);
+	await expect(group(page, "In your closet")).toBeVisible();
 	// When
 	await page.getByRole("link", { name: "Back" }).click();
 	// Then
@@ -195,6 +202,9 @@ test("says Not in your closet or on your wishlist after the last wish goes", asy
 	await page
 		.getByRole("link", { name: "Grey sweater, No shop link yet" })
 		.click();
+	// The piece page has a Remove from wishlist button too: wait for the wish
+	// page's facts.
+	await expect(facts(page)).toBeVisible();
 	await page.getByRole("button", { name: "Remove from wishlist" }).click();
 	await page
 		.getByRole("alertdialog", { name: "Remove from wishlist?" })

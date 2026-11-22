@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 import { markedFour } from "./combination-helpers";
 import { expect, test } from "./fixtures";
-import { sheet } from "./locators";
+import { facts, sheet } from "./locators";
 import { postShopLink } from "./wishlist-helpers";
 
 const lines = (page: Page) => page.locator('[data-slot="piece-line"]');
@@ -118,6 +118,9 @@ test("drops Want after the wish is removed, with no reload", async ({
 	await page
 		.getByRole("link", { name: "Grey sweater, No shop link yet" })
 		.click();
+	// The piece page has a Remove from wishlist button too: wait for the wish
+	// page's facts.
+	await expect(facts(page)).toBeVisible();
 	await page.getByRole("button", { name: "Remove from wishlist" }).click();
 	await page
 		.getByRole("alertdialog", { name: "Remove from wishlist?" })
@@ -160,6 +163,9 @@ test("shows Own and drops Want after Bought, with no reload", async ({
 		.getByRole("button", { name: "Bought" })
 		.click();
 	await expect(page).toHaveURL(/\/closet\/[^/]+$/);
+	// The address changes before the page does, so the old page's Back can
+	// still be on screen: wait for the Item page itself.
+	await expect(page.getByRole("button", { name: "Edit item" })).toBeVisible();
 	await page.getByRole("link", { name: "Back" }).click();
 	await expect(
 		page.getByRole("heading", { name: "In your closet" }),
