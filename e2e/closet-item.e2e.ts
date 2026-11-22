@@ -500,6 +500,22 @@ test("keeps only digits in the price with its message", async ({ page }) => {
 	});
 });
 
+test("shows the price message for a typed dot", async ({ page }) => {
+	// Given: a fresh account, Add to closet open
+	await openAddSheet(page);
+	// When
+	await addSheet(page).getByLabel("Price paid").pressSequentially("784.");
+	// Then
+	await expect(addSheet(page).getByRole("alert")).toBeVisible();
+	expect({
+		value: await addSheet(page).getByLabel("Price paid").inputValue(),
+		message: await addSheet(page).getByRole("alert").textContent(),
+	}).toEqual({
+		value: "784",
+		message: "Price is a whole number of VND from 1 to 999.999.999.",
+	});
+});
+
 test("shows the price message for a pasted decimal price", async ({ page }) => {
 	// Given: a fresh account, Add to closet open, "784000.00" copied
 	await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);

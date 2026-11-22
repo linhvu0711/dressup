@@ -44,3 +44,18 @@ test("says a paste with a dot that is not a thousands dot was cut", () => {
 		{ value: 123440000, shown: "123.440.000", cut: false },
 	]);
 });
+
+test("says a typed dot was cut", () => {
+	// Given: the field's text after the key, and the key
+	const typed = [
+		["784.", "."],
+		["7845", "5"],
+	] as const;
+	// When
+	const prices = typed.map(([text, key]) => typedPrice(text, key));
+	// Then
+	expect(prices).toEqual([
+		{ value: 784, shown: "784", cut: true },
+		{ value: 7845, shown: "7.845", cut: false },
+	]);
+});

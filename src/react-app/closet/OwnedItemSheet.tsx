@@ -275,7 +275,14 @@ export function OwnedItemSheet(
 										shown: typedPrice(now.shown).shown,
 									})),
 								);
-							} else setPrice(typedPrice(e.target.value, put.current));
+							} else {
+								const native = e.nativeEvent as InputEvent;
+								const key =
+									native.inputType === "insertText"
+										? (native.data ?? undefined)
+										: undefined;
+								setPrice(typedPrice(e.target.value, put.current ?? key));
+							}
 						}}
 						className={cn(INPUT, "min-w-0 flex-1")}
 					/>
