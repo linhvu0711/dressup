@@ -430,6 +430,41 @@ test("changes the name and price from the edit sheet", async ({ page }) => {
 	});
 });
 
+test("keeps a newer name and price from another tab on a quantity-only save", async ({
+	page,
+}) => {
+	// Given: Navy long button-up, no brand, 1, "Oxford shirt", 784000, its
+	// Edit item open; a second tab then renamed it and changed its price
+	await page.goto("/");
+	const ids = await colourIds(page);
+	const [id] = await postOwnedItems(page, {
+		typeId: "shirt_l",
+		colourId: ids.Navy,
+		brandId: null,
+		quantity: 1,
+		name: "Oxford shirt",
+		price: 784000,
+	});
+	await page.goto(`/closet/${id}`);
+	await page.getByRole("button", { name: "Edit item" }).click();
+	const edit = sheet(page, "Edit item");
+	await edit.getByLabel("Name").waitFor();
+	const changed = await page.request.put(`/api/owned-items/${id}`, {
+		data: { brandId: null, quantity: 1, name: "Linen shirt", price: 899000 },
+	});
+	expect(changed.status()).toBe(200);
+	// When
+	await edit.getByRole("button", { name: "More" }).click();
+	await edit.getByRole("button", { name: "Save" }).click();
+	// Then
+	await expect(toast(page)).toHaveText("Changes saved");
+	expect({
+		heading: await page.getByRole("heading", { level: 1 }).textContent(),
+		price: await page.locator('[data-slot="item-price"]').textContent(),
+		quantity: await fact(page, "Quantity").textContent(),
+	}).toEqual({ heading: "Linen shirt", price: "899.000 ₫", quantity: "2" });
+});
+
 test("stops the name at 80 characters with its message", async ({ page }) => {
 	// Given: a fresh account, Add to closet open
 	await openAddSheet(page);

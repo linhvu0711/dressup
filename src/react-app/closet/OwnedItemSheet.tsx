@@ -118,7 +118,16 @@ export function OwnedItemSheet(
 		const named = { name: name.trim() || null, price: price.value };
 		if (editing)
 			update.mutate(
-				{ id: panel.id, brandId, quantity: n, ...named, pictureIds },
+				{
+					id: panel.id,
+					brandId,
+					quantity: n,
+					// Only what changed here, so a save does not undo a newer name or
+					// price from another tab.
+					...(named.name === editing.name ? {} : { name: named.name }),
+					...(named.price === editing.price ? {} : { price: named.price }),
+					pictureIds,
+				},
 				{ onSuccess: () => panel.done("Changes saved") },
 			);
 		else
