@@ -6,7 +6,7 @@ import { colourIds, postBrand } from "./label-helpers";
 import { sheet, toast } from "./locators";
 import { uploadPng } from "./picture-helpers";
 
-const facts = (page: Page) => page.locator('[data-slot="item-facts"]');
+const facts = (page: Page) => page.locator('[data-slot="facts"]');
 
 const fact = (page: Page, term: string) =>
 	facts(page)
@@ -15,7 +15,7 @@ const fact = (page: Page, term: string) =>
 		.locator("dd");
 
 const bigPicture = (page: Page) =>
-	page.locator('[data-slot="item-picture"] img');
+	page.getByRole("button", { name: /^Open picture/ }).locator("img");
 
 // One plain item, a White short tee with no brand, on a fresh account.
 async function postPlainTee(page: Page, quantity = 1) {
@@ -69,10 +69,14 @@ test("shows an item's pictures, name, brand, price, facts, and actions", async (
 		price: await page.locator('[data-slot="item-price"]').textContent(),
 		terms: await facts(page).locator("dt").allTextContents(),
 		values: await facts(page).locator("dd").allTextContents(),
-		thumbs: await page.locator('[data-slot="picture-thumbs"] button').count(),
+		thumbs: await page
+			.getByRole("list", { name: "Pictures of Oxford shirt" })
+			.getByRole("button")
+			.count(),
 		big: await bigPicture(page).getAttribute("src"),
 		actions: await page
-			.locator('[data-slot="item-actions"] button')
+			.getByRole("group", { name: "Actions" })
+			.getByRole("button")
 			.evaluateAll((buttons) =>
 				buttons.map((b) => b.getAttribute("aria-label")),
 			),
@@ -118,7 +122,7 @@ test("shows the tapped thumbnail large", async ({ page }) => {
 	const { id, pictures } = await postOxfordShirt(page);
 	await page.goto(`/closet/${id}`);
 	// When
-	await page.getByRole("button", { name: "Show picture 3 of 3" }).click();
+	await page.getByRole("button", { name: "Show picture 3" }).click();
 	// Then
 	await expect(bigPicture(page)).toHaveAttribute(
 		"src",
@@ -217,8 +221,8 @@ test("shows the placeholder while the closet loads, then the item", async ({
 	});
 	// When
 	await page.goto(`/closet/${id}`);
-	await page.locator('[data-slot="item-loading"]').waitFor();
-	const placeholder = await page.locator('[data-slot="item-loading"]').count();
+	await page.locator('[data-slot="item-skeleton"]').waitFor();
+	const placeholder = await page.locator('[data-slot="item-skeleton"]').count();
 	release();
 	const heading = page.getByRole("heading", { level: 1 });
 	await heading.waitFor();

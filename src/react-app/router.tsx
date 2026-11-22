@@ -9,7 +9,9 @@ import { NotFoundPage } from "./pages/NotFoundPage";
 import { PiecePage } from "./pages/PiecePage";
 import { PrivacyPage } from "./pages/PrivacyPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { ShopLinkPage } from "./pages/ShopLinkPage";
 import { WishlistPage } from "./pages/WishlistPage";
+import { WishPage } from "./pages/WishPage";
 import { SessionGate } from "./shell/SessionGate";
 
 export const router = createBrowserRouter([
@@ -27,6 +29,8 @@ export const router = createBrowserRouter([
 			{ path: "piece/:typeId/:colourId", element: <PiecePage /> },
 			{ path: "labels", element: <LabelsPage /> },
 			{ path: "wishlist", element: <WishlistPage /> },
+			{ path: "wishlist/link/:shopLinkId", element: <ShopLinkPage /> },
+			{ path: "wishlist/wish/:wishId", element: <WishPage /> },
 			{ path: "*", element: <NotFoundPage /> },
 		],
 	},

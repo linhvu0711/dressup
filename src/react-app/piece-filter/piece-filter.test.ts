@@ -2,7 +2,13 @@ import { describe, expect, test } from "bun:test";
 import type { TypeId } from "@/dress/clothing-types";
 import type { BrandId } from "@/labels/brand";
 import type { ColourId } from "@/labels/colour";
-import type { ShopLink, ShopLinkId, Wish, WishId } from "@/wishlist/wish";
+import {
+	type ShopLink,
+	type ShopLinkId,
+	type Wish,
+	type WishId,
+	wishlistCards,
+} from "@/wishlist/wish";
 import {
 	type FilterPiece,
 	matchesPieceFilter,
@@ -11,6 +17,7 @@ import {
 	pieceFilterChips,
 	prunePieceFilter,
 	readPieceFilter,
+	wishCardPiece,
 	wishPiece,
 	writePieceFilter,
 } from "./piece-filter";
@@ -28,11 +35,11 @@ const colour = (id: ColourId) => ({
 	hex: "#1F3A5F" as const,
 });
 
-const link = (brand: BrandId | null): ShopLink => ({
+const link = (brand: BrandId | null, name = "A piece"): ShopLink => ({
 	id: crypto.randomUUID() as ShopLinkId,
 	url: "https://shop.example/a",
 	brand: brand === null ? null : { id: brand, name: brand },
-	name: "A piece",
+	name,
 	price: null,
 	pictureIds: [],
 });
@@ -121,6 +128,36 @@ describe("piece filter", () => {
 			.map((w) => w.typeId);
 		// Then
 		expect(shown).toEqual(["sweater"]);
+	});
+
+	test("a wishlist card fits the brand of its own shop link", () => {
+		// Given: a sweater wish with a COS link and a Uniqlo link
+		const wishes = [
+			wish("sweater", [link(COS, "COS knit"), link(UNIQLO, "Uniqlo knit")]),
+		];
+		const filter = filterOf({ brands: [COS] });
+		// When
+		const shown = wishlistCards(wishes)
+			.filter((card) => matchesPieceFilter(filter, wishCardPiece(card)))
+			.map((card) => card.link?.name);
+		// Then
+		expect(shown).toEqual(["COS knit"]);
+	});
+
+	test("a wishlist card with no link is not No brand", () => {
+		// Given: a chino_p wish with no link; a sweater wish with a link of no
+		// brand
+		const wishes = [
+			wish("chino_p", []),
+			wish("sweater", [link(null, "Plain knit")]),
+		];
+		const filter = filterOf({ brands: [null] });
+		// When
+		const shown = wishlistCards(wishes)
+			.filter((card) => matchesPieceFilter(filter, wishCardPiece(card)))
+			.map((card) => card.link?.name ?? "none");
+		// Then
+		expect(shown).toEqual(["Plain knit"]);
 	});
 
 	test("reads the picks of the address and writes them back", () => {

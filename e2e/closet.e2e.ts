@@ -561,7 +561,7 @@ test("keeps a changed quantity when an older closet load ends after the save", a
 	// Then
 	await expect(
 		page
-			.locator('[data-slot="item-facts"] div')
+			.locator('[data-slot="facts"] div')
 			.filter({ has: page.getByText("Quantity", { exact: true }) })
 			.locator("dd"),
 	).toHaveText("3");

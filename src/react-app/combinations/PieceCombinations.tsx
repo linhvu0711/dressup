@@ -1,4 +1,3 @@
-import { cn } from "cn";
 import { useId } from "react";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
@@ -9,16 +8,18 @@ import { type CombinationFilter, filterCombinations } from "./filter";
 import { NO_PIECES, type PieceRef } from "./marks";
 import { wallAddress } from "./wall-address";
 
-// The part for the combinations that hold the piece, newest first, in one
-// row, with See all to the wall filtered by the piece. A piece in no
-// combination has no part. A phone always shows four; wideColumns is for a
-// wide page with room for a fifth.
+// The piece page's part for the combinations that hold the piece, newest
+// first, with See all to the wall filtered by the piece. A piece in no
+// combination has no part.
+// One row of cards. The Item page has room for five on a wide screen; the
+// piece page's column is 540 px (PiecePage.tsx), so it keeps four in the
+// page, as e2e/piece-combinations.e2e.ts reads.
 export function PieceCombinations({
 	piece,
-	wideColumns = 4,
+	shown = 4,
 }: {
 	piece: PieceRef;
-	wideColumns?: 4 | 5;
+	shown?: 4 | 5;
 }) {
 	const title = useId();
 	const combinations = useCombinations();
@@ -51,24 +52,21 @@ export function PieceCombinations({
 					<Link to={wallAddress(filter)}>See all {held.length}</Link>
 				</Button>
 			</div>
-			<div
-				className={cn(
-					"grid grid-cols-4 gap-2.5",
-					wideColumns === 5 && "wide:grid-cols-5",
-				)}
-			>
-				{held.slice(0, wideColumns).map((c, i) =>
-					// CombinationCard takes no className, so a wrapper hides the
-					// fifth on a phone.
-					i < 4 ? (
+			{shown === 4 ? (
+				<div className="grid grid-cols-4 gap-2.5">
+					{held.slice(0, 4).map((c) => (
 						<CombinationCard key={c.id} combination={c} />
-					) : (
-						<div key={c.id} className="hidden wide:block">
+					))}
+				</div>
+			) : (
+				<div className="grid grid-cols-4 gap-2.5 wide:grid-cols-5">
+					{held.slice(0, 5).map((c, i) => (
+						<div key={c.id} className={i === 4 ? "max-wide:hidden" : undefined}>
 							<CombinationCard combination={c} />
 						</div>
-					),
-				)}
-			</div>
+					))}
+				</div>
+			)}
 		</section>
 	);
 }

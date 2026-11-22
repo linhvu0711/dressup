@@ -31,7 +31,7 @@ export function PieceTabPage<D, E>({
 	entries,
 	toPiece,
 	card,
-	skeleton,
+	placeholder,
 	failed,
 	unit,
 	empty,
@@ -43,9 +43,9 @@ export function PieceTabPage<D, E>({
 	query: UseQueryResult<D[]>;
 	entries: (data: D[]) => E[];
 	toPiece: (entry: E) => FilterPiece;
-	// A keyed element.
+	// The card carries its own key.
 	card: (entry: E) => ReactNode;
-	skeleton: ReactNode;
+	placeholder: (i: number) => ReactNode;
 	failed: (retry: () => void) => ReactNode;
 	// What the counts count, as "item" or "piece".
 	unit: string;
@@ -72,20 +72,7 @@ export function PieceTabPage<D, E>({
 		!query.isPending && !query.isError && (all.length > 0 || pf.count > 0);
 	let wall: ReactNode;
 	if (query.isPending) {
-		wall = (
-			<Wall>
-				{Array.from({ length: 6 }, (_, i) => (
-					<div
-						// biome-ignore lint/suspicious/noArrayIndexKey: the tiles are all alike and never move.
-						key={i}
-						data-slot={`${slot}-skeleton`}
-						className="flex min-w-0 flex-col"
-					>
-						{skeleton}
-					</div>
-				))}
-			</Wall>
-		);
+		wall = <Wall>{Array.from({ length: 6 }, (_, i) => placeholder(i))}</Wall>;
 	} else if (query.isError) {
 		// Checked before the data: a failed refetch keeps the old list.
 		wall = failed(() => void query.refetch());

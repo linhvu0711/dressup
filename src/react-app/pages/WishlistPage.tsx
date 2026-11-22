@@ -1,36 +1,36 @@
+import { useLocation } from "react-router";
 import { PieceTabPage } from "@/closet/PieceTabPage";
-import { PieceTile, PieceTileSkeleton } from "@/closet/PieceTile";
-import { pieceName } from "@/combinations/combination";
 import { PageError } from "@/components/ui/page-error";
-import { wishPiece } from "@/piece-filter/piece-filter";
+import { ItemCardPlaceholder } from "@/item/ItemCard";
+import { wishCardPiece } from "@/piece-filter/piece-filter";
 import { useWishlist } from "@/wishlist/api";
+import { WishlistCard } from "@/wishlist/WishlistCard";
 import { WishSheet } from "@/wishlist/WishSheet";
-import { linksLine } from "@/wishlist/wish";
+import { wishlistCards } from "@/wishlist/wish";
 
-// The pieces the account wants to buy, one tile for each wish, newest first.
+// One card per shop link, plus one per wish with no link, newest wish first.
 export function WishlistPage() {
+	const location = useLocation();
 	return (
 		<PieceTabPage
 			title="Wishlist"
 			slot="wish"
 			query={useWishlist()}
-			entries={(wishes) => wishes}
-			toPiece={wishPiece}
-			card={(wish) => (
-				<PieceTile
-					key={wish.id}
-					piece={wish}
-					from="/wishlist"
-					slot="wish-tile"
-					label={`${pieceName(wish)}, ${linksLine(wish)}`}
-					line={linksLine(wish)}
+			entries={wishlistCards}
+			toPiece={wishCardPiece}
+			card={(card) => (
+				<WishlistCard
+					key={card.link?.id ?? card.wish.id}
+					card={card}
+					slot="wish-card"
+					state={{ search: location.search }}
 				/>
 			)}
-			skeleton={<PieceTileSkeleton />}
+			placeholder={(i) => <ItemCardPlaceholder key={i} slot="wish-skeleton" />}
+			unit="item"
 			failed={(retry) => (
 				<PageError title="Could not load your wishlist" onRetry={retry} />
 			)}
-			unit="piece"
 			empty={{
 				title: "Nothing on your wishlist yet",
 				text: "Add the pieces you want to buy.",

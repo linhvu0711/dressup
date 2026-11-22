@@ -72,18 +72,18 @@ export function Field({
 	children,
 }: {
 	label: string;
-	problem?: string;
+	problem?: string | null;
 	children: ReactNode;
 }) {
 	return (
-		<div className="flex flex-col gap-1.5">
+		<div data-slot="field" className="flex flex-col gap-1.5">
 			<span className={LABEL}>{label}</span>
 			{children}
-			{problem === undefined ? null : (
+			{problem ? (
 				<p role="alert" className="text-[13px] text-destructive">
 					{problem}
 				</p>
-			)}
+			) : null}
 		</div>
 	);
 }

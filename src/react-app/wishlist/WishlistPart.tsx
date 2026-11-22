@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { PictureStrip } from "@/pictures/PictureStrip";
 import { priceText } from "@/price";
 import { BoughtDialog } from "./BoughtDialog";
-import { RemoveWishDialog } from "./RemoveWishDialog";
+import { RemoveDialog } from "./RemoveDialog";
 import { ShopLinkSheet } from "./ShopLinkSheet";
 import {
 	isWebAddress,
@@ -114,7 +114,7 @@ export function WishlistPart({ wish }: { wish: Wish }) {
 				/>
 			) : null}
 			{removing ? (
-				<RemoveWishDialog wish={wish} onClose={() => setRemoving(false)} />
+				<RemoveDialog wish={wish} onClose={() => setRemoving(false)} />
 			) : null}
 			{sheet === "add" ? (
 				<ShopLinkSheet
@@ -126,6 +126,7 @@ export function WishlistPart({ wish }: { wish: Wish }) {
 				<ShopLinkSheet
 					mode="edit"
 					link={sheet}
+					lastLink={wish.shopLinks.length === 1}
 					onClose={() => setSheet(null)}
 				/>
 			) : null}

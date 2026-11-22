@@ -227,7 +227,8 @@ export const after = {
 		refresh(keys.colours(userId));
 		refresh(keys.brands(userId));
 	},
-	// As combinationSaved; a new wish also makes its colour in use.
+	// As combinationSaved; a new wish also makes its colour in use, and its
+	// shop link can carry a brand.
 	wishAdded(userId: string | null, wish: Wish) {
 		queryClient.setQueryData<Wish[]>(
 			keys.wishlist(userId),
@@ -239,6 +240,7 @@ export const after = {
 		);
 		refresh(keys.wishlist(userId));
 		refresh(keys.colours(userId));
+		refresh(keys.brands(userId));
 	},
 	// A shop link write answers its whole wish. A link's brand counts on the
 	// brand list.
@@ -249,14 +251,18 @@ export const after = {
 		refresh(keys.wishlist(userId));
 		refresh(keys.brands(userId));
 	},
+	// The server removes a wish with its last link (#141), so the list matches
+	// it before the reload; the wish can free its colour.
 	shopLinkDeleted(userId: string | null, id: string) {
 		queryClient.setQueryData<Wish[]>(keys.wishlist(userId), (old) =>
-			old?.map((w) => ({
-				...w,
-				shopLinks: w.shopLinks.filter((link) => link.id !== id),
-			})),
+			old?.flatMap((w) => {
+				if (!w.shopLinks.some((link) => link.id === id)) return [w];
+				const shopLinks = w.shopLinks.filter((link) => link.id !== id);
+				return shopLinks.length === 0 ? [] : [{ ...w, shopLinks }];
+			}),
 		);
 		refresh(keys.wishlist(userId));
+		refresh(keys.colours(userId));
 		refresh(keys.brands(userId));
 	},
 	// A removed wish can free its colour, and its links leave their brands.

@@ -58,9 +58,9 @@ export function PieceTile({
 	);
 }
 
-export function PieceTileSkeleton() {
+export function PieceTilePlaceholder({ slot }: { slot: string }) {
 	return (
-		<div className="flex flex-col gap-[7px]">
+		<div data-slot={slot} className="flex flex-col gap-[7px]">
 			<span
 				className={`block aspect-square w-full rounded-[14px] bg-[#D3CFC9] ${PULSE}`}
 			/>
