@@ -745,6 +745,23 @@ test("keeps the cursor where Delete removed a digit of the price", async ({
 	}).toEqual({ value: "12.356", cursor: [4, 4] });
 });
 
+test("lets Delete before a dot of the price reach the next digit", async ({
+	page,
+}) => {
+	// Given: a fresh account, Add to closet open, "123.456" in Price paid, the
+	// cursor before its dot
+	await openAddSheet(page);
+	const price = await priceWithCursorAt(page, 3);
+	// When
+	await price.press("Delete");
+	await price.press("Delete");
+	// Then
+	expect({
+		value: await price.inputValue(),
+		cursor: await cursorOf(price),
+	}).toEqual({ value: "12.356", cursor: [4, 4] });
+});
+
 test("keeps the cursor where a letter was dropped from the price", async ({
 	page,
 }) => {

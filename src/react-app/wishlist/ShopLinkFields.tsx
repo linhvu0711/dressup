@@ -140,7 +140,7 @@ export function ShopLinkFields<Id extends string>({
 					autoComplete="off"
 					value={fields.price.shown}
 					onChange={(e) => {
-						priceCursor.keep(e.target);
+						priceCursor.keep(e);
 						fields.setPrice(typedPrice(e.target.value));
 					}}
 					className={INPUT}

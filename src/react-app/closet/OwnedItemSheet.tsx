@@ -284,7 +284,7 @@ export function OwnedItemSheet(
 									native.inputType === "insertText"
 										? (native.data ?? undefined)
 										: undefined;
-								priceCursor.keep(e.target);
+								priceCursor.keep(e);
 								setPrice(typedPrice(e.target.value, put.current ?? key));
 							}
 						}}
