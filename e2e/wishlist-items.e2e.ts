@@ -368,6 +368,31 @@ test("opens the bought item's page after Bought", async ({ page }) => {
 	});
 });
 
+test("goes back to the filtered Wishlist from the bought item's page", async ({
+	page,
+}) => {
+	// Given: the Wishlist filtered by COS, the COS link's page opened from it,
+	// then Bought
+	const { cos } = await jacketAndPolo(page);
+	await page.goto(`/wishlist?brand=${cos}`);
+	await page
+		.getByRole("link", {
+			name: "Single-breasted wool jacket, COS · Charcoal wool jacket",
+		})
+		.click();
+	await expect(title(page)).toHaveText("Single-breasted wool jacket");
+	await buy(page);
+	await expect(page.getByRole("button", { name: "Edit item" })).toBeVisible();
+	// When
+	await page.getByRole("link", { name: "Back" }).click();
+	await expect(chips(page)).toHaveCount(1);
+	// Then
+	expect({
+		back: `${new URL(page.url()).pathname}${new URL(page.url()).search}`,
+		chips: await chips(page).allTextContents(),
+	}).toEqual({ back: `/wishlist?brand=${cos}`, chips: ["COS"] });
+});
+
 test("says the closet limit when Bought answers owned_item_limit", async ({
 	page,
 }) => {

@@ -9,7 +9,7 @@ import { ColourValue, Facts } from "@/item/Facts";
 import { ItemPage } from "@/item/ItemPage";
 import { ItemPictures } from "@/item/ItemPictures";
 import { priceText } from "@/price";
-import { tabSearch } from "@/shell/piece-link";
+import { itemLink, tabSearch } from "@/shell/piece-link";
 import { useWishlist } from "@/wishlist/api";
 import { BoughtDialog } from "@/wishlist/BoughtDialog";
 import { OtherShops } from "@/wishlist/OtherShops";
@@ -37,7 +37,10 @@ export function ShopLinkPage() {
 	const [bought, setBought] = useState<OwnedItem | null>(null);
 	// Bought takes the wish off the list, so the page leaves before the frame
 	// can find the link gone and send the person back.
-	if (bought) return <Navigate to={`/closet/${bought.id}`} replace />;
+	if (bought) {
+		const to = itemLink(bought, "/wishlist", tabSearch(location.state));
+		return <Navigate to={to.to} state={to.state} replace />;
+	}
 	return (
 		<ItemPage
 			back={back}

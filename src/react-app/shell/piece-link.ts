@@ -29,14 +29,18 @@ export function usePieceLink(from: PieceFrom) {
 	return (piece: LinkPiece) => pieceLink(piece, from, search);
 }
 
-// The one way in to an owned item's page. Its Back goes to the Closet with
-// the Closet's filter, read by tabSearch.
+// The one way in to an owned item's page. Its Back goes to the tab it came
+// from with that tab's filter, as a piece page's does: the Closet, or the
+// Wishlist after Bought.
+export const itemLink = (
+	item: { id: string },
+	from: PieceTab,
+	search: string,
+) => ({ to: `/closet/${item.id}`, state: { from, search } });
+
 export function useItemLink() {
 	const { search } = useLocation();
-	return (item: { id: string }) => ({
-		to: `/closet/${item.id}`,
-		state: { search },
-	});
+	return (item: { id: string }) => itemLink(item, "/closet", search);
 }
 
 const searchRule = z

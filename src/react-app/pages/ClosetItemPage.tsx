@@ -12,7 +12,7 @@ import { ColourValue, Facts } from "@/item/Facts";
 import { ItemPage } from "@/item/ItemPage";
 import { ItemPictures } from "@/item/ItemPictures";
 import { priceText } from "@/price";
-import { tabSearch } from "@/shell/piece-link";
+import { addressBeforePiece } from "@/shell/piece-link";
 
 const ICON = { size: 18, strokeWidth: 1.9, "aria-hidden": true } as const;
 
@@ -21,7 +21,7 @@ const ICON = { size: 18, strokeWidth: 1.9, "aria-hidden": true } as const;
 export function ClosetItemPage() {
 	const { itemId } = useParams();
 	const location = useLocation();
-	const back = `/closet${tabSearch(location.state)}`;
+	const back = addressBeforePiece(location.state);
 	return (
 		<ItemPage
 			back={back}
