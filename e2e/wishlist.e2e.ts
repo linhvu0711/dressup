@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 import { postOwnedItems } from "./closet-helpers";
 import { expect, test } from "./fixtures";
 import { colourIds, postBrand } from "./label-helpers";
-import { sheet, toast } from "./locators";
+import { fact, sheet, toast } from "./locators";
 import { WISHLIST_FULL_FILE } from "./paths";
 import { jacketAndPolo, postShopLink, postWish } from "./wishlist-helpers";
 
@@ -574,68 +574,6 @@ test("opens the newest card of a piece already wished for when there is no addre
 	await expect(title(page)).toHaveText("Zara jacket");
 });
 
-const cards = (page: Page) => page.locator('[data-slot="shop-link"]');
-
-// A fresh account with a Charcoal wool jacket wish holding a COS link at
-// 4.290.000, then a Zara link with no brand at 588.000.
-async function jacketWithLinks(page: Page) {
-	await page.goto("/");
-	const ids = await colourIds(page);
-	const cos = await postBrand(page, "COS");
-	const wish = await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
-	await postShopLink(page, wish, {
-		url: "https://www.cos.com/a",
-		brandId: cos,
-		name: "Single-breasted wool jacket",
-		price: 4290000,
-	});
-	await postShopLink(page, wish, {
-		url: "https://www.zara.com/b",
-		brandId: null,
-		name: "Wool blend jacket",
-		price: 588000,
-	});
-	return { ids, wish };
-}
-
-// A Wishlist card opens its own Item page, so the piece page opens by its
-// address.
-const openJacket = (page: Page, ids: Record<string, string>) =>
-	page.goto(`/piece/wool/${ids.Charcoal}`);
-
-test("lists the shop links of a wish on its piece page", async ({ page }) => {
-	// Given
-	const { ids } = await jacketWithLinks(page);
-	// When
-	await openJacket(page, ids);
-	// Then
-	await expect(
-		page.getByRole("heading", { name: "On your wishlist" }),
-	).toBeVisible();
-	await expect(cards(page)).toHaveCount(2);
-	expect([
-		await cards(page).nth(0).locator("p, a").allInnerTexts(),
-		await cards(page).nth(1).locator("p, a").allInnerTexts(),
-	]).toEqual([
-		["COS", "Single-breasted wool jacket", "4.290.000 ₫", "cos.com"],
-		["zara.com", "Wool blend jacket", "588.000 ₫", "zara.com"],
-	]);
-});
-
-test("opens the shop in a new tab with noopener noreferrer", async ({
-	page,
-}) => {
-	// Given: the account of the case above, on the piece page
-	const { ids } = await jacketWithLinks(page);
-	await openJacket(page, ids);
-	// When
-	const address = page.locator('[data-slot="shop-address"]').first();
-	// Then
-	await expect(address).toHaveAttribute("href", "https://www.cos.com/a");
-	await expect(address).toHaveAttribute("target", "_blank");
-	await expect(address).toHaveAttribute("rel", "noopener noreferrer");
-});
-
 test("shows an address that is not http as text", async ({ page }) => {
 	// Given: the wishlist answers one Charcoal wool jacket wish with one link
 	// whose address is a script
@@ -665,11 +603,10 @@ test("shows an address that is not http as text", async ({ page }) => {
 		}),
 	);
 	// When
-	await page.goto(`/piece/wool/${ids.Charcoal}`);
+	await page.goto("/wishlist/link/22222222-2222-4222-8222-222222222222");
 	// Then
-	const card = page.getByRole("listitem", { name: "Odd link" });
-	await expect(card).toContainText("javascript:alert(1)");
-	await expect(card.locator("a")).toHaveCount(0);
+	await expect(fact(page, "Address")).toHaveText("javascript:alert(1)");
+	await expect(fact(page, "Address").locator("a")).toHaveCount(0);
 });
 
 // A fresh account with a Charcoal wool jacket in the closet and on the
@@ -731,7 +668,9 @@ test("shows the wishlist part's failed load on the piece page and loads it on Re
 	await page.getByRole("button", { name: "Retry" }).click();
 	// Then
 	await expect(page.getByRole("alert")).toHaveCount(0);
-	await expect(page.getByText("No shop link yet.")).toBeVisible();
+	await expect(page.locator('[data-slot="wish-card"]')).toHaveAccessibleName(
+		"Charcoal wool jacket, No shop link yet",
+	);
 });
 
 test("shows Could not load your closet and wishlist when both fail on the piece page", async ({
@@ -760,14 +699,14 @@ test("shows Could not load your closet and wishlist when both fail on the piece 
 
 const linkSheet = (page: Page, name = "Add a shop link") => sheet(page, name);
 
-// A fresh account with a Charcoal wool jacket wish, on its piece page.
+// A fresh account with a Charcoal wool jacket wish, on its own page.
 async function onJacketPage(page: Page) {
 	await page.goto("/");
 	const ids = await colourIds(page);
 	const wish = await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
-	await page.goto(`/piece/wool/${ids.Charcoal}`);
+	await page.goto(`/wishlist/wish/${wish}`);
 	await expect(
-		page.getByRole("heading", { name: "On your wishlist" }),
+		page.getByRole("heading", { level: 1, name: "Charcoal wool jacket" }),
 	).toBeVisible();
 	return { ids, wish };
 }
@@ -789,12 +728,9 @@ test("adds a shop link from the sheet", async ({ page }) => {
 	await linkSheet(page).getByRole("button", { name: "Save" }).click();
 	// Then
 	await expect(toast(page)).toHaveText("Shop link added");
-	expect(await cards(page).first().locator("p, a").allInnerTexts()).toEqual([
-		"zara.com",
-		"Wool blend jacket",
-		"2.990.000 ₫",
-		"zara.com",
-	]);
+	await expect(
+		page.getByRole("heading", { level: 1, name: "Wool blend jacket" }),
+	).toBeVisible();
 });
 
 test("shows dots in the price as it is typed", async ({ page }) => {
@@ -834,38 +770,38 @@ test("refuses an address without http and a link with no name", async ({
 	await expect(dialog).toBeVisible();
 });
 
-// The jacket page with the Zara link at 2.990.000.
+// The Zara link's page, at 2.990.000.
 async function onJacketWithLink(page: Page) {
 	await page.goto("/");
 	const ids = await colourIds(page);
 	const wish = await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
-	await postShopLink(page, wish, {
+	const link = await postShopLink(page, wish, {
 		url: ZARA,
 		brandId: null,
 		name: "Wool blend jacket",
 		price: 2990000,
 	});
-	await page.goto(`/piece/wool/${ids.Charcoal}`);
+	await page.goto(`/wishlist/link/${link}`);
 }
 
 test("changes a shop link", async ({ page }) => {
 	// Given
 	await onJacketWithLink(page);
 	// When
-	await page.getByRole("button", { name: "Change shop link" }).click();
+	await page.getByRole("button", { name: "Edit", exact: true }).click();
 	const dialog = linkSheet(page, "Edit shop link");
 	await dialog.getByRole("textbox", { name: "Price in ₫" }).fill("2490000");
 	await dialog.getByRole("button", { name: "Save" }).click();
 	// Then
 	await expect(toast(page)).toHaveText("Changes saved");
-	await expect(cards(page).first()).toContainText("2.490.000 ₫");
+	await expect(fact(page, "Price")).toHaveText("2.490.000 ₫");
 });
 
 test("deletes a shop link after its confirm", async ({ page }) => {
 	// Given
 	await onJacketWithLink(page);
 	// When
-	await page.getByRole("button", { name: "Change shop link" }).click();
+	await page.getByRole("button", { name: "Edit", exact: true }).click();
 	await linkSheet(page, "Edit shop link")
 		.getByRole("button", { name: "Delete" })
 		.click();
@@ -876,27 +812,30 @@ test("deletes a shop link after its confirm", async ({ page }) => {
 	await confirm.getByRole("button", { name: "Delete" }).click();
 	// Then
 	await expect(toast(page)).toHaveText("Shop link deleted");
-	await expect(page).toHaveURL("/closet");
+	await expect(page).toHaveURL("/wishlist");
 });
 
-test("turns Add a shop link off at 10 links", async ({ page }) => {
+test("hides the add card of Other shops at 10 links", async ({ page }) => {
 	// Given: a fresh account with a wish holding 10 links
 	await page.goto("/");
 	const ids = await colourIds(page);
 	const wish = await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
+	const links: string[] = [];
 	for (let i = 1; i <= 10; i++)
-		await postShopLink(page, wish, {
-			url: `https://shop.example/${i}`,
-			brandId: null,
-			name: `Link ${i}`,
-			price: null,
-		});
+		links.push(
+			await postShopLink(page, wish, {
+				url: `https://shop.example/${i}`,
+				brandId: null,
+				name: `Link ${i}`,
+				price: null,
+			}),
+		);
 	// When
-	await page.goto(`/piece/wool/${ids.Charcoal}`);
+	await page.goto(`/wishlist/link/${links[0]}`);
 	// Then
 	await expect(
 		page.getByRole("button", { name: "Add a shop link" }),
-	).toBeDisabled();
+	).toHaveCount(0);
 	await expect(
 		page.getByText("10 shop links is the limit for one wish."),
 	).toBeVisible();
@@ -921,44 +860,6 @@ test("keeps the shop link sheet open with Not saved when the save fails", async 
 	await expect(linkSheet(page).getByRole("alert")).toHaveText(
 		"Not saved. Try again.",
 	);
-});
-
-test("removes a wish after a confirm that counts its links", async ({
-	page,
-}) => {
-	// Given: a fresh account with a Charcoal wool jacket in the closet and on
-	// the wishlist with 2 links, on its piece page
-	await page.goto("/");
-	const ids = await colourIds(page);
-	await postOwnedItems(page, {
-		typeId: "wool",
-		colourId: ids.Charcoal,
-		brandId: null,
-		quantity: 1,
-	});
-	const wish = await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
-	for (const n of [1, 2])
-		await postShopLink(page, wish, {
-			url: `https://shop.example/${n}`,
-			brandId: null,
-			name: `Link ${n}`,
-			price: null,
-		});
-	await page.goto(`/piece/wool/${ids.Charcoal}`);
-	// When
-	await page.getByRole("button", { name: "Remove from wishlist" }).click();
-	const confirm = page.getByRole("alertdialog", {
-		name: "Remove from wishlist?",
-	});
-	// Then
-	await expect(confirm).toContainText("Its 2 shop links go with it.");
-	// When
-	await confirm.getByRole("button", { name: "Remove" }).click();
-	// Then
-	await expect(toast(page)).toHaveText("Removed from your wishlist");
-	await expect(page.getByRole("heading", { level: 2 })).toHaveText([
-		"In your closet",
-	]);
 });
 
 test("keeps the cursor after two zeros typed in the middle of the shop link price", async ({

@@ -4,6 +4,7 @@ import { Navigate } from "react-router";
 import { PageError } from "@/components/ui/page-error";
 import { PLACEHOLDER } from "@/components/ui/placeholder";
 import { BackLink, PageHeader } from "@/shell/PageHeader";
+import type { Back } from "@/shell/piece-link";
 
 type Parts = { pictures: ReactNode; details: ReactNode; below?: ReactNode };
 
@@ -18,7 +19,7 @@ export function ItemPage<D, T>({
 	failedTitle,
 	children,
 }: {
-	back: string;
+	back: Back;
 	query: UseQueryResult<D>;
 	find: (data: D) => T | undefined;
 	failedTitle: string;
@@ -27,13 +28,13 @@ export function ItemPage<D, T>({
 	const item = query.data === undefined ? undefined : find(query.data);
 	// A typed address, an item of another account, or one deleted since.
 	if (query.data !== undefined && item === undefined)
-		return <Navigate to={back} replace />;
+		return <Navigate to={back.to} state={back.state} replace />;
 	// A list that answered once keeps its data through a failed reload, so
 	// only a list with no data at all counts as failed.
 	if (query.isError && query.data === undefined)
 		return (
 			<div className="flex min-h-0 flex-1 flex-col">
-				<PageHeader start={<BackLink to={back} />} />
+				<PageHeader start={<BackLink to={back.to} state={back.state} />} />
 				<PageError title={failedTitle} onRetry={() => void query.refetch()} />
 			</div>
 		);
@@ -51,7 +52,7 @@ export function ItemPage<D, T>({
 			: children(item);
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
-			<PageHeader start={<BackLink to={back} />} />
+			<PageHeader start={<BackLink to={back.to} state={back.state} />} />
 			<div className="flex min-h-0 flex-1 flex-col gap-10 overflow-auto px-4 pt-1 pb-24 wide:px-6">
 				<div className="mx-auto flex w-full max-w-[928px] flex-col gap-6 wide:grid wide:grid-cols-[minmax(0,420px)_minmax(0,1fr)] wide:gap-12">
 					<div className="min-w-0">{parts.pictures}</div>

@@ -1,6 +1,7 @@
 import { pieceName } from "@/combinations/combination";
 import { ItemCard } from "@/item/ItemCard";
 import { priceText } from "@/price";
+import type { Back } from "@/shell/piece-link";
 import {
 	type WishlistCard as Card,
 	linkPage,
@@ -16,7 +17,7 @@ export function WishlistCard({
 	slot,
 }: {
 	card: Card;
-	state: unknown;
+	state: Back;
 	slot: string;
 }) {
 	if (link === null)

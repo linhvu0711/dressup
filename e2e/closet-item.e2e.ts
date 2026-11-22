@@ -3,16 +3,8 @@ import { postOwnedItems } from "./closet-helpers";
 import { isPhone, postCombinations } from "./combination-helpers";
 import { expect, test } from "./fixtures";
 import { colourIds, postBrand } from "./label-helpers";
-import { sheet, toast } from "./locators";
+import { fact, facts, sheet, toast } from "./locators";
 import { uploadPng } from "./picture-helpers";
-
-const facts = (page: Page) => page.locator('[data-slot="facts"]');
-
-const fact = (page: Page, term: string) =>
-	facts(page)
-		.locator("div")
-		.filter({ has: page.getByText(term, { exact: true }) })
-		.locator("dd");
 
 const bigPicture = (page: Page) =>
 	page.getByRole("button", { name: /^Open picture/ }).locator("img");

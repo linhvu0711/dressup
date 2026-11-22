@@ -5,9 +5,11 @@ import { PieceTabPage } from "@/closet/PieceTabPage";
 import { PartError } from "@/components/ui/part-error";
 import { ItemCardPlaceholder } from "@/item/ItemCard";
 import { ownedItemPiece } from "@/piece-filter/piece-filter";
+import { useHere } from "@/shell/piece-link";
 
 // The items the account owns, one card for each, newest first.
 export function ClosetPage() {
+	const here = useHere();
 	return (
 		<PieceTabPage
 			title="Closet"
@@ -15,7 +17,7 @@ export function ClosetPage() {
 			query={useCloset()}
 			entries={(items) => items}
 			toPiece={ownedItemPiece}
-			card={(item) => <ClosetCard key={item.id} item={item} />}
+			card={(item) => <ClosetCard key={item.id} item={item} state={here} />}
 			placeholder={(i) => (
 				<ItemCardPlaceholder key={i} slot="closet-skeleton" />
 			)}

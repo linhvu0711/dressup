@@ -1,10 +1,8 @@
 import type { Page } from "@playwright/test";
-import { postOwnedItems } from "./closet-helpers";
-import { postCombinations } from "./combination-helpers";
+import { markedFour } from "./combination-helpers";
 import { expect, test } from "./fixtures";
-import { colourIds } from "./label-helpers";
-import { sheet } from "./locators";
-import { postShopLink, postWish } from "./wishlist-helpers";
+import { facts, sheet } from "./locators";
+import { postShopLink } from "./wishlist-helpers";
 
 const lines = (page: Page) => page.locator('[data-slot="piece-line"]');
 
@@ -21,36 +19,6 @@ const markWindow = (page: Page) =>
 
 const windowStayed = (page: Page) =>
 	page.evaluate(() => (window as unknown as { stay?: boolean }).stay === true);
-
-// Khaki Harrington jacket + Grey sweater + Black long tee + Navy
-// casual pants. The closet has the jacket and the tee; the wishlist has the
-// jacket and the sweater. So the jacket shows both marks, the sweater Want,
-// the tee Own, and the pants none.
-async function markedFour(page: Page) {
-	await page.goto("/");
-	const ids = await colourIds(page);
-	const id = crypto.randomUUID();
-	await postCombinations(page, {
-		id,
-		pieces: [
-			{ typeId: "harrington", colourId: ids.Khaki },
-			{ typeId: "sweater", colourId: ids.Grey },
-			{ typeId: "tee_l", colourId: ids.Black },
-			{ typeId: "casual_p", colourId: ids.Navy },
-		],
-	});
-	await postOwnedItems(
-		page,
-		{ typeId: "tee_l", colourId: ids.Black, brandId: null, quantity: 1 },
-		{ typeId: "harrington", colourId: ids.Khaki, brandId: null, quantity: 1 },
-	);
-	const sweaterWish = await postWish(page, {
-		typeId: "sweater",
-		colourId: ids.Grey,
-	});
-	await postWish(page, { typeId: "harrington", colourId: ids.Khaki });
-	return { id, ids, sweaterWish };
-}
 
 test("marks each piece Own, Want, both, or none", async ({ page }) => {
 	// Given: both projects, a fresh account with the four pieces above
@@ -144,13 +112,24 @@ test("drops Want after the wish is removed, with no reload", async ({
 	const { id } = await markedFour(page);
 	await page.goto(`/combinations/${id}`);
 	await markWindow(page);
-	// When: the Grey sweater, wanted only, leaves the wishlist
+	// When: the Grey sweater, wanted only, leaves the wishlist, then Back from
+	// its piece page
 	await line(page, "Grey sweater").getByRole("link").click();
+	await page
+		.getByRole("link", { name: "Grey sweater, No shop link yet" })
+		.click();
+	// The piece page has a Remove from wishlist button too: wait for the wish
+	// page's facts.
+	await expect(facts(page)).toBeVisible();
 	await page.getByRole("button", { name: "Remove from wishlist" }).click();
 	await page
 		.getByRole("alertdialog", { name: "Remove from wishlist?" })
 		.getByRole("button", { name: "Remove" })
 		.click();
+	await expect(
+		page.getByText("Not in your closet or on your wishlist."),
+	).toBeVisible();
+	await page.getByRole("link", { name: "Back" }).click();
 	// Then
 	await expect(page).toHaveURL(`/combinations/${id}`);
 	await expect(line(page, "Grey sweater")).toHaveText("Grey sweater#8C8A84");
@@ -174,16 +153,20 @@ test("shows Own and drops Want after Bought, with no reload", async ({
 		"Grey sweaterWant#8C8A84",
 	);
 	await markWindow(page);
-	// When: the shop link is Bought on the sweater's piece page
+	// When: the shop link is Bought on its page, opened from the sweater's
+	// piece page, then Back from the bought item to the piece page and on
 	await line(page, "Grey sweater").getByRole("link").click();
-	await page
-		.getByRole("listitem", { name: "Cos sweater", exact: true })
-		.getByRole("button", { name: "Bought" })
-		.click();
+	await page.getByRole("link", { name: /^Cos sweater, / }).click();
+	await page.getByRole("button", { name: "Bought", exact: true }).click();
 	await page
 		.getByRole("alertdialog", { name: "Bought this one?" })
 		.getByRole("button", { name: "Bought" })
 		.click();
+	await expect(page).toHaveURL(/\/closet\/[^/]+$/);
+	// The address changes before the page does, so the old page's Back can
+	// still be on screen: wait for the Item page itself.
+	await expect(page.getByRole("button", { name: "Edit item" })).toBeVisible();
+	await page.getByRole("link", { name: "Back" }).click();
 	await expect(
 		page.getByRole("heading", { name: "In your closet" }),
 	).toBeVisible();
