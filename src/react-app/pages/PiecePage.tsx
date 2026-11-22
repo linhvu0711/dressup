@@ -12,8 +12,9 @@ import { isTypeId } from "@/dress/clothing-types";
 import { TypeFigure } from "@/dress/figure/TypeFigure";
 import { useColours } from "@/labels/api";
 import { useWishlist } from "@/wishlist/api";
+import { WishActions } from "@/wishlist/WishActions";
 import { WishlistCard } from "@/wishlist/WishlistCard";
-import { wishlistCards } from "@/wishlist/wish";
+import { SHOP_LINK_LIMIT, wishlistCards } from "@/wishlist/wish";
 import { BackLink, PageHeader } from "../shell/PageHeader";
 import { readBack, useHere } from "../shell/piece-link";
 
@@ -90,7 +91,15 @@ export function PiecePage() {
 					</PartError>
 				) : null}
 				{wish ? (
-					<CardGroup title="On your wishlist">
+					<CardGroup
+						title="On your wishlist"
+						actions={<WishActions wish={wish} />}
+						note={
+							wish.shopLinks.length >= SHOP_LINK_LIMIT
+								? `${SHOP_LINK_LIMIT} shop links is the limit for one wish.`
+								: null
+						}
+					>
 						{wishlistCards([wish]).map((card) => (
 							<WishlistCard
 								key={card.link?.id ?? card.wish.id}
@@ -152,17 +161,27 @@ function failedTitle(closet: boolean, wishlist: boolean) {
 
 function CardGroup({
 	title,
+	actions,
+	note,
 	children,
 }: {
 	title: string;
+	actions?: ReactNode;
+	note?: string | null;
 	children: ReactNode;
 }) {
 	const id = useId();
 	return (
 		<section aria-labelledby={id} className="flex flex-col gap-2">
-			<h2 id={id} className="text-[22px]">
-				{title}
-			</h2>
+			<div className="flex items-center gap-3">
+				<h2 id={id} className="min-w-0 flex-1 text-[22px]">
+					{title}
+				</h2>
+				{actions}
+			</div>
+			{note ? (
+				<p className="text-[13px] text-muted-foreground">{note}</p>
+			) : null}
 			<div className="grid grid-cols-2 gap-3.5 wide:grid-cols-5">
 				{children}
 			</div>

@@ -3,6 +3,7 @@ import { postOwnedItems } from "./closet-helpers";
 import { markedFour } from "./combination-helpers";
 import { expect, test } from "./fixtures";
 import { colourIds } from "./label-helpers";
+import { sheet, toast } from "./locators";
 import { postShopLink, postWish } from "./wishlist-helpers";
 
 const line = (page: Page, name: string) =>
@@ -303,4 +304,83 @@ test("shows the placeholder while the colours load", async ({ page }) => {
 	await expect(page.locator('[data-slot="piece-skeleton"]')).toBeVisible();
 	await expect(page).toHaveURL(`/piece/shirt_l/${ids.Navy}`);
 	release();
+});
+
+// A fresh account with a Charcoal wool jacket wish and this many shop links.
+async function jacketWithLinks(page: Page, links: number) {
+	await page.goto("/");
+	const ids = await colourIds(page);
+	const wish = await postWish(page, { typeId: "wool", colourId: ids.Charcoal });
+	for (let n = 1; n <= links; n++)
+		await postShopLink(page, wish, {
+			url: `https://shop.example/${n}`,
+			brandId: null,
+			name: `Link ${n}`,
+			price: null,
+		});
+	await page.goto(`/piece/wool/${ids.Charcoal}`);
+	return ids;
+}
+
+const wishCards = (page: Page) =>
+	group(page, "On your wishlist").locator('[data-slot="wish-card"]');
+
+test("adds a shop link from the piece page", async ({ page }) => {
+	// Given: both projects, a Charcoal wool jacket wish with one link, on its
+	// piece page
+	await jacketWithLinks(page, 1);
+	await expect(wishCards(page)).toHaveCount(1);
+	// When
+	await group(page, "On your wishlist")
+		.getByRole("button", { name: "Add a shop link" })
+		.click();
+	const add = sheet(page, "Add a shop link");
+	await add
+		.getByRole("textbox", { name: "Address" })
+		.fill("https://www.zara.com/x");
+	await add.getByRole("textbox", { name: "Name" }).fill("Wool blend jacket");
+	await add.getByRole("button", { name: "Save" }).click();
+	// Then
+	await expect(toast(page)).toHaveText("Shop link added");
+	await expect(wishCards(page)).toHaveCount(2);
+	await expect(wishCards(page).nth(1)).toHaveAccessibleName(
+		"Wool blend jacket, zara.com · Charcoal wool jacket",
+	);
+});
+
+test("removes a wish with its shop links from the piece page", async ({
+	page,
+}) => {
+	// Given: both projects, a Charcoal wool jacket wish with two links, on its
+	// piece page
+	await jacketWithLinks(page, 2);
+	// When
+	await group(page, "On your wishlist")
+		.getByRole("button", { name: "Remove from wishlist" })
+		.click();
+	const confirm = page.getByRole("alertdialog", {
+		name: "Remove from wishlist?",
+	});
+	await expect(confirm).toContainText("Its 2 shop links go with it.");
+	await confirm.getByRole("button", { name: "Remove" }).click();
+	// Then
+	await expect(
+		page.getByText("Not in your closet or on your wishlist."),
+	).toBeVisible();
+	await expect(wishCards(page)).toHaveCount(0);
+});
+
+test("turns off Add a shop link at 10 links and says the limit", async ({
+	page,
+}) => {
+	// Given: both projects, a Charcoal wool jacket wish with 10 links
+	await jacketWithLinks(page, 10);
+	// Then
+	const wished = group(page, "On your wishlist");
+	await expect(
+		wished.getByRole("button", { name: "Add a shop link" }),
+	).toBeDisabled();
+	await expect(
+		wished.getByText("10 shop links is the limit for one wish."),
+	).toBeVisible();
 });
